@@ -2,7 +2,7 @@
 
 **Versión de revisión:** 4<br>
 **Fecha:** 3 de agosto de 2026<br>
-**Productos:** Allfit One — OS, Space y Backoffice
+**Productos:** Allfit One — Studio, Space y Backoffice
 
 ## Objetivo
 
@@ -22,7 +22,7 @@ El objetivo no es migrar mecánicamente el esquema actual. No existen clientes n
 8. [Matriz de operaciones V1](./03_PROPOSED_DESIGN/V1_OPERATIONS_MATRIX.md).
 9. [Matriz de seguridad y RLS V1](./03_PROPOSED_DESIGN/V1_RLS_MATRIX.md).
 10. [Matriz de trazabilidad física de RLS V1](./03_PROPOSED_DESIGN/V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md).
-11. [Contratos de API de Space, OS y Backoffice](./03_PROPOSED_DESIGN/V1_SPACE_OS_API_CONTRACTS.md).
+11. [Contratos de API de Space, Studio y Backoffice](./03_PROPOSED_DESIGN/V1_SPACE_STUDIO_API_CONTRACTS.md).
 12. [Contrato OpenAPI de la primera rebanada vertical V1](./03_PROPOSED_DESIGN/V1_OPENAPI_CONTRACT.md).
 13. [Gobernanza de verificadores y break-glass V1](./03_PROPOSED_DESIGN/V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md).
 14. [Matriz de degradación y recuperación V1](./03_PROPOSED_DESIGN/V1_DEGRADATION_AND_RECOVERY_MATRIX.md).
@@ -71,7 +71,7 @@ refactor/
 │   ├── V1_OPERATIONS_MATRIX.md
 │   ├── V1_RLS_MATRIX.md
 │   ├── V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md
-│   ├── V1_SPACE_OS_API_CONTRACTS.md
+│   ├── V1_SPACE_STUDIO_API_CONTRACTS.md
 │   ├── V1_OPENAPI_CONTRACT.md
 │   ├── V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md
 │   ├── openapi/
@@ -105,7 +105,7 @@ refactor/
 | Matriz de operaciones V1 | Enumerar toda lectura y escritura con actor, filtros, transacción, idempotencia y evento | 184 operaciones; Backoffice opción B propagada, resto de P0 pendiente |
 | Matriz de seguridad y RLS V1 | Fijar condición de fila, grants, proyecciones, índices y pruebas por recurso | Backoffice opción B propagada, resto de P0 pendiente |
 | Matriz de trazabilidad física de RLS V1 | Compilar cada ruta de autorización a columnas, joins, funciones, índices y pruebas exactos | 28 rutas físicas; resto de P0 pendiente |
-| Contratos de API de Space, OS y Backoffice | Definir superficies, endpoints, field-sets por scope, funciones internas y eventos | Superficie Backoffice fijada; detalle de capacidades `NEW-*` pendiente |
+| Contratos de API de Space, Studio y Backoffice | Definir superficies, endpoints, field-sets por scope, funciones internas y eventos | Superficie Backoffice fijada; detalle de capacidades `NEW-*` pendiente |
 | Contrato OpenAPI de la primera rebanada V1 | Fijar 18 paths, 21 operaciones, DTOs, ejemplos, caché y gate contract-first | Aprobado y recertificado — P1/P2 de Nutrición cerrados |
 | Gobernanza de verificadores y break-glass V1 | Fijar catálogo, evidencia, conflictos, quorum, expiración, revisión y abuso | Recertificada con ADR-028 y separación de deberes |
 | Matriz de degradación y recuperación | Fijar aislamiento, fallo cerrado, límites, observabilidad y SLO/RTO/RPO | Aprobado — Fase 3 |
@@ -122,15 +122,15 @@ Dimensión actual: **9 dominios conceptuales, 11 schemas físicos, 115 tablas, 7
 
 ## Decisiones acordadas
 
-- El ecosistema documentado se compone de Allfit OS, Allfit Space y Allfit Backoffice.
+- El ecosistema documentado se compone de Allfit Studio, Allfit Space y Allfit Backoffice.
 - WorkOS AuthKit será la única fuente de autenticación.
 - Habrá un WorkOS environment compartido por ambiente y WorkOS Applications separadas por producto.
 - Supabase se utilizará únicamente como PostgreSQL administrado.
-- Space y OS accederán a los datos exclusivamente mediante una API propia.
+- Space y Studio accederán a los datos exclusivamente mediante una API propia.
 - Existirá un proyecto Supabase compartido por ambiente.
 - Una persona puede registrarse directamente en Space y activar su Fitness ID sin invitación, organización o relación profesional.
-- Allfit OS solo puede invitar por email o celular; nunca crea cuentas o personas.
-- La invitación es opcional para identidad: únicamente transporta propuestas iniciadas desde OS y una persona ya registrada la acepta con el mismo `person_id`.
+- Allfit Studio solo puede invitar por email o celular; nunca crea cuentas o personas.
+- La invitación es opcional para identidad: únicamente transporta propuestas iniciadas desde Studio y una persona ya registrada la acepta con el mismo `person_id`.
 - La persona completa personalmente el registro o autenticación mediante AuthKit, los términos y el onboarding.
 - V1 solo activa Fitness IDs para personas de 18 años o más; menores, representantes, consentimiento parental y cuentas tuteladas quedan fuera del alcance.
 - La elegibilidad adulta se resuelve antes de crear la persona, recopilar datos fitness o materializar invitaciones; un usuario WorkOS temporal no concede acceso de dominio.
@@ -148,7 +148,7 @@ Dimensión actual: **9 dominios conceptuales, 11 schemas físicos, 115 tablas, 7
 - Una inferencia conserva algoritmo, versión, inputs, confianza y vigencia; una verificación cubre solo la afirmación y evidencia evaluadas.
 - V1 verifica únicamente credenciales profesionales mediante registro oficial o confirmación del emisor; `A11` requiere deber separado, AAL2, vigencia y ausencia de conflicto.
 - La proyección actual aplica reglas explícitas, conserva alternativas y nunca amplía scopes ni convierte todo el perfil en “verificado”.
-- Para prestar servicios, gestionar clientes, publicar oferta, asignar programas o recibir pagos mediante OS, el profesional debe actuar dentro de una organización.
+- Para prestar servicios, gestionar clientes, publicar oferta, asignar programas o recibir pagos mediante Studio, el profesional debe actuar dentro de una organización.
 - El onboarding `solo_professional` crea una organización `professional_practice`; esta es una frontera operativa y no implica por sí sola una persona jurídica.
 - Una práctica inicialmente unipersonal puede incorporar staff y profesionales sin cambiar de `organization_id`; “independiente” no es un tipo permanente.
 - Terminar una relación corta inmediatamente acceso en vivo y escritura, y congela en `T` la ventana histórica previamente autorizada; no equivale a revocar el consentimiento.
@@ -167,7 +167,7 @@ Dimensión actual: **9 dominios conceptuales, 11 schemas físicos, 115 tablas, 7
 - Los scopes nutricionales nunca se heredan de los grants de entrenamiento: intake, guidance y media se conceden y revocan por separado.
 - Nutrición V1 incluye registro manual, seis nutrientes canónicos, resúmenes calculados, una foto opcional, objetivos personales y propuestas de un profesional verificado.
 - No existe rol `nutritionist`: proponer exige relación, asignación, membresía, `guide_nutrition`, credencial `nutrition_professional` vigente y `nutrition_guidance/contribute` en la misma organización.
-- `nutrition_media` aislado no revela comidas; una lectura OS necesita además `nutrition_intake/read`. Revocar un scope invalida filas, conteos, cursores, agregados, cachés y URLs relacionadas.
+- `nutrition_media` aislado no revela comidas; una lectura Studio necesita además `nutrition_intake/read`. Revocar un scope invalida filas, conteos, cursores, agregados, cachés y URLs relacionadas.
 - Tras terminar la relación, `frozen` nutricional nunca expone comidas, fotos, resúmenes o metas personales; solo guía profesional emitida por esa relación hasta `T`, mediante caso histórico y mientras `nutrition_guidance` siga vigente.
 - Las invitaciones usan intenciones tipadas de membresía, relación y programa; cada una se acepta o rechaza de forma independiente.
 - La aceptación parcial es válida y completar una invitación nunca concede términos, scopes, pagos o usos secundarios implícitos.
@@ -187,12 +187,12 @@ Dimensión actual: **9 dominios conceptuales, 11 schemas físicos, 115 tablas, 7
 - Booking/clases, commerce/pagos internos o externos, membresías comerciales, wearables productivos, IA, nutrición clínica/terapéutica o automatizada, comunidad y eventos no generan DDL en la baseline.
 - `sensor_enriched` se define y prueba como contrato del núcleo, sin incorporar conectores, credenciales o raw streams productivos.
 - Una capacidad diferida entra después como rebanada vertical con ADR, ownership, privacidad, modelo, migraciones, RLS y pruebas propios; no mediante placeholders.
-- Space y OS tienen independencia funcional y aislamiento operativo, pero comparten en V1 WorkOS AuthKit y PostgreSQL como dominios físicos de fallo aceptados.
+- Space y Studio tienen independencia funcional y aislamiento operativo, pero comparten en V1 WorkOS AuthKit y PostgreSQL como dominios físicos de fallo aceptados.
 - Los fallos locales se contienen con límites de recursos, colas y circuit breakers; autorización, consentimiento, capacidad y dinero fallan cerrados.
 - Una separación futura se decide por SLO, regulación, escala o incidentes demostrados y se ejecuta por dominio, no duplicando bases por producto.
-- La API propia se construye en Bun + TypeScript y expone cuatro superficies REST con OpenAPI: `/space/v1`, `/os/v1`, `/catalog/v1` y `/backoffice/v1`, cada una con versionado independiente.
-- `allfitone-os` es el repositorio propietario de `supabase/`, de las migraciones y de la API; Allfit Space es un repositorio cliente que consume DTOs generados.
-- En OS, la organización viaja explícita en la ruta bajo `/organizations/{orgId}`; nunca se resuelve desde el token ni desde una preferencia guardada.
+- La API propia se construye en Bun + TypeScript y expone cuatro superficies REST con OpenAPI: `/space/v1`, `/studio/v1`, `/catalog/v1` y `/backoffice/v1`, cada una con versionado independiente.
+- `allfitone-studio` es el repositorio propietario de `supabase/`, de las migraciones y de la API; Allfit Space es un repositorio cliente que consume DTOs generados.
+- En Studio, la organización viaja explícita en la ruta bajo `/organizations/{orgId}`; nunca se resuelve desde el token ni desde una preferencia guardada.
 - Allfit Space es una aplicación móvil Expo: registro de ejecución, edición de perfil y captura nutricional estructurada admiten borrador local. La foto nutricional se adjunta después al recuperar conexión; `Command-Id` se genera al crear la intención y cada operación HTTP usa su propia `Idempotency-Key`.
 - El catálogo de roles organizacionales es cerrado: `owner`, `admin`, `coach` y `staff`, sin roles personalizados ni alcance por sede.
 - Una relación tiene un titular efectivo y admite suplencias acotadas que la persona debe aceptar.
@@ -223,7 +223,7 @@ Además de los P0, permanecen decisiones de ejecución registradas en el plan; s
 1. **SLO, RTO y RPO** — los valores de la matriz de degradación son una propuesta. Si existe algún compromiso de disponibilidad ya adquirido con un cliente o inversionista, los objetivos deben derivarse de él.
 2. **Hosting de la API** — sin decidir. Los límites de recursos están expresados como garantías exigibles y se instancian en la Fase 5.
 3. **Retención y borrado — política ratificada el 23 de julio de 2026.** Tres estados: **relación activa** → el gimnasio ve los datos según sus grants; **relación terminada con cuenta viva** → los grants pasan a `frozen`, cesan operación y escritura y solo sobrevive la ventana histórica autorizada hasta la fecha de corte; **sin relaciones activas y cuenta eliminada** → la información se **anonimiza para todos, incluido el gimnasio**. Sin snapshots, copias ni tabla `archive`: el dato vive en un solo lugar y la anonimización se aplica una vez, en su lugar. `data_grants` ya modela `active`, `frozen` y `revoked`; el acceso histórico exige un caso acotado, MFA, propósito, `auth.can_read_frozen` y auditoría sin excepción según ADR-023. Quedan pendientes los **plazos de retención por categoría** y la **validación con abogado de datos en Colombia**. Detalle en [ADR-005 y ADR-023](./02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md).
-4. **Rol dual controlador/encargado de Allfit** — documentar en ADR propio: Allfit es **encargado** del gimnasio en OS y **controlador** frente a la persona en Space.
+4. **Rol dual controlador/encargado de Allfit** — documentar en ADR propio: Allfit es **encargado** del gimnasio en Studio y **controlador** frente a la persona en Space.
 
 Decisión cerrada durante la revisión:
 
@@ -257,7 +257,7 @@ Decisión final:
 
 ## Dependencias de repositorios
 
-Los documentos dentro de `01_CURRENT_STATE` enlazan evidencia histórica de Factory Fitness mediante el commit inmutable `d9f1fda7`. Los entregables de implementación apuntan al repositorio propietario `allfitone-os`; la documentación y los contratos permanecen en `allfitone-docs`.
+Los documentos dentro de `01_CURRENT_STATE` enlazan evidencia histórica de Factory Fitness mediante el commit inmutable `d9f1fda7`. Los entregables de implementación apuntan al repositorio propietario `allfitone-studio`; la documentación y los contratos permanecen en `allfitone-docs`.
 
 ## Regla de mantenimiento
 
@@ -272,6 +272,6 @@ No crear nuevos documentos para cada conversación. Mantener una sola fuente por
 - entidades y cardinalidades conceptuales → `V1_CONCEPTUAL_ERD.md`;
 - operaciones, actores y eventos → `V1_OPERATIONS_MATRIX.md`;
 - autorización, RLS, proyecciones y pruebas → `V1_RLS_MATRIX.md`;
-- superficies, endpoints y contratos → `V1_SPACE_OS_API_CONTRACTS.md`;
+- superficies, endpoints y contratos → `V1_SPACE_STUDIO_API_CONTRACTS.md`;
 - fallos, límites, observabilidad y objetivos → `V1_DEGRADATION_AND_RECOVERY_MATRIX.md`;
 - ejecución → `DATABASE_REFACTOR_PHASES.md`.

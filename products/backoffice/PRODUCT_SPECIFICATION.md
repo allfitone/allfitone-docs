@@ -14,7 +14,7 @@ Su promesa es:
 
 > **Resolver operaciones de plataforma con el mínimo acceso necesario, evidencia completa y separación de responsabilidades.**
 
-No es un panel con acceso irrestricto a la base de datos ni una versión privilegiada de OS o Space. Cada capacidad corresponde a un deber explícito, temporal y auditable.
+No es un panel con acceso irrestricto a la base de datos ni una versión privilegiada de Studio o Space. Cada capacidad corresponde a un deber explícito, temporal y auditable.
 
 ## 2. Lugar dentro del ecosistema
 
@@ -22,7 +22,7 @@ Allfit One se compone de tres productos que consumen dominios compartidos median
 
 ```text
 Allfit Space       Persona: identidad, entrenamiento y datos propios
-Allfit OS          Profesional u organización: servicio y operación fitness
+Allfit Studio          Profesional u organización: servicio y operación fitness
 Allfit Backoffice  Equipo de Allfit: soporte y gobierno de plataforma
 ```
 
@@ -135,7 +135,7 @@ Roles, deberes, decisiones y accesos forman un historial inmutable y consultable
 
 ### Backoffice no suplanta a otros productos
 
-Las personas controlan su identidad y datos desde Space; las organizaciones administran su operación desde OS.
+Las personas controlan su identidad y datos desde Space; las organizaciones administran su operación desde Studio.
 
 ### La automatización conserva las mismas garantías
 

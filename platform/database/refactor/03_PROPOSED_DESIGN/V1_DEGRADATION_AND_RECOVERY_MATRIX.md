@@ -4,7 +4,7 @@
 **Fecha:** 28 de julio de 2026
 **Fase:** 3 — Definir operaciones, seguridad y contratos
 **Estado:** aprobado y recertificado con Nutrición V1
-**Deriva de:** [ADR-014](../02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md), [`V1_OPERATIONS_MATRIX.md`](./V1_OPERATIONS_MATRIX.md), [`V1_SPACE_OS_API_CONTRACTS.md`](./V1_SPACE_OS_API_CONTRACTS.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
+**Deriva de:** [ADR-014](../02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md), [`V1_OPERATIONS_MATRIX.md`](./V1_OPERATIONS_MATRIX.md), [`V1_SPACE_STUDIO_API_CONTRACTS.md`](./V1_SPACE_STUDIO_API_CONTRACTS.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
 
 > **Nota de estado.** Los valores numéricos de límites, timeouts y SLO de este documento son una **propuesta pendiente de aprobación**. Se redactaron sin conocer compromisos de disponibilidad ya adquiridos con clientes o inversionistas; si existen, los SLO deben derivarse de ellos y no de esta propuesta. El proveedor de hosting tampoco está decidido, de modo que las garantías se expresan como requisitos exigibles y se instancian en la Fase 5.
 
@@ -41,16 +41,16 @@ El ecosistema mantiene **por ambiente** un WorkOS environment y un PostgreSQL co
 | SMS / WhatsApp | Proveedor externo | No | Invitación por celular se retrasa; fallback a email |
 | Push (Expo/FCM/APNs) | Proveedor externo | No | Recordatorios se retrasan; la app los ve al abrir |
 | Almacenamiento de imágenes | Proveedor externo | No | Fotos de progreso/nutrición no suben ni se sirven; el resto opera |
-| Frontend Space | Cliente | No | OS continúa |
-| Frontend OS | Cliente | No | Space continúa |
+| Frontend Space | Cliente | No | Studio continúa |
+| Frontend Studio | Cliente | No | Space continúa |
 
 ## 4. Matriz de fallos
 
-| Fallo | Space | OS | Workers | Degradación permitida |
+| Fallo | Space | Studio | Workers | Degradación permitida |
 | --- | --- | --- | --- | --- |
 | Frontend de Space | Caído | **Sin efecto** | Sin efecto | — |
-| Frontend de OS | **Sin efecto** | Caído | Sin efecto | — |
-| PostgreSQL | Sin confirmaciones | Sin confirmaciones | En espera | Space conserva borradores locales; OS **no confirma nada** |
+| Frontend de Studio | **Sin efecto** | Caído | Sin efecto | — |
+| PostgreSQL | Sin confirmaciones | Sin confirmaciones | En espera | Space conserva borradores locales; Studio **no confirma nada** |
 | WorkOS AuthKit | Login y refresh fallan; token vigente sigue operando hasta expirar | Igual | Sin efecto | Ninguna: no se acepta un token no verificable |
 | API completa | Solo caché de lectura | Solo caché de lectura | Sin efecto | Space registra en local |
 | Módulo de un producto | Ese contrato degrada | El otro continúa | Sin efecto | El prefijo de ruta aísla |
@@ -79,7 +79,7 @@ Autorización, consentimiento, capacidad y —cuando entre en alcance— dinero.
 | `OP-REL-005` decidir suplencia | Habilita un actor nuevo |
 | `OP-IDN-003` activar persona | Crea la raíz de identidad |
 | `OP-IDN-009` decidir intenciones | Materializa vínculos |
-| Toda lectura de OS bajo grant | Sin evaluar la fórmula íntegra, no se devuelve nada |
+| Toda lectura de Studio bajo grant | Sin evaluar la fórmula íntegra, no se devuelve nada |
 | `OP-PRV-018/019/020` abrir/cerrar caso y leer histórico | El caso, MFA, propósito, corte, denegaciones y auditoría se evalúan autoritativamente en cada intento |
 | `OP-NUT-008/009/010/011/012` decisión, lecturas y propuesta profesional | Requieren estado, grants, capability, credencial y auditoría actuales; nunca caché |
 
@@ -132,20 +132,20 @@ Valores **propuestos**. El objetivo no es el número exacto sino que exista un l
 | Space, por persona | 120 req/min | 300 | `429` con `Retry-After` |
 | Space, escrituras de ejecución | 60 req/min | 120 | `429` |
 | Space, WorkOS Application global | 20 000 req/min | — | `429` |
-| OS, por membresía | 300 req/min | 600 | `429` |
-| OS, lecturas de datos de clientes | 120 req/min | 240 | `429`; además se registra como patrón anómalo |
-| OS, WorkOS Application global | 10 000 req/min | — | `429` |
+| Studio, por membresía | 300 req/min | 600 | `429` |
+| Studio, lecturas de datos de clientes | 120 req/min | 240 | `429`; además se registra como patrón anómalo |
+| Studio, WorkOS Application global | 10 000 req/min | — | `429` |
 | Catálogo | 600 req/min por actor | 1 200 | `429` |
 | Soporte y break-glass | 30 req/min | 60 | `429` y alerta |
 
-Los presupuestos de Space y OS son **independientes**: agotar el de OS no reduce el de Space.
+Los presupuestos de Space y Studio son **independientes**: agotar el de Studio no reduce el de Space.
 
 ### 6.2 Conexiones y timeouts
 
 | Recurso | Propuesta | Regla |
 | --- | --- | --- |
-| Pool Space | 40% del total, con mínimo garantizado | Nunca por debajo del mínimo, aunque OS esté saturado |
-| Pool OS | 40%, con mínimo garantizado | Igual |
+| Pool Space | 40% del total, con mínimo garantizado | Nunca por debajo del mínimo, aunque Studio esté saturado |
+| Pool Studio | 40%, con mínimo garantizado | Igual |
 | Pool workers | 20%, dividido por dominio | Un worker no toma del pool síncrono |
 | `statement_timeout` lecturas | 3 s | Cancelable |
 | `statement_timeout` comandos | 10 s | |
@@ -184,11 +184,11 @@ Ningún breaker abierto bloquea una operación de negocio que no dependa de ese 
 
 ## 7. Observabilidad
 
-El requisito de ADR-014 es que las métricas permitan distinguir **impacto de Space, de OS, de dominio y de dependencia compartida**. Una métrica agregada de "errores de la API" no cumple: no responde a quién se le rompió.
+El requisito de ADR-014 es que las métricas permitan distinguir **impacto de Space, de Studio, de dominio y de dependencia compartida**. Una métrica agregada de "errores de la API" no cumple: no responde a quién se le rompió.
 
 ### 7.1 Dimensiones obligatorias
 
-Toda métrica y todo log llevan: `surface` (space \| os \| catalog), `domain` (identity \| organizations \| relationships \| privacy \| catalog \| planning \| execution \| system \| support), `operation` (el `OP-*`), `outcome`, `request_id`.
+Toda métrica y todo log llevan: `surface` (space \| studio \| catalog), `domain` (identity \| organizations \| relationships \| privacy \| catalog \| planning \| execution \| system \| support), `operation` (el `OP-*`), `outcome`, `request_id`.
 
 ### 7.2 Indicadores
 
@@ -229,10 +229,10 @@ Toda métrica y todo log llevan: `surface` (space \| os \| catalog), `domain` (i
 
 **Pendientes de aprobación.** ADR-014 exige acordarlos antes de producción y no inferirlos de la topología. Estos valores son un punto de partida coherente con una baseline sobre PostgreSQL administrado y un equipo pequeño; si existe un compromiso ya adquirido con un cliente, prevalece.
 
-| Objetivo | Space | OS | Nota |
+| Objetivo | Space | Studio | Nota |
 | --- | --- | --- | --- |
 | Disponibilidad mensual | 99.5% | 99.5% | ~3,6 h/mes. Limitada por la ventana del proveedor de PostgreSQL |
-| Latencia de lectura p95 | 400 ms | 600 ms | OS paga la fórmula de acceso |
+| Latencia de lectura p95 | 400 ms | 600 ms | Studio paga la fórmula de acceso |
 | Latencia de lectura p99 | 1 s | 1,5 s | |
 | Latencia de comando p95 | 800 ms | 1 s | |
 | `finalize_execution` p95 | 1,5 s | — | Incluye validación contra contrato |
@@ -273,9 +273,9 @@ El paso 3 **no es opcional y no se puede posponer**. Mientras existan disposicio
 | Space con borradores locales | Sincroniza con la clave original; los duplicados convergen a una sola ejecución |
 | Space con borrador cuyo contrato cambió | Valida contra el contrato **congelado al iniciar** |
 | Space con borrador de una asignación desacoplada | La sincronización se acepta si la sesión ya había comenzado; si no, se rechaza con motivo |
-| OS con formulario sin enviar | Reenvía; nada se confirmó, nada se duplica |
-| OS con vista cacheada de grants | Se descarta: los permisos se releen siempre |
-| OS con caso histórico conservado en UI | El identificador puede reenviarse, pero servidor relee estado, vigencia, actor, MFA, grant y denegaciones; nunca confía en el estado local |
+| Studio con formulario sin enviar | Reenvía; nada se confirmó, nada se duplica |
+| Studio con vista cacheada de grants | Se descarta: los permisos se releen siempre |
+| Studio con caso histórico conservado en UI | El identificador puede reenviarse, pero servidor relee estado, vigencia, actor, MFA, grant y denegaciones; nunca confía en el estado local |
 | Token vigente durante la caída | Sigue siendo válido hasta expirar; la autorización de dominio se reevalúa entera |
 
 ### 9.3 Backups
@@ -296,14 +296,14 @@ Alimentan la suite de la Fase 6. Los diez primeros son los escenarios exigidos p
 
 | # | Prueba | Resultado esperado |
 | --- | --- | --- |
-| `D-01` | Cae el frontend de Space | OS opera con normalidad |
-| `D-02` | Cae el frontend de OS | Space opera con normalidad |
-| `D-03` | Worker de OS saturado | No consume el presupuesto reservado de requests de Space |
+| `D-01` | Cae el frontend de Space | Studio opera con normalidad |
+| `D-02` | Cae el frontend de Studio | Space opera con normalidad |
+| `D-03` | Worker de Studio saturado | No consume el presupuesto reservado de requests de Space |
 | `D-04` | Proveedor externo degradado | El breaker abre sin bloquear operaciones independientes |
 | `D-05` | PostgreSQL no disponible | Ambos productos impiden confirmaciones sensibles y muestran degradación **explícita** |
 | `D-06` | Space crea borrador durante la caída | Se sincroniza **una sola vez** al recuperarse |
-| `D-07` | OS con read model atrasado | No confirma grants, asignaciones ni cambios de sesión |
-| `D-08` | Métricas durante un incidente | Permiten distinguir Space, OS, dominio y dependencia común |
+| `D-07` | Studio con read model atrasado | No confirma grants, asignaciones ni cambios de sesión |
+| `D-08` | Métricas durante un incidente | Permiten distinguir Space, Studio, dominio y dependencia común |
 | `D-09` | Ejercicio de restauración | Cumple el RTO y el RPO acordados |
 | `D-10` | Propuesta de extracción de un dominio | Identifica fuente de verdad y consistencia; se rechaza si solo duplica tablas por producto |
 | `D-11` | Reintentos posteriores a recuperación | Idempotentes: no duplican ejecuciones, asignaciones ni invitaciones |
@@ -335,10 +335,10 @@ Alimentan la suite de la Fase 6. Los diez primeros son los escenarios exigidos p
 | `D-37` | Registro interno de deberes no disponible o asignación no confirmable | Verificación y break-glass fallan cerrados; la operación ordinaria continúa sin elevar autoridad |
 | `D-NUT-01` | Space crea comida offline y repite sincronización tras recuperar DB/API | Una comida, hijos y outbox; el borrador pasa a confirmado una vez |
 | `D-NUT-02` | Almacenamiento falla al adjuntar foto | El PATCH falla sin cambiar revisión ni `media_ref`; la comida estructurada sigue disponible |
-| `D-NUT-03` | Credencial/capability no pueden verificarse | Lecturas y propuestas OS fallan cerradas; Space personal continúa |
+| `D-NUT-03` | Credencial/capability no pueden verificarse | Lecturas y propuestas Studio fallan cerradas; Space personal continúa |
 | `D-NUT-04` | Revocación durante consulta/agregación | La operación completa falla/reintenta; nunca sirve detalle o resumen previo |
 | `D-NUT-05` | Restauración anterior a borrado o revocación nutricional | Disposición/revocación se reaplica antes de abrir tráfico; foto, resumen y guía no reviven |
-| `D-NUT-06` | Firma Space o almacenamiento detrás del proxy OS no disponibles | No se expone `media_ref` ni URL de storage; OP-NUT-013 devuelve degradación explícita sin redirect y las comidas/resúmenes sin media continúan |
+| `D-NUT-06` | Firma Space o almacenamiento detrás del proxy Studio no disponibles | No se expone `media_ref` ni URL de storage; OP-NUT-013 devuelve degradación explícita sin redirect y las comidas/resúmenes sin media continúan |
 
 ## 11. Decisiones que este documento deja abiertas
 

@@ -286,7 +286,7 @@ El contrato completo —helpers UUIDv7, nombres de checks, funciones de entrada 
 
 ## 18. Migraciones
 
-- Una sola historia de migraciones, propiedad de `allfitone-os`, aplicada por un solo pipeline.
+- Una sola historia de migraciones, propiedad de `allfitone-studio`, aplicada por un solo pipeline.
 - Orden por dependencias: extensiones y enums → catálogos → tablas padre → dependientes → uniques/checks/FKs → índices → grants → RLS y policies → vistas y funciones → seeds.
 - Cada migración es reproducible desde cero: `supabase db reset` reconstruye el esquema sin pasos manuales.
 - Los nombres de archivo siguen el patrón de timestamp del tooling de Supabase.

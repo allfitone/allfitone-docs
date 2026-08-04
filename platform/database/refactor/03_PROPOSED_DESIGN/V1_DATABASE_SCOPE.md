@@ -8,7 +8,7 @@
 
 ## 1. Propósito
 
-Este documento define la frontera funcional y de datos de la primera baseline de base de datos para el ecosistema Allfit One, consumida por OS, Space y Backoffice.
+Este documento define la frontera funcional y de datos de la primera baseline de base de datos para el ecosistema Allfit One, consumida por Studio, Space y Backoffice.
 
 Responde:
 
@@ -31,17 +31,17 @@ No es un modelo lógico, un diccionario de tablas ni una especificación SQL. Lo
 V1 permite que:
 
 1. una persona adulta se registre directamente en Space y mantenga un Fitness ID autónomo;
-2. una organización invite desde OS sin crear identidad en nombre del destinatario;
+2. una organización invite desde Studio sin crear identidad en nombre del destinatario;
 3. una persona acepte por separado una membresía organizacional, una relación profesional o una asignación propuesta;
 4. un profesional opere siempre dentro de una organización;
 5. una persona y un profesional autorizado compartan planificación, ejecución y resultados bajo consentimientos explícitos;
 6. la persona conserve continuidad de su historial al cambiar o terminar relaciones;
-7. Space y OS trabajen sobre la misma persona y los mismos hechos, sin sincronizar copias por producto.
+7. Space y Studio trabajen sobre la misma persona y los mismos hechos, sin sincronizar copias por producto.
 
 ```mermaid
 flowchart LR
     direct["Registro directo en Space"] --> person["Persona + Fitness ID"]
-    invite["Invitación opcional desde OS"] --> person
+    invite["Invitación opcional desde Studio"] --> person
     person --> autonomous["Entrenamiento autónomo"]
     person --> relationship["Relación profesional aceptada"]
     relationship --> grants["Scopes y acciones aceptados"]
@@ -59,11 +59,11 @@ flowchart LR
 | Elemento | Decisión V1 |
 | --- | --- |
 | Allfit Space | Producto personal; permite registro directo, perfil, agenda, entrenamiento autónomo e historial propio |
-| Allfit OS | Producto profesional; invita, gestiona organizaciones, relaciones, planificación y datos autorizados |
+| Allfit Studio | Producto profesional; invita, gestiona organizaciones, relaciones, planificación y datos autorizados |
 | Autenticación | WorkOS AuthKit es la única fuente de autenticación |
 | Identidad de dominio | La persona/Fitness ID es independiente del `sub` de WorkOS AuthKit |
 | Persistencia | Un PostgreSQL administrado por Supabase compartido por ambiente |
-| Acceso | Space y OS usan una API propia; ningún cliente accede directamente a PostgreSQL/PostgREST |
+| Acceso | Space y Studio usan una API propia; ningún cliente accede directamente a PostgreSQL/PostgREST |
 | Autorización | Backend, privilegios mínimos y RLS con contexto transaccional |
 | Independencia | Funcional y operativa; WorkOS AuthKit, API autoritativa y PostgreSQL continúan como dependencias físicas compartidas |
 | Migraciones | Un solo repositorio y pipeline son autoridad del esquema |
@@ -105,9 +105,9 @@ La persona puede:
 
 El registro directo no crea invitación, organización, membresía, relación profesional, asignación o grant de servicio.
 
-### 5.2 Invitación opcional desde OS
+### 5.2 Invitación opcional desde Studio
 
-OS puede crear una invitación por email o celular con intenciones tipadas:
+Studio puede crear una invitación por email o celular con intenciones tipadas:
 
 - membresía organizacional;
 - relación profesional;
@@ -135,7 +135,7 @@ La elegibilidad se resuelve antes de crear/activar la persona, recopilar datos f
 
 El perfil profesional pertenece a la persona y puede existir sin organización. No constituye otra identidad.
 
-Para prestar servicios, gestionar clientes, asignar programas o realizar cualquier operación profesional mediante OS, la persona debe actuar dentro de una organización activa.
+Para prestar servicios, gestionar clientes, asignar programas o realizar cualquier operación profesional mediante Studio, la persona debe actuar dentro de una organización activa.
 
 ### 6.2 Tipos operativos iniciales
 
@@ -220,7 +220,7 @@ Cada scope:
 - se combina con un `access_level` y capacidades separados;
 - no concede marketing, publicación, IA, investigación o entrenamiento de modelos.
 
-`nutrition_media` es independiente para consentimiento y revocación, pero no constituye una superficie navegable: una proyección OS exige además `nutrition_intake/read`. Conceder media sin ingesta produce cero filas, conteos, cursores, enlaces o bytes. OS recibe únicamente un enlace a proxy autenticado que reevalúa ambos scopes por GET; la URL firmada de storage queda reservada para la persona en Space.
+`nutrition_media` es independiente para consentimiento y revocación, pero no constituye una superficie navegable: una proyección Studio exige además `nutrition_intake/read`. Conceder media sin ingesta produce cero filas, conteos, cursores, enlaces o bytes. Studio recibe únicamente un enlace a proxy autenticado que reevalúa ambos scopes por GET; la URL firmada de storage queda reservada para la persona en Space.
 
 ### 7.4 Sesiones autónomas
 
@@ -508,7 +508,7 @@ Sí puede conservar fundamentos ya requeridos por V1: IDs estables, límites de 
 La baseline debe demostrar como mínimo:
 
 1. **Space-only:** registro directo adulto → Fitness ID → perfil → sesión autónoma → resultados/historial.
-2. **OS pendiente:** organización emite invitación → no existe persona provisional → expira/revoca sin crear vínculos.
+2. **Studio pendiente:** organización emite invitación → no existe persona provisional → expira/revoca sin crear vínculos.
 3. **Ecosistema vinculado:** invitación → login/registro personal → aceptación parcial → relación + grant → asignación → ejecución → consulta profesional autorizada.
 4. **Persona preexistente:** usuario Space acepta invitación posterior sin duplicar identidad.
 5. **Práctica profesional:** onboarding unipersonal → organización → incorporación de staff sin cambiar `organization_id`.
@@ -518,7 +518,7 @@ La baseline debe demostrar como mínimo:
 9. **Multidisciplina:** fuerza, running, yoga/movilidad e híbrido cumplen contratos tipados sin columnas universales ficticias.
 10. **Capacidad diferida:** la baseline se reconstruye sin DDL ni permisos de booking, commerce, marketplace, integrations o intelligence.
 11. **Nutrición Space:** comida offline → sincronización estructurada → foto saneada diferida → resumen diario personal.
-12. **Nutrición vinculada:** grants independientes → lectura OS autorizada → propuesta profesional verificada → decisión personal.
+12. **Nutrición vinculada:** grants independientes → lectura Studio autorizada → propuesta profesional verificada → decisión personal.
 13. **Nutrición al terminar:** cancelación de propuestas → grants `frozen` → caso histórico que solo expone guía profesional emitida `<= T`.
 
 ## 15. Criterios de aceptación de la baseline
@@ -551,7 +551,7 @@ La baseline debe demostrar como mínimo:
 
 - Comidas, ítems y nutrientes pertenecen a una sola persona y no se mezclan con `health_context`.
 - Existe como máximo una versión activa de objetivos y toda propuesta profesional requiere decisión personal.
-- `nutrition_media` sin `nutrition_intake` no revela existencia, conteos, agregados, enlaces ni bytes; el proxy OS responde `404` sin redirect cuando cualquier autorización deja de ser efectiva.
+- `nutrition_media` sin `nutrition_intake` no revela existencia, conteos, agregados, enlaces ni bytes; el proxy Studio responde `404` sin redirect cuando cualquier autorización deja de ser efectiva.
 - Revocación y borrado invalidan detalle, paginación, resúmenes, cachés, derivados y almacenamiento.
 - El histórico `frozen` excluye ingestas, fotos, resúmenes y metas personales.
 
@@ -561,7 +561,7 @@ La baseline debe demostrar como mínimo:
 - Outbox/inbox evita efectos duplicados.
 - El esquema se reconstruye desde cero en CI/staging.
 - Consultas y policies tienen índices justificados.
-- Space y OS tienen contratos de degradación/observabilidad diferenciados.
+- Space y Studio tienen contratos de degradación/observabilidad diferenciados.
 - No existe DDL o contrato operativo de capacidades diferidas.
 
 ### Documentación
@@ -702,7 +702,7 @@ plan gratuito**, sin tocar una línea de código ni desplegar nada.
 
 | ADR | Regla incorporada al alcance |
 | --- | --- |
-| ADR-001 | Registro directo en Space e invitación opcional desde OS |
+| ADR-001 | Registro directo en Space e invitación opcional desde Studio |
 | ADR-002 | WorkOS AuthKit autentica; Supabase se usa solo como PostgreSQL |
 | ADR-003 | Núcleo multidisciplina y separación planificación/ejecución |
 | ADR-004 | Toda operación profesional ocurre dentro de organización |

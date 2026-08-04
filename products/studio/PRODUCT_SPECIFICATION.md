@@ -1,10 +1,10 @@
-# Allfit OS
+# Allfit Studio
 
 ## Visión del sistema operativo para profesionales y organizaciones fitness
 
 > **Estado del documento:** visión de producto alineada con la baseline técnica documentada en `platform/database/refactor`.
 
-Este documento describe la dirección completa de Allfit OS. No reemplaza las decisiones de arquitectura, el glosario, el alcance V1 ni el modelo conceptual del refactor.
+Este documento describe la dirección completa de Allfit Studio. No reemplaza las decisiones de arquitectura, el glosario, el alcance V1 ni el modelo conceptual del refactor.
 
 Cuando una capacidad de esta visión todavía no pertenece a V1, se indica expresamente como **expansión futura**. Si existe una diferencia entre este documento y las fuentes normativas de `platform/database/refactor`, prevalecen:
 
@@ -20,7 +20,7 @@ El panel administrativo existente de Factory Fitness se utiliza únicamente como
 
 ## 1. La tesis central
 
-**Allfit OS debe convertirse en el sistema operativo desde el cual un profesional o una organización ofrece fitness.**
+**Allfit Studio debe convertirse en el sistema operativo desde el cual un profesional o una organización ofrece fitness.**
 
 No debería ser únicamente:
 
@@ -52,7 +52,7 @@ La ventaja no consiste en tener más pantallas administrativas que otros product
 - La operación de sedes y servicios.
 - El negocio.
 
-Allfit OS no debe administrar una copia aislada del cliente. Debe operar, con autorización, sobre una relación conectada con la misma persona que utiliza Allfit Space.
+Allfit Studio no debe administrar una copia aislada del cliente. Debe operar, con autorización, sobre una relación conectada con la misma persona que utiliza Allfit Space.
 
 ---
 
@@ -66,7 +66,7 @@ ALLFIT ONE
 ├── Allfit Space
 │   Producto para personas
 │
-├── Allfit OS
+├── Allfit Studio
 │   Producto para profesionales y organizaciones
 │
 └── Allfit Backoffice
@@ -84,7 +84,7 @@ La persona:
 - Registra y consulta su progreso.
 - Conserva continuidad al cambiar de profesional u organización.
 
-### Allfit OS
+### Allfit Studio
 
 El profesional o la organización:
 
@@ -106,7 +106,7 @@ El equipo autorizado de Allfit:
 - Gestiona accesos internos, obligaciones legales y operaciones excepcionales con separación de deberes.
 
 ```text
-Allfit Space                         Allfit OS
+Allfit Space                         Allfit Studio
 
 Persona                              Profesional u organización
 Controla su Fitness ID               Opera dentro de una organización
@@ -123,7 +123,7 @@ Los tres productos consumen los mismos hechos de dominio mediante contratos y pe
 
 ## 3. El concepto más importante: una organización no es dueña del Fitness ID
 
-La unidad central de Allfit OS no debe ser un “usuario del gimnasio” duplicado dentro de cada negocio. Debe ser una **relación profesional explícita entre una persona y una organización**.
+La unidad central de Allfit Studio no debe ser un “usuario del gimnasio” duplicado dentro de cada negocio. Debe ser una **relación profesional explícita entre una persona y una organización**.
 
 La persona conserva:
 
@@ -161,9 +161,9 @@ Ser propietario o administrador de la organización no concede acceso automátic
 
 ## 4. Toda operación profesional ocurre dentro de una organización
 
-Allfit OS debe soportar desde un entrenador independiente hasta una red de centros sin mantener modelos incompatibles.
+Allfit Studio debe soportar desde un entrenador independiente hasta una red de centros sin mantener modelos incompatibles.
 
-El perfil profesional pertenece a la persona. Sin embargo, para prestar servicios, gestionar relaciones, asignar programas o recibir pagos mediante Allfit OS, el profesional actúa dentro de una organización activa.
+El perfil profesional pertenece a la persona. Sin embargo, para prestar servicios, gestionar relaciones, asignar programas o recibir pagos mediante Allfit Studio, el profesional actúa dentro de una organización activa.
 
 ### Práctica unipersonal
 
@@ -203,7 +203,7 @@ El panel administrativo actual demuestra el valor de áreas como clientes, agend
 
 Un entrenador que trabaja solo, un estudio con clases y un gimnasio con varias sedes no deberían ver la misma navegación exacta.
 
-Durante el onboarding, Allfit OS identifica:
+Durante el onboarding, Allfit Studio identifica:
 
 - El tipo de operación.
 - Las disciplinas ofrecidas.
@@ -264,7 +264,7 @@ Adherencia semanal: 75%
 [Revisar sesión]
 ```
 
-El panel existente de Factory Fitness aporta patrones valiosos para esta área: resumen del día, clientes activos, adherencia, intensidad, alertas y agenda. En Allfit OS esos indicadores deben derivarse del nuevo modelo de planificación, ejecución, procedencia y autorización.
+El panel existente de Factory Fitness aporta patrones valiosos para esta área: resumen del día, clientes activos, adherencia, intensidad, alertas y agenda. En Allfit Studio esos indicadores deben derivarse del nuevo modelo de planificación, ejecución, procedencia y autorización.
 
 ### 6.2 Personas
 
@@ -382,7 +382,7 @@ El panel actual demuestra flujos útiles de CRM, planes y membresías, suscripto
 
 ## 7. Invitaciones sin crear personas en nombre de otras personas
 
-Allfit OS puede iniciar una relación, pero no apropiarse del registro.
+Allfit Studio puede iniciar una relación, pero no apropiarse del registro.
 
 La organización solo invita por email o celular. Nunca crea un usuario WorkOS, una persona provisional o un Fitness ID en nombre del destinatario.
 
@@ -421,7 +421,7 @@ Una persona que ya usa Allfit Space acepta con su cuenta y `person_id` existente
 
 ## 8. Privacidad como capacidad de producto
 
-La privacidad no debe aparecer únicamente en una política legal. Debe formar parte de la operación diaria de Allfit OS.
+La privacidad no debe aparecer únicamente en una política legal. Debe formar parte de la operación diaria de Allfit Studio.
 
 V1 define cuatro scopes independientes:
 
@@ -451,7 +451,7 @@ Cada scope debe:
 
 La persona puede ocultar una sesión autónoma para una relación concreta. Esa sesión puede seguir existiendo en su Fitness ID y permanecer visible para otra relación autorizada.
 
-Allfit OS debe explicar de manera comprensible:
+Allfit Studio debe explicar de manera comprensible:
 
 - Qué puede ver la organización.
 - Para qué puede usarlo.
@@ -463,7 +463,7 @@ Allfit OS debe explicar de manera comprensible:
 
 ## 9. Una relación debe poder terminar correctamente
 
-Muchos productos diseñan cuidadosamente el alta y apenas consideran la salida. En Allfit OS, terminar una relación es un flujo central.
+Muchos productos diseñan cuidadosamente el alta y apenas consideran la salida. En Allfit Studio, terminar una relación es un flujo central.
 
 En la fecha efectiva de terminación:
 
@@ -490,7 +490,7 @@ Una organización nueva no hereda gestión, consentimiento o acceso. Debe inicia
 
 ## 10. Operar varias disciplinas sin convertir todo en fuerza
 
-Allfit OS debe funcionar para fuerza, running, movilidad y experiencias híbridas desde un lenguaje común.
+Allfit Studio debe funcionar para fuerza, running, movilidad y experiencias híbridas desde un lenguaje común.
 
 El núcleo utiliza:
 
@@ -528,7 +528,7 @@ La baseline debe validar al menos:
 
 ## 11. Seguimiento y analítica orientados a decisiones
 
-La analítica de Allfit OS debe ayudar a intervenir, no solo a reportar.
+La analítica de Allfit Studio debe ayudar a intervenir, no solo a reportar.
 
 ### V1
 
@@ -611,7 +611,7 @@ La inteligencia artificial debe convertirse en una capa transversal de asistenci
 
 ## 13. Administración organizacional y administración de plataforma
 
-Allfit OS debe distinguir dos niveles que el panel actual ya sugiere, pero que no deben mezclarse.
+Allfit Studio debe distinguir dos niveles que el panel actual ya sugiere, pero que no deben mezclarse.
 
 ### Administración de una organización
 
@@ -660,7 +660,7 @@ La visión de producto debe respetar las decisiones técnicas ya acordadas.
 
 - WorkOS AuthKit es la única fuente de autenticación.
 - Existe un WorkOS environment compartido por ambiente.
-- Space, OS y Backoffice utilizan WorkOS Applications separadas.
+- Space, Studio y Backoffice utilizan WorkOS Applications separadas.
 - La identidad externa de WorkOS AuthKit se separa de la persona/Fitness ID de dominio.
 - Los roles, Organizations y permissions de WorkOS no son autoridad de negocio; las relaciones y permisos fitness viven en PostgreSQL.
 - V1 admite únicamente personas de 18 años o más.
@@ -668,7 +668,7 @@ La visión de producto debe respetar las decisiones técnicas ya acordadas.
 ### Persistencia y acceso
 
 - Supabase se utiliza únicamente como PostgreSQL administrado.
-- Space y OS acceden exclusivamente mediante una API propia.
+- Space y Studio acceden exclusivamente mediante una API propia.
 - Ningún cliente usa PostgreSQL o PostgREST directamente.
 - Backend, privilegios mínimos y RLS transaccional forman defensa en profundidad.
 - Un único repositorio y pipeline son autoridad de migraciones.
@@ -685,7 +685,7 @@ Planificación
 Ejecución
 ```
 
-Los dominios pertenecen al ecosistema ALLFIT ONE, no a una aplicación concreta. Space y OS presentan capacidades diferentes sobre las mismas fuentes de verdad.
+Los dominios pertenecen al ecosistema ALLFIT ONE, no a una aplicación concreta. Space y Studio presentan capacidades diferentes sobre las mismas fuentes de verdad.
 
 ### Procedencia e historial
 
@@ -703,7 +703,7 @@ Procedencia, actor capturador, método y verificación son dimensiones separadas
 
 ## 15. El modelo de negocio
 
-Allfit OS puede capturar valor como infraestructura operativa y como capa de transacción del ecosistema.
+Allfit Studio puede capturar valor como infraestructura operativa y como capa de transacción del ecosistema.
 
 ### Suscripción SaaS
 
@@ -743,7 +743,7 @@ La monetización no debe debilitar la portabilidad del Fitness ID. Una organizac
 
 ## 16. La ventaja competitiva
 
-Allfit OS no ganará únicamente por crear rutinas más rápido.
+Allfit Studio no ganará únicamente por crear rutinas más rápido.
 
 Su defensa estaría compuesta por seis elementos.
 
@@ -775,11 +775,11 @@ Con el tiempo, planificación, clases, reservas, membresías, pagos, marketplace
 
 ## 17. La métrica principal
 
-La métrica norte de Allfit OS no debería ser el número de pantallas visitadas ni la cantidad de planes creados.
+La métrica norte de Allfit Studio no debería ser el número de pantallas visitadas ni la cantidad de planes creados.
 
 Debería ser:
 
-> **Personas activas que completan semanalmente sesiones gestionadas mediante una relación profesional en Allfit OS.**
+> **Personas activas que completan semanalmente sesiones gestionadas mediante una relación profesional en Allfit Studio.**
 
 Esta métrica conecta la operación del profesional con un resultado real de la persona.
 
@@ -885,7 +885,7 @@ Cada ampliación material requiere volver a alcance, ADR, ownership, modelo, seg
 - IA representada por un JSON genérico sin contratos.
 - Conectores de wearables sin modelo de consentimiento y operación.
 - Un perfil duplicado por cada organización.
-- Un modelo de datos separado para Space y otro para OS.
+- Un modelo de datos separado para Space y otro para Studio.
 - Acceso al Fitness ID basado únicamente en rol administrativo.
 - Un permiso genérico para editar cualquier ejecución.
 - Programas publicados que cambian retroactivamente.
@@ -933,11 +933,11 @@ Cada área debe priorizar decisiones y próximos pasos sobre administración pas
 
 ## Definición final
 
-> **Allfit OS es el sistema operativo para profesionales y organizaciones fitness que permite organizar equipos, establecer relaciones autorizadas, crear planificación multidisciplina, acompañar la ejecución y hacer crecer servicios conectados con el Fitness ID de cada persona.**
+> **Allfit Studio es el sistema operativo para profesionales y organizaciones fitness que permite organizar equipos, establecer relaciones autorizadas, crear planificación multidisciplina, acompañar la ejecución y hacer crecer servicios conectados con el Fitness ID de cada persona.**
 
 En su forma definitiva:
 
-> **Allfit OS no sería únicamente el panel donde un negocio administra clientes. Sería la infraestructura desde la cual profesionales y organizaciones ofrecen fitness de forma coordinada, medible, segura y conectada con la vida real de cada persona.**
+> **Allfit Studio no sería únicamente el panel donde un negocio administra clientes. Sería la infraestructura desde la cual profesionales y organizaciones ofrecen fitness de forma coordinada, medible, segura y conectada con la vida real de cada persona.**
 
 Y su lugar dentro de ALLFIT ONE sería:
 
@@ -947,7 +947,7 @@ ALLFIT ONE
 ALLFIT SPACE
 Todo lo que una persona necesita para vivir el fitness.
 
-ALLFIT OS
+ALLFIT STUDIO
 Todo lo que un profesional o negocio necesita para ofrecerlo.
 
 UNA SOLA IDENTIDAD

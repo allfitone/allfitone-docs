@@ -1,4 +1,4 @@
-# Historias de usuario — Allfit OS
+# Historias de usuario — Allfit Studio
 
 **Estado:** borrador para revisión conjunta<br>
 **Fecha:** 30 de julio de 2026<br>
@@ -12,13 +12,13 @@ entenderlo ni para construir a partir de él.
 ## 1. Cómo se lee una historia
 
 ```markdown
-### HU-OS-045 — Título escrito desde quien actúa
+### HU-STUDIO-045 — Título escrito desde quien actúa
 
 **Como** <quién>
 **quiero** <qué>
 **para** <para qué>.
 
-`E-OS-07` · imprescindible · HU-OS-041
+`E-STUDIO-07` · imprescindible · HU-STUDIO-041
 
 **Criterios**
 
@@ -27,11 +27,11 @@ entenderlo ni para construir a partir de él.
 
 | Elemento | Qué significa |
 | --- | --- |
-| `HU-OS-###` | Identificador estable. No se reutiliza nunca |
-| `E-OS-##` | Épica a la que pertenece |
+| `HU-STUDIO-###` | Identificador estable. No se reutiliza nunca |
+| `E-STUDIO-##` | Épica a la que pertenece |
 | Prioridad | `imprescindible` sin esto no se lanza · `importante` debería estar · `después` puede esperar |
 
-## 2. Quién usa Allfit OS
+## 2. Quién usa Allfit Studio
 
 Cuatro roles, y no hay más. No se pueden crear roles a medida.
 
@@ -91,43 +91,43 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 
 ---
 
-## E-OS-00 · Entrar
+## E-STUDIO-00 · Entrar
 
-### HU-OS-001 — Iniciar sesión
+### HU-STUDIO-001 — Iniciar sesión
 
 **Como** integrante de un gimnasio
-**quiero** entrar a Allfit OS
+**quiero** entrar a Allfit Studio
 **para** trabajar.
 
-`E-OS-00` · imprescindible
+`E-STUDIO-00` · imprescindible
 
 **Criterios**
 
 1. Entro con mi correo y contraseña.
 2. Un intento fallido no me dice si el error fue el correo o la contraseña.
 3. Si no pertenezco a ninguna organización, entro pero no veo nada operativo: se me explica que necesito una invitación.
-4. Mi sesión de Allfit OS es independiente de la de la aplicación personal. Si soy coach y además entreno, son dos accesos distintos.
+4. Mi sesión de Allfit Studio es independiente de la de la aplicación personal. Si soy coach y además entreno, son dos accesos distintos.
 
-### HU-OS-002 — Cerrar sesión
+### HU-STUDIO-002 — Cerrar sesión
 
 **Como** integrante de un gimnasio
 **quiero** cerrar sesión
 **para** dejar el equipo libre.
 
-`E-OS-00` · imprescindible
+`E-STUDIO-00` · imprescindible
 
 **Criterios**
 
 1. Al cerrar sesión no queda nada consultable sin volver a entrar.
 2. La sesión caduca sola tras un tiempo de inactividad.
 
-### HU-OS-003 — Recuperar mi contraseña
+### HU-STUDIO-003 — Recuperar mi contraseña
 
 **Como** integrante que olvidó su contraseña
 **quiero** restablecerla
 **para** volver a entrar.
 
-`E-OS-00` · imprescindible
+`E-STUDIO-00` · imprescindible
 
 **Criterios**
 
@@ -135,13 +135,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 2. El mensaje es el mismo exista o no la cuenta.
 3. Al cambiarla se cierran mis sesiones en otros dispositivos.
 
-### HU-OS-004 — Elegir en qué gimnasio estoy trabajando
+### HU-STUDIO-004 — Elegir en qué gimnasio estoy trabajando
 
 **Como** profesional que trabaja en más de un gimnasio
 **quiero** cambiar de organización dentro de la aplicación
 **para** atender a cada uno sin confundirme.
 
-`E-OS-00` · imprescindible
+`E-STUDIO-00` · imprescindible
 
 **Criterios**
 
@@ -152,15 +152,15 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 
 ---
 
-## E-OS-01 · Perfil profesional y organización
+## E-STUDIO-01 · Perfil profesional y organización
 
-### HU-OS-005 — Completar mi perfil dentro del gimnasio
+### HU-STUDIO-005 — Completar mi perfil dentro del gimnasio
 
 **Como** persona que trabaja en un gimnasio
 **quiero** llenar mi perfil profesional dentro de esa organización
 **para** que mis clientes sepan quién los atiende.
 
-`E-OS-01` · imprescindible
+`E-STUDIO-01` · imprescindible
 
 **Criterios**
 
@@ -170,13 +170,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 4. **Mi título profesional verificado es la excepción: ese es mío.** Un diploma no se lo queda un gimnasio, y si me cambio de trabajo no tengo que volver a verificarlo.
 5. Tener el perfil lleno no me habilita a ver los datos de nadie: para eso me tienen que asignar clientes.
 
-### HU-OS-006 — Ver en qué gimnasios trabajo
+### HU-STUDIO-006 — Ver en qué gimnasios trabajo
 
 **Como** persona que trabaja en uno o varios gimnasios
 **quiero** ver dónde estoy vinculada y con qué rol
 **para** saber qué puedo hacer en cada sitio.
 
-`E-OS-01` · imprescindible
+`E-STUDIO-01` · imprescindible
 
 **Criterios**
 
@@ -185,13 +185,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 3. Mi rol en un gimnasio **no vale en otro**: en cada uno tengo lo que ese gimnasio me dio.
 4. Esta vista no decide qué puedo hacer: cada acción se valida contra el gimnasio concreto.
 
-### HU-OS-007 — Crear mi organización
+### HU-STUDIO-007 — Crear mi organización
 
 **Como** profesional que va a empezar a atender
 **quiero** crear mi organización
 **para** poder invitar personas, planificar y asignar.
 
-`E-OS-01` · imprescindible
+`E-STUDIO-01` · imprescindible
 
 **Criterios**
 
@@ -201,13 +201,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 4. No existe una marca permanente de "independiente": esta misma organización puede incorporar equipo después sin cambiar de identidad ni migrar nada.
 5. Reintentar no crea una segunda organización.
 
-### HU-OS-008 — Actualizar los datos de la organización
+### HU-STUDIO-008 — Actualizar los datos de la organización
 
 **Como** admin u owner
 **quiero** actualizar la información de la organización
 **para** mantenerla correcta.
 
-`E-OS-01` · imprescindible
+`E-STUDIO-01` · imprescindible
 
 **Criterios**
 
@@ -216,13 +216,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 3. Incorporar personal **no** cambia el tipo automáticamente.
 4. Si dos personas editan a la vez, una recibe un aviso de conflicto en lugar de perder su cambio en silencio.
 
-### HU-OS-009 — Registrar una sede
+### HU-STUDIO-009 — Registrar una sede
 
 **Como** admin u owner
 **quiero** registrar las sedes de la organización
 **para** tener ubicada la operación.
 
-`E-OS-01` · importante
+`E-STUDIO-01` · importante
 
 **Criterios**
 
@@ -230,39 +230,39 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 2. Una sede **no** representa recursos reservables, capacidad, clases ni inventario.
 3. Una sede **no** delimita permisos: no existe alcance de rol por sede en V1.
 
-### HU-OS-010 — Actualizar o desactivar una sede
+### HU-STUDIO-010 — Actualizar o desactivar una sede
 
 **Como** admin u owner
 **quiero** editar o desactivar una sede
 **para** reflejar cambios en la operación.
 
-`E-OS-01` · después
+`E-STUDIO-01` · después
 
 **Criterios**
 
 1. Desactivar una sede no afecta relaciones, asignaciones ni historial.
 2. El cambio queda registrado.
 
-### HU-OS-011 — Consultar la organización
+### HU-STUDIO-011 — Consultar la organización
 
 **Como** integrante de la organización
 **quiero** consultar sus datos
 **para** trabajar con contexto.
 
-`E-OS-01` · imprescindible
+`E-STUDIO-01` · imprescindible
 
 **Criterios**
 
 1. Una organización nunca es legible por integrantes de otra.
 2. Si no pertenezco, la respuesta es la misma que si no existiera: no puedo confirmar que existe.
 
-### HU-OS-012 — Transferir la propiedad del gimnasio
+### HU-STUDIO-012 — Transferir la propiedad del gimnasio
 
 **Como** propietario que vende o se retira
 **quiero** dejar el gimnasio en manos de otra persona
 **para** que siga operando sin mí.
 
-`E-OS-01` · después
+`E-STUDIO-01` · después
 
 **Criterios**
 
@@ -273,13 +273,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 > real. Mientras tanto, si un gimnasio necesita cambiar de dueño, lo resuelve el
 > equipo de Allfit directamente.
 
-### HU-OS-013 — Cerrar la organización
+### HU-STUDIO-013 — Cerrar la organización
 
 **Como** owner
 **quiero** cerrar la organización
 **para** terminar la operación de forma ordenada.
 
-`E-OS-01` · después
+`E-STUDIO-01` · después
 
 **Criterios**
 
@@ -290,15 +290,15 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 
 ---
 
-## E-OS-02 · Equipo, roles y membresías
+## E-STUDIO-02 · Equipo, roles y membresías
 
-### HU-OS-014 — Invitar a alguien al equipo
+### HU-STUDIO-014 — Invitar a alguien al equipo
 
 **Como** admin, owner o staff
 **quiero** invitar a una persona a integrarse al equipo
 **para** que trabaje con nosotros.
 
-`E-OS-02` · imprescindible
+`E-STUDIO-02` · imprescindible
 
 **Criterios**
 
@@ -308,13 +308,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 4. Si vuelvo a invitar al mismo contacto con la misma propuesta, se reutiliza la invitación vigente en lugar de crear otra.
 5. Si falla el envío del correo o el SMS, la invitación sigue siendo válida.
 
-### HU-OS-015 — Revocar una invitación
+### HU-STUDIO-015 — Revocar una invitación
 
 **Como** admin, owner o staff
 **quiero** revocar una invitación que emitimos
 **para** cancelar una propuesta que ya no aplica.
 
-`E-OS-02` · imprescindible
+`E-STUDIO-02` · imprescindible
 
 **Criterios**
 
@@ -323,26 +323,26 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 3. Si la aceptación llegó primero, gana la aceptación.
 4. Queda evidencia de que la invitación existió.
 
-### HU-OS-016 — Ver las invitaciones emitidas
+### HU-STUDIO-016 — Ver las invitaciones emitidas
 
 **Como** admin, owner o staff
 **quiero** ver el estado de nuestras invitaciones
 **para** hacer seguimiento.
 
-`E-OS-02` · imprescindible
+`E-STUDIO-02` · imprescindible
 
 **Criterios**
 
 1. Veo el estado **por propuesta**, no una aceptación global.
 2. Mientras la invitación siga pendiente, no puedo saber si el contacto ya tiene cuenta en Allfit.
 
-### HU-OS-017 — Ver el equipo de la organización
+### HU-STUDIO-017 — Ver el equipo de la organización
 
 **Como** admin, owner o staff
 **quiero** ver quiénes integran la organización
 **para** administrar el equipo.
 
-`E-OS-02` · imprescindible
+`E-STUDIO-02` · imprescindible
 
 **Criterios**
 
@@ -350,13 +350,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 2. **No veo ningún dato fitness de ellos**, aunque también sean personas con Fitness ID.
 3. Si un integrante además es cliente de la organización, aquí aparece solo por su membresía; su condición de cliente vive en otro lugar y no se mezcla.
 
-### HU-OS-018 — Conocer los roles y lo que permite cada uno
+### HU-STUDIO-018 — Conocer los roles y lo que permite cada uno
 
 **Como** integrante de la organización
 **quiero** consultar los roles disponibles y sus capacidades
 **para** asignar permisos con criterio.
 
-`E-OS-02` · importante
+`E-STUDIO-02` · importante
 
 **Criterios**
 
@@ -364,13 +364,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 2. No se pueden crear roles personalizados.
 3. Queda explícito que staff nunca accede a datos fitness.
 
-### HU-OS-019 — Asignar un rol
+### HU-STUDIO-019 — Asignar un rol
 
 **Como** admin u owner
 **quiero** asignar un rol a un integrante
 **para** habilitarle lo que necesita.
 
-`E-OS-02` · imprescindible
+`E-STUDIO-02` · imprescindible
 
 **Criterios**
 
@@ -380,13 +380,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 4. Asignar un rol que ya tiene no lo duplica.
 5. Un cambio de permisos nunca se confirma desde información desactualizada.
 
-### HU-OS-020 — Retirar un rol
+### HU-STUDIO-020 — Retirar un rol
 
 **Como** admin u owner
 **quiero** retirar un rol
 **para** quitar permisos que ya no corresponden.
 
-`E-OS-02` · imprescindible
+`E-STUDIO-02` · imprescindible
 
 **Criterios**
 
@@ -394,13 +394,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 2. Al retirar el rol de coach, sus asignaciones sobre relaciones dejan de tener efecto: el permiso de la persona sobrevive, pero ese profesional deja de poder ejercerlo.
 3. La pérdida de acceso es inmediata, sin ventana de gracia.
 
-### HU-OS-021 — Dar de baja a un integrante
+### HU-STUDIO-021 — Dar de baja a un integrante
 
 **Como** admin u owner
 **quiero** terminar la membresía de un integrante
 **para** cerrar su participación.
 
-`E-OS-02` · imprescindible
+`E-STUDIO-02` · imprescindible
 
 **Criterios**
 
@@ -409,13 +409,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 3. Su autoría sobre lo que escribió se conserva.
 4. No se puede dar de baja al único propietario.
 
-### HU-OS-022 — Renunciar a mi membresía
+### HU-STUDIO-022 — Renunciar a mi membresía
 
 **Como** coach o staff
 **quiero** renunciar a mi membresía
 **para** dejar de trabajar en esta organización.
 
-`E-OS-02` · después
+`E-STUDIO-02` · después
 
 **Criterios**
 
@@ -425,15 +425,15 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 
 ---
 
-## E-OS-03 · Invitación de personas y directorio
+## E-STUDIO-03 · Invitación de personas y directorio
 
-### HU-OS-023 — Invitar a una persona como cliente
+### HU-STUDIO-023 — Invitar a una persona como cliente
 
 **Como** coach, admin, owner o staff
 **quiero** invitar a una persona a iniciar una relación con nosotros
 **para** empezar a atenderla.
 
-`E-OS-03` · imprescindible
+`E-STUDIO-03` · imprescindible
 
 **Criterios**
 
@@ -443,13 +443,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 4. Si propongo un programa, su versión debe estar publicada y ser nuestra; si no, se rechaza la invitación completa.
 5. Hasta que la persona acepte, no existe relación, ni asignación, ni persona provisional en nuestro sistema.
 
-### HU-OS-024 — Ver el directorio de personas
+### HU-STUDIO-024 — Ver el directorio de personas
 
 **Como** integrante de la organización
 **quiero** ver las personas vinculadas con nosotros
 **para** encontrar a quién necesito.
 
-`E-OS-03` · imprescindible
+`E-STUDIO-03` · imprescindible
 
 **Criterios**
 
@@ -459,13 +459,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 4. La existencia de un permiso se muestra como estado, nunca como contenido.
 5. Consultar el directorio no consume ningún permiso de la persona.
 
-### HU-OS-025 — Consultar el estado de una relación
+### HU-STUDIO-025 — Consultar el estado de una relación
 
 **Como** integrante de la organización
 **quiero** ver en qué estado está una relación
 **para** saber qué podemos hacer.
 
-`E-OS-03` · imprescindible
+`E-STUDIO-03` · imprescindible
 
 **Criterios**
 
@@ -473,13 +473,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 2. Veo **qué permisos están concedidos y en qué versión**, pero no el contenido que amparan.
 3. Saber que existe un permiso de contexto de salud no es leer el contexto de salud.
 
-### HU-OS-026 — Ver la historia de una relación
+### HU-STUDIO-026 — Ver la historia de una relación
 
 **Como** admin u owner
 **quiero** consultar la historia de una relación
 **para** entender qué pasó y cuándo.
 
-`E-OS-03` · importante
+`E-STUDIO-03` · importante
 
 **Criterios**
 
@@ -489,15 +489,15 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 
 ---
 
-## E-OS-04 · Responsable, suplencias y terminación
+## E-STUDIO-04 · Responsable, suplencias y terminación
 
-### HU-OS-027 — Asignar el profesional responsable
+### HU-STUDIO-027 — Asignar el profesional responsable
 
 **Como** admin u owner
 **quiero** asignar el profesional responsable de una relación
 **para** que alguien concreto atienda a esa persona.
 
-`E-OS-04` · imprescindible
+`E-STUDIO-04` · imprescindible
 
 **Criterios**
 
@@ -506,13 +506,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 3. Hay **un solo responsable efectivo** a la vez.
 4. Asignar **no concede datos**: sin el permiso de la persona, el responsable no ve nada.
 
-### HU-OS-028 — Cambiar el profesional responsable
+### HU-STUDIO-028 — Cambiar el profesional responsable
 
 **Como** admin u owner
 **quiero** reasignar la relación a otro profesional
 **para** cubrir una salida o redistribuir la carga.
 
-`E-OS-04` · imprescindible
+`E-STUDIO-04` · imprescindible
 
 **Criterios**
 
@@ -521,13 +521,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 3. **La persona es notificada.** Una reasignación nunca es silenciosa.
 4. Si la notificación no puede quedar encolada, la reasignación no se confirma.
 
-### HU-OS-029 — Asignar un suplente
+### HU-STUDIO-029 — Asignar un suplente
 
 **Como** coach responsable, admin u owner
 **quiero** poner a otro profesional a cubrir a un cliente por un tiempo
 **para** que nadie se quede sin atención cuando el titular no está.
 
-`E-OS-04` · importante
+`E-STUDIO-04` · importante
 
 **Criterios**
 
@@ -537,13 +537,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 4. Solo puedo poner de suplente a alguien de mi propio gimnasio con rol de coach.
 5. La persona atendida **es informada** de quién la va a atender mientras tanto.
 
-### HU-OS-030 — Terminar una suplencia
+### HU-STUDIO-030 — Terminar una suplencia
 
 **Como** coach responsable, admin u owner
 **quiero** terminar una suplencia antes de su fecha
 **para** devolver la atención al titular.
 
-`E-OS-04` · importante
+`E-STUDIO-04` · importante
 
 **Criterios**
 
@@ -551,26 +551,26 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 2. No afecta la relación ni al profesional titular.
 3. Lo que el suplente haya registrado se conserva con su autoría.
 
-### HU-OS-031 — Ver las suplencias de una relación
+### HU-STUDIO-031 — Ver las suplencias de una relación
 
 **Como** coach, admin u owner
 **quiero** ver quién ha cubierto a un cliente y cuándo
 **para** tener claro quién lo atendió.
 
-`E-OS-04` · después
+`E-STUDIO-04` · después
 
 **Criterios**
 
 1. Veo las suplencias vigentes y las pasadas, con sus fechas.
 2. Una suplencia vencida o terminada **no habilita ningún acceso**, aunque siga apareciendo en el historial.
 
-### HU-OS-032 — Terminar una relación
+### HU-STUDIO-032 — Terminar una relación
 
 **Como** admin u owner
 **quiero** terminar una relación de servicio
 **para** cerrar la atención a esa persona.
 
-`E-OS-04` · imprescindible
+`E-STUDIO-04` · imprescindible
 
 **Criterios**
 
@@ -584,13 +584,13 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 8. Un coach **no puede** ejecutar esta operación.
 9. Si algún paso falla, se revierte todo: no existe una terminación a medias.
 
-### HU-OS-033 — Solicitar la terminación de una relación
+### HU-STUDIO-033 — Solicitar la terminación de una relación
 
 **Como** coach responsable **sin** poder de terminación
 **quiero** solicitarle a la administración que termine una relación
 **para** dejar de atender a esa persona.
 
-`E-OS-04` · después
+`E-STUDIO-04` · después
 
 **Criterios**
 
@@ -604,7 +604,7 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 
 ---
 
-## E-OS-05 · Qué nos autorizó cada persona
+## E-STUDIO-05 · Qué nos autorizó cada persona
 
 Un coach **no le pide permiso a nadie ni espera a que le respondan**. La persona
 autoriza al aceptar la relación, en un solo paso, y desde ese momento su coach
@@ -612,26 +612,26 @@ puede trabajar.
 
 Lo que queda de este lado es solo saber qué autorizó y qué no.
 
-### HU-OS-034 — Saber qué abarca cada categoría de información
+### HU-STUDIO-034 — Saber qué abarca cada categoría de información
 
 **Como** integrante del gimnasio
 **quiero** entender qué cubre cada categoría de datos
 **para** saber qué puedo consultar de mis clientes.
 
-`E-OS-05` · importante
+`E-STUDIO-05` · importante
 
 **Criterios**
 
 1. Puedo leer qué incluye y qué excluye cada categoría: entrenamiento, historial previo, cuerpo, salud y las de nutrición.
 2. La definición es fija y no cambia bajo mis pies.
 
-### HU-OS-035 — Ver qué nos autorizó cada persona
+### HU-STUDIO-035 — Ver qué nos autorizó cada persona
 
 **Como** coach, admin u owner
 **quiero** ver qué categorías nos autorizó cada cliente
 **para** saber con qué puedo contar.
 
-`E-OS-05` · imprescindible
+`E-STUDIO-05` · imprescindible
 
 **Criterios**
 
@@ -643,15 +643,15 @@ Lo que queda de este lado es solo saber qué autorizó y qué no.
 
 ---
 
-## E-OS-06 · Contenido versionado
+## E-STUDIO-06 · Contenido versionado
 
-### HU-OS-036 — Crear una plantilla de sesión
+### HU-STUDIO-036 — Crear una plantilla de sesión
 
 **Como** coach, admin u owner
 **quiero** crear una plantilla de sesión de la organización
 **para** reutilizarla en nuestros programas.
 
-`E-OS-06` · imprescindible
+`E-STUDIO-06` · imprescindible
 
 **Criterios**
 
@@ -659,13 +659,13 @@ Lo que queda de este lado es solo saber qué autorizó y qué no.
 2. La plantilla existe como identidad estable antes de publicar nada.
 3. Una plantilla tiene un solo dueño: la organización **o** una persona, nunca los dos.
 
-### HU-OS-037 — Editar el borrador de una plantilla
+### HU-STUDIO-037 — Editar el borrador de una plantilla
 
 **Como** coach, admin u owner
 **quiero** editar el borrador
 **para** construir la sesión antes de publicarla.
 
-`E-OS-06` · imprescindible
+`E-STUDIO-06` · imprescindible
 
 **Criterios**
 
@@ -674,13 +674,13 @@ Lo que queda de este lado es solo saber qué autorizó y qué no.
 3. Los objetivos de cada paso deben ser compatibles con el tipo de actividad declarado.
 4. Si dos personas editan a la vez, una recibe el estado actual y un aviso de conflicto en lugar de perder su trabajo.
 
-### HU-OS-038 — Publicar una versión de plantilla
+### HU-STUDIO-038 — Publicar una versión de plantilla
 
 **Como** coach, admin u owner
 **quiero** publicar la plantilla
 **para** poder usarla en programas.
 
-`E-OS-06` · imprescindible
+`E-STUDIO-06` · imprescindible
 
 **Criterios**
 
@@ -689,39 +689,39 @@ Lo que queda de este lado es solo saber qué autorizó y qué no.
 3. Si el borrador está incompleto, se me devuelve la lista de lo que falta.
 4. Publicar dos veces el mismo contenido no crea dos versiones.
 
-### HU-OS-039 — Partir de una versión publicada
+### HU-STUDIO-039 — Partir de una versión publicada
 
 **Como** coach, admin u owner
 **quiero** crear un borrador a partir de una versión publicada
 **para** hacer una variante sin rehacerla.
 
-`E-OS-06` · después
+`E-STUDIO-06` · después
 
 **Criterios**
 
 1. El borrador conserva de qué versión proviene.
 2. No puedo derivar de contenido de otra organización: en V1 no existe contenido compartido entre organizaciones.
 
-### HU-OS-040 — Retirar una versión de plantilla
+### HU-STUDIO-040 — Retirar una versión de plantilla
 
 **Como** admin u owner
 **quiero** retirar una versión
 **para** que no se use en contenido nuevo.
 
-`E-OS-06` · después
+`E-STUDIO-06` · después
 
 **Criterios**
 
 1. Retirar impide componer contenido nuevo con esa versión.
 2. **No altera** programas publicados, asignaciones activas ni sesiones planificadas: el historial es intocable.
 
-### HU-OS-041 — Crear y editar un programa
+### HU-STUDIO-041 — Crear y editar un programa
 
 **Como** coach, admin u owner
 **quiero** armar un programa combinando plantillas
 **para** estructurar varias semanas de entrenamiento.
 
-`E-OS-06` · imprescindible
+`E-STUDIO-06` · imprescindible
 
 **Criterios**
 
@@ -729,13 +729,13 @@ Lo que queda de este lado es solo saber qué autorizó y qué no.
 2. No puedo componer con un borrador de plantilla.
 3. Si el programa usa versiones retiradas puedo seguir editándolo, pero al publicar se me advierte.
 
-### HU-OS-042 — Publicar una versión de programa
+### HU-STUDIO-042 — Publicar una versión de programa
 
 **Como** coach, admin u owner
 **quiero** publicar el programa
 **para** poder asignarlo a una persona.
 
-`E-OS-06` · imprescindible
+`E-STUDIO-06` · imprescindible
 
 **Criterios**
 
@@ -744,26 +744,26 @@ Lo que queda de este lado es solo saber qué autorizó y qué no.
 3. Un programa v1 fijado a la plantilla v1 sigue en v1 aunque exista una v2 de la plantilla.
 4. Publicaciones equivalentes convergen a una sola versión.
 
-### HU-OS-043 — Retirar una versión de programa
+### HU-STUDIO-043 — Retirar una versión de programa
 
 **Como** admin u owner
 **quiero** retirar una versión de programa
 **para** que no se asigne más.
 
-`E-OS-06` · después
+`E-STUDIO-06` · después
 
 **Criterios**
 
 1. Impide asignaciones nuevas.
 2. No cancela ni altera las asignaciones vigentes ni sus sesiones.
 
-### HU-OS-044 — Ver el contenido de la organización
+### HU-STUDIO-044 — Ver el contenido de la organización
 
 **Como** coach, admin u owner
 **quiero** ver nuestras plantillas y programas
 **para** encontrar y reutilizar lo que ya tenemos.
 
-`E-OS-06` · imprescindible
+`E-STUDIO-06` · imprescindible
 
 **Criterios**
 
@@ -771,13 +771,13 @@ Lo que queda de este lado es solo saber qué autorizó y qué no.
 2. Solo veo contenido de mi organización. **Nunca** de otra.
 3. Nuestros programas no son visibles para otra organización bajo ningún permiso de historial previo de una persona.
 
-### HU-OS-045 — Consultar una versión publicada
+### HU-STUDIO-045 — Consultar una versión publicada
 
 **Como** coach, admin u owner
 **quiero** leer una versión publicada completa
 **para** revisar qué contiene.
 
-`E-OS-06` · importante
+`E-STUDIO-06` · importante
 
 **Criterios**
 
@@ -786,15 +786,15 @@ Lo que queda de este lado es solo saber qué autorizó y qué no.
 
 ---
 
-## E-OS-07 · Asignación y seguimiento del plan
+## E-STUDIO-07 · Asignación y seguimiento del plan
 
-### HU-OS-046 — Asignar un programa a una persona
+### HU-STUDIO-046 — Asignar un programa a una persona
 
 **Como** coach con asignación efectiva
 **quiero** asignarle a una persona una versión de programa
 **para** que empiece a entrenar con nuestro plan.
 
-`E-OS-07` · imprescindible
+`E-STUDIO-07` · imprescindible
 
 **Criterios**
 
@@ -805,13 +805,13 @@ Lo que queda de este lado es solo saber qué autorizó y qué no.
 5. No hay límite de programas simultáneos: si se solapan, se advierte pero no se bloquea.
 6. Reintentar no crea una segunda asignación ni duplica sesiones.
 
-### HU-OS-047 — Ver los programas asignados a una persona
+### HU-STUDIO-047 — Ver los programas asignados a una persona
 
 **Como** coach o suplente con asignación efectiva
 **quiero** ver los programas que le asignamos
 **para** hacer seguimiento.
 
-`E-OS-07` · imprescindible
+`E-STUDIO-07` · imprescindible
 
 **Criterios**
 
@@ -820,13 +820,13 @@ Lo que queda de este lado es solo saber qué autorizó y qué no.
 3. Después de la terminación dejo de ver la asignación desacoplada y sus sesiones posteriores.
 4. Cada consulta queda registrada y la persona puede verla.
 
-### HU-OS-048 — Reprogramar una sesión
+### HU-STUDIO-048 — Reprogramar una sesión
 
 **Como** coach o suplente con asignación efectiva
 **quiero** mover una sesión de fecha
 **para** ajustarme a la disponibilidad de la persona.
 
-`E-OS-07` · importante
+`E-STUDIO-07` · importante
 
 **Criterios**
 
@@ -836,13 +836,13 @@ Lo que queda de este lado es solo saber qué autorizó y qué no.
 4. En un programa personal o desacoplado no hay administrador y esta acción no aplica.
 5. Reprogramar **nunca** altera el contenido ni los objetivos de la versión.
 
-### HU-OS-049 — Ajustar la prescripción para una persona
+### HU-STUDIO-049 — Ajustar la prescripción para una persona
 
 **Como** coach o suplente con asignación efectiva
 **quiero** adaptar cargas u objetivos para esta persona
 **para** personalizar sin romper el programa maestro.
 
-`E-OS-07` · importante
+`E-STUDIO-07` · importante
 
 **Criterios**
 
@@ -851,13 +851,13 @@ Lo que queda de este lado es solo saber qué autorizó y qué no.
 3. Los ajustes se conservan si la relación termina y el programa se desacopla.
 4. Solo puedo hacerlo mientras administremos esa asignación.
 
-### HU-OS-050 — Cancelar una asignación
+### HU-STUDIO-050 — Cancelar una asignación
 
 **Como** coach con asignación efectiva, admin u owner
 **quiero** cancelar un programa que administramos
 **para** detenerlo cuando ya no aplica.
 
-`E-OS-07` · importante
+`E-STUDIO-07` · importante
 
 **Criterios**
 
@@ -867,18 +867,18 @@ Lo que queda de este lado es solo saber qué autorizó y qué no.
 
 ---
 
-## E-OS-08 · Lectura autorizada de datos de la persona
+## E-STUDIO-08 · Lectura autorizada de datos de la persona
 
 Todas estas historias exigen la **FÓRMULA** completa y **registran el acceso con
 la identidad real** de quien consulta. La persona puede ver ese registro.
 
-### HU-OS-051 — Consultar el perfil de entrenamiento autorizado
+### HU-STUDIO-051 — Consultar el perfil de entrenamiento autorizado
 
 **Como** coach o suplente con asignación efectiva
 **quiero** ver el contexto de entrenamiento de la persona
 **para** planificar con información real.
 
-`E-OS-08` · imprescindible
+`E-STUDIO-08` · imprescindible
 
 **Criterios**
 
@@ -887,13 +887,13 @@ la identidad real** de quien consulta. La persona puede ver ese registro.
 3. **No veo** ningún atributo corporal ni de salud desde aquí: son categorías con su propio permiso.
 4. Recibo el conjunto de campos de la **versión congelada en el permiso**, no la última publicada. Dos organizaciones pueden ver campos distintos de la misma persona.
 
-### HU-OS-052 — Consultar el progreso corporal autorizado
+### HU-STUDIO-052 — Consultar el progreso corporal autorizado
 
 **Como** coach o suplente con asignación efectiva
 **quiero** ver las medidas y fotos que la persona compartió
 **para** seguir su evolución física.
 
-`E-OS-08` · importante
+`E-STUDIO-08` · importante
 
 **Criterios**
 
@@ -902,13 +902,13 @@ la identidad real** de quien consulta. La persona puede ver ese registro.
 3. No recibo metadatos de ubicación ni de dispositivo de ninguna imagen.
 4. Los enlaces a imágenes son temporales y no se pueden reutilizar ni compartir.
 
-### HU-OS-053 — Consultar el contexto de salud autorizado
+### HU-STUDIO-053 — Consultar el contexto de salud autorizado
 
 **Como** coach o suplente con asignación efectiva
 **quiero** conocer dolores, limitaciones y estado de recuperación declarados
 **para** no prescribir algo que le haga daño.
 
-`E-OS-08` · importante
+`E-STUDIO-08` · importante
 
 **Criterios**
 
@@ -916,13 +916,13 @@ la identidad real** de quien consulta. La persona puede ver ese registro.
 2. Recibo información minimizada: dolor, limitación y recuperación declarados.
 3. **No recibo** historia clínica, diagnósticos, laboratorios, documentos médicos ni biometría continua. No existen bajo ningún permiso de V1.
 
-### HU-OS-054 — Ver las sesiones autorizadas de una persona
+### HU-STUDIO-054 — Ver las sesiones autorizadas de una persona
 
 **Como** coach o suplente con asignación efectiva
 **quiero** ver las sesiones que ejecutó
 **para** hacer seguimiento de su entrenamiento.
 
-`E-OS-08` · imprescindible
+`E-STUDIO-08` · imprescindible
 
 **Criterios**
 
@@ -932,13 +932,13 @@ la identidad real** de quien consulta. La persona puede ver ese registro.
 4. Los conteos se calculan después de aplicar las ocultaciones.
 5. Sin permiso vigente recibo una lista vacía, y queda registrado el intento.
 
-### HU-OS-055 — Revisar el resultado de una sesión
+### HU-STUDIO-055 — Revisar el resultado de una sesión
 
 **Como** coach o suplente con asignación efectiva
 **quiero** consultar el detalle de una sesión que la persona ejecutó
 **para** comparar lo que prescribí con lo que realmente hizo.
 
-`E-OS-08` · imprescindible
+`E-STUDIO-08` · imprescindible
 
 **Criterios**
 
@@ -950,13 +950,13 @@ la identidad real** de quien consulta. La persona puede ver ese registro.
 6. Frecuencia cardiaca, GPS y datos de dispositivos no se exponen bajo ningún permiso de V1.
 7. Si la persona revoca el permiso o termina la relación, dejo de ver el resultado de inmediato.
 
-### HU-OS-056 — Consultar el progreso autorizado
+### HU-STUDIO-056 — Consultar el progreso autorizado
 
 **Como** coach o suplente con asignación efectiva
 **quiero** ver la evolución de la persona
 **para** decidir cómo ajustar su entrenamiento.
 
-`E-OS-08` · importante
+`E-STUDIO-08` · importante
 
 **Criterios**
 
@@ -967,15 +967,15 @@ la identidad real** de quien consulta. La persona puede ver ese registro.
 
 ---
 
-## E-OS-09 · Observaciones y correcciones
+## E-STUDIO-09 · Observaciones y correcciones
 
-### HU-OS-057 — Dejar una observación profesional
+### HU-STUDIO-057 — Dejar una observación profesional
 
 **Como** coach o suplente con permiso para contribuir
 **quiero** registrar mi observación sobre una sesión
 **para** dejar mi lectura profesional documentada.
 
-`E-OS-09` · importante
+`E-STUDIO-09` · importante
 
 **Criterios**
 
@@ -984,13 +984,13 @@ la identidad real** de quien consulta. La persona puede ver ese registro.
 3. Si transcribo algo que la persona me dijo, sigue constando como declarado por ella y yo quedo solo como quien lo capturó.
 4. Si observo dolor o una limitación, eso es contexto de salud y se protege con esa categoría, no con la de la sesión.
 
-### HU-OS-058 — Corregir mi propia observación
+### HU-STUDIO-058 — Corregir mi propia observación
 
 **Como** coach o suplente autor de una observación
 **quiero** corregirla
 **para** ajustar lo que registré.
 
-`E-OS-09` · importante
+`E-STUDIO-09` · importante
 
 **Criterios**
 
@@ -999,13 +999,13 @@ la identidad real** de quien consulta. La persona puede ver ese registro.
 3. El valor original se conserva con el motivo del cambio.
 4. Al terminar la relación ya no puedo hacer correcciones.
 
-### HU-OS-059 — Proponer una corrección a la persona
+### HU-STUDIO-059 — Proponer una corrección a la persona
 
 **Como** coach o suplente con permiso para contribuir
 **quiero** proponer la corrección de un dato que declaró la persona
 **para** que su historial sea preciso.
 
-`E-OS-09` · importante
+`E-STUDIO-09` · importante
 
 **Criterios**
 
@@ -1015,13 +1015,13 @@ la identidad real** de quien consulta. La persona puede ver ese registro.
 4. La propuesta vence a los 30 días; su silencio no es aceptación.
 5. Una propuesta pendiente sobre el mismo dato no se duplica.
 
-### HU-OS-060 — Ver mis propuestas de corrección
+### HU-STUDIO-060 — Ver mis propuestas de corrección
 
 **Como** coach
 **quiero** ver las propuestas que emití y su estado
 **para** hacer seguimiento.
 
-`E-OS-09` · importante
+`E-STUDIO-09` · importante
 
 **Criterios**
 
@@ -1031,15 +1031,15 @@ la identidad real** de quien consulta. La persona puede ver ese registro.
 
 ---
 
-## E-OS-10 · Acceso al historial de una relación terminada
+## E-STUDIO-10 · Acceso al historial de una relación terminada
 
-### HU-OS-061 — Abrir un caso de acceso al historial
+### HU-STUDIO-061 — Abrir un caso de acceso al historial
 
 **Como** admin u owner con autenticación reforzada
 **quiero** abrir un caso para consultar el historial de una relación terminada
 **para** atender una disputa, una obligación legal o una solicitud de la propia persona.
 
-`E-OS-10` · después
+`E-STUDIO-10` · después
 
 **Criterios**
 
@@ -1050,13 +1050,13 @@ la identidad real** de quien consulta. La persona puede ver ese registro.
 5. El caso autoriza a **una membresía concreta**: yo mismo, o el antiguo profesional responsable si mantiene membresía activa. Staff nunca es elegible.
 6. Requiere autenticación reforzada y la relación debe estar efectivamente terminada.
 
-### HU-OS-062 — Consultar el historial congelado
+### HU-STUDIO-062 — Consultar el historial congelado
 
 **Como** actor autorizado por un caso vigente
 **quiero** consultar lo que la persona nos había compartido hasta el corte
 **para** resolver el asunto que motivó el caso.
 
-`E-OS-10` · después
+`E-STUDIO-10` · después
 
 **Criterios**
 
@@ -1069,13 +1069,13 @@ la identidad real** de quien consulta. La persona puede ver ese registro.
 7. Si la persona revoca el permiso congelado, el caso se cierra y pierdo el acceso.
 8. Lo inexistente y lo no autorizado se ven igual: no puedo deducir qué había.
 
-### HU-OS-063 — Cerrar el caso de acceso
+### HU-STUDIO-063 — Cerrar el caso de acceso
 
 **Como** admin u owner
 **quiero** cerrar el caso
 **para** terminar la ventana de acceso.
 
-`E-OS-10` · después
+`E-STUDIO-10` · después
 
 **Criterios**
 
@@ -1085,15 +1085,15 @@ la identidad real** de quien consulta. La persona puede ver ese registro.
 
 ---
 
-## E-OS-11 · Catálogo privado de movimientos
+## E-STUDIO-11 · Catálogo privado de movimientos
 
-### HU-OS-064 — Crear un movimiento propio
+### HU-STUDIO-064 — Crear un movimiento propio
 
 **Como** coach, admin u owner
 **quiero** crear un movimiento nuestro
 **para** usar nuestra propia terminología y variantes.
 
-`E-OS-11` · importante
+`E-STUDIO-11` · importante
 
 **Criterios**
 
@@ -1103,26 +1103,26 @@ la identidad real** de quien consulta. La persona puede ver ese registro.
 4. Un nombre repetido dentro de nuestra organización se rechaza en lugar de duplicarse.
 5. **No existe forma de subir un movimiento nuestro al catálogo global.** El catálogo global lo carga Allfit; si necesitamos que un movimiento sea global, se gestiona fuera del producto.
 
-### HU-OS-065 — Actualizar un movimiento propio
+### HU-STUDIO-065 — Actualizar un movimiento propio
 
 **Como** coach, admin u owner
 **quiero** editar un movimiento nuestro
 **para** corregirlo o completarlo.
 
-`E-OS-11` · después
+`E-STUDIO-11` · después
 
 **Criterios**
 
 1. Actualizarlo **no reinterpreta el historial**: las versiones de plantilla y las sesiones que lo referencian conservan el significado con el que se registraron.
 2. Un movimiento global nunca se edita desde aquí.
 
-### HU-OS-066 — Archivar un movimiento propio
+### HU-STUDIO-066 — Archivar un movimiento propio
 
 **Como** admin u owner
 **quiero** archivar un movimiento
 **para** que no se use en contenido nuevo.
 
-`E-OS-11` · después
+`E-STUDIO-11` · después
 
 **Criterios**
 
@@ -1130,13 +1130,13 @@ la identidad real** de quien consulta. La persona puede ver ese registro.
 2. Las versiones publicadas y las sesiones que lo referencian siguen resolviéndolo correctamente.
 3. Un movimiento referenciado nunca se borra mientras exista historial.
 
-### HU-OS-067 — Buscar movimientos incluyendo los nuestros
+### HU-STUDIO-067 — Buscar movimientos incluyendo los nuestros
 
 **Como** coach, admin u owner
 **quiero** buscar en el catálogo global y en el nuestro a la vez
 **para** encontrar rápido lo que necesito al planificar.
 
-`E-OS-11` · importante
+`E-STUDIO-11` · importante
 
 **Criterios**
 
@@ -1146,7 +1146,7 @@ la identidad real** de quien consulta. La persona puede ver ese registro.
 
 ---
 
-## E-OS-12 · Nutrición autorizada
+## E-STUDIO-12 · Nutrición autorizada
 
 Toda esta épica es **lectura y propuesta**. Ningún profesional escribe en el
 registro nutricional de una persona ni activa su meta.
@@ -1156,13 +1156,13 @@ una credencial de profesional de nutrición **verificada**, y el permiso de
 orientación nutricional con nivel de contribución. Faltando una, la operación
 falla antes de persistir nada.
 
-### HU-OS-068 — Ver las comidas que la persona autorizó
+### HU-STUDIO-068 — Ver las comidas que la persona autorizó
 
 **Como** coach o suplente con asignación efectiva
 **quiero** consultar el registro de comidas de la persona
 **para** acompañar su alimentación con datos reales.
 
-`E-OS-12` · importante
+`E-STUDIO-12` · importante
 
 **Criterios**
 
@@ -1174,13 +1174,13 @@ falla antes de persistir nada.
 6. Cada consulta queda registrada antes de entregarme los datos, y la persona puede verla.
 7. Si algo falla en la autorización, no recibo ninguna señal de que exista o no exista información.
 
-### HU-OS-069 — Ver los resúmenes nutricionales autorizados
+### HU-STUDIO-069 — Ver los resúmenes nutricionales autorizados
 
 **Como** coach o suplente con asignación efectiva
 **quiero** ver el consolidado diario de la persona
 **para** evaluar tendencias sin revisar comida por comida.
 
-`E-OS-12` · importante
+`E-STUDIO-12` · importante
 
 **Criterios**
 
@@ -1190,13 +1190,13 @@ falla antes de persistir nada.
 4. Si un permiso se revoca, desaparecen también los totales, las tendencias y cualquier indicio de que haya más información.
 5. Nunca recibo un agregado parcial que permita deducir filas que no puedo ver.
 
-### HU-OS-070 — Ver el historial de objetivos que propusimos
+### HU-STUDIO-070 — Ver el historial de objetivos que propusimos
 
 **Como** coach o suplente con asignación efectiva
 **quiero** consultar las versiones de objetivos nutricionales de esta relación
 **para** dar continuidad a la orientación.
 
-`E-OS-12` · importante
+`E-STUDIO-12` · importante
 
 **Criterios**
 
@@ -1205,13 +1205,13 @@ falla antes de persistir nada.
 3. En la vista histórica solo aparece lo de **origen profesional de esta relación** y anterior al corte. Las comidas, las fotos, los resúmenes y las metas personales de la persona **no tienen ruta histórica**.
 4. Sin un caso válido no existe forma de caer de vuelta al endpoint normal.
 
-### HU-OS-071 — Proponer objetivos nutricionales
+### HU-STUDIO-071 — Proponer objetivos nutricionales
 
 **Como** profesional de nutrición verificado con asignación efectiva
 **quiero** proponerle a la persona una versión de sus objetivos
 **para** orientar su alimentación.
 
-`E-OS-12` · importante
+`E-STUDIO-12` · importante
 
 **Criterios**
 
@@ -1223,13 +1223,13 @@ falla antes de persistir nada.
 6. La persona ve que la propuesta es mía, con mi autoría mínima y nada más.
 7. Esta operación exige conexión.
 
-### HU-OS-072 — Ver la foto de una comida autorizada
+### HU-STUDIO-072 — Ver la foto de una comida autorizada
 
 **Como** coach o suplente con ambos permisos nutricionales
 **quiero** ver la foto que la persona adjuntó a una comida
 **para** entender mejor lo que registró.
 
-`E-OS-12` · importante
+`E-STUDIO-12` · importante
 
 **Criterios**
 
@@ -1241,7 +1241,7 @@ falla antes de persistir nada.
 
 ---
 
-## E-OS-13 · Planes y cobro
+## E-STUDIO-13 · Planes y cobro
 
 **La plata nunca pasa por Allfit.** Cada organización conecta su propia cuenta de
 pasarela y cobra directo. Allfit refleja el estado y suspende o reactiva.
@@ -1249,13 +1249,13 @@ pasarela y cobra directo. Allfit refleja el estado y suspende o reactiva.
 Y una regla que atraviesa toda la épica: **el `coach` no ve nada de esto.** El
 estado de pago de una persona no es un dato de entrenamiento.
 
-### HU-OS-073 — Conectar nuestra cuenta de cobro
+### HU-STUDIO-073 — Conectar nuestra cuenta de cobro
 
 **Como** propietario de la organización
 **quiero** conectar nuestra cuenta de Mercado Pago o Wompi
 **para** poder cobrarles a nuestros clientes.
 
-`E-OS-13` · imprescindible
+`E-STUDIO-13` · imprescindible
 
 **Criterios**
 
@@ -1264,13 +1264,13 @@ estado de pago de una persona no es un dato de entrenamiento.
 3. Allfit guarda una referencia a nuestras credenciales, **nunca las credenciales mismas**.
 4. Solo puede haber una cuenta de cobro activa a la vez.
 
-### HU-OS-074 — Crear un plan
+### HU-STUDIO-074 — Crear un plan
 
 **Como** admin u owner
 **quiero** crear un plan comercial
 **para** ofrecérselo a nuestros clientes.
 
-`E-OS-13` · imprescindible
+`E-STUDIO-13` · imprescindible
 
 **Criterios**
 
@@ -1278,13 +1278,13 @@ estado de pago de una persona no es un dato de entrenamiento.
 2. Un borrador **no se le puede vender a nadie** hasta publicarlo.
 3. No podemos tener dos planes con el mismo nombre.
 
-### HU-OS-075 — Publicar una versión de plan
+### HU-STUDIO-075 — Publicar una versión de plan
 
 **Como** admin u owner
 **quiero** publicar el plan con su precio
 **para** que la gente pueda suscribirse.
 
-`E-OS-13` · imprescindible
+`E-STUDIO-13` · imprescindible
 
 **Criterios**
 
@@ -1292,39 +1292,39 @@ estado de pago de una persona no es un dato de entrenamiento.
 2. Una versión publicada **no se edita nunca**. Cambiar el precio exige publicar otra.
 3. **A quien ya está suscrito no se le sube el precio**: conserva la versión que aceptó.
 
-### HU-OS-076 — Retirar una versión de plan
+### HU-STUDIO-076 — Retirar una versión de plan
 
 **Como** admin u owner
 **quiero** retirar una versión
 **para** que nadie más se suscriba a ella.
 
-`E-OS-13` · después
+`E-STUDIO-13` · después
 
 **Criterios**
 
 1. Retirar impide **suscripciones nuevas**.
 2. **No cancela, no suspende y no cambia de plan** a nadie que ya esté suscrito.
 
-### HU-OS-077 — Ver nuestros planes
+### HU-STUDIO-077 — Ver nuestros planes
 
 **Como** integrante de la organización
 **quiero** ver los planes que ofrecemos
 **para** saber qué estamos vendiendo.
 
-`E-OS-13` · imprescindible
+`E-STUDIO-13` · imprescindible
 
 **Criterios**
 
 1. Distingo borradores de versiones publicadas.
 2. Nunca veo los planes de otra organización.
 
-### HU-OS-078 — Ver quién está suscrito y quién debe
+### HU-STUDIO-078 — Ver quién está suscrito y quién debe
 
 **Como** admin u owner
 **quiero** ver el estado de pago de nuestros clientes
 **para** administrar el negocio.
 
-`E-OS-13` · imprescindible
+`E-STUDIO-13` · imprescindible
 
 **Criterios**
 
@@ -1332,13 +1332,13 @@ estado de pago de una persona no es un dato de entrenamiento.
 2. **Un coach no accede a esta pantalla**, aunque tenga a esa persona asignada. Un staff tampoco.
 3. Aquí no hay **ningún** dato de entrenamiento, cuerpo, salud ni nutrición.
 
-### HU-OS-079 — Suspender o reactivar a mano
+### HU-STUDIO-079 — Suspender o reactivar a mano
 
 **Como** admin u owner
 **quiero** suspender o reactivar una suscripción manualmente
 **para** manejar casos que el cobro automático no cubre.
 
-`E-OS-13` · importante
+`E-STUDIO-13` · importante
 
 **Criterios**
 
@@ -1348,13 +1348,13 @@ estado de pago de una persona no es un dato de entrenamiento.
 4. Reactivar devuelve todo a como estaba, **sin pedirle a la persona ninguna autorización nueva**.
 5. Si la operación intentara tocar permisos o asignaciones, se revierte entera.
 
-### HU-OS-080 — Terminar una suscripción
+### HU-STUDIO-080 — Terminar una suscripción
 
 **Como** admin u owner
 **quiero** terminar la suscripción de alguien
 **para** cerrar el vínculo comercial.
 
-`E-OS-13` · importante
+`E-STUDIO-13` · importante
 
 **Criterios**
 
@@ -1364,15 +1364,15 @@ estado de pago de una persona no es un dato de entrenamiento.
 
 ---
 
-## E-OS-14 · Resumen del día
+## E-STUDIO-14 · Resumen del día
 
-### HU-OS-081 — Ver qué necesita atención hoy
+### HU-STUDIO-081 — Ver qué necesita atención hoy
 
-**Como** coach o admin que abre Allfit OS
+**Como** coach o admin que abre Allfit Studio
 **quiero** ver de una qué requiere mi atención
 **para** no tener que revisar cliente por cliente.
 
-`E-OS-14` · imprescindible
+`E-STUDIO-14` · imprescindible
 
 **Criterios**
 
@@ -1383,13 +1383,13 @@ estado de pago de una persona no es un dato de entrenamiento.
 5. Desde cada aviso llego directo a donde se resuelve.
 6. Si no hay nada pendiente se dice, en lugar de mostrar una pantalla vacía.
 
-### HU-OS-082 — Buscar a una persona de mi gimnasio
+### HU-STUDIO-082 — Buscar a una persona de mi gimnasio
 
 **Como** integrante del gimnasio
 **quiero** encontrar rápido a una persona
 **para** llegar a su ficha.
 
-`E-OS-14` · imprescindible
+`E-STUDIO-14` · imprescindible
 
 **Criterios**
 
@@ -1398,13 +1398,13 @@ estado de pago de una persona no es un dato de entrenamiento.
 3. Los resultados muestran nombre y estado de la relación. **Ningún dato de entrenamiento**, ni siquiera resumido.
 4. Si no hay resultados se dice claramente.
 
-### HU-OS-083 — Ver la ficha de una persona que atiendo
+### HU-STUDIO-083 — Ver la ficha de una persona que atiendo
 
 **Como** coach con asignación vigente
 **quiero** abrir la ficha de mi cliente y ver todo lo que me autorizó
 **para** acompañarlo sin ir saltando entre pantallas.
 
-`E-OS-14` · imprescindible
+`E-STUDIO-14` · imprescindible
 
 **Criterios**
 
@@ -1412,13 +1412,13 @@ estado de pago de una persona no es un dato de entrenamiento.
 2. Lo que no me autorizó **no aparece como vacío ni como bloqueado**: no aparece.
 4. Cada consulta queda registrada y la persona la ve.
 
-### HU-OS-084 — Entender por qué dejé de ver algo
+### HU-STUDIO-084 — Entender por qué dejé de ver algo
 
 **Como** coach que antes veía algo de un cliente y ya no
 **quiero** que se me explique qué cambió
 **para** no pensar que la aplicación está fallando.
 
-`E-OS-14` · importante
+`E-STUDIO-14` · importante
 
 **Criterios**
 
@@ -1433,21 +1433,21 @@ estado de pago de una persona no es un dato de entrenamiento.
 
 | Épica | Historias | Imprescindibles |
 | --- | --- | ---: |
-| `E-OS-00` Entrar | `HU-OS-001` – `HU-OS-004` | 4 de 4 |
-| `E-OS-01` Perfil y organización | `HU-OS-005` – `HU-OS-013` | 5 de 9 |
-| `E-OS-02` Equipo, roles y membresías | `HU-OS-014` – `HU-OS-022` | 7 de 9 |
-| `E-OS-03` Invitación de personas y directorio | `HU-OS-023` – `HU-OS-026` | 3 de 4 |
-| `E-OS-04` Responsable, suplencias y terminación | `HU-OS-027` – `HU-OS-033` | 3 de 7 |
-| `E-OS-05` Qué nos autorizó cada persona | `HU-OS-034` – `HU-OS-035` | 1 de 2 |
-| `E-OS-06` Contenido versionado | `HU-OS-036` – `HU-OS-045` | 6 de 10 |
-| `E-OS-07` Asignación y seguimiento | `HU-OS-046` – `HU-OS-050` | 2 de 5 |
-| `E-OS-08` Ver los datos de mi cliente | `HU-OS-051` – `HU-OS-056` | 3 de 6 |
-| `E-OS-09` Observaciones y correcciones | `HU-OS-057` – `HU-OS-060` | 0 de 4 |
-| `E-OS-10` Historial de una relación terminada | `HU-OS-061` – `HU-OS-063` | 0 de 3 |
-| `E-OS-11` Catálogo privado de movimientos | `HU-OS-064` – `HU-OS-067` | 0 de 4 |
-| `E-OS-12` Nutrición | `HU-OS-068` – `HU-OS-072` | 0 de 5 |
-| `E-OS-13` Planes y cobro | `HU-OS-073` – `HU-OS-080` | 5 de 8 |
-| `E-OS-14` Resumen del día | `HU-OS-081` – `HU-OS-084` | 3 de 4 |
+| `E-STUDIO-00` Entrar | `HU-STUDIO-001` – `HU-STUDIO-004` | 4 de 4 |
+| `E-STUDIO-01` Perfil y organización | `HU-STUDIO-005` – `HU-STUDIO-013` | 5 de 9 |
+| `E-STUDIO-02` Equipo, roles y membresías | `HU-STUDIO-014` – `HU-STUDIO-022` | 7 de 9 |
+| `E-STUDIO-03` Invitación de personas y directorio | `HU-STUDIO-023` – `HU-STUDIO-026` | 3 de 4 |
+| `E-STUDIO-04` Responsable, suplencias y terminación | `HU-STUDIO-027` – `HU-STUDIO-033` | 3 de 7 |
+| `E-STUDIO-05` Qué nos autorizó cada persona | `HU-STUDIO-034` – `HU-STUDIO-035` | 1 de 2 |
+| `E-STUDIO-06` Contenido versionado | `HU-STUDIO-036` – `HU-STUDIO-045` | 6 de 10 |
+| `E-STUDIO-07` Asignación y seguimiento | `HU-STUDIO-046` – `HU-STUDIO-050` | 2 de 5 |
+| `E-STUDIO-08` Ver los datos de mi cliente | `HU-STUDIO-051` – `HU-STUDIO-056` | 3 de 6 |
+| `E-STUDIO-09` Observaciones y correcciones | `HU-STUDIO-057` – `HU-STUDIO-060` | 0 de 4 |
+| `E-STUDIO-10` Historial de una relación terminada | `HU-STUDIO-061` – `HU-STUDIO-063` | 0 de 3 |
+| `E-STUDIO-11` Catálogo privado de movimientos | `HU-STUDIO-064` – `HU-STUDIO-067` | 0 de 4 |
+| `E-STUDIO-12` Nutrición | `HU-STUDIO-068` – `HU-STUDIO-072` | 0 de 5 |
+| `E-STUDIO-13` Planes y cobro | `HU-STUDIO-073` – `HU-STUDIO-080` | 5 de 8 |
+| `E-STUDIO-14` Resumen del día | `HU-STUDIO-081` – `HU-STUDIO-084` | 3 de 4 |
 | **Total** | **84 historias** | **42 imprescindibles** |
 
 El camino mínimo para lanzar es: entrar, crear el gimnasio con su equipo,

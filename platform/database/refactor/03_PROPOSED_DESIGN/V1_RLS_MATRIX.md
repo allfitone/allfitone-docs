@@ -119,7 +119,7 @@ Las condiciones RLS se escriben sobre un conjunto pequeño de funciones `STABLE`
 | `auth.frozen_grant_of(relationship_id, scope_code)` | Grant `frozen` único con versión, propósito y `frozen_at`, o conjunto vacío | Nunca acepta `active`/`revoked` |
 | `auth.can_access(person_id, scope_code, level)` | La **fórmula completa** de diez condiciones | Compuesta por las anteriores |
 | `auth.has_verified_credential(person_id, credential_type)` | Verificación profesional vigente y no revocada | `SECURITY DEFINER`; nunca amplía scopes |
-| `auth.can_guide_nutrition(person_id, level)` | Fórmula live + `guide_nutrition` + credencial `nutrition_professional` | Solo para proyecciones/comandos nutricionales OS |
+| `auth.can_guide_nutrition(person_id, level)` | Fórmula live + `guide_nutrition` + credencial `nutrition_professional` | Solo para proyecciones/comandos nutricionales Studio |
 | `auth.can_read_frozen(relationship_id, scope_code, resource, field, occurred_at)` | Caso histórico, grant `frozen`, corte, field-set histórico, denegación y retención válidos | Predicado separado de ADR-023 |
 | `auth.session_denied(session_id, relationship_id)` | Existe denegación aplicable | Se evalúa **antes** de proyectar y de contar |
 | `auth.has_platform_role(role)` | Asignación vigente en `support.platform_role_assignments`; falla cerrado si no puede resolverse | — |
@@ -441,7 +441,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | `A6` | Las de su organización, sin contenido | — | — | — |
 | `A4`, `A5` | Las de su organización | Vía aceptación | Terminación | — |
 
-- **Condición RLS** — `person_id = auth.person()` **OR** (`organization_id = auth.org()` **AND** (`auth.has_capability(org,'manage_clients')` **OR** `auth.effective_assignment(id)`)). `INSERT` exclusivo de la función de aceptación de invitación: ninguna policy permite crear una relación desde OS.
+- **Condición RLS** — `person_id = auth.person()` **OR** (`organization_id = auth.org()` **AND** (`auth.has_capability(org,'manage_clients')` **OR** `auth.effective_assignment(id)`)). `INSERT` exclusivo de la función de aceptación de invitación: ninguna policy permite crear una relación desde Studio.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT` restringido, `UPDATE(status, ended_at, ended_reason)`. Sin `DELETE`.
 - **Índice para la policy** — sobre `(person_id, status)`, `(organization_id, status)` y `(relationship_id, status)` en la tabla de asignaciones.
 - **`T-REL-1` (negativa)** — Un profesional **no** consulta relaciones ajenas: sin asignación efectiva, la colección viene vacía aunque tenga rol `coach`.
@@ -924,8 +924,8 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 | `A10` break-glass | Solo proyección cerrada `nutrition_intake`, con ventana restringida vigente | — | — | — |
 
 - **Condición RLS base** — `auth.is_self(person_id)`. Las tablas hijas heredan mediante FK/`EXISTS` al `meal` propio.
-- **Condición OS** — sin `SELECT` a tablas base; `nutrition.v_client_meals_live` exige `auth.can_guide_nutrition(person_id,'read')` y `nutrition_intake/read`.
-- **Medios** — Space puede recibir una URL firmada para una comida propia. OS solo recibe un enlace a `OP-NUT-013`, que reevalúa `auth.can_guide_nutrition`, `nutrition_intake/read` y `nutrition_media/read` en cada GET, registra `ACCESS_EVENT`, transmite el objeto saneado y nunca redirige a storage; media aislada no produce una fila ni bytes. Break-glass jamás habilita `nutrition_media`, `OP-NUT-013`, storage, `media_ref`, URLs o bytes.
+- **Condición Studio** — sin `SELECT` a tablas base; `nutrition.v_client_meals_live` exige `auth.can_guide_nutrition(person_id,'read')` y `nutrition_intake/read`.
+- **Medios** — Space puede recibir una URL firmada para una comida propia. Studio solo recibe un enlace a `OP-NUT-013`, que reevalúa `auth.can_guide_nutrition`, `nutrition_intake/read` y `nutrition_media/read` en cada GET, registra `ACCESS_EVENT`, transmite el objeto saneado y nunca redirige a storage; media aislada no produce una fila ni bytes. Break-glass jamás habilita `nutrition_media`, `OP-NUT-013`, storage, `media_ref`, URLs o bytes.
 - **Grants mínimos** — `allfit_api` ejecuta funciones y vistas cerradas; `UPDATE/DELETE` directos revocados.
 - **Índices** — meals `(person_id,occurred_at DESC,id DESC)`; hijos `(meal_id,position)`; valores único `(meal_item_id,nutrient_definition_id)`.
 
@@ -958,10 +958,10 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 - **`T-NUT-RLS-10` (positiva)** — Fórmula completa + `nutrition_intake/read` devuelve estructura autorizada.
 - **`T-NUT-RLS-11` (negativa)** — Intake sin media redacta foto y nunca devuelve `media_ref`.
 - **`T-NUT-RLS-12` (negativa)** — `nutrition_media` aislado no revela existencia de comida.
-- **`T-NUT-RLS-13` (positiva)** — Intake + media exponen en OS únicamente el enlace autenticado a `OP-NUT-013`; el GET revalidado devuelve el objeto saneado sin `media_ref`, URL firmada ni redirect de storage.
+- **`T-NUT-RLS-13` (positiva)** — Intake + media exponen en Studio únicamente el enlace autenticado a `OP-NUT-013`; el GET revalidado devuelve el objeto saneado sin `media_ref`, URL firmada ni redirect de storage.
 - **`T-NUT-RLS-14` (positiva)** — Resumen profesional agrega solo filas previamente autorizadas.
 - **`T-NUT-RLS-15` (negativa)** — Revocar intake elimina detalle, total, cursor y resumen en el mismo commit.
-- **`T-NUT-RLS-16` (negativa)** — Revocar intake o media hace que el mismo enlace OS previamente emitido responda `404` sin bytes en la lectura inmediatamente posterior; revocar solo media no oculta la ingesta todavía autorizada.
+- **`T-NUT-RLS-16` (negativa)** — Revocar intake o media hace que el mismo enlace Studio previamente emitido responda `404` sin bytes en la lectura inmediatamente posterior; revocar solo media no oculta la ingesta todavía autorizada.
 - **`T-NUT-RLS-17` (positiva)** — La persona publica una meta propia y queda como única activa.
 - **`T-NUT-RLS-18` (negativa)** — Un grant guidance `read` no permite proponer.
 - **`T-NUT-RLS-19` (positiva)** — Profesional elegible con `contribute` crea propuesta inmutable.
@@ -1082,7 +1082,7 @@ Un índice que solo existe para consultas de negocio no basta: la condición RLS
 | Tabla | Índice | Por qué |
 | --- | --- | --- |
 | `ACCESS_ACCOUNT` | único `(provider, issuer, subject)`; `(person_id)` | Resolución del actor en cada request |
-| `ORGANIZATION_MEMBERSHIP` | `(person_id, status)`; `(organization_id, status)` | `auth.has_membership` en cada operación de OS |
+| `ORGANIZATION_MEMBERSHIP` | `(person_id, status)`; `(organization_id, status)` | `auth.has_membership` en cada operación de Studio |
 | `MEMBERSHIP_ROLE` | `(membership_id, role_code, valid_from, valid_to)` | `auth.has_capability` |
 | `SERVICE_RELATIONSHIP` | `(person_id, status)`; `(organization_id, status)`; único parcial `(person_id, organization_id) WHERE status='active'` | Visibilidad y unicidad de relación activa |
 | `RELATIONSHIP_PROFESSIONAL_ASSIGNMENT` | `(relationship_id, status, valid_from, valid_to)`; único parcial de titular efectivo | `auth.effective_assignment` |
@@ -1151,7 +1151,7 @@ Se enumeran para que una revisión pueda rechazarlos por referencia, sin volver 
 
 | Decisión | Destino |
 | --- | --- |
-| Definición exacta de cada `SCOPE_RESOURCE_RULE` campo por campo | `V1_SPACE_OS_API_CONTRACTS.md` y Fase 4 |
+| Definición exacta de cada `SCOPE_RESOURCE_RULE` campo por campo | `V1_SPACE_STUDIO_API_CONTRACTS.md` y Fase 4 |
 | Nombres físicos de tablas, vistas, funciones y policies | Fase 4 |
 | Estrategia de particionamiento de `ACCESS_EVENT` | Fase 4 |
 | Implementación exacta de las proyecciones: vistas, funciones o composición en la API | Fase 4, con medición de planes |
@@ -1172,4 +1172,4 @@ Se considera completa cuando la revisión confirme que:
 5. ningún rol de runtime puede alterar versiones publicadas, eventos ni revisiones;
 6. cada prueba negativa se ejecuta sobre datos que **existen**.
 
-**Siguiente entregable:** [`V1_SPACE_OS_API_CONTRACTS.md`](./V1_SPACE_OS_API_CONTRACTS.md).
+**Siguiente entregable:** [`V1_SPACE_STUDIO_API_CONTRACTS.md`](./V1_SPACE_STUDIO_API_CONTRACTS.md).

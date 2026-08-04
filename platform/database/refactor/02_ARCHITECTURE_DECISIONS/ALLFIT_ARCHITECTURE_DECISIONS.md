@@ -8,7 +8,7 @@
 
 | ADR | Decisión |
 | --- | --- |
-| ADR-001 | Registro directo en Space e invitaciones opcionales desde OS |
+| ADR-001 | Registro directo en Space e invitaciones opcionales desde Studio |
 | ADR-002 | WorkOS AuthKit para autenticación y Supabase únicamente como PostgreSQL |
 | ADR-003 | Núcleo de entrenamiento multidisciplina |
 | ADR-004 | Operación profesional siempre dentro de una organización |
@@ -41,27 +41,27 @@ Cada sección conserva su contexto, decisión, invariantes, consecuencias y prue
 
 ---
 
-## ADR-001 — Registro directo en Space e invitaciones opcionales desde OS
+## ADR-001 — Registro directo en Space e invitaciones opcionales desde Studio
 
 **Estado:** en revisión<br>
 **Fecha:** 18 de julio de 2026
 
 ### Contexto
 
-Allfit Space debe permitir que cualquier persona elegible se registre y use su Fitness ID de forma autónoma, sin depender de una organización o invitación. Allfit OS también necesita proponer relaciones con profesionales u organizaciones, pero una organización no debe crear credenciales, aceptar términos, completar perfiles ni tomar decisiones de privacidad en nombre de otra persona.
+Allfit Space debe permitir que cualquier persona elegible se registre y use su Fitness ID de forma autónoma, sin depender de una organización o invitación. Allfit Studio también necesita proponer relaciones con profesionales u organizaciones, pero una organización no debe crear credenciales, aceptar términos, completar perfiles ni tomar decisiones de privacidad en nombre de otra persona.
 
 ### Decisión
 
 Existen dos entradas al mismo flujo de identidad:
 
 1. **Registro directo en Space:** la persona inicia personalmente el registro mediante WorkOS AuthKit, acredita elegibilidad adulta, acepta términos y completa onboarding sin invitación.
-2. **Invitación opcional desde OS:** OS emite una invitación por email o celular; la persona se registra o inicia sesión por sí misma y decide sus intenciones.
+2. **Invitación opcional desde Studio:** Studio emite una invitación por email o celular; la persona se registra o inicia sesión por sí misma y decide sus intenciones.
 
 La invitación no es requisito para crear una cuenta, activar el Fitness ID o usar las funciones personales de Space. El registro directo crea únicamente persona, cuenta, perfil inicial y evidencia propia del onboarding; no crea organización, membresía, relación profesional, asignación ni grants de servicio.
 
-Allfit OS **solo puede emitir invitaciones por email o celular** para iniciar propuestas hacia otra persona.
+Allfit Studio **solo puede emitir invitaciones por email o celular** para iniciar propuestas hacia otra persona.
 
-OS nunca puede:
+Studio nunca puede:
 
 - usar la operación administrativa `Create User` de WorkOS o cualquier flujo equivalente para registrar al invitado;
 - crear una persona canónica en `identity.people`;
@@ -70,7 +70,7 @@ OS nunca puede:
 - crear una membresía o relación efectiva antes de la aceptación;
 - asignar de forma efectiva un programa a alguien que todavía no se ha registrado.
 
-Cuando el proceso se origina en OS, antes de la aceptación existe únicamente una invitación, no una persona provisional. La persona y cuenta se materializan cuando su titular verifica el contacto, acredita elegibilidad y completa personalmente el onboarding. En el registro directo de Space no existe invitación ni debe crearse una artificial.
+Cuando el proceso se origina en Studio, antes de la aceptación existe únicamente una invitación, no una persona provisional. La persona y cuenta se materializan cuando su titular verifica el contacto, acredita elegibilidad y completa personalmente el onboarding. En el registro directo de Space no existe invitación ni debe crearse una artificial.
 
 ### Invariantes
 
@@ -103,17 +103,17 @@ sequenceDiagram
     DB-->>P: Registro autónomo completado
 ```
 
-### Flujo de invitación desde OS
+### Flujo de invitación desde Studio
 
 ```mermaid
 sequenceDiagram
-    participant OS as "Allfit OS"
+    participant Studio as "Allfit Studio"
     participant Inv as "Servicio de invitaciones"
     participant P as "Persona invitada"
     participant Auth as "WorkOS AuthKit"
     participant DB as "Dominio Allfit"
 
-    OS->>Inv: Invitar email/celular + propósito
+    Studio->>Inv: Invitar email/celular + propósito
     Inv->>DB: Guardar invitación y token hasheado
     Inv-->>P: Enviar enlace/OTP
     P->>Auth: Iniciar personalmente registro/autenticación
@@ -187,21 +187,21 @@ AuthKit verifica email como identidad primaria. La ruta de invitación por celul
 #### Positivas
 
 - La persona controla su identidad, términos y privacidad.
-- OS no necesita permisos administrativos para crear usuarios en WorkOS.
+- Studio no necesita permisos administrativos para crear usuarios en WorkOS.
 - Se evita crear usuarios falsos, incompletos o duplicados.
 - Las relaciones efectivas siempre apuntan a personas verificadas.
 - El modelo de RLS es más simple: no existen personas activas sin identidad autenticable.
 
 #### Costos
 
-- OS no puede asignar ni operar sobre una persona antes de que acepte.
+- Studio no puede asignar ni operar sobre una persona antes de que acepte.
 - Los flujos comerciales deben distinguir invitación pendiente de cliente activo.
 - La conversión depende de entrega y aceptación del destinatario.
 - Se necesita un proceso robusto para reenvío, expiración y cambio de contacto.
 
 ### Escenarios de prueba obligatorios
 
-1. OS crea invitación y no aparece ningún usuario WorkOS ni fila en `identity.people`.
+1. Studio crea invitación y no aparece ningún usuario WorkOS ni fila en `identity.people`.
 2. Un token expirado o revocado no puede aceptarse.
 3. Una cuenta con email/celular diferente no puede aceptar la invitación.
 4. Una persona existente acepta sin crear duplicados.
@@ -213,7 +213,7 @@ AuthKit verifica email como identidad primaria. La ruta de invitación por celul
 10. Completar una invitación nunca concede scopes de datos, términos, pagos o usos secundarios implícitos.
 11. Una persona se registra directamente en Space sin que exista o se cree una invitación.
 12. El registro directo no crea organización, membresía, relación, asignación ni grant.
-13. Esa persona acepta después una invitación de OS usando el mismo `person_id` y Fitness ID.
+13. Esa persona acepta después una invitación de Studio usando el mismo `person_id` y Fitness ID.
 
 ---
 
@@ -224,15 +224,15 @@ AuthKit verifica email como identidad primaria. La ruta de invitación por celul
 
 ### Contexto
 
-Allfit OS y Allfit Space compartirán identidad y datos, pero vivirán en repositorios y aplicaciones independientes. Se decidió no utilizar Supabase Auth ni acceso directo desde los clientes a la Data API de Supabase.
+Allfit Studio y Allfit Space compartirán identidad y datos, pero vivirán en repositorios y aplicaciones independientes. Se decidió no utilizar Supabase Auth ni acceso directo desde los clientes a la Data API de Supabase.
 
 ### Decisión
 
 - WorkOS AuthKit será la única fuente de autenticación.
 - Existirá un environment de WorkOS aislado por ambiente de Allfit.
-- Space, OS y Backoffice tendrán WorkOS Applications separadas dentro del mismo environment y compartirán la misma base de usuarios de ese environment.
+- Space, Studio y Backoffice tendrán WorkOS Applications separadas dentro del mismo environment y compartirán la misma base de usuarios de ese environment.
 - Supabase se usará únicamente como servicio administrado de PostgreSQL.
-- Space y OS nunca se conectarán directamente a PostgreSQL ni usarán claves `anon`/`service_role`.
+- Space y Studio nunca se conectarán directamente a PostgreSQL ni usarán claves `anon`/`service_role`.
 - Una API/backend propio verificará los JWT de WorkOS AuthKit y será el único acceso runtime a la BD.
 - Personas, organizaciones, roles, relaciones, deberes y consentimientos de negocio vivirán en PostgreSQL. Las Organizations, roles, permissions y claims organizacionales de WorkOS no son autoridad de dominio para Allfit V1.
 - La RLS de PostgreSQL se conservará como defensa en profundidad usando contexto transaccional establecido por el backend.
@@ -242,15 +242,15 @@ Allfit OS y Allfit Space compartirán identidad y datos, pero vivirán en reposi
 ```mermaid
 flowchart LR
     space["Allfit Space"] --> spaceClient["WorkOS Application<br/>Space · cliente público PKCE"]
-    os["Allfit OS"] --> osClient["WorkOS Application<br/>OS"]
+    studio["Allfit Studio"] --> studioClient["WorkOS Application<br/>Studio"]
     backoffice["Allfit Backoffice"] --> backofficeClient["WorkOS Application<br/>Backoffice"]
 
     spaceClient --> pool["WorkOS environment<br/>por ambiente Allfit"]
-    osClient --> pool
+    studioClient --> pool
     backofficeClient --> pool
 
     space --> api["API Allfit"]
-    os --> api
+    studio --> api
     backoffice --> api
     pool -->|"JWT firmado"| api
 
@@ -263,28 +263,28 @@ flowchart LR
 development
 ├── WorkOS environment allfit-dev
 │   ├── WorkOS Application Space dev
-│   ├── WorkOS Application OS dev
+│   ├── WorkOS Application Studio dev
 │   └── WorkOS Application Backoffice dev
 └── Supabase project allfit-dev
 
 staging
 ├── WorkOS environment allfit-staging
 │   ├── WorkOS Application Space staging
-│   ├── WorkOS Application OS staging
+│   ├── WorkOS Application Studio staging
 │   └── WorkOS Application Backoffice staging
 └── Supabase project allfit-staging
 
 production
 ├── WorkOS environment allfit-prod
 │   ├── WorkOS Application Space prod
-│   ├── WorkOS Application OS prod
+│   ├── WorkOS Application Studio prod
 │   └── WorkOS Application Backoffice prod
 └── Supabase project allfit-prod
 ```
 
 No se crea un environment por producto: las Applications del mismo environment comparten usuarios sin duplicar cuentas. Los environments sí permanecen aislados entre development, staging y production; sus usuarios, claves, webhooks y configuración no se promueven automáticamente.
 
-Space es una aplicación móvil pública y usa Authorization Code con PKCE; nunca incorpora una API key o client secret de WorkOS en el bundle. OS y Backoffice usan el flujo y almacenamiento de sesión apropiados para aplicaciones web, con redirect URIs y políticas de sesión independientes.
+Space es una aplicación móvil pública y usa Authorization Code con PKCE; nunca incorpora una API key o client secret de WorkOS en el bundle. Studio y Backoffice usan el flujo y almacenamiento de sesión apropiados para aplicaciones web, con redirect URIs y políticas de sesión independientes.
 
 ### Identidad externa y persona de dominio
 
@@ -324,11 +324,11 @@ La API debe validar antes de consultar la BD:
 2. `iss` permitido para el environment o dominio de autenticación del ambiente;
 3. `exp`, `iat` y temporalidad;
 4. `sub` con formato de WorkOS user ID y `sid` de sesión;
-5. `client_id` permitido para la superficie Space, OS o Backoffice solicitada;
+5. `client_id` permitido para la superficie Space, Studio o Backoffice solicitada;
 6. estado local de la cuenta/persona;
 7. membresías, relaciones, deberes y consentimientos en PostgreSQL.
 
-Los claims `org_id`, `role` y `permissions` de WorkOS se ignoran para autorización de negocio. La organización efectiva continúa viajando explícitamente en la ruta de OS y se valida contra PostgreSQL.
+Los claims `org_id`, `role` y `permissions` de WorkOS se ignoran para autorización de negocio. La organización efectiva continúa viajando explícitamente en la ruta de Studio y se valida contra PostgreSQL.
 
 El claim `auth_time` permite exigir autenticación reciente mediante `max_age`, pero **no demuestra por sí solo que hubo MFA**. La política MFA de AuthKit se configura por environment y no se aplica de la misma forma a usuarios SSO, por lo que activarla no basta para inferir AAL2 en Backoffice. Antes de habilitar una operación que exige `aal2`, la integración debe fijar y probar cómo obtiene evidencia verificable de MFA/step-up desde WorkOS y cómo la ata a la sesión. Mientras esa evidencia no exista, el backend solo establece `app.authn_assurance = 'aal1'` y las operaciones AAL2 fallan cerradas.
 
@@ -395,8 +395,8 @@ La decisión documentada en la sección ADR-001 permanece:
 
 - Space permite que la persona inicie registro/autenticación con AuthKit y onboarding sin invitación.
 - El registro directo crea el Fitness ID sin organización, membresía, relación, asignación o grant de servicio.
-- OS crea `identity.invitations` con email/celular.
-- OS nunca usa la operación administrativa `Create User` de WorkOS para registrar a un invitado.
+- Studio crea `identity.invitations` con email/celular.
+- Studio nunca usa la operación administrativa `Create User` de WorkOS para registrar a un invitado.
 - La persona inicia personalmente el registro o autenticación mediante AuthKit.
 - Si ya tiene cuenta, inicia sesión con la existente.
 - La API valida que el contacto verificado coincida con la invitación.
@@ -410,7 +410,7 @@ Un registro iniciado por la persona puede producir temporalmente un usuario Work
 
 - Supabase Auth.
 - Acceso directo desde `supabase-js` a tablas de negocio.
-- Claves `anon` o `service_role` en Space/OS.
+- Claves `anon` o `service_role` en Space/Studio.
 - `auth.users`, `auth.uid()` o claims de Supabase en policies.
 - PostgREST/Data API como frontera pública de las aplicaciones.
 
@@ -454,7 +454,7 @@ Storage, Realtime o Edge Functions requerirían un ADR separado antes de incorpo
 6. Falta de contexto RLS produce cero filas/denegación.
 7. El contexto no sobrevive al `commit` ni se filtra entre conexiones pooled.
 8. `allfit_api` no puede desactivar RLS ni consultar como otra persona sin contexto válido.
-9. Space, OS y Backoffice aplican permisos diferentes sobre la misma persona.
+9. Space, Studio y Backoffice aplican permisos diferentes sobre la misma persona.
 10. `org_id`, `role` o `permissions` de WorkOS nunca sustituyen la autorización de PostgreSQL.
 11. Space completa Authorization Code con PKCE sin client secret ni API key en el bundle.
 12. Una sesión sin evidencia verificable de MFA/step-up nunca establece `aal2`.
@@ -469,7 +469,7 @@ Storage, Realtime o Edge Functions requerirían un ADR separado antes de incorpo
 
 ### Contexto
 
-La primera rebanada funcional de Allfit se validará con entrenamiento de fuerza, pero Allfit Space y Allfit OS deben soportar running, ciclismo, natación, entrenamiento híbrido, cross-training, calistenia, movilidad, yoga, pilates, clases y futuras disciplinas.
+La primera rebanada funcional de Allfit se validará con entrenamiento de fuerza, pero Allfit Space y Allfit Studio deben soportar running, ciclismo, natación, entrenamiento híbrido, cross-training, calistenia, movilidad, yoga, pilates, clases y futuras disciplinas.
 
 Un modelo construido alrededor de `exercises`, `routines`, `sets`, `reps` y `weight` convertiría musculación en la estructura universal y obligaría a deformar o duplicar las demás disciplinas.
 
@@ -741,14 +741,14 @@ Duplica persona, programa, calendario, privacidad y ejecución; dificulta entren
 
 ### Contexto
 
-Un profesional es una capacidad de una persona y puede mantener un perfil, especialidades y credenciales propios. Sin embargo, prestar servicios mediante Allfit OS requiere un contexto operativo estable para clientes, oferta, programas, permisos, pagos, auditoría y suscripción de producto.
+Un profesional es una capacidad de una persona y puede mantener un perfil, especialidades y credenciales propios. Sin embargo, prestar servicios mediante Allfit Studio requiere un contexto operativo estable para clientes, oferta, programas, permisos, pagos, auditoría y suscripción de producto.
 
 Modelar al “coach independiente” y al “gimnasio” como raíces incompatibles duplicaría relaciones, comercio y autorización. También fallaría cuando una misma persona trabaja por cuenta propia y para una o varias organizaciones.
 
 ### Decisión
 
 - Toda persona profesional puede crear y mantener su perfil profesional independientemente de una organización.
-- Para prestar servicios, gestionar clientes, publicar oferta, asignar programas o recibir pagos mediante Allfit OS, el profesional debe actuar dentro de una organización.
+- Para prestar servicios, gestionar clientes, publicar oferta, asignar programas o recibir pagos mediante Allfit Studio, el profesional debe actuar dentro de una organización.
 - Si trabaja de forma independiente, Allfit crea durante el onboarding una organización de tipo `professional_practice`, registra `solo_professional` como modalidad de onboarding y crea su membresía inicial como propietario.
 - La organización unipersonal es una frontera técnica y operativa; no afirma por sí sola que exista una persona jurídica, razón social o registro tributario.
 - Una persona puede conservar su organización unipersonal y, simultáneamente, pertenecer como profesional a otras organizaciones.
@@ -760,7 +760,7 @@ Tipos estables como `professional_practice`, `gym`, `studio`, `academy` o `clini
 ### Invariantes
 
 1. El perfil profesional pertenece a la persona, no a una organización.
-2. Existir como profesional no concede acceso a Allfit OS ni a datos de clientes.
+2. Existir como profesional no concede acceso a Allfit Studio ni a datos de clientes.
 3. Ninguna acción profesional sobre un cliente ocurre sin una organización activa y una membresía profesional vigente.
 4. La práctica creada mediante onboarding `solo_professional` tiene exactamente una membresía propietaria inicial para la persona que la crea.
 5. Cambiar o terminar una membresía organizacional no elimina el perfil profesional global.
@@ -785,7 +785,7 @@ Tipos estables como `professional_practice`, `gym`, `studio`, `academy` o `clini
 
 ### Escenarios de prueba obligatorios
 
-1. Una persona crea su perfil profesional sin obtener acceso a clientes ni operaciones de OS.
+1. Una persona crea su perfil profesional sin obtener acceso a clientes ni operaciones de Studio.
 2. El onboarding `solo_professional` crea una sola `professional_practice` y una sola membresía propietaria ante reintentos concurrentes.
 3. Un profesional publica o asigna únicamente bajo una organización donde tiene membresía y permiso vigentes.
 4. La misma persona opera desde su organización unipersonal y desde un gimnasio sin duplicar su perfil profesional.
@@ -869,7 +869,7 @@ La persona necesita continuidad de su historial y la organización necesita pres
 #### Costos
 
 - Se necesita clasificar los datos y definir plazos por categoría y jurisdicción.
-- OS requiere la superficie histórica separada y el predicado de autorización específico definidos por ADR-023.
+- Studio requiere la superficie histórica separada y el predicado de autorización específico definidos por ADR-023.
 - La terminación debe coordinar relación, grants, listados operativos, asignaciones y políticas de retención.
 - Los plazos y bases de conservación necesitan validación jurídica antes de producción.
 
@@ -942,7 +942,7 @@ El tamaño actual del equipo y la clase de operación son dimensiones diferentes
 
 #### Costos
 
-- OS necesita flujos de invitación, roles y administración de equipo incluso para organizaciones creadas como unipersonales.
+- Studio necesita flujos de invitación, roles y administración de equipo incluso para organizaciones creadas como unipersonales.
 - Las reasignaciones de profesional responsable requieren historial temporal/auditable.
 - La interfaz debe cambiar gradualmente de experiencia personal a gestión de equipo sin exponer complejidad prematuramente.
 
@@ -1483,7 +1483,7 @@ Al terminar la relación:
 - las propuestas pendientes expiran o quedan bloqueadas según política;
 - revisiones ya aceptadas permanecen en el historial;
 - notas retenidas siguen ADR-005;
-- una disputa posterior usa soporte restringido y auditado, no endpoints normales de OS.
+- una disputa posterior usa soporte restringido y auditado, no endpoints normales de Studio.
 
 ### Invariantes
 
@@ -1512,7 +1512,7 @@ Al terminar la relación:
 - Se necesitan propuestas, eventos de revisión y proyecciones canónicas.
 - La UI debe mostrar solicitudes, before/after, autor y motivo.
 - Recalcular métricas derivadas requiere jobs/eventos versionados.
-- Soporte necesita un flujo excepcional separado de OS operativo.
+- Soporte necesita un flujo excepcional separado de Studio operativo.
 
 ### Escenarios de prueba obligatorios
 
@@ -1770,15 +1770,15 @@ JSONB puede expresar reglas publicadas o extensiones experimentales con `schema_
 
 ### Contexto
 
-Allfit Space y Allfit OS deben funcionar como productos con valor propio, pero comparten persona, Fitness ID, relaciones, consentimientos, entrenamiento y transacciones. Interpretar “independencia” como dos dominios físicos de persistencia desde V1 exigiría duplicar o sincronizar esas verdades mediante consistencia eventual, eventos, resolución de conflictos y controles de privacidad distribuidos.
+Allfit Space y Allfit Studio deben funcionar como productos con valor propio, pero comparten persona, Fitness ID, relaciones, consentimientos, entrenamiento y transacciones. Interpretar “independencia” como dos dominios físicos de persistencia desde V1 exigiría duplicar o sincronizar esas verdades mediante consistencia eventual, eventos, resolución de conflictos y controles de privacidad distribuidos.
 
-La arquitectura necesita declarar qué fallos deben quedar aislados y cuáles forman parte del riesgo aceptado. Sin esa definición, “independiente” puede prometer una disponibilidad que una única base compartida no puede cumplir o, en el extremo contrario, permitir que un job exclusivo de OS degrade innecesariamente Space.
+La arquitectura necesita declarar qué fallos deben quedar aislados y cuáles forman parte del riesgo aceptado. Sin esa definición, “independiente” puede prometer una disponibilidad que una única base compartida no puede cumplir o, en el extremo contrario, permitir que un job exclusivo de Studio degrade innecesariamente Space.
 
 ### Decisión
 
 En V1, independencia significa:
 
-- valor funcional y comercial propio para Space y OS;
+- valor funcional y comercial propio para Space y Studio;
 - frontends, WorkOS Applications y contratos HTTP separados;
 - despliegues de frontend independientes;
 - límites de dominio y módulos/workers extraíbles;
@@ -1792,9 +1792,9 @@ No se fijan SLO, RTO o RPO numéricos en este ADR. Deben acordarse antes de prod
 
 | Fallo | Comportamiento V1 |
 | --- | --- |
-| Frontend de Space | OS continúa funcionando |
-| Frontend de OS | Space continúa funcionando |
-| Worker o integración exclusiva de OS | Space continúa; OS reintenta mediante cola/DLQ sin bloquear requests síncronos |
+| Frontend de Space | Studio continúa funcionando |
+| Frontend de Studio | Space continúa funcionando |
+| Worker o integración exclusiva de Studio | Space continúa; Studio reintenta mediante cola/DLQ sin bloquear requests síncronos |
 | Proveedor externo usado por V1 | El núcleo continúa cuando la operación puede degradarse; la capacidad afectada aplica timeout/circuit breaker |
 | Endpoint/módulo específico de un producto | El otro contrato permanece disponible si API y PostgreSQL compartidos están sanos |
 | WorkOS AuthKit | Login/refresh pueden fallar; la API solo acepta tokens vigentes que pueda verificar de forma segura |
@@ -1804,7 +1804,7 @@ No se fijan SLO, RTO o RPO numéricos en este ADR. Deben acordarse antes de prod
 ### Degradación segura
 
 - Space puede conservar borradores locales de ejecuciones y sincronizarlos después mediante comandos idempotentes y detección de conflictos.
-- OS puede conservar borradores no enviados, pero no confirmar asignaciones, membresías organizacionales o cambios de permisos sin estado autoritativo.
+- Studio puede conservar borradores no enviados, pero no confirmar asignaciones, membresías organizacionales o cambios de permisos sin estado autoritativo.
 - Autorización, grants y operaciones sensibles V1 fallan cerrados; capacidades futuras de disponibilidad y dinero deben heredar esta regla.
 - La UI distingue `draft/local`, `pending_sync`, `confirmed` y `failed`; nunca presenta un dato cacheado como confirmación del servidor.
 - Reintentar tras recuperación conserva idempotency keys y no duplica ejecuciones, asignaciones o invitaciones.
@@ -1817,7 +1817,7 @@ No se fijan SLO, RTO o RPO numéricos en este ADR. Deben acordarse antes de prod
 - circuit breakers y timeouts para proveedores externos;
 - jobs con credenciales/grants específicos, sin rol universal;
 - outbox/inbox e idempotencia para procesamiento asíncrono;
-- métricas de disponibilidad, errores y latencia diferenciadas para Space y OS;
+- métricas de disponibilidad, errores y latencia diferenciadas para Space y Studio;
 - restauración, backups y recuperación probados sobre la dependencia compartida.
 
 Compartir deployment de API en la primera etapa es válido si mantiene estos límites. Los módulos o workers pueden separarse físicamente cuando su perfil de carga o fallo lo justifique, sin separar todavía la fuente de verdad.
@@ -1834,12 +1834,12 @@ Se reevalúa esta decisión cuando exista evidencia de uno o más de estos facto
 - equipos que necesitan autonomía de despliegue de backend con ownership separado;
 - incidentes repetidos cuyo blast radius compartido excede el riesgo aceptado.
 
-La extracción se realiza por bounded context/dominio —por ejemplo booking, commerce, integrations o intelligence—, no copiando todas las entidades en una `space_database` y una `os_database`. Cada extracción define fuente de verdad, contratos/eventos, consistencia, privacidad, reconciliación y estrategia de backfill/cutover. Identidad, privacidad y Fitness ID mantienen una autoridad inequívoca.
+La extracción se realiza por bounded context/dominio —por ejemplo booking, commerce, integrations o intelligence—, no copiando todas las entidades en una `space_database` y una `studio_database`. Cada extracción define fuente de verdad, contratos/eventos, consistencia, privacidad, reconciliación y estrategia de backfill/cutover. Identidad, privacidad y Fitness ID mantienen una autoridad inequívoca.
 
 ### Invariantes
 
 1. Independencia funcional no se presenta como alta disponibilidad física separada.
-2. Space y OS no duplican el Fitness ID para simular aislamiento.
+2. Space y Studio no duplican el Fitness ID para simular aislamiento.
 3. Un fallo exclusivo de frontend, worker o proveedor de un producto no debe derribar el otro cuando las dependencias comunes están sanas.
 4. PostgreSQL compartido es un dominio de fallo común aceptado y observado en V1.
 5. Ningún cache/read model atrasado autoriza operaciones sensibles.
@@ -1867,14 +1867,14 @@ La extracción se realiza por bounded context/dominio —por ejemplo booking, co
 
 ### Escenarios de prueba obligatorios
 
-1. Una caída del frontend de Space no afecta OS y viceversa.
-2. Un worker de OS saturado no consume el presupuesto reservado de requests de Space.
+1. Una caída del frontend de Space no afecta Studio y viceversa.
+2. Un worker de Studio saturado no consume el presupuesto reservado de requests de Space.
 3. Un proveedor externo usado por V1 abre su circuit breaker sin bloquear operaciones independientes.
 4. PostgreSQL no disponible impide confirmaciones sensibles en ambos productos y muestra degradación explícita.
 5. Space crea un borrador local durante la caída y lo sincroniza una sola vez al recuperarse.
-6. OS no confirma asignación, cambio de permisos o grant usando caché/read model atrasado.
+6. Studio no confirma asignación, cambio de permisos o grant usando caché/read model atrasado.
 7. Reintentos posteriores a recuperación no duplican operaciones.
-8. Métricas y alertas permiten distinguir impacto Space, OS, dominio y dependencia compartida.
+8. Métricas y alertas permiten distinguir impacto Space, Studio, dominio y dependencia compartida.
 9. Un ejercicio de restauración cumple los RTO/RPO acordados antes de producción.
 10. Una propuesta de extracción identifica dominio, fuente de verdad y consistencia; se rechaza si solo duplica tablas por producto.
 
@@ -2194,7 +2194,7 @@ V1 no incluirá esas capacidades. La exclusión es una decisión de alcance de p
 
 ### Decisión
 
-Allfit OS y Allfit Space V1 solo activan un Fitness ID para personas que cumplan la política de elegibilidad adulta: **18 años o más**. El límite se aplica globalmente en V1 y no puede reducirse por organización, profesional, país, disciplina o tipo de servicio.
+Allfit Studio y Allfit Space V1 solo activan un Fitness ID para personas que cumplan la política de elegibilidad adulta: **18 años o más**. El límite se aplica globalmente en V1 y no puede reducirse por organización, profesional, país, disciplina o tipo de servicio.
 
 V1 no modela ni permite:
 
@@ -3051,7 +3051,7 @@ La autorización se materializa mediante un `privacy.historical_access_case` que
 
 La lectura ocurre exclusivamente bajo:
 
-`GET /os/v1/organizations/{orgId}/historical-relationships/{relationshipId}`
+`GET /studio/v1/organizations/{orgId}/historical-relationships/{relationshipId}`
 
 La petición identifica el caso mediante `X-Historical-Access-Case`. Puede consultar recursos históricos subordinados por relación, pero:
 
@@ -3414,7 +3414,7 @@ El cambio necesita dominio, ownership, privacidad, autoridad profesional, estruc
 8. El profesional nunca modifica comidas, adjunta fotos, decide por la persona ni activa objetivos directamente.
 9. Terminar la relación cancela propuestas pendientes y congela el grant. La superficie histórica solo puede mostrar guía profesional emitida por esa relación hasta `T`; excluye comidas, resúmenes, fotos y metas personales, y exige el caso, AAL2, propósito y auditoría de ADR-023.
 10. Space admite captura offline de datos estructurados con `Command-Id`. La foto se adjunta después mediante una revisión idempotente; el servidor elimina EXIF/geolocalización y falla cerrado si no puede sanearla.
-11. Resúmenes diarios son vistas/proyecciones, no snapshots ni tablas materializadas. Space puede emitir a la persona una URL de storage firmada por hasta 300 segundos; OS nunca recibe esa URL y obtiene la foto por un proxy autenticado que reevalúa ambos scopes en cada GET, registra el acceso, no redirige y transmite únicamente el objeto saneado. Revocación, borrado o anonimización invalidan detalles, conteos, cursores, agregados, cachés, enlaces autenticados y URLs firmadas según su superficie.
+11. Resúmenes diarios son vistas/proyecciones, no snapshots ni tablas materializadas. Space puede emitir a la persona una URL de storage firmada por hasta 300 segundos; Studio nunca recibe esa URL y obtiene la foto por un proxy autenticado que reevalúa ambos scopes en cada GET, registra el acceso, no redirige y transmite únicamente el objeto saneado. Revocación, borrado o anonimización invalidan detalles, conteos, cursores, agregados, cachés, enlaces autenticados y URLs firmadas según su superficie.
 12. Los datos canónicos permanecen mientras la cuenta esté activa salvo borrado personal, hold o política de disposición. El acceso `frozen` nunca crea una copia independiente.
 13. La incorporación es greenfield: no existen ETL, backfill, mapeos de ID, compatibilidad, reconciliación, reconsentimiento o importación desde Factory Fitness.
 14. La primera rebanada de Fase 5 se amplía de ocho a veintiuna operaciones HTTP: conserva las ocho actuales e incorpora `OP-NUT-001..013`.
@@ -3440,10 +3440,10 @@ El dominio se materializa en ocho tablas: `nutrient_definitions`, `meals`, `meal
 2. Otra persona, un admin, un `staff` y un coach sin asignación reciben cero acceso.
 3. Un coach asignado sin capability, credencial o grant falla cerrado.
 4. `nutrition_intake/read` expone estructura pero no foto; `nutrition_media/read` aislado no revela la comida.
-5. Para Space, la persona recibe una URL HTTPS de storage por máximo 300 segundos; para OS, la combinación de ambos scopes entrega un enlace al proxy autenticado `OP-NUT-013`, nunca una URL de storage.
+5. Para Space, la persona recibe una URL HTTPS de storage por máximo 300 segundos; para Studio, la combinación de ambos scopes entrega un enlace al proxy autenticado `OP-NUT-013`, nunca una URL de storage.
 6. Un profesional autorizado propone; la versión no se activa hasta aceptación de la persona.
 7. Aceptaciones concurrentes producen una sola meta activa y una sola decisión por versión.
-8. Revocar `nutrition_intake` o `nutrition_media` hace que el mismo enlace OS previamente entregado responda `404` sin bytes en la lectura inmediatamente posterior; revocar cualquier scope invalida además su superficie y todos sus derivados.
+8. Revocar `nutrition_intake` o `nutrition_media` hace que el mismo enlace Studio previamente entregado responda `404` sin bytes en la lectura inmediatamente posterior; revocar cualquier scope invalida además su superficie y todos sus derivados.
 9. Tras terminar la relación, un caso histórico válido solo ve guía emitida hasta `T`.
 10. El esquema se reconstruye sin ningún artefacto, dato o dependencia de Factory Fitness.
 
@@ -3476,7 +3476,7 @@ Las HU de Backoffice declaraban un único `allfit_admin` con acceso ordinario a 
 12. Toda lectura sensible permitida o denegada escribe `break_glass_events` y `privacy.access_events` antes de devolver contenido. Si no puede auditar, falla cerrada. La persona afectada ve actor, categoría, propósito, instante y resultado, no el expediente interno.
 13. Suspender, revocar o vencer `request_break_glass` cierra las ventanas abiertas del actor. Retirar el rol base revoca la sesión y todos sus deberes efectivos sin borrar historial.
 14. Ningún runtime usa owner, superuser o `BYPASSRLS`; el rol de conexión de soporte sólo ejecuta funciones/proyecciones cerradas.
-15. Backoffice usa un WorkOS Application propia dentro del WorkOS environment compartido y la API sólo acepta ese `client_id` en `/backoffice/v1`. Los WorkOS Applications de Space u OS no obtienen acceso por compartir `sub` o `person_id`.
+15. Backoffice usa un WorkOS Application propia dentro del WorkOS environment compartido y la API sólo acepta ese `client_id` en `/backoffice/v1`. Los WorkOS Applications de Space u Studio no obtienen acceso por compartir `sub` o `person_id`.
 16. El bootstrap inicial y una recuperación por pérdida total de autoridad no son endpoints. Una ceremonia operativa con aprobación de dos personas usa temporalmente `allfit_migrator` para insertar, en una sola transacción, al menos dos roles base y sus deberes `manage_platform_access` cruzados: cada destinatario tiene como otorgante a la otra persona. El pipeline deshabilita esa credencial al terminar y conserva evidencia; no hay seed ni excepción de autoasignación.
 
 ### Invariantes

@@ -23,7 +23,7 @@ Para cada concepto se responden las mismas siete preguntas:
 - La persona es la raíz del Fitness ID.
 - WorkOS AuthKit autentica; el claim `sub` no representa por sí solo a la persona de dominio.
 - Una persona puede registrarse directamente en Space y activar su Fitness ID sin invitación, organización o relación profesional.
-- Allfit OS nunca crea usuarios WorkOS ni personas. Solo crea invitaciones dirigidas a un email o celular.
+- Allfit Studio nunca crea usuarios WorkOS ni personas. Solo crea invitaciones dirigidas a un email o celular.
 - Una invitación pendiente no es una persona, cuenta, membresía, relación, consentimiento ni asignación.
 - La persona invitada debe verificar su contacto y completar personalmente el registro antes de que existan esas entidades.
 - V1 solo activa personas de 18 años o más; no existen perfiles tutelados, representantes, consentimiento parental ni cuentas familiares.
@@ -54,7 +54,7 @@ Para cada concepto se responden las mismas siete preguntas:
 - Un profesional puede revisar su propia captura o proponer correcciones, pero nunca sobrescribir silenciosamente datos de la persona o raw de dispositivos.
 - Todo dato personal tiene una política versionada cuya disposición es eliminar, anonimizar irreversiblemente o conservar con acceso restringido.
 - Revocar un scope elimina el acceso del tercero, no el dato que la persona conserva en su Fitness ID; seudonimizar tampoco equivale a anonimizar.
-- Space y OS son independientes funcionalmente, pero comparten en V1 identidad y persistencia autoritativa; independencia no promete tolerancia física separada.
+- Space y Studio son independientes funcionalmente, pero comparten en V1 identidad y persistencia autoritativa; independencia no promete tolerancia física separada.
 - Booking/clases, marketplace, conectores de wearables, IA, comunidad y publicación pública son capacidades diferidas sin DDL en la baseline V1.
 - El **plan comercial** que una persona le paga a su gimnasio entra a V1 por DT-017: suscripción recurrente mensual o anual, con la plata yendo directo a la cuenta de pasarela de la organización. Allfit refleja el estado; no cobra, no gira y no almacena datos de tarjeta.
 - La falta de pago **suspende de forma indefinida y nunca termina**: los grants no se tocan, el programa no se desacopla y el coach conserva la lectura pero pierde la escritura.
@@ -70,13 +70,13 @@ Para cada concepto se responden las mismas siete preguntas:
 
 | Pregunta | Respuesta |
 | --- | --- |
-| **1. ¿Qué es?** | Un sobre temporal y opcional emitido desde OS para que el titular de un email o celular se registre o use su cuenta existente y decida propuestas tipadas de membresía, relación o programa. Contiene canal, destino normalizado, organización, emisor, propósito, expiración y token seguro. |
+| **1. ¿Qué es?** | Un sobre temporal y opcional emitido desde Studio para que el titular de un email o celular se registre o use su cuenta existente y decida propuestas tipadas de membresía, relación o programa. Contiene canal, destino normalizado, organización, emisor, propósito, expiración y token seguro. |
 | **2. ¿Qué no es?** | No es requisito para registrarse o usar Space. Tampoco es una persona, cuenta de acceso, perfil, membresía, relación profesional, consentimiento ni asignación, ni demuestra que el titular del contacto haya aceptado participar. |
-| **3. ¿Quién lo crea?** | Un miembro autorizado de una organización desde OS. El backend genera y envía el token; OS nunca invoca `Create User` ni otro flujo administrativo de WorkOS AuthKit en nombre del invitado. |
+| **3. ¿Quién lo crea?** | Un miembro autorizado de una organización desde Studio. El backend genera y envía el token; Studio nunca invoca `Create User` ni otro flujo administrativo de WorkOS AuthKit en nombre del invitado. |
 | **4. ¿Quién es dueño del dato?** | La organización es responsable de la intención y su finalidad; Allfit custodia entrega y seguridad. El email/celular sigue siendo dato personal del destinatario y debe conservarse solo durante la vigencia/retención definida. |
 | **5. ¿Puede existir sin Auth?** | Sí. Esa es precisamente su función. El destinatario todavía no es un usuario ni una persona del dominio. |
 | **6. ¿Cuál es su ciclo de vida?** | Creada → enviada → entregada → abierta → completada, expirada, revocada o bloqueada por no elegibilidad. Cada intención pasa independientemente por propuesta, aceptación, rechazo, revocación o expiración. Completar no significa aceptar todo. El token es de un solo uso y se almacena hasheado. |
-| **7. Ejemplos y contraejemplos** | **Ejemplo:** Ana acepta la relación con su coach y rechaza el programa propuesto. **Contraejemplos:** OS crea a Ana con `Create User` o un botón “aceptar todo” concede relación, programa y datos. |
+| **7. Ejemplos y contraejemplos** | **Ejemplo:** Ana acepta la relación con su coach y rechaza el programa propuesto. **Contraejemplos:** Studio crea a Ana con `Create User` o un botón “aceptar todo” concede relación, programa y datos. |
 
 ### Implicación para la BD
 
@@ -90,9 +90,9 @@ Para cada concepto se responden las mismas siete preguntas:
 | --- | --- |
 | **1. ¿Qué es?** | El ser humano canónico alrededor del cual se construye el Fitness ID. Es el sujeto al que pertenecen identidad, preferencias, relaciones, historial de entrenamiento y progreso. La misma persona puede entrenar sola, ser cliente de varios profesionales y también prestar servicios profesionales. |
 | **2. ¿Qué no es?** | No es una credencial de acceso, un usuario de una organización, un cliente comercial, un profesional ni un perfil público. Tampoco es una copia distinta por cada gimnasio. |
-| **3. ¿Quién lo crea?** | El servicio de registro después de que la propia persona verifica su email mediante WorkOS, acredita elegibilidad de 18 años o más y completa el onboarding requerido. Una invitación por celular exige además la prueba separada de control del canal. Puede originarse desde una invitación de OS o desde un registro espontáneo en Space. OS nunca crea la persona directamente. |
+| **3. ¿Quién lo crea?** | El servicio de registro después de que la propia persona verifica su email mediante WorkOS, acredita elegibilidad de 18 años o más y completa el onboarding requerido. Una invitación por celular exige además la prueba separada de control del canal. Puede originarse desde una invitación de Studio o desde un registro espontáneo en Space. Studio nunca crea la persona directamente. |
 | **4. ¿Quién es dueño del dato?** | La persona es el dueño lógico de su identidad e historial personal. Allfit actúa como custodio de la fuente canónica. Cada organización conserva autoría y responsabilidad sobre los registros operativos que haya producido, pero no obtiene propiedad sobre toda la persona. |
-| **5. ¿Puede existir sin usuario WorkOS?** | No como persona activa en V1. Antes de completar el registro directo no existe persona de dominio; si el flujo empezó desde OS puede existir una invitación separada. Por retención o auditoría, una persona podría permanecer anonimizada/archivada después de cerrar su cuenta, pero no nace sin que su titular complete WorkOS AuthKit y el onboarding. |
+| **5. ¿Puede existir sin usuario WorkOS?** | No como persona activa en V1. Antes de completar el registro directo no existe persona de dominio; si el flujo empezó desde Studio puede existir una invitación separada. Por retención o auditoría, una persona podría permanecer anonimizada/archivada después de cerrar su cuenta, pero no nace sin que su titular complete WorkOS AuthKit y el onboarding. |
 | **6. ¿Cuál es su ciclo de vida?** | Elegibilidad adulta resuelta → registrada/activa → restringida o suspendida → eventualmente anonimizada/archivada. No se crea una persona nueva al entrar a otra organización. Las fusiones por duplicados excepcionales deben conservar alias, procedencia y auditoría. Si se descubre que es menor, se restringe y se inicia disposición; no se convierte en perfil tutelado. |
 | **7. Ejemplos y contraejemplos** | **Ejemplo:** Ana, adulta, entrena sola, pertenece a un gimnasio y contrata dos profesionales; continúa siendo una sola persona. **Contraejemplos:** crear tres filas de Ana, una por cada relación u organización, o activar el perfil de un menor porque su acudiente lo autorizó. |
 
@@ -106,9 +106,9 @@ Para cada concepto se responden las mismas siete preguntas:
 
 | Pregunta | Respuesta |
 | --- | --- |
-| **1. ¿Qué es?** | La identidad externa autenticada por WorkOS AuthKit. Se identifica por la combinación estable de `issuer` del WorkOS environment y claim `sub`, y se vincula con la persona canónica mediante `identity.accounts`. Space, OS y Backoffice usan WorkOS Applications separadas del mismo WorkOS environment por ambiente. |
+| **1. ¿Qué es?** | La identidad externa autenticada por WorkOS AuthKit. Se identifica por la combinación estable de `issuer` del WorkOS environment y claim `sub`, y se vincula con la persona canónica mediante `identity.accounts`. Space, Studio y Backoffice usan WorkOS Applications separadas del mismo WorkOS environment por ambiente. |
 | **2. ¿Qué no es?** | No es la persona, su perfil fitness, su rol profesional ni su membresía en una organización. Borrar o bloquear una cuenta no debe borrar automáticamente a la persona ni su historial. |
-| **3. ¿Quién lo crea?** | WorkOS AuthKit cuando la propia persona inicia registro/SSO, verifica el email y completa el flujo permitido. Una invitación de OS puede iniciar la navegación, pero OS nunca usa `Create User`. El backend crea el vínculo local durante el onboarding. |
+| **3. ¿Quién lo crea?** | WorkOS AuthKit cuando la propia persona inicia registro/SSO, verifica el email y completa el flujo permitido. Una invitación de Studio puede iniciar la navegación, pero Studio nunca usa `Create User`. El backend crea el vínculo local durante el onboarding. |
 | **4. ¿Quién es dueño del dato?** | El titular controla el uso de su cuenta; Allfit administra autenticación, seguridad y recuperación. Una organización puede invitar o solicitar acceso, pero no debe apropiarse de la cuenta personal. |
 | **5. ¿Puede existir sin WorkOS AuthKit?** | No. Por definición, la cuenta de acceso corresponde a un sujeto de WorkOS AuthKit. Puede existir una invitación pendiente, pero todavía no es una cuenta. |
 | **6. ¿Cuál es su ciclo de vida?** | Registro/verificación iniciada → activa → bloqueada o recuperación → desactivada/eliminada. La invitación es una entidad previa y separada. Los proveedores federados deben vincularse a un mismo usuario WorkOS AuthKit, no producir personas duplicadas. |
@@ -128,7 +128,7 @@ Para cada concepto se responden las mismas siete preguntas:
 | **2. ¿Qué no es?** | No es el historial completo, un registro de sesiones, una medición corporal, un diagnóstico médico ni un documento libre donde se almacena cualquier dato. Tampoco es el perfil público de marketplace. |
 | **3. ¿Quién lo crea?** | Principalmente la persona. Un profesional puede crear observaciones propias o transcribir una declaración dentro de una relación autorizada; dispositivos producen mediciones, el sistema crea inferencias y un flujo competente verifica afirmaciones concretas. Cada caso conserva una procedencia diferente. |
 | **4. ¿Quién es dueño del dato?** | La persona. Deben conservarse sujeto, origen semántico, actor capturador, fuente y tiempo. Una observación conserva autoría profesional; una inferencia, algoritmo; una verificación, autoridad y evidencia. Ninguno de ellos obtiene ownership sobre el perfil completo. |
-| **5. ¿Puede existir sin Auth?** | No en V1. El perfil comienza cuando la persona completa su registro y onboarding, directamente en Space o desde una invitación de OS. Una invitación, cuando existe, conserva solo datos mínimos y todavía no es un perfil. |
+| **5. ¿Puede existir sin Auth?** | No en V1. El perfil comienza cuando la persona completa su registro y onboarding, directamente en Space o desde una invitación de Studio. Una invitación, cuando existe, conserva solo datos mínimos y todavía no es un perfil. |
 | **6. ¿Cuál es su ciclo de vida?** | Se crea progresivamente mediante afirmaciones/revisiones. Declaraciones, observaciones, mediciones, inferencias y verificaciones pueden coexistir; una proyección selecciona el valor actual sin destruir alternativas. Puede archivarse o exportarse y las verificaciones/inferencias pueden vencer o revocarse. |
 | **7. Ejemplos y contraejemplos** | **Ejemplo:** Ana declara nivel intermedio, su coach observa nivel principiante y Allfit infiere una recomendación; se conservan los tres. **Contraejemplos:** sobrescribir la declaración con la inferencia, marcar como verificado todo el perfil por una credencial o guardar todos los sets en un JSON de perfil. |
 
@@ -159,12 +159,12 @@ La verificación conserva valor evaluado, autoridad, método, evidencia mínima,
 | **3. ¿Quién lo crea?** | La persona puede solicitar o completar su perfil; una organización puede invitarla; Allfit o un tercero autorizado puede verificar credenciales. |
 | **4. ¿Quién es dueño del dato?** | La persona es dueña de su identidad y presentación profesional. El emisor o Allfit conserva la fuente de verificación. Los roles y condiciones dentro de una organización pertenecen a esa relación organizacional. |
 | **5. ¿Puede existir sin Auth?** | No como profesional del dominio. Antes del registro puede existir una invitación cuyo propósito sea incorporar un profesional, pero no un perfil profesional materializado. |
-| **6. ¿Cuál es su ciclo de vida?** | Perfil solicitado/borrador después del registro → pendiente de verificación → verificado/activo → suspendido o retirado. Entrar o salir de una organización no elimina su identidad profesional global. Para operar en OS necesita una membresía profesional vigente dentro de una organización. |
+| **6. ¿Cuál es su ciclo de vida?** | Perfil solicitado/borrador después del registro → pendiente de verificación → verificado/activo → suspendido o retirado. Entrar o salir de una organización no elimina su identidad profesional global. Para operar en Studio necesita una membresía profesional vigente dentro de una organización. |
 | **7. Ejemplos y contraejemplos** | **Ejemplo:** Ana es atleta y entrenadora verificada usando la misma persona. **Contraejemplo:** crear `coach_users` como una segunda identidad o asumir que todo empleado del gimnasio puede ver datos fitness. |
 
 ### Implicación para la BD
 
-Separar `people`, perfil profesional, verificaciones, membresías organizacionales y relaciones con personas atendidas. El perfil profesional puede existir sin organización, pero prestar servicios, gestionar clientes, publicar oferta, asignar programas o recibir pagos mediante OS exige actuar bajo una organización activa.
+Separar `people`, perfil profesional, verificaciones, membresías organizacionales y relaciones con personas atendidas. El perfil profesional puede existir sin organización, pero prestar servicios, gestionar clientes, publicar oferta, asignar programas o recibir pagos mediante Studio exige actuar bajo una organización activa.
 
 ---
 
@@ -172,7 +172,7 @@ Separar `people`, perfil profesional, verificaciones, membresías organizacional
 
 | Pregunta | Respuesta |
 | --- | --- |
-| **1. ¿Qué es?** | Una entidad operativa —y, cuando corresponda, legal— que ofrece servicios mediante Allfit OS: práctica profesional, gimnasio, estudio, box, academia o centro. Es una frontera de operación, configuración, comercio y acceso organizacional. Una práctica puede comenzar con una persona y crecer a equipo sin cambiar de identidad. |
+| **1. ¿Qué es?** | Una entidad operativa —y, cuando corresponda, legal— que ofrece servicios mediante Allfit Studio: práctica profesional, gimnasio, estudio, box, academia o centro. Es una frontera de operación, configuración, comercio y acceso organizacional. Una práctica puede comenzar con una persona y crecer a equipo sin cambiar de identidad. |
 | **2. ¿Qué no es?** | No es una sede, una persona, un plan SaaS, una membresía de cliente ni un simple tema visual del workspace. Tampoco es propietaria automática de todos los datos de las personas relacionadas. |
 | **3. ¿Quién lo crea?** | Un fundador o representante autorizado mediante onboarding, o Allfit mediante un proceso administrativo/verificado. En el onboarding `solo_professional`, Allfit crea automáticamente una `professional_practice` y su membresía propietaria inicial. |
 | **4. ¿Quién es dueño del dato?** | La propia organización controla sus datos operativos, personal, sedes, oferta y registros legales. Allfit custodia la plataforma. Los datos personales vinculados mantienen su ownership y reglas de consentimiento. |
@@ -208,7 +208,7 @@ Los espacios y recursos reservables deben modelarse debajo de la sede, no mezcla
 
 | Pregunta | Respuesta |
 | --- | --- |
-| **1. ¿Qué es?** | La relación entre una persona y una organización para desempeñar un rol interno, como propietario, administrador, profesional o miembro de staff. Es la base para permisos operativos en OS. |
+| **1. ¿Qué es?** | La relación entre una persona y una organización para desempeñar un rol interno, como propietario, administrador, profesional o miembro de staff. Es la base para permisos operativos en Studio. |
 | **2. ¿Qué no es?** | No es la membresía comercial de un cliente, una suscripción SaaS, una relación profesional-persona ni el consentimiento para ver datos fitness. |
 | **3. ¿Quién lo crea?** | Un administrador invita y la persona acepta; el fundador recibe la membresía inicial durante el alta; Allfit puede intervenir en flujos administrativos auditados. |
 | **4. ¿Quién es dueño del dato?** | Es un registro bilateral administrado por la organización y aceptado por la persona. Los roles y permisos operativos son definidos por la organización dentro de los límites de plataforma. |
@@ -218,7 +218,7 @@ Los espacios y recursos reservables deben modelarse debajo de la sede, no mezcla
 
 ### Implicación para la BD
 
-Separar claramente `organization_memberships` de membresías comerciales y relaciones de atención. RLS de OS parte de esta relación, pero no termina en ella.
+Separar claramente `organization_memberships` de membresías comerciales y relaciones de atención. RLS de Studio parte de esta relación, pero no termina en ella.
 
 ---
 
@@ -491,7 +491,7 @@ Aplicar constraints que impidan duplicar el número de versión por programa. `p
 | **2. ¿Qué no es?** | No es el programa master, una versión, una compra, una membresía ni una sesión ejecutada. Comprar un programa puede originar una asignación, pero no son el mismo hecho. |
 | **3. ¿Quién lo crea?** | La persona para autoentrenamiento; un profesional con relación y permiso vigentes; o el sistema/IA conforme a una autorización y aprobación definidas. |
 | **4. ¿Quién es dueño del dato?** | La asignación forma parte del historial de entrenamiento de la persona. El profesional/organización conserva origen, autoría y registro de la acción. La versión master conserva su dueño original. |
-| **5. ¿Puede existir sin Auth?** | No. OS puede incluir un programa propuesto dentro de la invitación, pero la asignación se materializa únicamente después del registro y de la aceptación correspondiente. |
+| **5. ¿Puede existir sin Auth?** | No. Studio puede incluir un programa propuesto dentro de la invitación, pero la asignación se materializa únicamente después del registro y de la aceptación correspondiente. |
 | **6. ¿Cuál es su ciclo de vida?** | Propuesta → `active_managed` o personal → pausada → completada/terminada. Si termina la relación gestora, pasa a `detached_pending_choice`; solo la persona la convierte en `active_personal` o `ended`. No cambia silenciosamente de versión ni se copia para continuar. |
 | **7. Ejemplos y contraejemplos** | **Ejemplo:** versión 2 asignada a Ana para iniciar el 1 de agosto por su entrenador. **Contraejemplo:** guardar `program_id` en el perfil y asumir que eso conserva calendario, versión y origen. |
 
@@ -649,7 +649,7 @@ Modelar por separado rol base y deber en `support.platform_role_assignments` y `
 
 ### Implicación para la BD
 
-Separar comida, ítems y nutrientes tipados. Conservar un solo `media_ref` saneado por comida, unidad canónica, instante, zona horaria capturada, `revision_number` y autoría personal. Space puede entregar a la persona una URL firmada corta; OS solo entrega un enlace a proxy autenticado que reevalúa intake y media por petición. Los resúmenes diarios se calculan desde filas autorizadas y nunca se almacenan como copia paralela.
+Separar comida, ítems y nutrientes tipados. Conservar un solo `media_ref` saneado por comida, unidad canónica, instante, zona horaria capturada, `revision_number` y autoría personal. Space puede entregar a la persona una URL firmada corta; Studio solo entrega un enlace a proxy autenticado que reevalúa intake y media por petición. Los resúmenes diarios se calculan desde filas autorizadas y nunca se almacenan como copia paralela.
 
 ---
 

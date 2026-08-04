@@ -153,7 +153,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `person_id → people(id) RESTRICT`; `unit_code → catalog.units(code) RESTRICT`.
 - **Uniques y checks:** `CHECK (has_media = (media_ref is not null))`.
 - **Actores:** la persona (lee, escribe, borra); el profesional con `body_progress` **read**; worker de privacidad.
-- **RLS:** `auth.is_self(person_id)` **OR** `auth.can_access(person_id,'body_progress','read')`. `relationship_training` **no** alcanza; OS usa `identity.v_client_body_progress`.
+- **RLS:** `auth.is_self(person_id)` **OR** `auth.can_access(person_id,'body_progress','read')`. `relationship_training` **no** alcanza; Studio usa `identity.v_client_body_progress`.
 - **Consultas:** `(person_id, measured_on desc)`.
 - **Índices:** `(person_id, measured_on desc)`.
 - **Retención:** categoría `body`; borrado propio abre `disposition_case` unitario; imágenes con borrado propagado.
@@ -168,7 +168,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `person_id → people(id) RESTRICT`.
 - **Uniques y checks:** `CHECK (context_type in ('pain','limitation','recovery'))`.
 - **Actores:** la persona; el profesional con `health_context`; worker de privacidad.
-- **RLS:** `auth.is_self(person_id)` **OR** `auth.can_access(person_id,'health_context','read')`; OS usa `identity.v_client_health_context`.
+- **RLS:** `auth.is_self(person_id)` **OR** `auth.can_access(person_id,'health_context','read')`; Studio usa `identity.v_client_health_context`.
 - **Consultas:** `(person_id, valid_from desc)`.
 - **Índices:** `(person_id, valid_from desc)`.
 - **Retención:** categoría `health`; disposición por su política.
@@ -923,7 +923,7 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Columnas:** `id` · `result_contract_id uuid` · `kind text` (`valid`, `invalid`) · `payload_schema_version smallint` (`1`) · `payload jsonb` · `expected text`.
 - **FKs y borrado:** `result_contract_id → result_contracts(id) ON DELETE CASCADE`.
 - **Uniques y checks:** al publicar un contrato debe existir ≥1 `valid` y ≥1 `invalid` (validado en `OP-CAT-006`).
-- **Actores:** lectura y escritura de curaduría, CI y validadores internos; sin acceso desde Space u OS.
+- **Actores:** lectura y escritura de curaduría, CI y validadores internos; sin acceso desde Space u Studio.
 - **RLS:** sin acceso de runtime de producto; únicamente plataforma/CI mediante rol dedicado y contrato publicado.
 - **Consultas / índices:** por `result_contract_id`.
 - **Retención:** se elimina con el contrato no publicado; fixtures de contratos publicados se conservan permanentemente para reproducibilidad.
@@ -1387,7 +1387,7 @@ Nota de conteo: `planning` tiene 16 tablas y 16 fichas; §9.5–9.8 son cuatro t
 - **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; clave portadora `UNIQUE(id,person_id)`.
 - **Uniques y checks:** `revision_number>=0`; `CHECK (has_media=(media_ref IS NOT NULL))`; `local_date` corresponde a `occurred_at` bajo `timezone` mediante función de entrada; máximo una foto.
 - **Actores:** solo la persona crea/revisa/borra por funciones; profesional nunca recibe DML.
-- **RLS:** base `auth.is_self(person_id)`; OS solo por vistas `nutrition.v_client_*`.
+- **RLS:** base `auth.is_self(person_id)`; Studio solo por vistas `nutrition.v_client_*`.
 - **Consultas:** `(person_id,occurred_at DESC,id DESC)`; por `local_date`.
 - **Índices:** `(person_id,occurred_at DESC,id DESC)`; `(person_id,local_date)`.
 - **Retención:** mientras cuenta activa o hasta borrado personal; disposición elimina hijos, media, vistas/derivados; hold suspende.

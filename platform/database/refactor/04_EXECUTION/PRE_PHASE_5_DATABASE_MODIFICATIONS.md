@@ -3,7 +3,7 @@
 **Versión:** 2<br>
 **Fecha:** 3 de agosto de 2026<br>
 **Estado:** registro activo de decisiones just-in-time por HU<br>
-**Aplica a:** Allfit Space, Allfit OS y Allfit Backoffice<br>
+**Aplica a:** Allfit Space, Allfit Studio y Allfit Backoffice<br>
 **Gate afectado:** entrada de cada rebanada vertical a implementación en Supabase
 
 ## 1. Propósito
@@ -13,7 +13,7 @@ Este documento consolida las modificaciones de diseño de base de datos que debe
 La revisión parte de:
 
 - las 94 historias de [Allfit Space](../../../../products/space/USER_STORIES.md);
-- las 84 historias de [Allfit OS](../../../../products/os/USER_STORIES.md);
+- las 84 historias de [Allfit Studio](../../../../products/studio/USER_STORIES.md);
 - las 33 historias de [Allfit Backoffice](../../../../products/backoffice/USER_STORIES.md);
 - los entregables vigentes de Fases 1 a 4;
 - el estado declarado en [PHASE_5_READINESS_REVIEW.md](./PHASE_5_READINESS_REVIEW.md).
@@ -116,7 +116,7 @@ El diseño de Fases 1–4 sigue siendo referencia y mapa de riesgos, pero deja d
 
 `DB-P5-019` sustituye Cognito por WorkOS AuthKit sin cambiar la separación entre identidad externa y persona de dominio. Antes de implementar autenticación debe cerrar:
 
-- un environment WorkOS aislado por ambiente Allfit y Applications separadas para Space, OS y Backoffice;
+- un environment WorkOS aislado por ambiente Allfit y Applications separadas para Space, Studio y Backoffice;
 - Authorization Code con PKCE para Space, sin API key o client secret en el bundle;
 - validación de JWKS, `iss`, `exp`, `iat`, `sub`, `sid` y `client_id` por superficie;
 - rechazo de `org_id`, `role` y `permissions` de WorkOS como autoridad de dominio;
@@ -587,7 +587,7 @@ Añadir `identity.person_activity_days` o una proyección durable equivalente:
 
 - `person_id`;
 - `activity_date`;
-- `product`: `space`, `os`, `backoffice`;
+- `product`: `space`, `studio`, `backoffice`;
 - `first_seen_at`, `last_seen_at`;
 - unique `(person_id, activity_date, product)`;
 - sin ruta, contenido, IP u otros datos innecesarios para la métrica.

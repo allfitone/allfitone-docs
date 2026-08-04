@@ -1,6 +1,6 @@
 # Productos
 
-- [Allfit OS](os/README.md)
+- [Allfit Studio](studio/README.md)
 - [Allfit Space](space/README.md)
 - [Allfit Backoffice](backoffice/README.md)
 

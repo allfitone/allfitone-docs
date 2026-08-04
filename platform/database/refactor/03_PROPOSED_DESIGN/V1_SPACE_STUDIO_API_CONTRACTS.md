@@ -1,4 +1,4 @@
-# Contratos de API de Space, OS y Backoffice — V1
+# Contratos de API de Space, Studio y Backoffice — V1
 
 **Versión de revisión:** 4
 **Fecha:** 3 de agosto de 2026
@@ -17,12 +17,12 @@ No define esquemas de columnas. La serialización ejecutable de la primera reban
 ```mermaid
 flowchart TB
     spaceApp["Allfit Space<br/>Expo · iOS/Android"]
-    osApp["Allfit OS<br/>web"]
+    studioApp["Allfit Studio<br/>web"]
     backofficeApp["Allfit Backoffice<br/>web interno"]
 
     subgraph api["API Allfit · Bun + TypeScript"]
         space["/space/v1"]
-        os["/os/v1"]
+        studio["/studio/v1"]
         catalog["/catalog/v1"]
         backoffice["/backoffice/v1"]
         core["Servicios de dominio<br/>compartidos"]
@@ -32,16 +32,16 @@ flowchart TB
     db[("PostgreSQL<br/>Supabase")]
 
     spaceApp -->|"Application Space · PKCE"| workos
-    osApp -->|"WorkOS Application OS"| workos
+    studioApp -->|"WorkOS Application Studio"| workos
     backofficeApp -->|"WorkOS Application Backoffice"| workos
     spaceApp --> space
-    osApp --> os
+    studioApp --> studio
     backofficeApp --> backoffice
     spaceApp --> catalog
-    osApp --> catalog
+    studioApp --> catalog
 
     space --> core
-    os --> core
+    studio --> core
     catalog --> core
     backoffice --> core
     core -->|"conexión pooled<br/>+ contexto local"| db
@@ -52,34 +52,34 @@ flowchart TB
 | Superficie | Base | Sujeto | Documento OpenAPI |
 | --- | --- | --- | --- |
 | Space | `api.allfit.com/space/v1` | La persona autenticada | `allfit-v1.openapi.yaml` en la primera rebanada; `space-v1.yaml` al separar empaquetado |
-| OS | `api.allfit.com/os/v1` | La organización en la que actúa el profesional | `allfit-v1.openapi.yaml` en la primera rebanada; `os-v1.yaml` al separar empaquetado |
+| Studio | `api.allfit.com/studio/v1` | La organización en la que actúa el profesional | `allfit-v1.openapi.yaml` en la primera rebanada; `studio-v1.yaml` al separar empaquetado |
 | Catálogo | `api.allfit.com/catalog/v1` | Ninguno: contenido global | Fuera de la primera rebanada; `catalog-v1.yaml` antes de su primer endpoint |
 | Backoffice | `api.allfit.com/backoffice/v1` | Persona del equipo con rol base, AAL2 y deber temporal | Fuera de la primera rebanada; `backoffice-v1.yaml` antes de su primer endpoint |
 
-La versión va **dentro** de cada superficie, no delante. Space, OS y Backoffice son contratos separados que evolucionan por separado: OS puede llegar a `v2` sin arrastrar a Space o Backoffice. Los cuatro documentos comparten `components` mediante referencias a un archivo común de esquemas.
+La versión va **dentro** de cada superficie, no delante. Space, Studio y Backoffice son contratos separados que evolucionan por separado: Studio puede llegar a `v2` sin arrastrar a Space o Backoffice. Los cuatro documentos comparten `components` mediante referencias a un archivo común de esquemas.
 
-Space y OS **no** duplican endpoints. Comparten el 6% de su superficie —el catálogo— y ese 6% vive en su propio prefijo. El resto no coincide porque el sujeto es distinto:
+Space y Studio **no** duplican endpoints. Comparten el 6% de su superficie —el catálogo— y ese 6% vive en su propio prefijo. El resto no coincide porque el sujeto es distinto:
 
-| Concepto | Space | OS |
+| Concepto | Space | Studio |
 | --- | --- | --- |
-| Perfil | `GET /space/v1/profile` — el propio, completo | `GET /os/v1/organizations/{orgId}/clients/{personId}/profile` — el de otra persona, proyectado por field-set |
+| Perfil | `GET /space/v1/profile` — el propio, completo | `GET /studio/v1/organizations/{orgId}/clients/{personId}/profile` — el de otra persona, proyectado por field-set |
 | Ejecuciones | `GET /space/v1/executions` — las propias | `.../clients/{personId}/executions` — las autorizadas, con denegaciones aplicadas |
-| Agenda | `GET /space/v1/agenda` — la propia | No existe: OS consulta asignaciones, no agenda |
+| Agenda | `GET /space/v1/agenda` — la propia | No existe: Studio consulta asignaciones, no agenda |
 
 ### 2.2 La organización viaja en la ruta
 
-Toda operación de OS que toque datos de una persona cuelga de `/organizations/{orgId}/`. Un profesional puede pertenecer a varias organizaciones y la fórmula de acceso exige evaluar membresía, relación, asignación y grant contra **una** organización concreta.
+Toda operación de Studio que toque datos de una persona cuelga de `/organizations/{orgId}/`. Un profesional puede pertenecer a varias organizaciones y la fórmula de acceso exige evaluar membresía, relación, asignación y grant contra **una** organización concreta.
 
 `{orgId}` no se resuelve desde el token ni desde una preferencia guardada. Está en la ruta, aparece en los logs y en el `ACCESS_EVENT`, y se valida contra una membresía vigente dentro de la transacción.
 
-Las dos únicas excepciones son `GET /os/v1/me` y `GET /os/v1/me/memberships`, que responden "quién soy" y "dónde puedo actuar".
+Las dos únicas excepciones son `GET /studio/v1/me` y `GET /studio/v1/me/memberships`, que responden "quién soy" y "dónde puedo actuar".
 
 ## 3. Convenciones
 
 ### 3.1 Autenticación
 
 - `Authorization: Bearer <access_token>` de WorkOS AuthKit.
-- La API verifica la firma mediante el JWKS de la Application y valida `iss`, `exp`, `iat`, `sub`, `sid` y **`client_id`**: un token emitido para Space u OS no opera contra `/backoffice/v1`, aunque la persona tenga cuenta. Cambiar de producto exige la WorkOS Application correspondiente.
+- La API verifica la firma mediante el JWKS de la Application y valida `iss`, `exp`, `iat`, `sub`, `sid` y **`client_id`**: un token emitido para Space u Studio no opera contra `/backoffice/v1`, aunque la persona tenga cuenta. Cambiar de producto exige la WorkOS Application correspondiente.
 - El `sub` se resuelve a `ACCESS_ACCOUNT` y, si existe, a `PERSON`, **en la base**. Ningún identificador de dominio viaja en el token.
 - Los claims `org_id`, `role` y `permissions` que WorkOS pueda transportar se ignoran para autorización de negocio. Organizaciones, roles, relaciones, consentimientos y deberes de plataforma viven en PostgreSQL (ADR-002 y ADR-028).
 - Space usa Authorization Code con PKCE como cliente público y nunca contiene una API key o client secret de WorkOS.
@@ -144,7 +144,7 @@ GET /space/v1/executions?limit=25&cursor=eyJ2IjoxLCJzIjoi...
   "title": "El consentimiento requerido no está vigente",
   "status": 403,
   "detail": "Esta proyección requiere body_progress con nivel read.",
-  "instance": "/os/v1/organizations/8f2.../clients/a91.../body-progress",
+  "instance": "/studio/v1/organizations/8f2.../clients/a91.../body-progress",
   "request_id": "01J...",
   "required_scope": { "code": "body_progress", "level": "read" }
 }
@@ -296,7 +296,7 @@ Sujeto implícito: la persona autenticada. Ningún endpoint recibe un `person_id
 | `GET` | `/subscriptions/{id}/payments` | `OP-PAY-014` | |
 | `POST` | `/subscriptions/{id}/cancellation` | `OP-PAY-015` | No termina la relación ni revoca permisos |
 
-## 5. Contrato de OS
+## 5. Contrato de Studio
 
 Sujeto: la organización de la ruta.
 
@@ -454,7 +454,7 @@ El request break-glass declara propósito cerrado, `case_reference`, sujeto, cat
 | `GET` | `.../nutrition/goals/versions` | `OP-NUT-011` | `nutrition_guidance/read`; soporta proyección frozen minimizada |
 | `POST` | `.../nutrition/goals/versions` | `OP-NUT-012` | `nutrition_guidance/contribute` + `guide_nutrition` + credencial verificada |
 
-Las cinco operaciones OS exigen además relación/asignación/membresía efectivas y organización coincidente. Ninguna permite escribir comidas, decidir propuestas o devolver `media_ref`. OP-NUT-013 registra un `ACCESS_EVENT`, transmite el objeto saneado desde el backend, nunca redirige a storage y devuelve el mismo `404` sin bytes ante inexistencia o autorización no efectiva.
+Las cinco operaciones Studio exigen además relación/asignación/membresía efectivas y organización coincidente. Ninguna permite escribir comidas, decidir propuestas o devolver `media_ref`. OP-NUT-013 registra un `ACCESS_EVENT`, transmite el objeto saneado desde el backend, nunca redirige a storage y devuelve el mismo `404` sin bytes ante inexistencia o autorización no efectiva.
 
 ## 6. Contrato de Catálogo
 
@@ -468,13 +468,13 @@ Las cinco operaciones OS exigen además relación/asignación/membresía efectiv
 | `GET` | `/equipment` | `OP-CAT-011` | Sí |
 | `GET` | `/scope-definitions` | `OP-PRV-012` | Sí, inmutable |
 
-Space precarga disciplinas, tipos de actividad, contratos y el subconjunto global de movimientos: sin ellos no puede validar localmente un borrador antes de sincronizar. Los movimientos **privados** de una organización nunca se sirven desde `/catalog`; se piden a `/os/v1/organizations/{orgId}/movements`.
+Space precarga disciplinas, tipos de actividad, contratos y el subconjunto global de movimientos: sin ellos no puede validar localmente un borrador antes de sincronizar. Los movimientos **privados** de una organización nunca se sirven desde `/catalog`; se piden a `/studio/v1/organizations/{orgId}/movements`.
 
 ## 7. Field-sets y versión de scope por proyección
 
 Es el requisito central de la Fase 3: *"field-set y versión de scope requeridos por cada endpoint/proyección"*.
 
-Cada proyección de OS declara qué `SCOPE_DEFINITION` consume y en qué versión. **La versión que se aplica no es la última publicada: es la congelada en el grant de esa relación.** Dos coaches de organizaciones distintas pueden recibir field-sets distintos de la misma persona porque sus grants congelaron versiones distintas.
+Cada proyección de Studio declara qué `SCOPE_DEFINITION` consume y en qué versión. **La versión que se aplica no es la última publicada: es la congelada en el grant de esa relación.** Dos coaches de organizaciones distintas pueden recibir field-sets distintos de la misma persona porque sus grants congelaron versiones distintas.
 
 | Proyección | Scope · nivel | Field-set v1 | Excluido explícitamente |
 | --- | --- | --- | --- |
@@ -503,10 +503,10 @@ Reglas de aplicación:
 
 Los siete pasos que el plan de fases define como frontera de V1. Es el único lugar de este documento con cuerpos completos.
 
-### 8.1 OS publica una versión de programa
+### 8.1 Studio publica una versión de programa
 
 ```http
-POST /os/v1/organizations/{orgId}/programs/{programId}/versions
+POST /studio/v1/organizations/{orgId}/programs/{programId}/versions
 Idempotency-Key: 6f1c...
 Command-Id: 019a...
 ```
@@ -528,10 +528,10 @@ Command-Id: 019a...
 
 Cada posición referencia una **versión exacta**. Publicar más tarde una v3 de `stv_9c4` no toca esta composición.
 
-### 8.2 OS asigna la versión mediante una relación activa
+### 8.2 Studio asigna la versión mediante una relación activa
 
 ```http
-POST /os/v1/organizations/{orgId}/relationships/{relId}/assignments
+POST /studio/v1/organizations/{orgId}/relationships/{relId}/assignments
 Idempotency-Key: 8b0d...
 Command-Id: 019b...
 ```
@@ -617,10 +617,10 @@ If-Match: "execution:019c...:r1"
 
 Guardar resultados y finalizar son comandos distintos, con identidades idempotentes propias. Si falta `If-Match`: `428 precondition-required`; si la revisión quedó atrás: `409 stale-draft`. Si faltara la cantidad lograda de un set: `422 contract-validation-failed` con el error tipado por regla, y la ejecución **permanece abierta**.
 
-### 8.5 OS consulta el resultado autorizado
+### 8.5 Studio consulta el resultado autorizado
 
 ```http
-GET /os/v1/organizations/{orgId}/clients/{personId}/executions/019c...
+GET /studio/v1/organizations/{orgId}/clients/{personId}/executions/019c...
 ```
 ```json
 { "id": "019c...", "started_at": "2026-07-27T06:04:00-05:00", "timezone": "America/Bogota",
@@ -647,10 +647,10 @@ Command-Id: 019f...
 
 La invalidación de proyecciones y read models ocurre en la misma transacción.
 
-### 8.7 OS deja de ver lo que ya no está autorizado
+### 8.7 Studio deja de ver lo que ya no está autorizado
 
 ```http
-GET /os/v1/organizations/{orgId}/clients/{personId}/executions/019c...
+GET /studio/v1/organizations/{orgId}/clients/{personId}/executions/019c...
 ```
 ```json
 { "type": "https://errors.allfit.com/scope-required", "status": 403,
@@ -702,23 +702,23 @@ Los lookups `auth.grant_of(relationship_id,scope_code)` y `auth.frozen_grant_of(
 
 | Vista | Consumidor | Nota |
 | --- | --- | --- |
-| `identity.v_client_identity` | OS · directorio | Sin datos fitness |
-| `identity.v_client_profile` | OS | Field-set de la versión congelada |
-| `privacy.v_frozen_relationship_history` | OS histórico | Solo campos `historical_readable`, filas `<= frozen_at`, denegaciones monotónicas y caso exacto |
-| `identity.v_client_body_progress` | OS | URLs firmadas por petición |
-| `identity.v_client_health_context` | OS | Minimizada |
-| `execution.v_client_executions` | OS | Denegaciones **antes** de proyectar y contar |
-| `execution.v_client_progress` | OS | Herencia de clasificación |
+| `identity.v_client_identity` | Studio · directorio | Sin datos fitness |
+| `identity.v_client_profile` | Studio | Field-set de la versión congelada |
+| `privacy.v_frozen_relationship_history` | Studio histórico | Solo campos `historical_readable`, filas `<= frozen_at`, denegaciones monotónicas y caso exacto |
+| `identity.v_client_body_progress` | Studio | URLs firmadas por petición |
+| `identity.v_client_health_context` | Studio | Minimizada |
+| `execution.v_client_executions` | Studio | Denegaciones **antes** de proyectar y contar |
+| `execution.v_client_progress` | Studio | Herencia de clasificación |
 | `planning.v_person_agenda` | Space | Resuelta en la zona horaria de la persona |
 | `privacy.v_person_consents` | Space | Grants, versión, actores que pueden ejercerlos |
 | `privacy.v_my_access_events` | Space | Solo eventos cuyo sujeto es la persona autenticada |
 | `support.v_support_metadata` | Soporte | Solo metadatos operativos |
 | `nutrition.v_my_meals` | Space | Comidas propias; URL firmada si existe medio |
 | `nutrition.v_my_daily_summaries` | Space | Agregado reproducible por fecha local |
-| `nutrition.v_client_meals_live` | OS | Intake live; serializa únicamente un enlace autenticado a OP-NUT-013 cuando ambos scopes coinciden |
-| `nutrition.v_client_daily_summaries_live` | OS | Filtra antes de agregar |
-| `nutrition.v_client_guidance_live` | OS | Guía live autorizada |
-| `nutrition.v_client_guidance_frozen` | OS histórico | Solo guía profesional de la relación con `goal_versions.created_at<=T` |
+| `nutrition.v_client_meals_live` | Studio | Intake live; serializa únicamente un enlace autenticado a OP-NUT-013 cuando ambos scopes coinciden |
+| `nutrition.v_client_daily_summaries_live` | Studio | Filtra antes de agregar |
+| `nutrition.v_client_guidance_live` | Studio | Guía live autorizada |
+| `nutrition.v_client_guidance_frozen` | Studio histórico | Solo guía profesional de la relación con `goal_versions.created_at<=T` |
 
 Todas son `SECURITY INVOKER`: la RLS del consumidor se aplica. Una vista `SECURITY DEFINER` sobre datos personales sería un bypass de RLS con otro nombre.
 
@@ -748,7 +748,7 @@ El catálogo completo está en [`V1_OPERATIONS_MATRIX.md` §8](./V1_OPERATIONS_M
 ## 12. DTOs compartidos
 
 ```text
-allfitone-os/                     ← propietario de supabase/ y de la API
+allfitone-studio/                     ← propietario de supabase/ y de la API
 ├── supabase/                     migraciones, seeds, tests
 ├── apps/api/                     Bun + TypeScript
 └── packages/contracts/           OpenAPI → tipos generados → paquete privado
@@ -758,7 +758,7 @@ allfitone-space/                  ← consume @allfit/contracts versionado
 ```
 
 - Los tipos se generan **desde** los documentos OpenAPI, no a mano.
-- Los tipos crudos del esquema de base de datos **no salen** del backend. Space y OS conocen DTOs, no columnas.
+- Los tipos crudos del esquema de base de datos **no salen** del backend. Space y Studio conocen DTOs, no columnas.
 - El paquete se versiona con semver. Un cambio incompatible de una superficie sube major y coexiste con el anterior mientras dure la deprecación.
 - El CI del backend falla si el OpenAPI generado difiere del publicado: el contrato no puede desviarse del código en silencio.
 
@@ -784,7 +784,7 @@ Cada endpoint declara qué hace cuando una dependencia falla. La tabla completa 
 | Valores concretos de rate limit por WorkOS Application y dominio | `V1_DEGRADATION_AND_RECOVERY_MATRIX.md` |
 | Formato de `id`: opaco con prefijo o UUID desnudo | Fase 4, con la estrategia de identificadores |
 
-El OpenAPI, los DTOs exactos, la caché por operación, las URLs firmadas Space y el proxy autenticado OS de la primera rebanada quedaron cerrados por P1-01 en [`V1_OPENAPI_CONTRACT.md`](./V1_OPENAPI_CONTRACT.md).
+El OpenAPI, los DTOs exactos, la caché por operación, las URLs firmadas Space y el proxy autenticado Studio de la primera rebanada quedaron cerrados por P1-01 en [`V1_OPENAPI_CONTRACT.md`](./V1_OPENAPI_CONTRACT.md).
 El catálogo de verificadores, quorum break-glass, conflictos, expiración, recertificación y respuesta ante abuso quedaron cerrados por P1-02 en [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md).
 
 ## 15. Estado de salida
@@ -792,7 +792,7 @@ El catálogo de verificadores, quorum break-glass, conflictos, expiración, rece
 Tercero de los cuatro entregables de la Fase 3. Se considera completo cuando la revisión confirme que:
 
 1. cada operación de la matriz tiene endpoint o función interna asignada;
-2. ninguna operación de OS resuelve la organización fuera de la ruta;
+2. ninguna operación de Studio resuelve la organización fuera de la ruta;
 3. cada proyección declara scope, nivel y field-set, y aplica la **versión congelada en el grant**;
 4. ninguna respuesta permite distinguir un campo redactado de uno no capturado;
 5. los siete pasos originales y el flujo nutricional están cubiertos de extremo a extremo;

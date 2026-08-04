@@ -2,7 +2,7 @@
 
 **Fecha:** 28 de julio de 2026<br>
 **Estado:** aprobado y recertificado con Nutrición V1<br>
-**Deriva de:** [ADR-025](../02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md), [`V1_OPERATIONS_MATRIX.md`](./V1_OPERATIONS_MATRIX.md), [`V1_DEGRADATION_AND_RECOVERY_MATRIX.md`](./V1_DEGRADATION_AND_RECOVERY_MATRIX.md), [`V1_SPACE_OS_API_CONTRACTS.md`](./V1_SPACE_OS_API_CONTRACTS.md), [`V1_DATA_DICTIONARY.md`](./V1_DATA_DICTIONARY.md)
+**Deriva de:** [ADR-025](../02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md), [`V1_OPERATIONS_MATRIX.md`](./V1_OPERATIONS_MATRIX.md), [`V1_DEGRADATION_AND_RECOVERY_MATRIX.md`](./V1_DEGRADATION_AND_RECOVERY_MATRIX.md), [`V1_SPACE_STUDIO_API_CONTRACTS.md`](./V1_SPACE_STUDIO_API_CONTRACTS.md), [`V1_DATA_DICTIONARY.md`](./V1_DATA_DICTIONARY.md)
 
 ---
 
@@ -34,7 +34,7 @@ El backend calcula el scope efectivo antes de abrir el comando:
 | --- | --- |
 | `principal_fingerprint` | SHA-256 de kind + ID canónico: `person_id` tras activación, `access_account.id` durante onboarding o principal de servicio estable |
 | `client_id` | Claim `client_id` de la WorkOS Application validada o identidad del worker |
-| `surface` | ruta resuelta por el servidor: `space`, `os`, `system` |
+| `surface` | ruta resuelta por el servidor: `space`, `studio`, `system` |
 | `operation_code` | operación `OP-*` asociada a la ruta o job |
 
 Ni actor, WorkOS Application, superficie ni operación se aceptan desde body o headers libres.
@@ -60,7 +60,7 @@ Esto permite repetir una misma clave accidental en otro actor u operación sin m
 ### 3.1 Tipos
 
 ```text
-system.command_surface       = space | os | system
+system.command_surface       = space | studio | system
 system.idempotency_status    = processing | succeeded | rejected_final
 ```
 

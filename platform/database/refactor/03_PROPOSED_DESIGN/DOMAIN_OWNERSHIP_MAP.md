@@ -9,7 +9,7 @@
 
 ## 1. Propósito
 
-Este documento define dónde vive cada concepto de V1, quién controla cada dato y cómo se relacionan los dominios que consumen Allfit Space y Allfit OS.
+Este documento define dónde vive cada concepto de V1, quién controla cada dato y cómo se relacionan los dominios que consumen Allfit Space y Allfit Studio.
 
 No es todavía un ERD, un modelo lógico, un diccionario de tablas ni una especificación SQL. Los nombres aquí representan conceptos y fronteras de responsabilidad; no obligan a crear una tabla por concepto ni anticipan schemas, columnas o índices.
 
@@ -22,7 +22,7 @@ No es todavía un ERD, un modelo lógico, un diccionario de tablas ni una especi
 - **Acceso:** capacidad temporal concedida por finalidad; no transfiere ownership.
 - **Retención:** conservación restringida por finalidad y plazo; no implica acceso operativo.
 
-Space y OS no son dueños ni dominios de datos. Son consumidores de los mismos dominios mediante contratos diferentes.
+Space y Studio no son dueños ni dominios de datos. Son consumidores de los mismos dominios mediante contratos diferentes.
 
 ## 2. Vista inicial de dominios
 
@@ -44,7 +44,7 @@ Space y OS no son dueños ni dominios de datos. Son consumidores de los mismos d
 
 Identidad mantiene la existencia canónica de una persona dentro de Allfit y la vincula, sin confundirlas, con sus credenciales externas, elegibilidad adulta, perfiles personales y profesionales, y onboarding.
 
-También custodia el sobre de invitación previo al registro. La invitación permite iniciar desde OS un flujo dirigido a un contacto, pero no crea una persona ni reemplaza el registro personal.
+También custodia el sobre de invitación previo al registro. La invitación permite iniciar desde Studio un flujo dirigido a un contacto, pero no crea una persona ni reemplaza el registro personal.
 
 ### 3.2 Qué pertenece a Identidad
 
@@ -73,7 +73,7 @@ También custodia el sobre de invitación previo al registro. La invitación per
 
 ### 3.4 Fitness ID
 
-En este mapa, **Fitness ID no es una credencial ni una identidad paralela**. Es el agregado longitudinal mediante el cual la persona conserva su contexto fitness, planificación incorporada, ejecuciones, resultados y progreso a través de Space, OS y sus relaciones.
+En este mapa, **Fitness ID no es una credencial ni una identidad paralela**. Es el agregado longitudinal mediante el cual la persona conserva su contexto fitness, planificación incorporada, ejecuciones, resultados y progreso a través de Space, Studio y sus relaciones.
 
 La persona es su raíz y dueño lógico. Cada dominio conserva la fuente de verdad de los hechos que aporta al agregado; Identidad no copia programas, ejecuciones o consentimientos para construirlo. El Fitness ID se compone mediante referencias y consultas autorizadas sobre datos canónicos compartidos.
 
@@ -98,7 +98,7 @@ Esto implica:
 | Proyección actual del perfil | Selección reproducible de afirmaciones para un contexto concreto | Regla versionada de Identidad; no reemplaza las afirmaciones |
 | Perfil profesional | Presentación y capacidades profesionales personales, separadas de membresías organizacionales | Identidad |
 | Verificación | Evaluación de una credencial profesional concreta por `A11/verify_professional_credentials`, con registro oficial/emisor, evidencia mínima y vigencia | Identidad bajo ADR-026 |
-| Invitación | Sobre temporal emitido desde OS hacia un email o celular, sin `person_id` obligatorio | Identidad para seguridad y ciclo de vida; organización para finalidad y autoría |
+| Invitación | Sobre temporal emitido desde Studio hacia un email o celular, sin `person_id` obligatorio | Identidad para seguridad y ciclo de vida; organización para finalidad y autoría |
 | Intención de invitación | Propuesta tipada de membresía, relación o programa que el destinatario decide independientemente | Identidad para la decisión; dominio destino para la entidad materializada |
 
 Los nombres anteriores son conceptuales. Por ejemplo, “afirmación de perfil” no autoriza una tabla EAV universal ni un JSON abierto; los valores deben permanecer tipados y separados por sensibilidad.
@@ -116,7 +116,7 @@ Los nombres anteriores son conceptuales. Por ejemplo, “afirmación de perfil�
 | Proyección actual del perfil | La persona respecto del resultado personal; Allfit gobierna la regla | Sistema desde afirmaciones y una regla versionada | Solo una nueva versión de regla o nuevos hechos cambia la proyección; nunca destruye alternativas | Mismos actores autorizados para las afirmaciones resultantes, respetando la clasificación más restrictiva |
 | Perfil profesional | La persona | La persona lo solicita o completa después del registro | La persona mantiene su presentación; verificaciones cambian solo mediante su flujo competente | La persona y consumidores autorizados; publicación pública está fuera de V1 |
 | Verificación | La persona es sujeto; A11 conserva autoría y Allfit custodia evidencia mínima | A11 con deber/AAL2 contrasta registro oficial o emisor sin conflicto | Se renueva, vence, revoca o apela por eventos; máximo 12 meses | Persona y actores con finalidad; evidencia más restringida que estado |
-| Invitación | La organización es responsable de la intención; el destinatario es titular del contacto; Allfit custodia entrega y seguridad | Miembro organizacional autorizado desde OS; backend genera token | Organización puede revocar antes de completar; sistema actualiza entrega/expiración; destinatario no cambia emisor o finalidad | Emisor autorizado y destinatario; nunca concede acceso al Fitness ID |
+| Invitación | La organización es responsable de la intención; el destinatario es titular del contacto; Allfit custodia entrega y seguridad | Miembro organizacional autorizado desde Studio; backend genera token | Organización puede revocar antes de completar; sistema actualiza entrega/expiración; destinatario no cambia emisor o finalidad | Emisor autorizado y destinatario; nunca concede acceso al Fitness ID |
 | Intención de invitación | Organización sobre la propuesta; destinatario sobre su decisión | Emisor autorizado propone una intención tipada | Destinatario acepta o rechaza cada intención; emisor puede revocar lo pendiente; sistema valida dependencias | Emisor y destinatario según finalidad; el dominio destino consulta solo lo necesario para materializar la decisión |
 
 ### 3.7 Matriz de ciclo de vida y disposición
@@ -143,7 +143,7 @@ Retener un registro no permite consultarlo mediante endpoints, búsquedas, lista
 flowchart TD
     start{"¿Cómo inicia?"}
     direct["Registro directo en Space"]
-    invitation["Invitación opcional desde OS"]
+    invitation["Invitación opcional desde Studio"]
     auth["La persona controla y verifica WorkOS AuthKit"]
     eligibility{"Elegibilidad adulta"}
     blocked["Intento no elegible o en revisión<br/>sin persona ni Fitness ID"]
@@ -173,7 +173,7 @@ flowchart TD
 
 #### Invitación para una persona nueva
 
-1. OS crea una invitación con destino mínimo e intenciones tipadas.
+1. Studio crea una invitación con destino mínimo e intenciones tipadas.
 2. La invitación existe sin cuenta y sin persona provisional.
 3. El destinatario completa personalmente autenticación, elegibilidad y onboarding.
 4. Identidad crea la misma clase de persona, cuenta y Fitness ID que en el registro directo.
@@ -208,9 +208,9 @@ flowchart TD
 
 ### 3.10 Invariantes de Identidad
 
-1. Space y OS referencian la misma persona canónica y nunca mantienen copias por producto.
+1. Space y Studio referencian la misma persona canónica y nunca mantienen copias por producto.
 2. Una persona puede registrarse y usar Space sin invitación, organización o relación profesional.
-3. OS nunca crea un usuario WorkOS o una persona en nombre del destinatario.
+3. Studio nunca crea un usuario WorkOS o una persona en nombre del destinatario.
 4. Una invitación pendiente no es una persona, cuenta, perfil, consentimiento, membresía, relación o asignación.
 5. Una persona existente acepta invitaciones posteriores con el mismo `person_id` y Fitness ID.
 6. WorkOS AuthKit autentica, pero `(issuer, subject)` no reemplaza la identidad de dominio.
@@ -230,9 +230,9 @@ flowchart TD
 | Escenario | Resultado obligatorio |
 | --- | --- |
 | Persona adulta se registra directamente en Space | Se crea una persona/cuenta/Fitness ID sin invitación ni entidades profesionales |
-| OS invita a un email que aún no tiene cuenta | Existe invitación, pero no persona provisional ni acceso operativo |
+| Studio invita a un email que aún no tiene cuenta | Existe invitación, pero no persona provisional ni acceso operativo |
 | Persona nueva acepta parcialmente una invitación | Se crea una sola identidad y solo se materializan intenciones aceptadas con dependencias satisfechas |
-| Persona de Space acepta después una invitación de OS | Se reutiliza la identidad existente sin duplicados |
+| Persona de Space acepta después una invitación de Studio | Se reutiliza la identidad existente sin duplicados |
 | Persona actúa como atleta y profesional | Mantiene una sola persona/cuenta y perfiles o roles diferenciados |
 | Profesional cambia o suma organizaciones | Conserva identidad y perfil profesional; cambian membresías en Organizaciones |
 | Persona tiene dos profesionales de organizaciones distintas | Ambos vínculos apuntan al mismo `person_id`; el acceso se resuelve por relación y grants independientes |
@@ -258,7 +258,7 @@ Ninguna de estas decisiones puede permitir identidades por producto, perfiles ab
 
 ### 4.1 Responsabilidad
 
-Organizaciones mantiene las fronteras operativas bajo las cuales equipos y profesionales utilizan Allfit OS. Conserva la identidad estable de cada organización, su tipo principal de operación, estado, sedes básicas, membresías internas, roles y capacidades organizacionales.
+Organizaciones mantiene las fronteras operativas bajo las cuales equipos y profesionales utilizan Allfit Studio. Conserva la identidad estable de cada organización, su tipo principal de operación, estado, sedes básicas, membresías internas, roles y capacidades organizacionales.
 
 El dominio usa una sola raíz para prácticas profesionales, gimnasios, estudios, academias y clínicas compatibles con V1. El tamaño actual del equipo no define el tipo de organización ni crea otro modelo raíz.
 
@@ -271,7 +271,7 @@ El dominio usa una sola raíz para prácticas profesionales, gimnasios, estudios
 - sedes físicas básicas, dirección operativa, zona horaria y estado;
 - membresías internas aceptadas entre personas y organizaciones;
 - roles internos de owner, admin, staff y profesional;
-- capacidades organizacionales explícitas que habilitan acciones dentro de OS;
+- capacidades organizacionales explícitas que habilitan acciones dentro de Studio;
 - historial efectivo de altas, suspensiones, cambios de rol y terminaciones;
 - activos estrictamente organizacionales y su autoría, cuando el dominio propietario los referencia.
 
@@ -310,7 +310,7 @@ El onboarding crea de forma transaccional e idempotente:
 
 1. una organización estable con `organization_kind = professional_practice`;
 2. una única membresía propietaria inicial para la persona;
-3. el contexto organizacional desde el cual podrá operar profesionalmente en OS.
+3. el contexto organizacional desde el cual podrá operar profesionalmente en Studio.
 
 Después, esa misma organización puede incorporar staff y profesionales sin cambiar su identificador ni migrar relaciones, programas, auditoría o activos. La condición unipersonal se deriva de las membresías activas; no se guarda como `is_independent`.
 
@@ -372,7 +372,7 @@ flowchart TD
     accept{"La persona acepta membresía"}
     member["Membresía activa + rol/capacidades"]
     operate{"¿Organización, membresía y capacidad vigentes?"}
-    os["Operación organizacional en OS"]
+    studio["Operación organizacional en Studio"]
     deny["Denegar y auditar"]
 
     person --> solo --> practice
@@ -382,21 +382,21 @@ flowchart TD
     accept -->|"no"| deny
     owner --> operate
     member --> operate
-    operate -->|"sí"| os
+    operate -->|"sí"| studio
     operate -->|"no"| deny
 ```
 
 #### Alta de práctica profesional
 
 1. Una persona elegible mantiene primero su identidad y perfil profesional personal.
-2. Al elegir operar por cuenta propia en OS, inicia `solo_professional`.
+2. Al elegir operar por cuenta propia en Studio, inicia `solo_professional`.
 3. El backend crea una sola `professional_practice` y una sola membresía owner ante reintentos.
 4. El perfil profesional permanece en Identidad y la organización solo lo referencia.
 5. Las acciones posteriores registran persona actora y organización de contexto.
 
 #### Incorporación de staff o profesionales
 
-1. Un miembro autorizado crea desde OS una invitación con intención `organization_membership` y rol propuesto válido.
+1. Un miembro autorizado crea desde Studio una invitación con intención `organization_membership` y rol propuesto válido.
 2. La invitación permanece en Identidad y todavía no es una membresía.
 3. La persona se registra o usa su cuenta existente y acepta o rechaza esa intención.
 4. Solo la aceptación materializa una membresía idempotente.
@@ -407,7 +407,7 @@ flowchart TD
 
 1. Una misma persona conserva un único perfil profesional.
 2. Cada organización mantiene una membresía, rol, capacidades y vigencia independientes.
-3. Cada comando de OS exige seleccionar explícitamente la organización de actuación.
+3. Cada comando de Studio exige seleccionar explícitamente la organización de actuación.
 4. Relaciones, programas y auditoría conservan organización y actor de origen.
 5. Salir de una organización no afecta las otras membresías ni el perfil global.
 
@@ -457,8 +457,8 @@ Organizaciones solo responde las tres primeras dimensiones. Relaciones y Privaci
 
 ### 4.12 Invariantes de Organizaciones
 
-1. Toda operación profesional en OS ocurre dentro de una organización activa.
-2. Tener perfil profesional no concede acceso a OS, clientes o datos personales.
+1. Toda operación profesional en Studio ocurre dentro de una organización activa.
+2. Tener perfil profesional no concede acceso a Studio, clientes o datos personales.
 3. Práctica profesional, gimnasio, estudio, academia y clínica comparten una raíz organizacional.
 4. `organization_kind` describe actividad principal, no tamaño ni personalidad jurídica.
 5. `solo_professional` es procedencia de onboarding, no tipo permanente o permiso.
@@ -906,7 +906,7 @@ Reglas:
 | `health_context` | Adaptar entrenamiento con contexto de salud fitness minimizado | Dolor, lesión/limitación declarados, restricciones, recuperación, fatiga, sueño/readiness y observaciones separadas | Historia clínica completa, diagnósticos innecesarios, medicamentos, laboratorios, documentos, biometría/raw e inferencias médicas | `read`; `contribute` explícito para observaciones y propuestas, nunca overwrite de declaraciones |
 | `nutrition_intake` | Compartir registro alimentario manual y sus resúmenes | Comidas, ítems, cantidades y seis nutrientes V1 | Fotos, guía, clínica, catálogo externo e inferencias | `read`; nunca escritura profesional |
 | `nutrition_guidance` | Proponer y revisar objetivos nutricionales no clínicos | Versiones, targets, racional, autoría y decisiones | Comidas, fotos, menús y prescripción terapéutica | `read`; `contribute` solo con capability y credencial verificadas |
-| `nutrition_media` | Compartir una foto elegida por comida | `media_ref` saneado; Space entrega URL firmada temporal a la persona y OS un enlace a proxy autenticado | Galería, URL de storage en OS, EXIF, geolocalización e inferencias | `read`, efectivo solo junto con `nutrition_intake/read` |
+| `nutrition_media` | Compartir una foto elegida por comida | `media_ref` saneado; Space entrega URL firmada temporal a la persona y Studio un enlace a proxy autenticado | Galería, URL de storage en Studio, EXIF, geolocalización e inferencias | `read`, efectivo solo junto con `nutrition_intake/read` |
 
 Reglas transversales:
 
@@ -2604,7 +2604,7 @@ El entregable complementario [`V1_CONCEPTUAL_ERD.md`](./V1_CONCEPTUAL_ERD.md) re
 | Escenario | Estado | Resultado actual |
 | --- | --- | --- |
 | 1. Space-only: registro directo → Fitness ID → perfil → sesión autónoma → historial | Recertificado | Representable sin organización, relación, asignación, invitación o grant |
-| 2. OS pendiente: invitación sin persona provisional | Recertificado | La invitación y sus intenciones existen sin cuenta, persona, Fitness ID ni entidades destino |
+| 2. Studio pendiente: invitación sin persona provisional | Recertificado | La invitación y sus intenciones existen sin cuenta, persona, Fitness ID ni entidades destino |
 | 3. Ecosistema vinculado y aceptación parcial | Recertificado | Valida relación sin programa y rama completa con grant parcial, asignación, ejecución y consulta autorizada |
 | 4. Persona Space preexistente acepta invitación | Recertificado | Reutiliza cuenta, `person_id` y Fitness ID; crea relación y asignación aceptadas sin compartir historial autónomo |
 | 5. Práctica unipersonal crece a equipo | Recertificado | Añade membresía y reasigna explícitamente un cliente sin cambiar organización, tipo, ownership o historial |
@@ -2628,19 +2628,19 @@ El entregable complementario [`V1_CONCEPTUAL_ERD.md`](./V1_CONCEPTUAL_ERD.md) re
 
 #### Objetivo
 
-Demostrar que una persona adulta puede registrarse directamente en Allfit Space, activar un único Fitness ID, mantener su perfil, ejecutar una actividad autónoma y consultar su historial sin invitación ni dependencia de Allfit OS.
+Demostrar que una persona adulta puede registrarse directamente en Allfit Space, activar un único Fitness ID, mantener su perfil, ejecutar una actividad autónoma y consultar su historial sin invitación ni dependencia de Allfit Studio.
 
 #### Precondiciones
 
 - La persona no tiene usuario WorkOS ni `person_id` previo.
-- No existe invitación de OS.
+- No existe invitación de Studio.
 - No existe organización, membresía, relación profesional, asignación o grant.
 - La persona declara cumplir la política global de elegibilidad de 18 años o más.
 - Existen en Catálogo una disciplina, tipo de actividad y contrato de resultados publicados compatibles con la actividad que registrará.
 
 #### Resultado esperado
 
-Al finalizar existe una sola persona canónica vinculada a una sola cuenta local y un solo Fitness ID. La persona conserva una sesión autónoma con resultados tipados en su historial. No se crea ninguna entidad profesional u organizacional y OS no mantiene una copia de los datos.
+Al finalizar existe una sola persona canónica vinculada a una sola cuenta local y un solo Fitness ID. La persona conserva una sesión autónoma con resultados tipados en su historial. No se crea ninguna entidad profesional u organizacional y Studio no mantiene una copia de los datos.
 
 #### Recorrido de extremo a extremo
 
@@ -2830,7 +2830,7 @@ La respuesta puede incluir:
 
 No se necesita `data_grant` para que la persona consulte su propio Fitness ID. El backend y RLS deben verificar `subject_person_id = current_person_id` o la regla equivalente; una persona no puede consultar la sesión de otra.
 
-Space no persiste una copia autoritativa del historial. OS tampoco recibe o sincroniza otra copia. Si en el futuro la persona acepta una relación, esa organización accede a los mismos hechos canónicos únicamente mediante grants y proyecciones autorizadas.
+Space no persiste una copia autoritativa del historial. Studio tampoco recibe o sincroniza otra copia. Si en el futuro la persona acepta una relación, esa organización accede a los mismos hechos canónicos únicamente mediante grants y proyecciones autorizadas.
 
 #### Entidades y dominios involucrados
 
@@ -2902,7 +2902,7 @@ Como no existe organización o relación, no hay evidencia bilateral profesional
 | Catálogo copiado por persona | No ocurre: sesión/perfil referencian códigos/versiones gobernados |
 | Sesión planificada ficticia para entrenar | No ocurre: Ejecución admite actividad autónoma |
 | Resultado guardado dentro de planificación | No ocurre: targets y hechos permanecen separados |
-| Historial duplicado para OS | No ocurre: OS solo podrá consultar los mismos hechos mediante autorización futura |
+| Historial duplicado para Studio | No ocurre: Studio solo podrá consultar los mismos hechos mediante autorización futura |
 | Grant para acceso propio | No ocurre: grants modelan acceso de terceros dentro de relaciones |
 
 #### Resultado de la validación
@@ -2913,19 +2913,19 @@ Como no existe organización o relación, no hay evidencia bilateral profesional
 **Contradicciones detectadas:** ninguna.<br>
 **Ajustes requeridos a los límites de dominio:** ninguno.
 
-La futura invitación de OS para esta misma persona deberá reutilizar su `person_id`, cuenta y Fitness ID. Esa convergencia se validará en el escenario 4.
+La futura invitación de Studio para esta misma persona deberá reutilizar su `person_id`, cuenta y Fitness ID. Esa convergencia se validará en el escenario 4.
 
-### 12.4 Escenario 2 — Invitación pendiente de OS sin persona provisional
+### 12.4 Escenario 2 — Invitación pendiente de Studio sin persona provisional
 
 #### Objetivo
 
-Demostrar que una organización puede emitir desde Allfit OS una propuesta dirigida a un email o celular sin registrar al destinatario, descubrir si ya usa Allfit ni crear por anticipado cuenta, persona, Fitness ID, membresía, relación, asignación o grant.
+Demostrar que una organización puede emitir desde Allfit Studio una propuesta dirigida a un email o celular sin registrar al destinatario, descubrir si ya usa Allfit ni crear por anticipado cuenta, persona, Fitness ID, membresía, relación, asignación o grant.
 
 #### Precondiciones
 
 - La organización emisora existe y está activa.
 - El actor emisor es una persona autenticada con membresía y capacidad organizacional vigentes para invitar.
-- El destino es un email o celular normalizado que OS puede usar únicamente para entregar la invitación.
+- El destino es un email o celular normalizado que Studio puede usar únicamente para entregar la invitación.
 - El escenario no presupone si el destinatario tiene una cuenta Allfit; el emisor no recibe esa información.
 - Para una invitación de cliente, el profesional responsable y la versión exacta de programa opcional ya existen y son proponibles en el contexto de la organización.
 - El destinatario todavía no ha completado una decisión autenticada sobre ninguna intención.
@@ -2939,7 +2939,7 @@ Existe un único sobre de invitación pendiente con destino protegido, token has
 ```mermaid
 sequenceDiagram
     actor Staff as "Miembro autorizado"
-    participant OS as "Allfit OS"
+    participant Studio as "Allfit Studio"
     participant Organizations as "Organizaciones"
     participant Relations as "Relaciones"
     participant Planning as "Planificación"
@@ -2947,16 +2947,16 @@ sequenceDiagram
     participant Delivery as "Proveedor de entrega"
     actor Recipient as "Destinatario"
 
-    Staff->>OS: Proponer invitación + intenciones tipadas
-    OS->>Organizations: Validar organización, membresía y capacidad
-    Organizations-->>OS: Contexto emisor vigente
-    OS->>Relations: Validar referencias proponibles de servicio
-    Relations-->>OS: Profesional/contexto válidos sin crear relación
+    Staff->>Studio: Proponer invitación + intenciones tipadas
+    Studio->>Organizations: Validar organización, membresía y capacidad
+    Organizations-->>Studio: Contexto emisor vigente
+    Studio->>Relations: Validar referencias proponibles de servicio
+    Relations-->>Studio: Profesional/contexto válidos sin crear relación
     opt Programa opcional
-        OS->>Planning: Validar programa y versión exacta publicable
-        Planning-->>OS: Referencia proponible sin crear asignación
+        Studio->>Planning: Validar programa y versión exacta publicable
+        Planning-->>Studio: Referencia proponible sin crear asignación
     end
-    OS->>Identity: Crear sobre e intenciones con idempotencia
+    Studio->>Identity: Crear sobre e intenciones con idempotencia
     Identity->>Identity: Proteger destino y persistir solo token_hash
     Identity-->>Delivery: Solicitar entrega después de persistir
     Delivery-->>Recipient: Enviar enlace u OTP
@@ -2967,7 +2967,7 @@ La validación al emitir confirma únicamente que la propuesta está bien formad
 
 #### Paso 1 — Autorización del emisor
 
-OS recibe un comando organizacional autenticado e idempotente. Antes de crear la invitación, el backend verifica:
+Studio recibe un comando organizacional autenticado e idempotente. Antes de crear la invitación, el backend verifica:
 
 - organización activa;
 - membresía efectiva del actor;
@@ -2977,7 +2977,7 @@ OS recibe un comando organizacional autenticado e idempotente. Antes de crear la
 - programa y versión exacta proponibles cuando existe una intención de asignación;
 - compatibilidad entre propósito e intenciones.
 
-Un administrador técnico de OS sin membresía de negocio no puede invitar por una organización. Una membresía válida tampoco permite proponer recursos de otra organización.
+Un administrador técnico de Studio sin membresía de negocio no puede invitar por una organización. Una membresía válida tampoco permite proponer recursos de otra organización.
 
 #### Paso 2 — Creación del sobre temporal
 
@@ -3024,7 +3024,7 @@ Después de persistir la invitación, el sistema solicita el envío del enlace u
 
 Mientras la invitación permanece pendiente:
 
-- OS muestra al emisor solo estado operativo y destino enmascarado;
+- Studio muestra al emisor solo estado operativo y destino enmascarado;
 - el emisor puede revocarla conforme a su autoridad;
 - el sistema puede expirar o bloquear el sobre;
 - un reenvío no cambia el propósito ni amplía las intenciones;
@@ -3075,7 +3075,7 @@ Las referencias a organización, profesional, rol o programa identifican el cont
 | Operación | Actor | Condiciones obligatorias | Resultado permitido |
 | --- | --- | --- | --- |
 | Crear invitación | Miembro organizacional autenticado | Organización, membresía, capacidad, propósito e intenciones válidos | Crear un sobre temporal y sus propuestas |
-| Consultar invitación desde OS | Emisor o miembro administrativo autorizado | Mismo contexto organizacional y finalidad operativa | Estado, propósito, intenciones y destino enmascarado |
+| Consultar invitación desde Studio | Emisor o miembro administrativo autorizado | Mismo contexto organizacional y finalidad operativa | Estado, propósito, intenciones y destino enmascarado |
 | Revocar invitación pendiente | Actor organizacional autorizado | Sobre revocable y misma organización | Bloquear decisiones futuras aún pendientes |
 | Procesar entrega | Servicio técnico | Comando/evento válido y secreto de proveedor aislado | Enviar al destino; no consultar Fitness ID |
 | Abrir enlace | Poseedor del token | Token íntegro, vigente y sujeto a controles de abuso | Presentación mínima; ningún acceso de dominio personal |
@@ -3098,7 +3098,7 @@ Ni la existencia ni el estado de la invitación deben revelar al emisor si el co
 | Proveedor reporta rebote o timeout | Registra solo evidencia operativa necesaria; no altera perfiles ni crea cuenta |
 | Token robado, manipulado o expirado | No revela contenido sensible ni permite autenticación, decisión o acceso |
 | Invitación revocada mientras se abre | La comprobación autoritativa deniega toda decisión posterior |
-| Contacto pertenece a una cuenta existente | OS no lo descubre; no se enlaza `person_id` antes de autenticación del titular |
+| Contacto pertenece a una cuenta existente | Studio no lo descubre; no se enlaza `person_id` antes de autenticación del titular |
 | Destinatario resulta menor o no elegible después | No crea persona ni materializa intenciones; inicia disposición corta del intento |
 
 La política exacta para consolidar invitaciones equivalentes se difiere al modelo lógico. Cualquier decisión posterior debe preservar historial, emisor, propósito, versiones presentadas e idempotencia, sin convertir coincidencia de contacto en deduplicación de personas.
@@ -3122,7 +3122,7 @@ Un hold de seguridad documentado puede suspender la disposición de targets conc
 | Riesgo | Resultado del recorrido |
 | --- | --- |
 | Contacto tratado como persona | No ocurre: el destino pertenece al sobre y no recibe `person_id` |
-| Usuario WorkOS creado por OS | No ocurre: solo el titular puede iniciar autenticación |
+| Usuario WorkOS creado por Studio | No ocurre: solo el titular puede iniciar autenticación |
 | Cliente provisional en Relaciones | No ocurre: la intención permanece en Identidad hasta ser aceptada |
 | Membresía provisional en Organizaciones | No ocurre: el rol propuesto no es un miembro efectivo |
 | Asignación provisional en Planificación | No ocurre: se referencia programa/versión sin crear asignación |
@@ -3238,7 +3238,7 @@ Identidad crea transaccional e idempotentemente:
 - evidencias de elegibilidad, términos y onboarding;
 - el perfil inicial mínimo o su capacidad de recibir afirmaciones.
 
-La identidad resultante es igual a la de un registro directo en Space. No se crea una variante “cliente de OS”, y el contacto de la invitación no se copia como una persona provisional.
+La identidad resultante es igual a la de un registro directo en Space. No se crea una variante “cliente de Studio”, y el contacto de la invitación no se copia como una persona provisional.
 
 Aunque todas las intenciones fueran rechazadas, esta identidad personal no pertenecería a la organización ni debería eliminarse por ese motivo. La invitación es opcional respecto de la existencia de la persona.
 
@@ -3475,7 +3475,7 @@ La materialización conserva fuentes separadas:
 - Planificación mantiene programa, versión, asignación, snapshot, sesión planificada e intento/primaria;
 - Ejecución mantiene la sesión real y resultados tipados.
 
-Los reintentos crean como máximo una entidad por intención, un grant por concesión efectiva, una asignación, un vínculo de intento y una ejecución por comando idempotente. El profesional consulta la misma ejecución canónica; OS no recibe una copia de resultados.
+Los reintentos crean como máximo una entidad por intención, un grant por concesión efectiva, una asignación, un vínculo de intento y una ejecución por comando idempotente. El profesional consulta la misma ejecución canónica; Studio no recibe una copia de resultados.
 
 #### Resultado de la validación
 
@@ -3488,11 +3488,11 @@ Los reintentos crean como máximo una entidad por intención, un grant por conce
 
 El siguiente escenario comprobará que una persona ya registrada directamente en Space acepta una invitación posterior reutilizando su misma cuenta, `person_id` y Fitness ID.
 
-### 12.6 Escenario 4 — Persona de Space acepta después una invitación de OS
+### 12.6 Escenario 4 — Persona de Space acepta después una invitación de Studio
 
 #### Objetivo
 
-Demostrar que una persona registrada directamente en Space puede aceptar posteriormente una invitación de cliente emitida desde OS sin crear otra cuenta, persona, perfil o Fitness ID, y sin transferir a la organización su historial autónomo anterior.
+Demostrar que una persona registrada directamente en Space puede aceptar posteriormente una invitación de cliente emitida desde Studio sin crear otra cuenta, persona, perfil o Fitness ID, y sin transferir a la organización su historial autónomo anterior.
 
 #### Precondiciones
 
@@ -3555,7 +3555,7 @@ El flujo añade contextos al agregado longitudinal, pero no mueve los hechos ent
 
 #### Paso 1 — Autenticación con la cuenta existente
 
-La persona inicia login, no SignUp administrativo ni creación de usuario desde OS. WorkOS AuthKit autentica al sujeto y el backend resuelve primero la restricción única `(provider, issuer, subject)` hacia la cuenta local y el `person_id` existentes.
+La persona inicia login, no SignUp administrativo ni creación de usuario desde Studio. WorkOS AuthKit autentica al sujeto y el backend resuelve primero la restricción única `(provider, issuer, subject)` hacia la cuenta local y el `person_id` existentes.
 
 Esta resolución debe devolver exactamente:
 
@@ -3579,7 +3579,7 @@ Después de resolver la cuenta, Identidad verifica:
 
 El orden es deliberado: primero se conoce a la persona por su sujeto autenticado y luego se prueba que puede reclamar la invitación. No se busca ni se fusiona una persona por coincidencia de email o celular.
 
-OS continúa sin recibir una respuesta del tipo “este contacto ya estaba registrado”. Solo después de la decisión puede conocer que la relación aceptada referencia una persona canónica, dentro del acceso mínimo que esa relación permite.
+Studio continúa sin recibir una respuesta del tipo “este contacto ya estaba registrado”. Solo después de la decisión puede conocer que la relación aceptada referencia una persona canónica, dentro del acceso mínimo que esa relación permite.
 
 #### Paso 3 — Conservación íntegra del estado previo
 
@@ -3645,7 +3645,7 @@ Privacidad mantiene denegación por defecto porque no se presentó ningún scope
 - la sesión autónoma previa no aparece en listados, conteos, récords, derivados o analítica de la relación;
 - perfil y objetivos previos no se exponen;
 - frecuencia cardiaca, GPS, biometría y wearables continúan fuera;
-- OS no puede precargar el nuevo vínculo con datos personales históricos.
+- Studio no puede precargar el nuevo vínculo con datos personales históricos.
 
 Incluso si en el futuro la persona concede `relationship_training`, ese scope no incorpora automáticamente sesiones autónomas o historial previo. Cada categoría y finalidad conserva su definición y versión exactas.
 
@@ -3657,10 +3657,10 @@ Después de materializar ambas intenciones:
 - cada intención queda `accepted` con referencia a su entidad destino;
 - la relación y asignación apuntan a la misma persona canónica;
 - Space muestra el programa nuevo dentro del Fitness ID existente;
-- OS muestra únicamente el contexto autorizado de relación/propuesta;
+- Studio muestra únicamente el contexto autorizado de relación/propuesta;
 - auditoría y outbox registran un solo resultado idempotente.
 
-No se “migra” la persona de Space a OS. Ambos productos consultan mediante la API los mismos registros canónicos y aplican proyecciones diferentes según actor, relación y permisos.
+No se “migra” la persona de Space a Studio. Ambos productos consultan mediante la API los mismos registros canónicos y aplican proyecciones diferentes según actor, relación y permisos.
 
 #### Matriz de entidades y cambios
 
@@ -3712,7 +3712,7 @@ Un retry nunca vuelve a ejecutar onboarding ni crea un segundo Fitness ID. Las r
 | Caso | Resultado obligatorio |
 | --- | --- |
 | Persona autenticada con contacto distinto | No reclama el sobre ni revela datos del destinatario esperado |
-| Persona intenta SignUp aunque ya tiene cuenta | El flujo orienta a login/recuperación; OS no crea otra cuenta |
+| Persona intenta SignUp aunque ya tiene cuenta | El flujo orienta a login/recuperación; Studio no crea otra cuenta |
 | Otro usuario WorkOS presenta un email verificado coincidente | No fusiona personas automáticamente; bloquea y deriva a recuperación/revisión segura |
 | Evidencia de elegibilidad vigente falta o está restringida | Falla cerrado y resuelve el requisito personal sin crear otra identidad |
 | Retry con respuesta perdida | Devuelve mismo `person_id`, relación, asignación e invitación completada |
@@ -3723,7 +3723,7 @@ Un retry nunca vuelve a ejecutar onboarding ni crea un segundo Fitness ID. Las r
 | Relación se crea pero falla dependencia de programa | No inventa otra versión; informa el resultado por intención sin borrar identidad |
 | Invitación revocada durante confirmación | La comprobación autoritativa impide nuevas materializaciones |
 | Dos organizaciones invitan a la misma persona | Reutilizan el mismo `person_id`, pero crean relaciones y permisos independientes |
-| UI o caché mezcla historial autónomo con OS | Backend/RLS filtran por relación, grants, scopes y procedencia; la UI no es frontera |
+| UI o caché mezcla historial autónomo con Studio | Backend/RLS filtran por relación, grants, scopes y procedencia; la UI no es frontera |
 
 La política exacta ante una relación equivalente preexistente se cerrará en el modelo lógico. Ninguna resolución podrá crear otra persona, apropiarse de una relación de otra organización o enlazar por contacto sin autenticación.
 
@@ -3744,10 +3744,10 @@ Aceptar una invitación no reinicia el ciclo de vida personal ni cambia las fech
 
 | Riesgo | Resultado del recorrido |
 | --- | --- |
-| Segunda persona para “cliente OS” | No ocurre: se usa el `person_id` resuelto desde la cuenta existente |
+| Segunda persona para “cliente Studio” | No ocurre: se usa el `person_id` resuelto desde la cuenta existente |
 | Segundo Fitness ID al entrar a una organización | No ocurre: la relación y asignación se incorporan al agregado existente |
 | Fusión por email/celular | No ocurre: el contacto solo prueba control del sobre después de autenticar |
-| Perfil copiado a OS | No ocurre: OS consulta proyecciones autorizadas de Identidad |
+| Perfil copiado a Studio | No ocurre: Studio consulta proyecciones autorizadas de Identidad |
 | Historial autónomo reasignado al profesional | No ocurre: Ejecución conserva origen y Privacidad deniega exposición |
 | Programa master copiado como propiedad personal | No ocurre: la asignación referencia versión/snapshot y conserva autoría/owner |
 | Asignación guardada dentro de Identidad | No ocurre: la intención referencia la entidad cuya fuente es Planificación |
@@ -3795,29 +3795,29 @@ La nueva persona no accede a clientes por incorporarse. Cuando el owner reasigna
 sequenceDiagram
     actor Owner as "Profesional fundador"
     actor Member as "Segundo profesional"
-    participant OS as "Allfit OS"
+    participant Studio as "Allfit Studio"
     participant Identity as "Identidad"
     participant Organizations as "Organizaciones"
     participant Relations as "Relaciones"
     participant Privacy as "Privacidad"
     participant Planning as "Planificación"
 
-    Owner->>OS: Invitar profesional con rol propuesto
-    OS->>Organizations: Validar owner, capacidad y misma organización
-    Organizations-->>OS: Contexto emisor vigente
-    OS->>Identity: Crear staff_invitation + organization_membership
+    Owner->>Studio: Invitar profesional con rol propuesto
+    Studio->>Organizations: Validar owner, capacidad y misma organización
+    Organizations-->>Studio: Contexto emisor vigente
+    Studio->>Identity: Crear staff_invitation + organization_membership
     Identity-->>Member: Entregar invitación
     Member->>Identity: Login y aceptar membresía
     Identity->>Organizations: Materializar intención aceptada
     Organizations->>Organizations: Crear membresía activa en organization_id existente
-    Member->>OS: Intentar consultar cliente existente
-    OS->>Relations: Evaluar asignación profesional
-    Relations-->>OS: Denegar porque el nuevo miembro no está asignado
-    Owner->>OS: Reasignar explícitamente una relación
-    OS->>Organizations: Revalidar membresía y capacidad del nuevo profesional
-    OS->>Relations: Terminar asignación anterior e iniciar la nueva
+    Member->>Studio: Intentar consultar cliente existente
+    Studio->>Relations: Evaluar asignación profesional
+    Relations-->>Studio: Denegar porque el nuevo miembro no está asignado
+    Owner->>Studio: Reasignar explícitamente una relación
+    Studio->>Organizations: Revalidar membresía y capacidad del nuevo profesional
+    Studio->>Relations: Terminar asignación anterior e iniciar la nueva
     Relations->>Privacy: Reevaluar mismo grant con nuevo actor efectivo
-    Privacy-->>OS: Permitir solo scope/acción vigentes desde effective_at
+    Privacy-->>Studio: Permitir solo scope/acción vigentes desde effective_at
     Note right of Planning: Programas y asignaciones conservan organization_id y origen
 ```
 
@@ -3840,7 +3840,7 @@ La procedencia `solo_professional` permanece como hecho histórico aunque despu�
 
 #### Paso 2 — Invitación de staff separada
 
-El owner emite desde OS una invitación con:
+El owner emite desde Studio una invitación con:
 
 - propósito `staff_invitation`;
 - una única intención `organization_membership`;
@@ -4121,7 +4121,7 @@ sequenceDiagram
     API-->>CoachB: Respuesta equivalente a que S no pertenece al conjunto
 ```
 
-La regla decisiva es **filtrar antes de proyectar y agregar**. No es suficiente ocultar una tarjeta en OS después de obtener datos o restar una fila al final.
+La regla decisiva es **filtrar antes de proyectar y agregar**. No es suficiente ocultar una tarjeta en Studio después de obtener datos o restar una fila al final.
 
 #### Paso 1 — Consentimientos separados por relación
 
@@ -4825,7 +4825,7 @@ La analítica anonimizada no alimenta marketing individual, perfiles, decisiones
 
 Los targets `retain_restricted` salen de:
 
-- endpoints de Space y OS;
+- endpoints de Space y Studio;
 - listados de clientes y búsquedas operativas;
 - APIs de entrenamiento;
 - exports ordinarios;
@@ -4970,7 +4970,7 @@ Un backup que no pueda demostrar esta reconciliación no se considera apto para 
 | `deleted_at` como falsa eliminación | No ocurre: `delete` alcanza datos físicos y derivados incluidos |
 | Hash/UUID tratado como anónimo | No ocurre: la prueba elimina vías de enlace y combinaciones reidentificables |
 | Hold global para conservar todo | No ocurre: referencia targets concretos y tiene vigencia/revisión |
-| Evidencia retenida visible en OS | No ocurre: queda fuera de endpoints/listados operativos |
+| Evidencia retenida visible en Studio | No ocurre: queda fuera de endpoints/listados operativos |
 | Programa master borrado con el cliente | No ocurre: conserva owner/finalidad organizacional independiente |
 | Tombstone contiene PII recuperable | No ocurre: solo preserva integridad mínima bajo política propia |
 | Caché o índice reexpone PII | No ocurre: la solicitud no cierra hasta confirmar invalidación |
@@ -5393,7 +5393,7 @@ Una sesión planificada V1 pertenece a una persona y representa trabajo previsto
 - recurrencia comercial;
 - check-in o asistencia.
 
-Una sede V1 aporta ubicación operativa y zona horaria; no se convierte por eso en room/resource reservable. Si OS intenta “crear clase” usando una sesión personal con `capacity` en metadata, el comando se rechaza: faltan actores, ownership, estados, concurrencia de cupos, cancelaciones y autorización propios de booking.
+Una sede V1 aporta ubicación operativa y zona horaria; no se convierte por eso en room/resource reservable. Si Studio intenta “crear clase” usando una sesión personal con `capacity` en metadata, el comando se rechaza: faltan actores, ownership, estados, concurrencia de cupos, cancelaciones y autorización propios de booking.
 
 #### Prueba 2 — Commerce no se esconde en relaciones
 
@@ -5492,7 +5492,7 @@ Una ingesta técnica incompleta puede permanecer `partial` únicamente dentro de
 
 | Fundamento | Por qué existe hoy | Cómo ayuda después sin especular |
 | --- | --- | --- |
-| IDs canónicos estables | Evitar duplicación entre Space/OS/organizaciones | Capacidades futuras referencian las mismas raíces |
+| IDs canónicos estables | Evitar duplicación entre Space/Studio/organizaciones | Capacidades futuras referencian las mismas raíces |
 | Límites de dominio/API | Separar ownership y autorización actuales | Permiten añadir contratos sin copiar datos |
 | Versionado inmutable | Scopes, plantillas y resultados V1 cambian | Futuras versiones no reescriben historia |
 | Outbox/inbox e idempotencia | Invitaciones, terminación y jobs V1 | Facilitan integraciones futuras con efectos confiables |
@@ -5609,7 +5609,7 @@ Los diez escenarios obligatorios y los cinco recorridos de recertificación qued
 
 Resultados consolidados:
 
-- una sola persona/Fitness ID entre Space y OS;
+- una sola persona/Fitness ID entre Space y Studio;
 - invitaciones sin personas provisionales;
 - intenciones y scopes con decisiones independientes;
 - organización estable al crecer de práctica individual a equipo;
@@ -5641,7 +5641,7 @@ Nutrición conserva el registro manual de ingestas, sus componentes y nutrientes
 | Versión profesional | Persona, con autoría profesional preservada | Nutrición | Función cerrada con contexto profesional completo | Lectura/contribución según grant |
 | Decisión | Persona | Nutrición append-only | Solo la persona del objetivo | Visible bajo `nutrition_guidance` |
 
-Space y OS consumen el mismo dominio. No existen comidas “de OS”, duplicados organizacionales, snapshots para histórico ni copias por relación.
+Space y Studio consumen el mismo dominio. No existen comidas “de Studio”, duplicados organizacionales, snapshots para histórico ni copias por relación.
 
 ### 13.3 Autoridad profesional
 

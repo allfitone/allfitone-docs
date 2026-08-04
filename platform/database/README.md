@@ -5,4 +5,4 @@
 - [Diseño propuesto](refactor/03_PROPOSED_DESIGN/)
 - [Plan de ejecución](refactor/04_EXECUTION/)
 
-El modelo compartido cubre necesidades de Allfit OS, Allfit Space y Allfit Backoffice. Su implementación se realiza incrementalmente con cada HU.
+El modelo compartido cubre necesidades de Allfit Studio, Allfit Space y Allfit Backoffice. Su implementación se realiza incrementalmente con cada HU.

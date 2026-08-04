@@ -79,7 +79,7 @@ sensores y notas privadas no son categorías aprobables por break-glass.
 | Crear la cuenta de una persona | La persona se registra sola y acepta sus propios términos. Allfit invita, no suplanta |
 | Cambiar directamente nombre, correo, teléfono, contraseña o cuenta vinculada | La identidad permanece bajo control de la persona y de sus pruebas de acceso |
 | Reescribir el historial de entrenamiento, cuerpo, salud o nutrición | Ese historial es suyo. Se corrige desde su app o mediante propuesta de su coach |
-| Operar un gimnasio en nombre de su dueño | Se le entrega y él lo administra desde Allfit OS |
+| Operar un gimnasio en nombre de su dueño | Se le entrega y él lo administra desde Allfit Studio |
 | Cobrar o mover dinero | Los cobros los reporta la pasarela |
 | Leer contenido sensible por tener `allfit_admin` | El rol base permite entrar; el deber y, cuando aplica, break-glass autorizan cada operación |
 | Aprobar o auditar mi propio acceso excepcional | La separación de deberes es obligatoria y falla cerrada |
@@ -107,7 +107,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 1. Entro con mi correo y contraseña.
 2. Si no tengo rol de plataforma vigente **no entro**, aunque mi cuenta exista.
 3. Un intento fallido no revela si el correo existe o si la contraseña está mal.
-4. La sesión del Backoffice es independiente de la de Allfit OS: entrar a uno no me mete al otro.
+4. La sesión del Backoffice es independiente de la de Allfit Studio: entrar a uno no me mete al otro.
 5. Entrar no habilita ninguna operación: cada pantalla y acción comprueba un deber vigente y, para funciones sensibles, AAL2.
 
 ### HU-BO-002 — Cerrar sesión
@@ -338,7 +338,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 3. Cuando el dueño acepta, **queda como propietario** y la organización empieza a operar.
 4. **Allfit no la administra en el intervalo.** Solo puede reenviar la invitación o cancelar la creación.
 5. Si nadie la reclama dentro del plazo, aparece en el panel como pendiente de seguimiento.
-6. Allfit **no crea las cuentas del equipo**. Una vez entregada, el dueño invita a sus entrenadores desde Allfit OS.
+6. Allfit **no crea las cuentas del equipo**. Una vez entregada, el dueño invita a sus entrenadores desde Allfit Studio.
 7. Queda registrado quién la creó y a quién se la entregó.
 8. Crear o cancelar organizaciones no reclamadas exige `manage_organization_lifecycle`, AAL2 y actor humano auditado.
 

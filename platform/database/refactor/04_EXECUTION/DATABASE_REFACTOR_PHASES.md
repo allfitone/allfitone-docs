@@ -10,7 +10,7 @@ El proceso no busca diseñar por adelantado toda la visión futura de Allfit. Bu
 
 ```mermaid
 sequenceDiagram
-    participant Coach as "Profesional en Allfit OS"
+    participant Coach as "Profesional en Allfit Studio"
     participant DB as "Supabase compartido"
     participant Person as "Persona en Allfit Space"
 
@@ -33,7 +33,7 @@ Al terminar deben existir:
 - ERD conceptual y lógico;
 - diccionario de tablas;
 - matriz de RLS;
-- contratos iniciales de Space, OS y Backoffice;
+- contratos iniciales de Space, Studio y Backoffice;
 - migraciones, seeds y pruebas locales;
 - flujo vertical validado desde los productos involucrados en la rebanada;
 - lista explícita de lo que queda fuera de V1.
@@ -76,11 +76,11 @@ Evitar que varias personas o repositorios produzcan modelos incompatibles.
 - Establecer que la BD remota no se modifica manualmente.
 - Confirmar que la base actual es evidencia, no la plantilla obligatoria.
 - Adoptar el flujo vertical asignar → ejecutar → revisar como frontera de V1.
-- Establecer como invariante que OS solo invita por email/celular y nunca ejecuta `Create User` de WorkOS AuthKit ni crea personas.
-- Confirmar WorkOS AuthKit como única autenticación, con un WorkOS environment compartido por ambiente y WorkOS Applications separadas para Space, OS y Backoffice.
+- Establecer como invariante que Studio solo invita por email/celular y nunca ejecuta `Create User` de WorkOS AuthKit ni crea personas.
+- Confirmar WorkOS AuthKit como única autenticación, con un WorkOS environment compartido por ambiente y WorkOS Applications separadas para Space, Studio y Backoffice.
 - Confirmar que solo la API propia accede a PostgreSQL; los clientes no usan PostgREST/Data API ni credenciales Supabase.
-- Confirmar que el perfil profesional pertenece a la persona, pero toda operación profesional en OS ocurre dentro de una organización; el onboarding `solo_professional` crea una `professional_practice` que puede crecer a equipo sin cambiar de identidad.
-- Confirmar independencia funcional y aislamiento operativo para Space/OS, aceptando WorkOS AuthKit, API y PostgreSQL como dependencias físicas compartidas en V1.
+- Confirmar que el perfil profesional pertenece a la persona, pero toda operación profesional en Studio ocurre dentro de una organización; el onboarding `solo_professional` crea una `professional_practice` que puede crecer a equipo sin cambiar de identidad.
+- Confirmar independencia funcional y aislamiento operativo para Space/Studio, aceptando WorkOS AuthKit, API y PostgreSQL como dependencias físicas compartidas en V1.
 - Acordar antes de producción SLO, RTO y RPO medibles; no inferirlos de la topología.
 
 ### Trabajo de IA
@@ -152,7 +152,7 @@ Para cada concepto responder:
 
 Decisión central:
 
-> La persona es el sujeto del Fitness ID y puede registrarse directamente en Space sin invitación. Antes de completar un onboarding elegible no existe persona ni cuenta local; si el flujo inició desde OS existe una invitación separada y puede existir temporalmente un usuario WorkOS. OS nunca registra a alguien en su nombre. V1 solo activa personas de 18 años o más.
+> La persona es el sujeto del Fitness ID y puede registrarse directamente en Space sin invitación. Antes de completar un onboarding elegible no existe persona ni cuenta local; si el flujo inició desde Studio existe una invitación separada y puede existir temporalmente un usuario WorkOS. Studio nunca registra a alguien en su nombre. V1 solo activa personas de 18 años o más.
 
 ### Alcance V1
 
@@ -228,7 +228,7 @@ Decidir dónde vive cada concepto y quién controla cada dato.
 | Ejecución | Sesiones, segmentos y resultados tipados por modalidad |
 | Nutrición | Comidas manuales, nutrientes, resúmenes y objetivos versionados |
 
-Space y OS no son dominios de datos. Son consumidores diferentes de los mismos dominios.
+Space y Studio no son dominios de datos. Son consumidores diferentes de los mismos dominios.
 
 ### Matriz de ownership
 
@@ -249,7 +249,7 @@ Para cada entidad definir:
 ### Casos que el modelo debe resolver
 
 - una persona que entrena sola;
-- una invitación pendiente de OS que todavía no representa una persona;
+- una invitación pendiente de Studio que todavía no representa una persona;
 - aceptación de la invitación que crea cuenta/persona y materializa el vínculo aceptado;
 - aceptación parcial que crea una relación y rechaza el programa sin conceder scopes implícitos;
 - una persona con dos profesionales de organizaciones distintas;
@@ -277,7 +277,7 @@ Para cada entidad definir:
 
 ### Criterio de salida
 
-Todos los escenarios se representan sin duplicar personas, asignaciones, ejecuciones o historial entre Space y OS.
+Todos los escenarios se representan sin duplicar personas, asignaciones, ejecuciones o historial entre Space y Studio.
 
 ---
 
@@ -346,7 +346,7 @@ No se aceptan políticas genéricas como “si pertenece al workspace puede verl
 Definir qué necesita cada aplicación:
 
 - contrato HTTP de Space: agenda personal, programa asignado, ejecución, progreso y nutrición propios;
-- contrato HTTP de OS: creación/asignación, personas relacionadas, resultados y nutrición autorizados;
+- contrato HTTP de Studio: creación/asignación, personas relacionadas, resultados y nutrición autorizados;
 - funciones SQL internas para comandos que necesiten varias escrituras atómicas;
 - vistas internas para consultas estables del backend;
 - eventos/outbox para procesos asíncronos;
@@ -368,14 +368,14 @@ Definir además el contrato de degradación por producto y dependencia:
 - Detectar accesos ambiguos o demasiado amplios.
 - Proponer vistas, RPCs y eventos.
 - Generar casos de prueba de autorización y abuso.
-- Generar matriz de fallos, degradación y recuperación para Space, OS y dependencias compartidas.
+- Generar matriz de fallos, degradación y recuperación para Space, Studio y dependencias compartidas.
 
 ### Entregables
 
 - [`V1_OPERATIONS_MATRIX.md`](../03_PROPOSED_DESIGN/V1_OPERATIONS_MATRIX.md).
 - [`V1_RLS_MATRIX.md`](../03_PROPOSED_DESIGN/V1_RLS_MATRIX.md).
 - [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](../03_PROPOSED_DESIGN/V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md).
-- [`V1_SPACE_OS_API_CONTRACTS.md`](../03_PROPOSED_DESIGN/V1_SPACE_OS_API_CONTRACTS.md).
+- [`V1_SPACE_STUDIO_API_CONTRACTS.md`](../03_PROPOSED_DESIGN/V1_SPACE_STUDIO_API_CONTRACTS.md).
 - [`V1_OPENAPI_CONTRACT.md`](../03_PROPOSED_DESIGN/V1_OPENAPI_CONTRACT.md) y [`allfit-v1.openapi.yaml`](../03_PROPOSED_DESIGN/openapi/allfit-v1.openapi.yaml) para la primera rebanada vertical.
 - [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](../03_PROPOSED_DESIGN/V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md).
 - [`V1_DEGRADATION_AND_RECOVERY_MATRIX.md`](../03_PROPOSED_DESIGN/V1_DEGRADATION_AND_RECOVERY_MATRIX.md).
@@ -626,7 +626,7 @@ La lista siguiente describe el resultado acumulado de Fase 5. Cada rebanada ejec
 - meta personal activa, dos propuestas pendientes de relaciones diferentes y reemplazo de la pendiente de la misma relación;
 - aceptación y rechazo personal únicos, con activación/supersesión atómica;
 - relación terminada que cancela propuestas pendientes y solo conserva guía profesional minimizada bajo caso histórico;
-- revocación de cada scope sin filtración por filas, conteos, cursores, agregados o caché; una foto OS usa proxy autenticado y el mismo enlace anterior responde `404` sin bytes tras revocar intake o media.
+- revocación de cada scope sin filtración por filas, conteos, cursores, agregados o caché; una foto Studio usa proxy autenticado y el mismo enlace anterior responde `404` sin bytes tras revocar intake o media.
 
 ### Trabajo de IA
 
@@ -643,7 +643,7 @@ La lista siguiente describe el resultado acumulado de Fase 5. Cada rebanada ejec
 
 ### Entregables
 
-Los siguientes son destinos previstos dentro de `allfitone-os`; se convertirán en enlaces cuando existan los artefactos:
+Los siguientes son destinos previstos dentro de `allfitone-studio`; se convertirán en enlaces cuando existan los artefactos:
 
 - cadena inicial de migraciones: `supabase/migrations/`;
 - seed de base de datos: `supabase/seed.sql`;
@@ -670,7 +670,7 @@ Probar que el diseño funciona desde los productos involucrados en cada rebanada
 - las siete pruebas `T-PHY-*` y cuatro `T-NUT-PHY-*` demuestran compilación física, grants, transiciones, live/frozen, scopes, privilegios, índices y planes de autorización;
 - las seis pruebas `T-SCHEMA-*` demuestran inventario 115, objetos nombrados, contracts JSONB y unicidad/mantenimiento particionado;
 - las diez pruebas `T-IDEM-*` y seis `T-NUT-IDEM-*` demuestran scope, concurrencia, captura offline, foto diferida, doble decisión, crash, disposición y minimización;
-- las nueve pruebas `T-API-*` y catorce `T-NUT-API-*` demuestran contrato OpenAPI resoluble, operación trazable, ejemplos válidos, headers obligatorios, caché, redacción, agregados, autoría mínima, URL firmada Space, proxy autenticado OS y DTOs sin drift;
+- las nueve pruebas `T-API-*` y catorce `T-NUT-API-*` demuestran contrato OpenAPI resoluble, operación trazable, ejemplos válidos, headers obligatorios, caché, redacción, agregados, autoría mínima, URL firmada Space, proxy autenticado Studio y DTOs sin drift;
 - las seis pruebas `T-VG-*` y doce `T-BGG-*` demuestran verificación acotada, conflictos, deberes temporales, quorum, expiración, auditoría y suspensión por abuso;
 - las 30 pruebas `T-INT-*` y ocho `T-NUT-INT-*` rechazan cruces aun con `BYPASSRLS`;
 - las 162 pruebas RLS previas y 24 `T-NUT-RLS-*` cubren un total de 186 casos funcionales de autorización;
@@ -692,9 +692,9 @@ Probar que el diseño funciona desde los productos involucrados en cada rebanada
 - `body_progress` no expone EXIF, geolocalización o galería no seleccionada;
 - `health_context` no expone historia clínica, biometría, raw o inferencias médicas;
 - frecuencia cardiaca, GPS y wearables permanecen fuera de los siete scopes V1;
-- `nutrition_media` aislado no revela una comida; OS requiere además `nutrition_intake/read`;
-- revocar cualquier scope nutricional invalida filas, detalles, conteos, cursores, agregados y cachés; revocar intake o media hace que el mismo enlace de foto OS responda `404` sin bytes inmediatamente;
-- Space acepta una meta propia sin `rationale`; OS rechaza una propuesta profesional con `rationale` ausente, nulo, vacío o mayor de 2000 caracteres antes de persistir;
+- `nutrition_media` aislado no revela una comida; Studio requiere además `nutrition_intake/read`;
+- revocar cualquier scope nutricional invalida filas, detalles, conteos, cursores, agregados y cachés; revocar intake o media hace que el mismo enlace de foto Studio responda `404` sin bytes inmediatamente;
+- Space acepta una meta propia sin `rationale`; Studio rechaza una propuesta profesional con `rationale` ausente, nulo, vacío o mayor de 2000 caracteres antes de persistir;
 - frozen incluye una propuesta profesional con `goal_versions.created_at=T` y excluye cualquiera con `created_at>T`;
 - un profesional sin relación, asignación, `guide_nutrition`, credencial vigente o grant exacto no lee ni propone;
 - `frozen` nutricional nunca expone comidas, fotos, resúmenes o metas personales y se corta al revocar `nutrition_guidance`;
@@ -764,10 +764,10 @@ Probar que el diseño funciona desde los productos involucrados en cada rebanada
 - ningún cliente usa una clave secreta o evita RLS;
 - la caída de un frontend no afecta al otro producto;
 - un worker/proveedor exclusivo degradado no consume recursos reservados para el otro contrato;
-- rate limits, conexiones, timeouts, colas y métricas distinguen Space, OS y dominio;
+- rate limits, conexiones, timeouts, colas y métricas distinguen Space, Studio y dominio;
 - PostgreSQL caído bloquea confirmaciones autoritativas y la UI muestra degradación explícita;
 - Space sincroniza un borrador local una sola vez después de recuperarse;
-- OS no confirma grants, asignaciones o cambios de sesión desde caché/read model atrasado;
+- Studio no confirma grants, asignaciones o cambios de sesión desde caché/read model atrasado;
 - circuit breakers aíslan email y demás proveedores externos realmente usados por V1;
 - la baseline no crea schemas, tablas, permisos, scopes o endpoints para capacidades diferidas;
 - los reintentos posteriores a recuperación son idempotentes;
@@ -775,15 +775,15 @@ Probar que el diseño funciona desde los productos involucrados en cada rebanada
 
 ### Validación extremo a extremo
 
-1. OS crea y publica un programa.
-2. OS lo asigna mediante una relación activa.
+1. Studio crea y publica un programa.
+2. Studio lo asigna mediante una relación activa.
 3. Space consulta la agenda de la persona.
 4. Space registra la ejecución.
-5. OS consulta el resultado autorizado.
+5. Studio consulta el resultado autorizado.
 6. Se revoca el consentimiento.
-7. OS deja de ver lo que ya no está autorizado según la regla definida.
+7. Studio deja de ver lo que ya no está autorizado según la regla definida.
 8. Space registra una comida offline y la sincroniza sin duplicados; adjunta la foto saneada después.
-9. OS obtiene ingesta autorizada y un profesional elegible propone objetivos.
+9. Studio obtiene ingesta autorizada y un profesional elegible propone objetivos.
 10. Space acepta la propuesta; la versión anterior queda `superseded`.
 11. Se termina la relación; desaparecen ingesta y metas personales, y solo la guía emitida hasta `T` queda disponible mediante caso histórico.
 12. Se revoca `nutrition_guidance`; también desaparece la lectura histórica.
@@ -798,10 +798,10 @@ Probar que el diseño funciona desde los productos involucrados en cada rebanada
 
 ### Entregables
 
-Los siguientes son destinos previstos dentro de `allfitone-os`:
+Los siguientes son destinos previstos dentro de `allfitone-studio`:
 
 - pruebas SQL/pgTAP: `supabase/tests/database/`;
-- pruebas de integración de la API Space/OS: `tests/integration/space_os/`;
+- pruebas de integración de la API Space/Studio: `tests/integration/space_studio/`;
 - `05_VALIDATION/V1_SECURITY_AND_INTEGRITY_REPORT.md`.
 - `05_VALIDATION/V1_APPROVED_BASELINE.md`.
 - `05_VALIDATION/NEXT_DOMAIN_BACKLOG.md`.
@@ -856,7 +856,7 @@ Las fases son puertas de calidad, no bloques de tiempo. Desde Fase 5 se aplican 
 ## Señales para detenerse y corregir
 
 - se discuten columnas antes de definir conceptos;
-- una entidad “pertenece a Space” y otra copia “pertenece a OS”;
+- una entidad “pertenece a Space” y otra copia “pertenece a Studio”;
 - se añade `organization_id` a todas las tablas;
 - el `sub` de WorkOS AuthKit representa persona, cliente y miembro simultáneamente;
 - un cliente accede directamente a PostgreSQL, PostgREST o una clave Supabase;
@@ -882,14 +882,14 @@ La baseline V1 está terminada cuando:
 - existe una historia única de migraciones;
 - el esquema se reconstruye desde cero;
 - no contiene DDL, permisos, endpoints o placeholders de capacidades diferidas;
-- Space y OS completan el flujo vertical;
+- Space y Studio completan el flujo vertical;
 - la persona conserva una identidad única;
 - las asignaciones preservan su versión;
 - las ejecuciones preservan historial;
 - fuerza, running, yoga/movilidad e híbrido pasan el gate multidisciplina;
 - las unidades y resultados operativos están tipados por modalidad;
 - los contratos `summary`, `detailed` y `sensor_enriched` están versionados, congelados y probados por `activity_type`;
-- Space y OS tienen contratos de degradación, límites de recursos y observabilidad diferenciados;
+- Space y Studio tienen contratos de degradación, límites de recursos y observabilidad diferenciados;
 - las dependencias físicas compartidas, modos de fallo y SLO/RTO/RPO están documentados y probados;
 - drafts/reintentos de recuperación son idempotentes y las operaciones sensibles fallan cerradas;
 - constraints y FKs impiden estados inválidos;

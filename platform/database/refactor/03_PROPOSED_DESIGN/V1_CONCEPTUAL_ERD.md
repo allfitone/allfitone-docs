@@ -8,7 +8,7 @@
 
 ## 1. Propósito
 
-Este documento representa las entidades conceptuales, sus fronteras de ownership y las cardinalidades necesarias para la baseline V1 compartida por Allfit Space y Allfit OS.
+Este documento representa las entidades conceptuales, sus fronteras de ownership y las cardinalidades necesarias para la baseline V1 compartida por Allfit Space y Allfit Studio.
 
 El ERD debe permitir:
 
@@ -31,7 +31,7 @@ Este es un **modelo conceptual**, no el modelo lógico ni una especificación SQ
 - Los conceptos “afirmación”, “target”, “resultado” y “evento” no autorizan tablas EAV, JSON abierto ni referencias polimórficas sin integridad.
 - Las estructuras tipadas pueden dividirse en varias tablas físicas aunque aparezcan agrupadas conceptualmente.
 - Fitness ID es un agregado longitudinal en torno a `PERSON`; no es una segunda persona ni una entidad duplicada.
-- Space y OS son consumidores de los mismos dominios; no aparecen como propietarios de datos.
+- Space y Studio son consumidores de los mismos dominios; no aparecen como propietarios de datos.
 
 ### 2.1 Leyenda de cardinalidad
 
@@ -88,7 +88,7 @@ erDiagram
 
 ### 4.1 Lectura de la columna vertebral
 
-1. `PERSON` es la raíz canónica compartida por Space y OS.
+1. `PERSON` es la raíz canónica compartida por Space y Studio.
 2. Una persona puede operar en varias organizaciones mediante membresías distintas.
 3. Una relación siempre une a una persona con una organización y no concede acceso por sí sola.
 4. Un profesional actúa mediante una membresía organizacional y una asignación efectiva dentro de la relación.
@@ -513,7 +513,7 @@ erDiagram
 ### 11A.2 Reglas de acceso y ciclo
 
 - La persona accede a toda su nutrición sin convertir un rol organizacional en ownership.
-- OS solo consume proyecciones cerradas con relación, asignación, membresía, `guide_nutrition`, credencial verificada y grant.
+- Studio solo consume proyecciones cerradas con relación, asignación, membresía, `guide_nutrition`, credencial verificada y grant.
 - `nutrition_media` requiere también `nutrition_intake`; aislado no revela la comida.
 - Un profesional propone objetivos, pero no modifica comidas ni activa versiones.
 - `frozen` proyecta únicamente guía profesional originada en la relación y registrada `<= T`; ingestas, medios, resúmenes y metas personales quedan fuera.
@@ -605,7 +605,7 @@ erDiagram
 | Escenario | Camino principal en el ERD | Resultado |
 | --- | --- | --- |
 | 1. Persona Space-only | `ONBOARDING_ATTEMPT → PERSON → EXECUTED_SESSION` | No requiere organización, relación, grant, programa o invitación |
-| 2. Invitación OS pendiente | `ORGANIZATION → INVITATION → INVITATION_INTENT` | No existe `PERSON` provisional ni entidad destino |
+| 2. Invitación Studio pendiente | `ORGANIZATION → INVITATION → INVITATION_INTENT` | No existe `PERSON` provisional ni entidad destino |
 | 3. Aceptación parcial | Intención aceptada → `SERVICE_RELATIONSHIP`; intención rechazada → sin `PROGRAM_ASSIGNMENT` | Las decisiones no se acoplan ni conceden scopes implícitos |
 | 4. Persona Space preexistente | `ACCESS_ACCOUNT → PERSON` existente + invitación reclamada | Reutiliza la identidad y conserva historial autónomo privado |
 | 5. Práctica crece a equipo | Misma `ORGANIZATION` + nueva `ORGANIZATION_MEMBERSHIP` | No migra organización, autoría, relaciones ni activos |
@@ -623,7 +623,7 @@ erDiagram
 | 17. Guía nutricional | Relación/asignación/grant → `GOAL_VERSION proposed → GOAL_DECISION` | Profesional verificado propone; solo la persona activa |
 | 18. Nutrición frozen | Grant/caso histórico → versiones profesionales `<= T` | Excluye ingestas, medios, resúmenes, metas personales y post-corte |
 
-**Resultado de la validación:** los recorridos originales y los incorporados por ADR-022/023/027 se representan sin duplicar personas, asignaciones, ejecuciones, nutrición o historial entre Space y OS. Nutrición queda como noveno dominio y se traduce a ocho tablas físicas propias.
+**Resultado de la validación:** los recorridos originales y los incorporados por ADR-022/023/027 se representan sin duplicar personas, asignaciones, ejecuciones, nutrición o historial entre Space y Studio. Nutrición queda como noveno dominio y se traduce a ocho tablas físicas propias.
 
 ## 16. Decisiones reservadas para el modelo lógico
 

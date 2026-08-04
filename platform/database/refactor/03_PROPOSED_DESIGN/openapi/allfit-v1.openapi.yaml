@@ -5,7 +5,7 @@ info:
   version: 1.0.0
   description: >-
     Canonical contract for the first implementable vertical slice shared by
-    Allfit OS and Allfit Space. Every operation maps to exactly one OP-* entry.
+    Allfit Studio and Allfit Space. Every operation maps to exactly one OP-* entry.
     Endpoints outside this file remain non-implementable until added through
     the contract-first gate.
   license:
@@ -14,19 +14,19 @@ info:
 servers:
   - url: /
 tags:
-  - name: OS Planning
-    description: Planning commands and queries performed from Allfit OS.
+  - name: Studio Planning
+    description: Planning commands and queries performed from Allfit Studio.
   - name: Space Agenda
     description: Personal agenda queries exposed to Allfit Space.
   - name: Space Execution
     description: Workout execution commands performed from Allfit Space.
-  - name: OS Execution
-    description: Authorized workout execution queries exposed to Allfit OS.
+  - name: Studio Execution
+    description: Authorized workout execution queries exposed to Allfit Studio.
   - name: Space Privacy
     description: Consent and privacy commands controlled by the person.
   - name: Space Nutrition
     description: Personal nutrition capture and goal operations.
-  - name: OS Nutrition
+  - name: Studio Nutrition
     description: Authorized professional nutrition operations.
 x-allfit-contract-gate:
   source: V1_OPERATIONS_MATRIX.md
@@ -40,7 +40,7 @@ x-allfit-media-url-policy:
     cache_control: private, no-store
     query_is_opaque: true
     logging: Never log or persist the query string.
-  os_professional:
+  studio_professional:
     delivery: authenticated_api_proxy
     allowed_method: GET
     cache_control: private, no-store
@@ -49,9 +49,9 @@ x-allfit-media-url-policy:
     failure_without_effective_access: 404
 
 paths:
-  /os/v1/organizations/{organizationId}/programs/{programId}/versions:
+  /studio/v1/organizations/{organizationId}/programs/{programId}/versions:
     post:
-      tags: [OS Planning]
+      tags: [Studio Planning]
       operationId: publishProgramVersion
       x-allfit-operation: OP-PLN-008
       x-allfit-cache: no-store
@@ -96,9 +96,9 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
-  /os/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments:
+  /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments:
     post:
-      tags: [OS Planning]
+      tags: [Studio Planning]
       operationId: assignProgramVersion
       x-allfit-operation: OP-PLN-010
       x-allfit-cache: no-store
@@ -327,9 +327,9 @@ paths:
         '428':
           $ref: '#/components/responses/PreconditionRequired'
 
-  /os/v1/organizations/{organizationId}/clients/{personId}/executions/{executionId}:
+  /studio/v1/organizations/{organizationId}/clients/{personId}/executions/{executionId}:
     get:
-      tags: [OS Execution]
+      tags: [Studio Execution]
       operationId: getAuthorizedClientExecution
       x-allfit-operation: OP-EXE-018
       x-allfit-cache: private, no-store
@@ -669,9 +669,9 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
-  /os/v1/organizations/{organizationId}/clients/{personId}/nutrition/meals:
+  /studio/v1/organizations/{organizationId}/clients/{personId}/nutrition/meals:
     get:
-      tags: [OS Nutrition]
+      tags: [Studio Nutrition]
       operationId: listAuthorizedClientNutritionMeals
       x-allfit-operation: OP-NUT-009
       x-allfit-cache: private, no-store
@@ -704,9 +704,9 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /os/v1/organizations/{organizationId}/clients/{personId}/nutrition/meals/{mealId}/photo:
+  /studio/v1/organizations/{organizationId}/clients/{personId}/nutrition/meals/{mealId}/photo:
     get:
-      tags: [OS Nutrition]
+      tags: [Studio Nutrition]
       operationId: getAuthorizedClientNutritionMealPhoto
       x-allfit-operation: OP-NUT-013
       x-allfit-cache: private, no-store
@@ -746,9 +746,9 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /os/v1/organizations/{organizationId}/clients/{personId}/nutrition/daily-summaries:
+  /studio/v1/organizations/{organizationId}/clients/{personId}/nutrition/daily-summaries:
     get:
-      tags: [OS Nutrition]
+      tags: [Studio Nutrition]
       operationId: listAuthorizedClientNutritionDailySummaries
       x-allfit-operation: OP-NUT-010
       x-allfit-cache: private, no-store
@@ -779,9 +779,9 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /os/v1/organizations/{organizationId}/clients/{personId}/nutrition/goals/versions:
+  /studio/v1/organizations/{organizationId}/clients/{personId}/nutrition/goals/versions:
     get:
-      tags: [OS Nutrition]
+      tags: [Studio Nutrition]
       operationId: listAuthorizedClientNutritionGoalVersions
       x-allfit-operation: OP-NUT-011
       x-allfit-cache: private, no-store
@@ -811,7 +811,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     post:
-      tags: [OS Nutrition]
+      tags: [Studio Nutrition]
       operationId: proposeClientNutritionGoalVersion
       x-allfit-operation: OP-NUT-012
       x-allfit-cache: no-store
@@ -2080,7 +2080,7 @@ components:
                 value: 42
                 unit: g
         photo:
-          href: /os/v1/organizations/018f6f8d-2b00-7a00-8000-000000000101/clients/018f6f8d-2b00-7a00-8000-000000000102/nutrition/meals/0190f2d6-68d0-7b4a-8d7f-d152223eed28/photo
+          href: /studio/v1/organizations/018f6f8d-2b00-7a00-8000-000000000101/clients/018f6f8d-2b00-7a00-8000-000000000102/nutrition/meals/0190f2d6-68d0-7b4a-8d7f-d152223eed28/photo
           method: GET
         applied_scopes:
           - code: nutrition_intake
@@ -2510,13 +2510,13 @@ components:
       additionalProperties: false
       required: [href, method]
       example:
-        href: /os/v1/organizations/018f6f8d-2b00-7a00-8000-000000000101/clients/018f6f8d-2b00-7a00-8000-000000000102/nutrition/meals/0190f2d6-68d0-7b4a-8d7f-d152223eed28/photo
+        href: /studio/v1/organizations/018f6f8d-2b00-7a00-8000-000000000101/clients/018f6f8d-2b00-7a00-8000-000000000102/nutrition/meals/0190f2d6-68d0-7b4a-8d7f-d152223eed28/photo
         method: GET
       properties:
         href:
           type: string
           format: uri-reference
-          pattern: '^/os/v1/organizations/[^/?#]+/clients/[^/?#]+/nutrition/meals/[^/?#]+/photo$'
+          pattern: '^/studio/v1/organizations/[^/?#]+/clients/[^/?#]+/nutrition/meals/[^/?#]+/photo$'
           description: Authenticated API URL; the bearer token and live authorization are required on every GET.
         method:
           type: string

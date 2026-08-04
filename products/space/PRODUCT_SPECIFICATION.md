@@ -41,7 +41,7 @@ ALLFIT ONE
 ├── Allfit Space
 │   Producto para personas
 │
-├── Allfit OS
+├── Allfit Studio
 │   Producto para profesionales y organizaciones
 │
 └── Allfit Backoffice
@@ -59,7 +59,7 @@ Para:
 * Miembros de gimnasios y estudios.
 * Personas que buscan servicios, clases o productos fitness.
 
-### Allfit OS
+### Allfit Studio
 
 Para:
 
@@ -80,7 +80,7 @@ Para el equipo autorizado de Allfit que atiende incidencias, gobierna contenido 
 Los tres productos consumen infraestructura, identidad, datos y contratos compartidos con superficies y permisos diferentes.
 
 ```text
-Allfit Space                      Allfit OS
+Allfit Space                      Allfit Studio
 
 Persona                           Profesional o negocio
 Entrena                           Programa
@@ -429,7 +429,7 @@ La IA puede:
 
 ### Entrenamiento con profesional
 
-Un entrenador humano administra el programa desde Allfit OS.
+Un entrenador humano administra el programa desde Allfit Studio.
 
 El profesional puede:
 
@@ -567,7 +567,7 @@ No intentaría competir desde el primer día con una base nutricional global com
 
 ## 9. Gimnasios conectados
 
-Cuando una persona se vincule con un gimnasio que utiliza Allfit OS, la app habilitaría un modo contextual.
+Cuando una persona se vincule con un gimnasio que utiliza Allfit Studio, la app habilitaría un modo contextual.
 
 ### Dentro del gimnasio
 
@@ -660,7 +660,7 @@ Allfit One puede capturar valor desde varios lados sin cobrar por cada acción.
 
 ### Entrenadores y negocios
 
-Ingresos mediante Allfit OS:
+Ingresos mediante Allfit Studio:
 
 * Suscripción mensual.
 * Planes por número de clientes o sedes.
@@ -709,7 +709,7 @@ Años de entrenamiento, relaciones, métricas, membresías y progreso en un úni
 
 Personas buscando fitness y profesionales u organizaciones ofreciéndolo.
 
-### 3. Integración con Allfit OS
+### 3. Integración con Allfit Studio
 
 La oferta del marketplace no se administra manualmente en dos lugares. Horarios, cupos, precios, membresías y programas salen directamente de la operación real.
 
@@ -768,7 +768,7 @@ La visión es amplia. El producto inicial no debe serlo.
 * Calendario.
 * Progreso.
 * Programas.
-* Integración básica con Allfit OS.
+* Integración básica con Allfit Studio.
 * Entrenador asignando rutinas.
 * Gimnasio y membresía vinculados.
 
@@ -848,12 +848,12 @@ En su forma definitiva:
 
 > **Allfit Space no sería una app para registrar lo que hiciste. Sería el sistema que te ayuda a decidir qué hacer, dónde hacerlo, con quién hacerlo y cómo progresar.**
 
-Y su relación con Allfit OS sería:
+Y su relación con Allfit Studio sería:
 
 ```text
 ALLFIT SPACE
 Todo lo que una persona necesita para vivir el fitness.
 
-ALLFIT OS
+ALLFIT STUDIO
 Todo lo que un profesional o negocio necesita para ofrecerlo.
 ```

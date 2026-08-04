@@ -37,7 +37,7 @@ La integridad cross-table quedó recertificada mediante ADR-024/027 y una matriz
 El drift físico de RLS quedó cerrado mediante 27 rutas operación→policy→índice→prueba, contratos separados para grants `active`/`frozen`, siete pruebas físicas `T-PHY-*` y cuatro `T-NUT-PHY-*`.
 El inventario y diccionario físico quedaron recertificados en 99 tablas con ficha individual, contratos JSONB, nombres determinísticos y particionamiento verificable.
 La idempotencia durable quedó cerrada el 26 de julio de 2026 separando replay HTTP de 24 h y `Command-Id`, con scope calculado, tombstone mínimo, concurrencia transaccional y diez pruebas `T-IDEM-*`.
-El contrato HTTP corregido contiene OpenAPI 3.1 con 18 paths, 21 operaciones, DTOs cerrados, ejemplos, caché, URL firmada Space, proxy autenticado OS, nueve verificaciones `T-API-*` y catorce `T-NUT-API-*`.
+El contrato HTTP corregido contiene OpenAPI 3.1 con 18 paths, 21 operaciones, DTOs cerrados, ejemplos, caché, URL firmada Space, proxy autenticado Studio, nueve verificaciones `T-API-*` y catorce `T-NUT-API-*`.
 La gobernanza de verificación y break-glass quedó recertificada con `nutrition_guidance` estándar, `nutrition_intake` restringida y `nutrition_media` prohibida, además de catálogo mínimo, evidencia permitida, conflictos, deberes de 90 días, quorum por sensibilidad, revisión independiente y respuesta ante abuso.
 
 ### Reevaluación consolidada
@@ -76,7 +76,7 @@ La revisión utiliza como fuentes:
 8. [`V1_OPERATIONS_MATRIX.md`](../03_PROPOSED_DESIGN/V1_OPERATIONS_MATRIX.md).
 9. [`V1_RLS_MATRIX.md`](../03_PROPOSED_DESIGN/V1_RLS_MATRIX.md).
 10. [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](../03_PROPOSED_DESIGN/V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md).
-11. [`V1_SPACE_OS_API_CONTRACTS.md`](../03_PROPOSED_DESIGN/V1_SPACE_OS_API_CONTRACTS.md).
+11. [`V1_SPACE_STUDIO_API_CONTRACTS.md`](../03_PROPOSED_DESIGN/V1_SPACE_STUDIO_API_CONTRACTS.md).
 12. [`V1_OPENAPI_CONTRACT.md`](../03_PROPOSED_DESIGN/V1_OPENAPI_CONTRACT.md) y [`allfit-v1.openapi.yaml`](../03_PROPOSED_DESIGN/openapi/allfit-v1.openapi.yaml).
 13. [`V1_DEGRADATION_AND_RECOVERY_MATRIX.md`](../03_PROPOSED_DESIGN/V1_DEGRADATION_AND_RECOVERY_MATRIX.md).
 14. [`V1_IDEMPOTENCY_CONTRACT.md`](../03_PROPOSED_DESIGN/V1_IDEMPOTENCY_CONTRACT.md).
@@ -143,7 +143,7 @@ Mantener Fase 1 cerrada. Un cambio futuro que altere actores, consentimiento, ci
 
 #### Fortalezas
 
-- Space y OS son consumidores, no dominios ni fuentes de verdad paralelas.
+- Space y Studio son consumidores, no dominios ni fuentes de verdad paralelas.
 - Los nueve límites de dominio están cohesionados; Nutrición y Soporte están separados de Privacidad y de los roles organizacionales.
 - La persona y su Fitness ID permanecen únicos.
 - Los diez escenarios cubren identidad autónoma, invitación, aceptación parcial, relaciones múltiples, privacidad, terminación, disposición y multidisciplina.
@@ -175,7 +175,7 @@ Mantener Fase 2 cerrada. Los defectos restantes son físicos y contractuales; cu
 - No hay un rol universal de workers.
 - Las lecturas por grant registran al actor humano.
 - Las denegaciones de sesiones autónomas se aplican antes de contar o agregar.
-- Space y OS tienen contratos separados y la organización de OS viaja en la ruta.
+- Space y Studio tienen contratos separados y la organización de Studio viaja en la ruta.
 - Las operaciones sensibles fallan cerradas.
 - La degradación distingue dependencias compartidas, productos, dominios y proveedores.
 
@@ -255,7 +255,7 @@ ADR-023 separa explícitamente la operación diaria de la consulta histórica:
 - el antiguo titular pierde toda autoridad derivada de asignación en `T` y solo puede leer mediante el caso excepcional;
 - V1 no introduce un quinto rol de cumplimiento;
 - se exige autenticación MFA/AAL2 y uno de cinco propósitos cerrados: disputa del servicio, obligación legal/regulatoria, solicitud de soporte de la persona, investigación de seguridad o revisión de calidad autorizada;
-- la superficie es `/os/v1/organizations/{orgId}/historical-relationships/{relationshipId}` con `X-Historical-Access-Case`; no reutiliza `/clients`, no lista antiguos clientes, no escribe y no exporta en bloque;
+- la superficie es `/studio/v1/organizations/{orgId}/historical-relationships/{relationshipId}` con `X-Historical-Access-Case`; no reutiliza `/clients`, no lista antiguos clientes, no escribe y no exporta en bloque;
 - cada intento permitido o denegado produce `ACCESS_EVENT` en la misma transacción; si falla la auditoría, falla la lectura;
 - una denegación vigente en `T` o posterior reduce el histórico; volver a compartir después de `T` nunca amplía la ventana;
 - la persona puede cambiar `frozen → revoked`; se cierran casos y se invalidan cachés, derivados y exportaciones;
@@ -486,7 +486,7 @@ El cierre exige y confirma:
 - ejemplos completos;
 - idempotencia, `If-Match`, `ETag` y errores exactos;
 - caché concreta por operación;
-- URLs firmadas HTTPS Space con vigencia máxima de 300 segundos y proxy OS autenticado, sin redirect y revocable en cada petición;
+- URLs firmadas HTTPS Space con vigencia máxima de 300 segundos y proxy Studio autenticado, sin redirect y revocable en cada petición;
 - DTOs separados para meta self y profesional, con `rationale` obligatorio en OP-NUT-012;
 - verificaciones `T-API-01..09` y `T-NUT-API-01..14`.
 
@@ -550,7 +550,7 @@ Implementar por rebanadas verticales dentro de la misma Fase 5:
 4. catálogo mínimo y programa versionado;
 5. asignación y sesión planificada;
 6. ejecución de una familia;
-7. lectura autorizada desde OS;
+7. lectura autorizada desde Studio;
 8. revocación y terminación;
 9. comida offline y sincronización;
 10. lectura nutricional autorizada, propuesta y decisión;
@@ -689,7 +689,7 @@ Una regla derivada debe enlazar a la fuente, no volver a presentarse como decisi
 | `D-013` | Contrato físico de RLS | **27 rutas `PR-*`, grants live/frozen separados, proyecciones cerradas, índices obligatorios, `T-PHY-01..07` y `T-NUT-PHY-01..04`** | 28 de julio de 2026 |
 | `D-014` | Inventario y contratos físicos | **99 fichas; tipos compartidos; nombres determinísticos; 20 JSONB versionados; UUIDv7/particiones y `T-SCHEMA-01..06`** | 28 de julio de 2026 |
 | `D-010` | Alcance de idempotencia durable | **ADR-025: replay HTTP 24 h + `Command-Id` durable; scope de servidor, terminalidad transaccional, disposición y `T-IDEM-01..10`** | 26 de julio de 2026 |
-| `D-012` | Esquema exacto de DTOs/OpenAPI | **OpenAPI 3.1 canónico para 18 paths/21 operaciones; DTOs self/profesional separados, autoría mínima, caché, URL firmada Space, proxy OS y `T-API-01..09` + `T-NUT-API-01..14`** | 28 de julio de 2026 |
+| `D-012` | Esquema exacto de DTOs/OpenAPI | **OpenAPI 3.1 canónico para 18 paths/21 operaciones; DTOs self/profesional separados, autoría mínima, caché, URL firmada Space, proxy Studio y `T-API-01..09` + `T-NUT-API-01..14`** | 28 de julio de 2026 |
 | `D-015` | Nutrición en V1 | **ADR-027: registro manual y guía profesional no clínica; ocho tablas, tres scopes, autoridad verificada, frozen minimizado y cero legado Factory Fitness** | 28 de julio de 2026 |
 | `D-006` | Verificadores autorizados | **Solo credenciales profesionales; A11 con deber separado/AAL2, registro oficial o emisor, conflicto cerrado, vigencia y `T-VG-01..06`** | 26 de julio de 2026 |
 
@@ -752,7 +752,7 @@ P0-08 separó key HTTP y command ID, cerró scope, concurrencia, retención y di
 
 ### Paso 8 — Contrato ejecutable de la rebanada completado
 
-P1-01/ADR-027 fijaron 21 operaciones HTTP, DTOs, ejemplos, autoría mínima, caché, concurrencia, URL firmada Space y proxy autenticado OS en OpenAPI 3.1. Antes del primer handler, CI debe materializar `T-API-01..09`, `T-NUT-API-01..14` y la generación de tipos sin drift.
+P1-01/ADR-027 fijaron 21 operaciones HTTP, DTOs, ejemplos, autoría mínima, caché, concurrencia, URL firmada Space y proxy autenticado Studio en OpenAPI 3.1. Antes del primer handler, CI debe materializar `T-API-01..09`, `T-NUT-API-01..14` y la generación de tipos sin drift.
 
 ### Paso 9 — Implementar una rebanada vertical
 
@@ -767,10 +767,10 @@ La primera demostración debe cubrir:
 7. programa/plantilla versionados;
 8. asignación y calendario;
 9. ejecución;
-10. lectura autorizada desde OS;
+10. lectura autorizada desde Studio;
 11. revocación;
 12. terminación y comportamiento histórico decidido.
-13. comida offline → sincronización → grant → lectura OS;
+13. comida offline → sincronización → grant → lectura Studio;
 14. propuesta profesional → aceptación personal;
 15. terminación → vista histórica nutricional minimizada → revocación.
 
@@ -810,7 +810,7 @@ Solo después se amplían las restantes operaciones.
 - Retry con igual clave y distinto cuerpo produce conflicto.
 - Retry después de 24 horas no duplica una ejecución offline.
 - Una clave de una persona no puede reproducir la respuesta de otra.
-- Una clave de Space no puede reutilizarse contra OS.
+- Una clave de Space no puede reutilizarse contra Studio.
 - Un timeout después del commit devuelve el resultado previo al reintentar.
 - Una respuesta persistida no expone contenido sensible fuera de su actor.
 - Un `processing` no puede sobrevivir al commit o crash.
@@ -871,7 +871,7 @@ Comenzar Fase 5 no equivale a aprobarla. Su cierre requiere además:
 - [ ] Las siete pruebas físicas `T-PHY-*` y cuatro `T-NUT-PHY-*` pasan contra catálogo, privilegios, concurrencia, índices y planes.
 - [ ] Las seis pruebas `T-SCHEMA-*` pasan contra inventario, objetos, JSONB y particiones.
 - [ ] Las diez pruebas `T-IDEM-*` y seis `T-NUT-IDEM-*` pasan contra concurrencia, offline, foto diferida, doble decisión, expiración, crash y disposición.
-- [ ] Las nueve pruebas `T-API-*` y catorce `T-NUT-API-*` pasan contra contrato, ejemplos, headers, caché, redacción, agregados, autoría, URL firmada Space, proxy OS y generación de DTOs.
+- [ ] Las nueve pruebas `T-API-*` y catorce `T-NUT-API-*` pasan contra contrato, ejemplos, headers, caché, redacción, agregados, autoría, URL firmada Space, proxy Studio y generación de DTOs.
 - [ ] Las 27 `T-INT-*` y ocho `T-NUT-INT-*` pasan incluso con `BYPASSRLS`.
 - [ ] Las 186 pruebas RLS, incluidas 24 `T-NUT-RLS-*`, pasan sin filtraciones por filas, totales, paginación, agregados o medios.
 - [ ] Las seis `T-VG-*` y doce `T-BGG-*` pasan contra evidencia, conflictos, deberes, quorum, expiración, revisión y abuso.
@@ -880,10 +880,10 @@ Comenzar Fase 5 no equivale a aprobarla. Su cierre requiere además:
 - [ ] Ningún runtime usa owner, superuser o `BYPASSRLS`.
 - [ ] OpenAPI generado coincide con el código.
 - [ ] Reintentos, concurrencia y outbox son idempotentes.
-- [ ] El flujo vertical funciona desde Space y OS.
-- [ ] El flujo nutricional completo pasa: comida offline → sincronización → grant → lectura OS → propuesta → aceptación → terminación → vista histórica minimizada.
+- [ ] El flujo vertical funciona desde Space y Studio.
+- [ ] El flujo nutricional completo pasa: comida offline → sincronización → grant → lectura Studio → propuesta → aceptación → terminación → vista histórica minimizada.
 - [ ] Revocación, terminación, congelación y disposición pasan pruebas adversariales.
-- [ ] Métricas distinguen Space, OS, dominio y dependencia.
+- [ ] Métricas distinguen Space, Studio, dominio y dependencia.
 - [ ] Los límites se probaron sobre la topología real.
 - [ ] No existe DDL de capacidades diferidas.
 - [ ] ERD, diccionario, SQL, RLS y contratos no presentan drift.
@@ -901,8 +901,8 @@ Comenzar Fase 5 no equivale a aprobarla. Su cierre requiere además:
 | `V1_OPERATIONS_MATRIX.md` | 150 operaciones, incluidas `OP-NUT-001..013`, alineadas con autoridad y ciclo de vida |
 | `V1_RLS_MATRIX.md` | 186 casos, incluidos 24 `T-NUT-RLS-*`, scopes/media/frozen alineados |
 | `V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md` | `PR-24..27`, asociaciones exactas `OP-NUT`→prueba y `T-NUT-PHY-01..04` incorporados |
-| `V1_SPACE_OS_API_CONTRACTS.md` | Primera rebanada alineada con OpenAPI, 21 operaciones, `If-Match`, ejemplos y gate contract-first |
-| `V1_OPENAPI_CONTRACT.md` + `openapi/allfit-v1.openapi.yaml` | Fuente canónica de 18 paths/21 operaciones, DTOs, autoría mínima, ejemplos, caché, URL firmada Space, proxy OS y pruebas API |
+| `V1_SPACE_STUDIO_API_CONTRACTS.md` | Primera rebanada alineada con OpenAPI, 21 operaciones, `If-Match`, ejemplos y gate contract-first |
+| `V1_OPENAPI_CONTRACT.md` + `openapi/allfit-v1.openapi.yaml` | Fuente canónica de 18 paths/21 operaciones, DTOs, autoría mínima, ejemplos, caché, URL firmada Space, proxy Studio y pruebas API |
 | `V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md` | Fuente normativa de catálogo, categorías nutricionales, evidencia, conflictos, deberes, quorum, expiración, revisión y abuso |
 | `V1_DEGRADATION_AND_RECOVERY_MATRIX.md` | Alertas/suspensión/revisión break-glass alineadas; todavía aprobar objetivos y aclarar encolar versus entregar notificaciones |
 | `V1_IDEMPOTENCY_CONTRACT.md` | Scope, receipt, retención, concurrencia, disposición y `T-NUT-IDEM-01..06` incorporados |

@@ -82,7 +82,7 @@ Estados de máquina y clasificaciones cerradas y estables. Se declaran una vez y
 | `goal_status` | `nutrition` | `proposed`, `active`, `rejected`, `superseded`, `cancelled` |
 | `goal_target_mode` | `nutrition` | `minimum`, `maximum`, `range`, `exact` |
 | `goal_decision` | `nutrition` | `accepted`, `rejected` |
-| `command_surface` | `system` | `space`, `os`, `system` |
+| `command_surface` | `system` | `space`, `studio`, `system` |
 | `idempotency_status` | `system` | `processing`, `succeeded`, `rejected_final` |
 
 ## 5. Identidad

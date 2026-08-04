@@ -112,13 +112,13 @@ No hay roles personalizados en V1. No hay alcance de rol por sede: `ORGANIZATION
 | Superficie | Base | Sujeto | WorkOS Application |
 | --- | --- | --- | --- |
 | Space | `api.allfit.com/space/v1` | La persona autenticada | Space |
-| OS | `api.allfit.com/os/v1` | La organización en la que actúa el profesional | OS |
+| Studio | `api.allfit.com/studio/v1` | La organización en la que actúa el profesional | Studio |
 | Catálogo | `api.allfit.com/catalog/v1` | Ninguno: contenido global de lectura | Ambos |
 | Backoffice | `api.allfit.com/backoffice/v1` | Persona del equipo + rol base + deber vigente | Backoffice |
 
 Cada superficie versiona su propio ciclo de vida y publica su propio documento OpenAPI. Las cuatro comparten `components` y se sirven desde el mismo despliegue.
 
-En OS, la organización viaja explícita en la ruta bajo `/organizations/{orgId}/...`. Ninguna operación de OS que toque datos de una persona puede resolver la organización desde el token o desde una preferencia guardada.
+En Studio, la organización viaja explícita en la ruta bajo `/organizations/{orgId}/...`. Ninguna operación de Studio que toque datos de una persona puede resolver la organización desde el token o desde una preferencia guardada.
 
 ## 5. Convenciones transversales
 
@@ -162,7 +162,7 @@ Space es una aplicación Expo: la conectividad intermitente es el caso normal, n
 - Solo el registro de ejecución y la edición de perfil admiten `draft_local`.
 - Autorización, consentimiento, grants, membresías, asignaciones y terminaciones **fallan cerradas**: nunca se confirman desde caché ni desde un read model atrasado.
 - La UI jamás presenta `pending_sync` como confirmación.
-- OS no tiene modo offline: puede conservar borradores no enviados, pero no confirma nada sin estado autoritativo.
+- Studio no tiene modo offline: puede conservar borradores no enviados, pero no confirma nada sin estado autoritativo.
 
 ### 5.5 Eventos de dominio
 
@@ -293,7 +293,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Offline / concurrencia** | Falla cerrada. Dos peticiones concurrentes producen una sola persona: la unicidad se resuelve en la base, no en el cliente |
 | **Información sensible** | Datos identificativos básicos |
 | **Evento de dominio** | `identity.person_activated.v1` |
-| **Reglas** | Es el **único** camino que crea una `PERSON`. OS no lo puede invocar en nombre de nadie. Si la cuenta ya tenía persona (invitación posterior sobre alguien ya registrado en Space), reutiliza el mismo `person_id` y no duplica el Fitness ID |
+| **Reglas** | Es el **único** camino que crea una `PERSON`. Studio no lo puede invocar en nombre de nadie. Si la cuenta ya tenía persona (invitación posterior sobre alguien ya registrado en Space), reutiliza el mismo `person_id` y no duplica el Fitness ID |
 | **Falla cerrada** | Sin elegibilidad `pass` no hay persona, aunque la invitación exista y esté vigente |
 
 #### `OP-IDN-004` — Declarar afirmación de perfil
@@ -403,7 +403,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `PUT /os/v1/me/professional-profile` |
+| **Superficie** | `PUT /studio/v1/me/professional-profile` |
 | **Actor** | `A2` |
 | **Filtros obligatorios** | Sujeto = persona autenticada |
 | **Transacción** | Crear o revisar `PROFESSIONAL_PROFILE` |
@@ -523,7 +523,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/me` |
+| **Superficie** | `GET /studio/v1/me` |
 | **Actor** | `A3` |
 | **Filtros obligatorios** | Persona = sujeto del token |
 | **Transacción** | Ninguna |
@@ -540,7 +540,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/clients/{personId}/profile` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/clients/{personId}/profile` |
 | **Actor** | `A3`, `A7` con asignación efectiva |
 | **Filtros obligatorios** | **FÓRMULA** + `relationship_training` · `read`. Field-set de la **versión congelada en el grant**, no de la última publicada |
 | **Transacción** | Ninguna. Lectura por `identity.v_client_profile` y `ACCESS_EVENT` en la misma transacción |
@@ -557,7 +557,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/clients/{personId}/body-progress` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/clients/{personId}/body-progress` |
 | **Actor** | `A3`, `A7` con asignación efectiva |
 | **Filtros obligatorios** | **FÓRMULA** + `body_progress` · `read` |
 | **Transacción** | Ninguna. Lectura por `identity.v_client_body_progress` y `ACCESS_EVENT` en la misma transacción |
@@ -574,7 +574,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/clients/{personId}/health-context` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/clients/{personId}/health-context` |
 | **Actor** | `A3`, `A7` con asignación efectiva |
 | **Filtros obligatorios** | **FÓRMULA** + `health_context` · `read` |
 | **Transacción** | Ninguna. Lectura por `identity.v_client_health_context` y `ACCESS_EVENT` en la misma transacción |
@@ -671,7 +671,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations` |
+| **Superficie** | `POST /studio/v1/organizations` |
 | **Actor** | `A2` — cualquier persona activa |
 | **Filtros obligatorios** | Persona activa con `PROFESSIONAL_PROFILE`. El tipo solicitado pertenece al catálogo gobernado de `ORGANIZATION_TYPE` |
 | **Transacción** | Una sola: crear `ORGANIZATION`, crear `ORGANIZATION_MEMBERSHIP` para el creador, asignarle `MEMBERSHIP_ROLE` = `owner` y registrar el `ORGANIZATION_EVENT` de alta |
@@ -688,7 +688,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `PATCH /os/v1/organizations/{orgId}` |
+| **Superficie** | `PATCH /studio/v1/organizations/{orgId}` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | Membresía vigente en `{orgId}` con capacidad de administración |
 | **Transacción** | Actualizar la organización y registrar `ORGANIZATION_EVENT` con before/after |
@@ -705,7 +705,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/sites` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/sites` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | Membresía vigente con capacidad de administración |
 | **Transacción** | Crear `ORGANIZATION_SITE` |
@@ -722,7 +722,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `PATCH /os/v1/organizations/{orgId}/sites/{siteId}` |
+| **Superficie** | `PATCH /studio/v1/organizations/{orgId}/sites/{siteId}` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | La sede pertenece a `{orgId}`; membresía vigente con capacidad de administración |
 | **Transacción** | Actualizar la sede y registrar el evento |
@@ -739,7 +739,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/invitations` con intención de tipo `membership` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/invitations` con intención de tipo `membership` |
 | **Actor** | `A4`, `A5`, `A6` |
 | **Filtros obligatorios** | Membresía vigente con capacidad de invitar. El destino es un email o celular; **nunca** un `person_id` |
 | **Transacción** | Crear `INVITATION` con su token e `INVITATION_INTENT` de membresía, incluyendo el rol propuesto, y encolar el envío en el outbox |
@@ -748,7 +748,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Contacto de la persona invitada. La organización **no** aprende si ese contacto ya tiene cuenta |
 | **Evento de dominio** | `organization.staff_invited.v1` |
-| **Reglas** | OS nunca ejecuta `Create User` ni crea personas. La invitación no crea cuenta, persona, perfil ni membresía: solo transporta una propuesta. El envío es asíncrono; un fallo del proveedor no invalida la invitación |
+| **Reglas** | Studio nunca ejecuta `Create User` ni crea personas. La invitación no crea cuenta, persona, perfil ni membresía: solo transporta una propuesta. El envío es asíncrono; un fallo del proveedor no invalida la invitación |
 | **Falla cerrada** | Sin capacidad de invitar, rechazo |
 
 #### `OP-ORG-006` — Revocar una invitación emitida
@@ -756,7 +756,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/invitations/{id}/revocation` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/invitations/{id}/revocation` |
 | **Actor** | `A4`, `A5`, `A6` |
 | **Filtros obligatorios** | La invitación pertenece a `{orgId}` y sigue pendiente |
 | **Transacción** | Marcar la invitación y todas sus intenciones pendientes como revocadas |
@@ -773,7 +773,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/memberships/{id}/roles` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/memberships/{id}/roles` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | La membresía pertenece a `{orgId}` y está vigente. El rol pertenece al catálogo V1 |
 | **Transacción** | Crear `MEMBERSHIP_ROLE` con vigencia y registrar `MEMBERSHIP_EVENT` |
@@ -790,7 +790,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `DELETE /os/v1/organizations/{orgId}/memberships/{id}/roles/{roleCode}` |
+| **Superficie** | `DELETE /studio/v1/organizations/{orgId}/memberships/{id}/roles/{roleCode}` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | La membresía pertenece a `{orgId}`; el rol está vigente |
 | **Transacción** | Cerrar la vigencia del `MEMBERSHIP_ROLE`, registrar el evento y **reevaluar en la misma transacción** las asignaciones profesionales que dependían de ese rol |
@@ -807,7 +807,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/memberships/{id}/termination` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/memberships/{id}/termination` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | La membresía pertenece a `{orgId}` y está vigente |
 | **Transacción** | Una sola: cerrar la membresía, cerrar sus roles, cerrar todas sus `RELATIONSHIP_PROFESSIONAL_ASSIGNMENT` efectivas y registrar los eventos correspondientes |
@@ -824,7 +824,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/me/membership/resignation` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/me/membership/resignation` |
 | **Actor** | `A3`, `A6` |
 | **Filtros obligatorios** | La membresía es la del sujeto autenticado y está vigente |
 | **Transacción** | Idéntica a `OP-ORG-009` |
@@ -841,7 +841,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/ownership-transfer` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/ownership-transfer` |
 | **Actor** | `A5` |
 | **Filtros obligatorios** | El destinatario tiene membresía vigente en `{orgId}` |
 | **Transacción** | Una sola: otorgar `owner` al destinatario y, si corresponde, retirarlo del emisor, registrando ambos eventos |
@@ -858,7 +858,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/closure` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/closure` |
 | **Actor** | `A5` |
 | **Filtros obligatorios** | Membresía `owner` vigente |
 | **Transacción** | Una sola: terminar todas las relaciones de servicio activas con su efecto completo (congelar grants, cerrar periodos de gestión, desacoplar asignaciones), cerrar membresías, cerrar la organización y abrir el `DISPOSITION_CASE` correspondiente |
@@ -875,7 +875,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}` |
 | **Actor** | `A3`–`A6` |
 | **Filtros obligatorios** | Membresía vigente en `{orgId}` |
 | **Transacción** | Ninguna |
@@ -892,7 +892,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/me/memberships` |
+| **Superficie** | `GET /studio/v1/me/memberships` |
 | **Actor** | `A2` |
 | **Filtros obligatorios** | Persona = sujeto del token |
 | **Transacción** | Ninguna |
@@ -901,7 +901,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Offline / concurrencia** | Cacheable para presentación, **nunca** para decidir en qué organización se puede actuar |
 | **Información sensible** | Ninguna categoría personal |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Es la única operación de OS fuera del ámbito `/organizations/{orgId}`. Devuelve organizaciones, roles vigentes y capacidades efectivas |
+| **Reglas** | Es la única operación de Studio fuera del ámbito `/organizations/{orgId}`. Devuelve organizaciones, roles vigentes y capacidades efectivas |
 | **Falla cerrada** | — |
 
 #### `OP-ORG-015` — Listar membresías de la organización
@@ -909,7 +909,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/memberships` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/memberships` |
 | **Actor** | `A4`, `A5`, `A6` |
 | **Filtros obligatorios** | Membresía vigente con capacidad de administración o de directorio |
 | **Transacción** | Ninguna |
@@ -926,7 +926,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/invitations` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/invitations` |
 | **Actor** | `A4`, `A5`, `A6` |
 | **Filtros obligatorios** | Invitaciones patrocinadas por `{orgId}` |
 | **Transacción** | Ninguna |
@@ -943,7 +943,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/roles` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/roles` |
 | **Actor** | `A3`–`A6` |
 | **Filtros obligatorios** | Membresía vigente |
 | **Transacción** | Ninguna |
@@ -1002,7 +1002,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/invitations` con intención `service_relationship` y, opcionalmente, `program_assignment` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/invitations` con intención `service_relationship` y, opcionalmente, `program_assignment` |
 | **Actor** | `A3`–`A6` con capacidad de invitar |
 | **Filtros obligatorios** | Membresía vigente. Destino email o celular, nunca `person_id`. Si incluye intención de programa, la versión referenciada debe estar publicada y pertenecer a `{orgId}` |
 | **Transacción** | Crear `INVITATION`, sus `INVITATION_INTENT` tipadas y el `RESPONSIBLE_PARTY_SNAPSHOT` que se presentará; encolar el envío |
@@ -1019,7 +1019,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/relationships/{relId}/professional-assignments` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/relationships/{relId}/professional-assignments` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | La relación pertenece a `{orgId}` y está vigente. La membresía destino está vigente **en la misma organización** y tiene rol `coach` |
 | **Transacción** | Crear `RELATIONSHIP_PROFESSIONAL_ASSIGNMENT` con vigencia abierta y registrar `PROFESSIONAL_ASSIGNMENT_EVENT` |
@@ -1036,7 +1036,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/relationships/{relId}/professional-assignments/reassignment` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/relationships/{relId}/professional-assignments/reassignment` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | Igual que `OP-REL-002`, más la existencia de un titular vigente |
 | **Transacción** | Una sola: cerrar la asignación anterior, abrir la nueva, notificar a la persona y registrar ambos eventos |
@@ -1053,7 +1053,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/relationships/{relId}/substitutions` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/relationships/{relId}/substitutions` |
 | **Actor** | `A3` (el titular) o `A4`, `A5` |
 | **Filtros obligatorios** | Relación vigente en `{orgId}`; membresía destino vigente en la **misma** organización con rol `coach`; vigencia propuesta acotada y con fecha de fin obligatoria |
 | **Transacción** | Crear la suplencia en estado `pending_person_decision` y notificar a la persona |
@@ -1087,7 +1087,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/relationships/{relId}/substitutions/{id}/termination` · `POST /os/v1/organizations/{orgId}/relationships/{relId}/substitutions/{id}/termination` |
+| **Superficie** | `POST /space/v1/relationships/{relId}/substitutions/{id}/termination` · `POST /studio/v1/organizations/{orgId}/relationships/{relId}/substitutions/{id}/termination` |
 | **Actor** | `A2`, `A4`, `A5` |
 | **Filtros obligatorios** | Suplencia vigente sobre una relación propia (persona) o de `{orgId}` (organización) |
 | **Transacción** | Cerrar la vigencia y registrar el evento |
@@ -1121,7 +1121,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/relationships/{id}/termination` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/relationships/{id}/termination` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | La relación pertenece a `{orgId}` y está vigente |
 | **Transacción** | Idéntica a `OP-REL-007` |
@@ -1138,7 +1138,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/relationships/{id}/termination-requests` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/relationships/{id}/termination-requests` |
 | **Actor** | `A3`, titular de la relación, **sin** rol `admin` ni `owner` en `{orgId}` |
 | **Filtros obligatorios** | Es el titular vigente de la relación en `{orgId}`. Si la misma persona tiene además rol `admin` u `owner`, la operación se rechaza: no solicita, termina con `OP-REL-008` |
 | **Transacción** | Crear `relationships.relationship_termination_requests` en estado `pending` y notificar a la administración de la organización |
@@ -1155,7 +1155,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/clients` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/clients` |
 | **Actor** | `A3`–`A6` |
 | **Filtros obligatorios** | Relaciones de `{orgId}`. Para `A3`: **solo** aquellas donde tiene asignación efectiva vigente, como titular o suplente |
 | **Transacción** | Ninguna |
@@ -1172,7 +1172,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/relationships/{id}` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/relationships/{id}` |
 | **Actor** | `A3`–`A6` |
 | **Filtros obligatorios** | La relación pertenece a `{orgId}`. Para `A3`: asignación efectiva vigente |
 | **Transacción** | Ninguna |
@@ -1206,7 +1206,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /space/v1/relationships/{relId}/substitutions` · `GET /os/v1/organizations/{orgId}/relationships/{relId}/substitutions` |
+| **Superficie** | `GET /space/v1/relationships/{relId}/substitutions` · `GET /studio/v1/organizations/{orgId}/relationships/{relId}/substitutions` |
 | **Actor** | `A2` (propia), `A3`–`A5` (de `{orgId}`) |
 | **Filtros obligatorios** | Relación propia o de la organización |
 | **Transacción** | Ninguna |
@@ -1223,7 +1223,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /space/v1/relationships/{id}/events` · `GET /os/v1/organizations/{orgId}/relationships/{id}/events` |
+| **Superficie** | `GET /space/v1/relationships/{id}/events` · `GET /studio/v1/organizations/{orgId}/relationships/{id}/events` |
 | **Actor** | `A2` (propia), `A4`, `A5` (de `{orgId}`) |
 | **Filtros obligatorios** | Relación propia o de la organización |
 | **Transacción** | Ninguna |
@@ -1277,7 +1277,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/relationships/{relId}/grant-requests` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/relationships/{relId}/grant-requests` |
 | **Actor** | `A3` (titular), `A4`, `A5` |
 | **Filtros obligatorios** | Relación vigente en `{orgId}`; scope solicitado dentro de los cuatro V1; versión de `SCOPE_DEFINITION` vigente al momento de solicitar; propósito declarado |
 | **Transacción** | Crear la solicitud congelando scope, versión, `access_level`, propósito y `RESPONSIBLE_PARTY_SNAPSHOT`; notificar a la persona |
@@ -1294,7 +1294,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/grant-requests/{id}/withdrawal` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/grant-requests/{id}/withdrawal` |
 | **Actor** | `A3`, `A4`, `A5` |
 | **Filtros obligatorios** | La solicitud pertenece a `{orgId}` y sigue pendiente |
 | **Transacción** | Marcar la solicitud como retirada |
@@ -1498,7 +1498,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/grants` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/grants` |
 | **Actor** | `A3` (solo los de sus relaciones asignadas), `A4`, `A5` |
 | **Filtros obligatorios** | Grants cuya organización receptora es `{orgId}` |
 | **Transacción** | Ninguna |
@@ -1566,7 +1566,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/historical-access-cases` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/historical-access-cases` |
 | **Actor** | `A4`, `A5` con `manage_historical_access` y MFA |
 | **Filtros obligatorios** | Relación terminada de `{orgId}`; membresía autorizada activa de la misma organización; actor autorizado `owner`/`admin` o antiguo titular; nunca `staff`; propósito cerrado, `case_reference`, justificación y expiración `<= 24h` |
 | **Transacción** | Crear `HISTORICAL_ACCESS_CASE` exacto para organización, relación, membresía, capacidad y propósito; no leer datos en esta operación |
@@ -1583,7 +1583,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/historical-access-cases/{caseId}/closure` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/historical-access-cases/{caseId}/closure` |
 | **Actor** | `A4`, `A5` con `manage_historical_access` |
 | **Filtros obligatorios** | Caso abierto de `{orgId}` |
 | **Transacción** | Cambiar a `closed`, fijar `closed_at` e invalidar cualquier contexto o caché asociado |
@@ -1600,7 +1600,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/historical-relationships/{relationshipId}` y recursos subordinados |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/historical-relationships/{relationshipId}` y recursos subordinados |
 | **Actor** | `A3`, `A4` o `A5` cuya membresía coincide exactamente con el caso |
 | **Filtros obligatorios** | Header `X-Historical-Access-Case`; MFA; `auth.can_read_frozen`; relación terminada; grant `frozen`; propósito/caso coincidentes; fila `<= frozen_at`; campo `historical_readable`; retención vigente; denegación histórica ausente |
 | **Transacción** | Una sola transacción sin escrituras de dominio que registra un `ACCESS_EVENT` por recurso/grant consultado, incluido resultado denegado y el contexto que haya podido resolverse. Si la auditoría falla, no devuelve datos |
@@ -1642,7 +1642,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/movements` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/movements` |
 | **Actor** | `A3`, `A4`, `A5` |
 | **Filtros obligatorios** | Membresía vigente en `{orgId}`; disciplina existente y publicada; alcance del movimiento fijado en `organization` con owner `{orgId}` |
 | **Transacción** | Crear `MOVEMENT` con alcance, owner y procedencia; opcionalmente sus `MOVEMENT_ALIAS`, `MOVEMENT_EQUIPMENT` y su relación `MOVEMENT_VARIANT` con una base global |
@@ -1659,7 +1659,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `PATCH /os/v1/organizations/{orgId}/movements/{id}` |
+| **Superficie** | `PATCH /studio/v1/organizations/{orgId}/movements/{id}` |
 | **Actor** | `A3`, `A4`, `A5` |
 | **Filtros obligatorios** | El movimiento pertenece a `{orgId}` y su alcance es privado |
 | **Transacción** | Actualizar el movimiento conservando procedencia y registrando la revisión |
@@ -1668,7 +1668,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Falla cerrada; versión optimista |
 | **Información sensible** | Ninguna categoría personal |
 | **Evento de dominio** | `catalog.private_movement_updated.v1` |
-| **Reglas** | Actualizar un movimiento **no reinterpreta el historial**: las versiones de plantilla y las ejecuciones que lo referencian conservan el significado con el que se registraron. Un movimiento global nunca se edita desde OS |
+| **Reglas** | Actualizar un movimiento **no reinterpreta el historial**: las versiones de plantilla y las ejecuciones que lo referencian conservan el significado con el que se registraron. Un movimiento global nunca se edita desde Studio |
 | **Falla cerrada** | Movimiento global, rechazo |
 
 #### `OP-CAT-003` — Archivar un movimiento privado
@@ -1676,7 +1676,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/movements/{id}/archival` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/movements/{id}/archival` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | El movimiento pertenece a `{orgId}` |
 | **Transacción** | Marcar el movimiento como archivado |
@@ -1727,9 +1727,9 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /catalog/v1/movements?discipline=&q=` · `GET /os/v1/organizations/{orgId}/movements?q=` |
+| **Superficie** | `GET /catalog/v1/movements?discipline=&q=` · `GET /studio/v1/organizations/{orgId}/movements?q=` |
 | **Actor** | Cualquier cuenta autenticada |
-| **Filtros obligatorios** | En `/catalog`: solo alcance global. En `/os`: global **más** los privados de `{orgId}` y nada de otras organizaciones |
+| **Filtros obligatorios** | En `/catalog`: solo alcance global. En `/studio`: global **más** los privados de `{orgId}` y nada de otras organizaciones |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | Cursor. Orden: relevancia y nombre normalizado, desempate por identificador |
@@ -1832,8 +1832,8 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/session-templates` · `POST /space/v1/session-templates` |
-| **Actor** | `A3`–`A5` en OS; `A2` para contenido personal |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/session-templates` · `POST /space/v1/session-templates` |
+| **Actor** | `A3`–`A5` en Studio; `A2` para contenido personal |
 | **Filtros obligatorios** | Exactamente **un** contexto de ownership: persona **u** organización, nunca ambos |
 | **Transacción** | Crear `SESSION_TEMPLATE` con identidad estable y su primer `SESSION_TEMPLATE_DRAFT` |
 | **Idempotencia** | `Idempotency-Key` |
@@ -1849,7 +1849,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `PUT /os/v1/organizations/{orgId}/session-templates/{id}/draft` |
+| **Superficie** | `PUT /studio/v1/organizations/{orgId}/session-templates/{id}/draft` |
 | **Actor** | `A3`–`A5` con membresía vigente; `A2` sobre contenido propio |
 | **Filtros obligatorios** | La plantilla pertenece al contexto del actor |
 | **Transacción** | Reemplazar el contenido del borrador: pasos planificados, targets tipados por modalidad y referencias a movimientos |
@@ -1866,7 +1866,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/session-templates/{id}/versions` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/session-templates/{id}/versions` |
 | **Actor** | `A3`–`A5`; `A2` sobre contenido propio |
 | **Filtros obligatorios** | Borrador completo y válido: disciplina, tipo de actividad, al menos un paso, targets compatibles y unidades resueltas |
 | **Transacción** | Crear `SESSION_TEMPLATE_VERSION` inmutable con sus `PLANNED_STEP` y targets, y asignar el número de versión |
@@ -1883,7 +1883,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/session-templates/{id}/versions/{v}/derivation` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/session-templates/{id}/versions/{v}/derivation` |
 | **Actor** | `A3`–`A5`; `A2` sobre contenido propio |
 | **Filtros obligatorios** | La versión origen está publicada y es accesible para el actor |
 | **Transacción** | Crear un borrador nuevo copiando el contenido y registrando la relación de derivación |
@@ -1900,7 +1900,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/session-templates/{id}/versions/{v}/deprecation` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/session-templates/{id}/versions/{v}/deprecation` |
 | **Actor** | `A2`, `A4`, `A5` |
 | **Filtros obligatorios** | La versión pertenece al contexto del actor y está publicada |
 | **Transacción** | Marcar la versión como deprecada |
@@ -1917,7 +1917,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/programs` · `PUT .../programs/{id}/draft` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/programs` · `PUT .../programs/{id}/draft` |
 | **Actor** | `A3`–`A5`; `A2` para programas personales |
 | **Filtros obligatorios** | Un solo contexto de ownership. Cada posición del borrador referencia una **versión exacta** de plantilla accesible para el actor |
 | **Transacción** | Crear `PROGRAM` y su `PROGRAM_DRAFT`; al editar, reemplazar la composición |
@@ -1934,7 +1934,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/programs/{id}/versions` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/programs/{id}/versions` |
 | **Actor** | `A3`–`A5`; `A2` para programas personales |
 | **Filtros obligatorios** | Borrador con al menos una posición; cada posición apunta a una versión de plantilla **publicada** |
 | **Transacción** | Crear `PROGRAM_VERSION` inmutable con sus `PROGRAM_VERSION_SESSION` y su numeración |
@@ -1951,7 +1951,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/programs/{id}/versions/{v}/deprecation` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/programs/{id}/versions/{v}/deprecation` |
 | **Actor** | `A2`, `A4`, `A5` |
 | **Filtros obligatorios** | Versión publicada del contexto del actor |
 | **Transacción** | Marcar la versión como deprecada |
@@ -1968,7 +1968,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/relationships/{relId}/assignments` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/relationships/{relId}/assignments` |
 | **Actor** | `A3` con asignación efectiva vigente |
 | **Filtros obligatorios** | **FÓRMULA**, más: versión de programa publicada, no deprecada y perteneciente a `{orgId}`; relación vigente; fecha de inicio y zona horaria de la persona |
 | **Transacción** | Una sola: crear `PROGRAM_ASSIGNMENT` congelando la versión exacta y la relación de origen; abrir el `ASSIGNMENT_MANAGEMENT_PERIOD` de esa relación; **materializar todas las `PLANNED_SESSION`** derivadas de la composición, resueltas en la zona horaria de la persona |
@@ -2002,7 +2002,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `PATCH /os/v1/organizations/{orgId}/planned-sessions/{id}` |
+| **Superficie** | `PATCH /studio/v1/organizations/{orgId}/planned-sessions/{id}` |
 | **Actor** | `A3`, `A7` con asignación efectiva |
 | **Filtros obligatorios** | **FÓRMULA**. La sesión pertenece a una asignación con periodo de gestión **vigente** de esa relación, y no tiene ejecución iniciada |
 | **Transacción** | Actualizar la fecha planificada y registrar la revisión con autoría |
@@ -2019,7 +2019,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/assignments/{id}/prescription-revisions` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/assignments/{id}/prescription-revisions` |
 | **Actor** | `A3`, `A7` con asignación efectiva |
 | **Filtros obligatorios** | **FÓRMULA**, más periodo de gestión vigente sobre esa asignación |
 | **Transacción** | Crear `PRESCRIPTION_REVISION` referenciando la asignación, el paso afectado y el ajuste tipado |
@@ -2036,7 +2036,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/assignments/{id}/cancellation` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/assignments/{id}/cancellation` |
 | **Actor** | `A3` con asignación efectiva, `A4`, `A5` |
 | **Filtros obligatorios** | **FÓRMULA**, más periodo de gestión vigente |
 | **Transacción** | Cerrar el periodo de gestión, cancelar únicamente las sesiones futuras **no iniciadas** y registrar el evento |
@@ -2104,7 +2104,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/relationships/{relId}/assignments` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/relationships/{relId}/assignments` |
 | **Actor** | `A3`, `A7` |
 | **Filtros obligatorios** | **FÓRMULA**. Solo asignaciones **originadas por esa relación** |
 | **Transacción** | Ninguna. Escribe `ACCESS_EVENT` |
@@ -2121,8 +2121,8 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/session-templates` · `.../programs` · equivalentes en `/space/v1` |
-| **Actor** | `A3`–`A5` en OS; `A2` para contenido propio |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/session-templates` · `.../programs` · equivalentes en `/space/v1` |
+| **Actor** | `A3`–`A5` en Studio; `A2` para contenido propio |
 | **Filtros obligatorios** | Contenido del contexto del actor: su organización o su persona. **Nunca** de otra organización |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
@@ -2138,7 +2138,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/session-templates/{id}/versions/{v}` · `GET /space/v1/assignments/{id}/program-version` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/session-templates/{id}/versions/{v}` · `GET /space/v1/assignments/{id}/program-version` |
 | **Actor** | `A2`, `A3`–`A5` |
 | **Filtros obligatorios** | La versión pertenece al contexto del actor, o le fue asignada a la persona autenticada |
 | **Transacción** | Ninguna |
@@ -2344,7 +2344,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/clients/{personId}/observations` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/clients/{personId}/observations` |
 | **Actor** | `A3`, `A7` |
 | **Filtros obligatorios** | **FÓRMULA** con `access_level` = `contribute`, sobre una ejecución visible para esa relación |
 | **Transacción** | Crear `PROFESSIONAL_OBSERVATION` con autoría en la asignación profesional y procedencia `professional_observation` |
@@ -2361,7 +2361,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/observations/{id}/revisions` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/observations/{id}/revisions` |
 | **Actor** | `A3`, `A7`, **autor** de la observación |
 | **Filtros obligatorios** | **FÓRMULA**, más autoría propia de la observación |
 | **Transacción** | Crear `REVISION_EVENT` con before/after, actor y motivo |
@@ -2378,7 +2378,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/clients/{personId}/correction-proposals` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/clients/{personId}/correction-proposals` |
 | **Actor** | `A3`, `A7` |
 | **Filtros obligatorios** | **FÓRMULA** con `contribute`; el target es un dato **declarado por la persona** y visible para esa relación |
 | **Transacción** | Crear `CORRECTION_PROPOSAL` con target tipado, valor propuesto, motivo y vencimiento a 30 días; notificar a la persona |
@@ -2446,7 +2446,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/clients/{personId}/executions` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/clients/{personId}/executions` |
 | **Actor** | `A3`, `A7` |
 | **Filtros obligatorios** | **FÓRMULA**. Las sesiones producidas dentro de la relación exigen `relationship_training`; la actividad autónoma o previa exige `prior_training_history`. Las `SESSION_VISIBILITY_DENIAL` aplicables se evalúan **antes** de proyectar y de contar |
 | **Transacción** | Ninguna. Escribe `ACCESS_EVENT` en la misma transacción de lectura |
@@ -2463,7 +2463,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/clients/{personId}/executions/{id}` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/clients/{personId}/executions/{id}` |
 | **Actor** | `A3`, `A7` |
 | **Filtros obligatorios** | Igual que `OP-EXE-017`, evaluado para esa ejecución concreta |
 | **Transacción** | Ninguna. Escribe `ACCESS_EVENT` |
@@ -2480,7 +2480,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/clients/{personId}/progress` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/clients/{personId}/progress` |
 | **Actor** | `A3`, `A7` |
 | **Filtros obligatorios** | **FÓRMULA**. El derivado solo se calcula sobre inputs que el actor puede leer |
 | **Transacción** | Ninguna. Escribe `ACCESS_EVENT` |
@@ -2497,7 +2497,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /space/v1/correction-proposals` · `GET /os/v1/organizations/{orgId}/correction-proposals` |
+| **Superficie** | `GET /space/v1/correction-proposals` · `GET /studio/v1/organizations/{orgId}/correction-proposals` |
 | **Actor** | `A2` (dirigidas a ella), `A3` (emitidas por él) |
 | **Filtros obligatorios** | Propias como destinataria o como proponente |
 | **Transacción** | Ninguna |
@@ -2554,7 +2554,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/payment-gateway` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/payment-gateway` |
 | **Actor** | `A5` con `manage_billing`. **Ni `admin`, ni `coach`, ni `staff`** |
 | **Filtros obligatorios** | Membresía `owner` vigente; proveedor del catálogo cerrado; la organización no tiene otra conexión activa |
 | **Transacción** | Crear `gateway_connections` guardando la **referencia** al secreto, nunca el secreto |
@@ -2571,7 +2571,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/plans` · `PUT .../plans/{id}/draft` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/plans` · `PUT .../plans/{id}/draft` |
 | **Actor** | `A4`, `A5` con `manage_billing` |
 | **Filtros obligatorios** | Membresía vigente con capacidad; nombre único dentro de la organización |
 | **Transacción** | Crear `organization_plans` con identidad estable, o reemplazar el contenido del borrador |
@@ -2588,7 +2588,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/plans/{id}/versions` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/plans/{id}/versions` |
 | **Actor** | `A4`, `A5` con `manage_billing` |
 | **Filtros obligatorios** | Borrador completo: monto positivo, moneda ISO 4217 y periodo `month` o `year` |
 | **Transacción** | Crear `plan_versions` inmutable con numeración monotónica |
@@ -2605,7 +2605,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/plans/{id}/versions/{v}/deprecation` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/plans/{id}/versions/{v}/deprecation` |
 | **Actor** | `A4`, `A5` con `manage_billing` |
 | **Filtros obligatorios** | Versión publicada de la organización |
 | **Transacción** | Marcar la versión como deprecada |
@@ -2622,7 +2622,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/plans` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/plans` |
 | **Actor** | `A3`–`A6` con membresía vigente |
 | **Filtros obligatorios** | Planes de `{orgId}` |
 | **Transacción** | Ninguna |
@@ -2639,7 +2639,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/subscriptions` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/subscriptions` |
 | **Actor** | `A4`, `A5` con `manage_billing` |
 | **Filtros obligatorios** | Suscripciones de `{orgId}` |
 | **Transacción** | Ninguna |
@@ -2656,7 +2656,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/subscriptions/{id}/suspension` · `/reactivation` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/subscriptions/{id}/suspension` · `/reactivation` |
 | **Actor** | `A4`, `A5` con `manage_billing` |
 | **Filtros obligatorios** | Suscripción de `{orgId}`; estado compatible con la transición |
 | **Transacción** | Cambiar el estado, registrar `subscription_events` con el actor humano y encolar la notificación |
@@ -2673,7 +2673,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/subscriptions/{id}/termination` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/subscriptions/{id}/termination` |
 | **Actor** | `A4`, `A5` con `manage_billing` |
 | **Filtros obligatorios** | Suscripción viva de `{orgId}` |
 | **Transacción** | Cerrar la suscripción declarando el actor humano y registrar el evento |
@@ -3289,7 +3289,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 
 ### 7.10 Nutrición
 
-Regla que gobierna todo el dominio: **la persona escribe su registro; el profesional verificado solo lee o propone**. Todas las lecturas OS usan una organización explícita de ruta y todas las mutaciones nutricionales son transaccionales.
+Regla que gobierna todo el dominio: **la persona escribe su registro; el profesional verificado solo lee o propone**. Todas las lecturas Studio usan una organización explícita de ruta y todas las mutaciones nutricionales son transaccionales.
 
 | ID | Operación | Tipo | Actor |
 | --- | --- | --- | --- |
@@ -3450,7 +3450,7 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/clients/{personId}/nutrition/meals` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/clients/{personId}/nutrition/meals` |
 | **Actor** | `A3/A7` con contexto profesional elegible |
 | **Filtros obligatorios** | Fórmula completa + `nutrition_intake/read`; foto exige además `nutrition_media/read` |
 | **Transacción** | Lectura por `nutrition.v_client_meals_live` y `ACCESS_EVENT` antes de servir |
@@ -3467,7 +3467,7 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/clients/{personId}/nutrition/daily-summaries` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/clients/{personId}/nutrition/daily-summaries` |
 | **Actor** | `A3/A7` elegible |
 | **Filtros obligatorios** | Fórmula completa + `nutrition_intake/read` |
 | **Transacción** | Filtrar comidas primero, agregar después y registrar acceso |
@@ -3484,7 +3484,7 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/clients/{personId}/nutrition/goals/versions` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/clients/{personId}/nutrition/goals/versions` |
 | **Actor** | Live: profesional elegible. Frozen: membresía exacta autorizada por caso histórico |
 | **Filtros obligatorios** | Live: `nutrition_guidance/read`. Frozen: grant frozen, caso/AAL2/propósito y solo origen profesional de esa relación `<=T` |
 | **Transacción** | `nutrition.v_client_guidance_live` o `nutrition.v_client_guidance_frozen`; acceso auditado |
@@ -3501,7 +3501,7 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /os/v1/organizations/{orgId}/clients/{personId}/nutrition/goals/versions` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/clients/{personId}/nutrition/goals/versions` |
 | **Actor** | `A3/A7` con `guide_nutrition` y credencial `nutrition_professional` verificada |
 | **Filtros obligatorios** | Organización de ruta = relación/asignación/grant; relación/membresía/credencial vigentes; `nutrition_guidance/contribute` |
 | **Transacción** | `nutrition.propose_goal_version`: bloquear set, supersede pendiente de la misma relación, crear snapshot/targets/contexto y outbox |
@@ -3518,7 +3518,7 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta binaria |
-| **Superficie** | `GET /os/v1/organizations/{orgId}/clients/{personId}/nutrition/meals/{mealId}/photo` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/clients/{personId}/nutrition/meals/{mealId}/photo` |
 | **Actor** | `A3/A7` con contexto profesional elegible |
 | **Filtros obligatorios** | Fórmula profesional completa + `nutrition_intake/read` + `nutrition_media/read`, reevaluados en cada GET |
 | **Transacción** | Resolver `nutrition.v_client_meals_live`, registrar `ACCESS_EVENT` y transmitir internamente el objeto saneado; nunca redirigir a storage |
@@ -3572,7 +3572,7 @@ Se enumeran para que su ausencia sea una decisión registrada y no un olvido. Ni
 | Escenario | Operaciones que lo recorren |
 | --- | --- |
 | 1. Persona Space-only | `IDN-001` → `IDN-002` → `IDN-003` → `IDN-004` → `EXE-004` → `EXE-005` → `EXE-006` → `EXE-014` |
-| 2. Invitación OS pendiente | `REL-001` sin ninguna operación de materialización |
+| 2. Invitación Studio pendiente | `REL-001` sin ninguna operación de materialización |
 | 3. Aceptación parcial | `REL-001` → `IDN-016` → `IDN-009` aceptando relación y rechazando programa; `PRV-001` posterior e independiente |
 | 4. Persona Space preexistente acepta invitación | `IDN-016` → `IDN-009` reutilizando el mismo `person_id`, sin exponer `EXE-014` previo |
 | 5. Práctica crece a equipo | `ORG-001` → `ORG-005` → `IDN-009` → `ORG-007` → `REL-003` sin cambiar `{orgId}` |
@@ -3626,7 +3626,7 @@ Las decisiones 1, 7 y 23 introdujeron conceptos respecto a la primera aprobació
 | Catálogo de verificadores y gobernanza break-glass | Cerrado por ADR-026 y [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md) |
 | Diccionario exhaustivo de recursos y campos por versión de scope | `V1_RLS_MATRIX.md` |
 | Condición RLS, índice y prueba positiva/negativa por operación | `V1_RLS_MATRIX.md` |
-| Esquema de request/response, códigos de error y OpenAPI | `V1_SPACE_OS_API_CONTRACTS.md` |
+| Esquema de request/response, códigos de error y OpenAPI | `V1_SPACE_STUDIO_API_CONTRACTS.md` |
 | Rate limits, cuotas, breakers, DLQ y SLO/RTO/RPO numéricos | `V1_DEGRADATION_AND_RECOVERY_MATRIX.md` |
 | Nombres físicos, PKs, FKs, tipos, constraints e índices | Fase 4 |
 | Estados y transiciones físicas exactas de cada entidad | Fase 4 |

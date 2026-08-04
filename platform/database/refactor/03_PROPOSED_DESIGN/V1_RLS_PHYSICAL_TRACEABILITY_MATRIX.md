@@ -70,13 +70,13 @@ WHERE status IN ('active', 'frozen')
 
 | Proyección | Consumidor | Regla |
 | --- | --- | --- |
-| `identity.v_client_identity` | OS | Identidad mínima de la relación, sin PII de cuenta |
-| `identity.v_client_profile` | OS | Field-set de `relationship_training` |
-| `identity.v_client_body_progress` | OS | Field-set de `body_progress` |
-| `identity.v_client_health_context` | OS | Field-set minimizado de `health_context` |
-| `execution.v_client_executions` | OS | Grant por procedencia, denegación antes de proyectar/contar |
-| `execution.v_client_progress` | OS | Clasificación más restrictiva de todos los inputs |
-| `privacy.v_frozen_relationship_history` | OS histórico | Caso exacto, corte, field-set histórico y auditoría |
+| `identity.v_client_identity` | Studio | Identidad mínima de la relación, sin PII de cuenta |
+| `identity.v_client_profile` | Studio | Field-set de `relationship_training` |
+| `identity.v_client_body_progress` | Studio | Field-set de `body_progress` |
+| `identity.v_client_health_context` | Studio | Field-set minimizado de `health_context` |
+| `execution.v_client_executions` | Studio | Grant por procedencia, denegación antes de proyectar/contar |
+| `execution.v_client_progress` | Studio | Clasificación más restrictiva de todos los inputs |
+| `privacy.v_frozen_relationship_history` | Studio histórico | Caso exacto, corte, field-set histórico y auditoría |
 | `privacy.v_my_access_events` | Space | Solo `subject_person_id = auth.person()` |
 | `support.v_support_metadata` | Soporte | Solo metadatos operativos |
 
@@ -112,7 +112,7 @@ Los tres identificadores de contexto pueden ser `NULL` solo cuando el modo y res
 | `PR-06` | `OP-REL-002..014` | `service_relationships(id,person_id,organization_id,status)`; `relationship_professional_assignments(relationship_id,person_id,organization_id,membership_id,status,valid_from,valid_to)` | Persona por `person_id`; organización por `organization_id`; profesional mediante `auth.effective_assignment(relationship_id)` y membresía vigente | relaciones `(person_id,status)`, `(organization_id,status)`; asignaciones `(relationship_id,status,valid_from,valid_to)`, `(person_id,status)`, `(organization_id,status)` | `T-REL-*`, `T-ASGN-*`, `T-PHY-07` |
 | `PR-07` | `OP-PRV-011..012` | `privacy.scope_definitions(id,scope_code,version_number,status)` y reglas hijas por `scope_definition_id` | Lectura autenticada solo `status='published'`; escritura plataforma; hijos heredan mediante FK al padre publicado | único `(scope_code,version_number)`; portador `(id,scope_code)`; reglas `(scope_definition_id,resource,field)` | `T-SCOPE-*`, `T-PHY-01` |
 | `PR-08` | `OP-PRV-001..005`, `013..014` | `grant_requests(relationship_id,organization_id,scope_definition_id,scope_code,status)`; `consent_events(person_id,relationship_id,organization_id,scope_definition_id,scope_code)`; `data_grants(...)` | Persona vía `service_relationships(id,person_id)`; organización por par `(relationship_id,organization_id)`; inserción/revocación solo por funciones del §3.3 | solicitudes `(relationship_id,status)`, `(organization_id,status)` y pendiente único; consentimientos por persona/relación/org; grant efectivo único | `T-CONSENT-*`, `T-GRANT-*`, `T-PHY-02..05` |
-| `PR-09` | lecturas OS de `OP-IDN-017`, `OP-PLN-*`, `OP-EXE-017..019` | relación, asignación, membresía, grant, definición y recurso solicitado | Las diez condiciones de `auth.can_access`; `auth.grant_of` no acepta `frozen` ni `revoked`; salida solo por proyección cerrada | cadena completa de relación/asignación/membresía/grant; índices del recurso por `person_id` | `T-GRANT-*`, familias de cada proyección, `T-PHY-04`, `T-PHY-07` |
+| `PR-09` | lecturas Studio de `OP-IDN-017`, `OP-PLN-*`, `OP-EXE-017..019` | relación, asignación, membresía, grant, definición y recurso solicitado | Las diez condiciones de `auth.can_access`; `auth.grant_of` no acepta `frozen` ni `revoked`; salida solo por proyección cerrada | cadena completa de relación/asignación/membresía/grant; índices del recurso por `person_id` | `T-GRANT-*`, familias de cada proyección, `T-PHY-04`, `T-PHY-07` |
 | `PR-10` | `OP-PRV-018..020` | `historical_access_cases(organization_id,relationship_id,authorized_membership_id,purpose,status,expires_at)`; `data_grants(...,frozen_at)` | `privacy.v_frozen_relationship_history` + `auth.can_read_frozen`; exige caso exacto, actor, MFA, propósito, field-set, retención, denegación y `occurred_at <= frozen_at` | casos `(authorized_membership_id,status,expires_at)`, `(organization_id,relationship_id,status)`; grants frozen `(relationship_id,scope_code,frozen_at)` | `T-REL-8`, `T-FROZEN-*`, `T-ACCESS-5`, `T-PHY-03..04` |
 | `PR-11` | `OP-PRV-006..007`, `017`; lecturas `OP-EXE-017..019` | `session_visibility_denials(executed_session_id,relationship_id,status)`; sesión con `person_id` | `auth.session_denied(session_id,relationship_id)` se evalúa antes de detalle, conteo y derivado | único `(executed_session_id,relationship_id)`; `(relationship_id,status)` | `T-DENIAL-*`, `T-EXEC-3`, `T-PHY-07` |
 | `PR-12` | `OP-PRV-015` | `access_events(subject_person_id,actor_person_id,actor_membership_id,occurred_at,access_mode,result)` | Tabla base: solo sujeto; Space usa `privacy.v_my_access_events`; `A10/A12` sin `SELECT` directo; inserción solo por `privacy.log_access_event` | partición mensual; `(subject_person_id,occurred_at DESC)` por partición | `T-ACCESS-1..7`, `T-PHY-06` |
@@ -149,11 +149,11 @@ Esta tabla es el índice unívoco operación → OpenAPI → policy/proyección 
 | `OP-NUT-006` | `GET /space/v1/nutrition/goals` | `PR-24` · self policy de goal set/versiones | `goal_sets(person_id)` + `goal_versions(goal_set_id,created_at DESC,id DESC)` | `T-NUT-RLS-17/20/21`, `T-NUT-INT-05/06`, `T-NUT-API-14`, `T-NUT-PHY-01/04` |
 | `OP-NUT-007` | `POST /space/v1/nutrition/goals/versions` | `PR-24` · `nutrition.publish_self_goal_version` | activo único por `goal_set_id` | `T-NUT-RLS-17`, `T-NUT-INT-05..07`, `T-NUT-IDEM-05`, `T-NUT-API-08/14`, `T-NUT-PHY-01/03` |
 | `OP-NUT-008` | `POST /space/v1/nutrition/goal-versions/{goalVersionId}/decision` | `PR-24` · `nutrition.decide_goal_proposal` | `UNIQUE(goal_version_id)` + activo único | `T-NUT-RLS-21/22`, `T-NUT-INT-08`, `T-NUT-IDEM-04/05`, `T-NUT-API-09`, `T-NUT-PHY-03` |
-| `OP-NUT-009` | `GET /os/v1/organizations/{organizationId}/clients/{personId}/nutrition/meals` | `PR-25` · `nutrition.v_client_meals_live` | cadena profesional + meals por persona/fecha | `T-NUT-RLS-04/06..13/15/16`, `T-NUT-API-06/10/12`, `T-NUT-PHY-02/04` |
-| `OP-NUT-010` | `GET /os/v1/organizations/{organizationId}/clients/{personId}/nutrition/daily-summaries` | `PR-25` · `nutrition.v_client_daily_summaries_live` | cadena profesional + `meals(person_id,local_date)` | `T-NUT-RLS-04/06..10/14/15`, `T-NUT-API-07/10`, `T-NUT-PHY-02/04` |
-| `OP-NUT-011` | `GET /os/v1/organizations/{organizationId}/clients/{personId}/nutrition/goals/versions` | `PR-26` live / `PR-27` frozen | versiones `(goal_set_id,created_at DESC,id DESC)` live y `(origin_relationship_id,created_at DESC,id DESC)` frozen | `T-NUT-RLS-20/23/24`, `T-NUT-API-10/11/14`, `T-NUT-PHY-02/04` |
-| `OP-NUT-012` | `POST /os/v1/organizations/{organizationId}/clients/{personId}/nutrition/goals/versions` | `PR-26` · `nutrition.propose_goal_version` | pendiente única por set/relación + cadena profesional | `T-NUT-RLS-18/19`, `T-NUT-INT-03..07`, `T-NUT-IDEM-05`, `T-NUT-API-08/14`, `T-NUT-PHY-03/04` |
-| `OP-NUT-013` | `GET /os/v1/organizations/{organizationId}/clients/{personId}/nutrition/meals/{mealId}/photo` | `PR-25` · proxy API sobre `nutrition.v_client_meals_live`; sin acceso directo a storage | cadena profesional + `meals(id,person_id)` | `T-NUT-RLS-04/06..13/16`, `T-NUT-API-05/06/12/13`, `T-NUT-PHY-02/04` |
+| `OP-NUT-009` | `GET /studio/v1/organizations/{organizationId}/clients/{personId}/nutrition/meals` | `PR-25` · `nutrition.v_client_meals_live` | cadena profesional + meals por persona/fecha | `T-NUT-RLS-04/06..13/15/16`, `T-NUT-API-06/10/12`, `T-NUT-PHY-02/04` |
+| `OP-NUT-010` | `GET /studio/v1/organizations/{organizationId}/clients/{personId}/nutrition/daily-summaries` | `PR-25` · `nutrition.v_client_daily_summaries_live` | cadena profesional + `meals(person_id,local_date)` | `T-NUT-RLS-04/06..10/14/15`, `T-NUT-API-07/10`, `T-NUT-PHY-02/04` |
+| `OP-NUT-011` | `GET /studio/v1/organizations/{organizationId}/clients/{personId}/nutrition/goals/versions` | `PR-26` live / `PR-27` frozen | versiones `(goal_set_id,created_at DESC,id DESC)` live y `(origin_relationship_id,created_at DESC,id DESC)` frozen | `T-NUT-RLS-20/23/24`, `T-NUT-API-10/11/14`, `T-NUT-PHY-02/04` |
+| `OP-NUT-012` | `POST /studio/v1/organizations/{organizationId}/clients/{personId}/nutrition/goals/versions` | `PR-26` · `nutrition.propose_goal_version` | pendiente única por set/relación + cadena profesional | `T-NUT-RLS-18/19`, `T-NUT-INT-03..07`, `T-NUT-IDEM-05`, `T-NUT-API-08/14`, `T-NUT-PHY-03/04` |
+| `OP-NUT-013` | `GET /studio/v1/organizations/{organizationId}/clients/{personId}/nutrition/meals/{mealId}/photo` | `PR-25` · proxy API sobre `nutrition.v_client_meals_live`; sin acceso directo a storage | cadena profesional + `meals(id,person_id)` | `T-NUT-RLS-04/06..13/16`, `T-NUT-API-05/06/12/13`, `T-NUT-PHY-02/04` |
 
 ## 5. Pruebas de cierre físico de P0-06
 

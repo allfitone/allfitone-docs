@@ -8,7 +8,7 @@ Aquí viven las especificaciones de producto, historias de usuario, decisiones d
 
 | Producto | Documentación |
 | --- | --- |
-| Allfit OS | [Especificación e historias de usuario](products/os/README.md) |
+| Allfit Studio | [Especificación e historias de usuario](products/studio/README.md) |
 | Allfit Space | [Especificación e historias de usuario](products/space/README.md) |
 | Allfit Backoffice | [Especificación e historias de usuario](products/backoffice/README.md) |
 
@@ -31,7 +31,7 @@ La estructura admite nuevos productos mediante un directorio adicional en `produ
 | Contratos compartidos de API, datos, identidad y seguridad | Arquitectura y decisiones internas de la implementación |
 | Iniciativas técnicas transversales y su trazabilidad | Changelog, contribución, operación y mantenimiento local |
 
-- `allfitone-os`, `allfitone-space`, `allfitone-backoffice`, `allfitone-design-system` y `allfitone-landing-page` mantienen la documentación propia que necesitan.
+- `allfitone-studio`, `allfitone-space`, `allfitone-backoffice`, `allfitone-design-system` y `allfitone-landing-page` mantienen la documentación propia que necesitan.
 - Una fuente de verdad no se copia entre repositorios: se conserva en su propietario y los demás documentos la enlazan.
 - Si una decisión inicialmente local pasa a afectar a varios productos, su definición normativa se traslada a este repositorio y la documentación local conserva el enlace y el detalle de implementación.
 
