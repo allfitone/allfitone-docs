@@ -31,9 +31,9 @@ Allfit One debe unir esas experiencias alrededor de una sola persona y de un sol
 
 ---
 
-# 2. El ecosistema completo
+## 2. El ecosistema completo
 
-Allfit One tendría dos productos principales:
+Allfit One tiene tres productos:
 
 ```text
 ALLFIT ONE
@@ -41,11 +41,14 @@ ALLFIT ONE
 ├── Allfit Space
 │   Producto para personas
 │
-└── Allfit OS
-    Producto para profesionales y organizaciones
+├── Allfit OS
+│   Producto para profesionales y organizaciones
+│
+└── Allfit Backoffice
+    Producto interno para operar y gobernar la plataforma
 ```
 
-## Allfit Space
+### Allfit Space
 
 Para:
 
@@ -56,7 +59,7 @@ Para:
 * Miembros de gimnasios y estudios.
 * Personas que buscan servicios, clases o productos fitness.
 
-## Allfit OS
+### Allfit OS
 
 Para:
 
@@ -70,7 +73,11 @@ Para:
 * Organizadores de eventos.
 * Futuras operaciones propias de Allfit One.
 
-Los dos productos compartirían infraestructura, datos, pagos, identidades y marketplace.
+### Allfit Backoffice
+
+Para el equipo autorizado de Allfit que atiende incidencias, gobierna contenido y planes globales, administra accesos internos y cumple obligaciones de privacidad sin operar en nombre de las personas o los gimnasios.
+
+Los tres productos consumen infraestructura, identidad, datos y contratos compartidos con superficies y permisos diferentes.
 
 ```text
 Allfit Space                      Allfit OS
@@ -86,7 +93,7 @@ Administra membresías            Administra miembros
 
 ---
 
-# 3. El concepto más importante: Fitness ID
+## 3. El concepto más importante: Fitness ID
 
 Cada persona tendría una **identidad fitness portátil**.
 
@@ -113,7 +120,7 @@ El gimnasio no sería dueño del historial de la persona. El entrenador tampoco.
 
 ---
 
-# 4. La aplicación no debe organizarse por funciones
+## 4. La aplicación no debe organizarse por funciones
 
 Una superapp mal diseñada muestra docenas de módulos al mismo tiempo. La app definitiva debe ser **modular y contextual**.
 
@@ -142,11 +149,11 @@ Todos utilizan la misma plataforma, pero no la misma interfaz exacta.
 
 ---
 
-# 5. Las cinco áreas principales
+## 5. Las cinco áreas principales
 
 La navegación principal debería mantenerse limitada a cinco áreas.
 
-## 5.1 Today
+### 5.1 Today
 
 El centro diario de la aplicación.
 
@@ -182,7 +189,7 @@ Duración estimada: 72 minutos
 
 El usuario no debería necesitar navegar por cinco pantallas para iniciar lo que debe hacer.
 
-## 5.2 Train
+### 5.2 Train
 
 El motor de entrenamiento.
 
@@ -200,7 +207,7 @@ Debe soportar progresivamente:
 * Clases grupales.
 * Deportes personalizados.
 
-### Entrenamiento de fuerza
+#### Entrenamiento de fuerza
 
 * Rutinas propias.
 * Rutinas de entrenadores.
@@ -218,7 +225,7 @@ Debe soportar progresivamente:
 * Modo offline.
 * Integración con reloj.
 
-### Running y resistencia
+#### Running y resistencia
 
 * GPS.
 * Ritmo, distancia, tiempo y desnivel.
@@ -233,7 +240,7 @@ Debe soportar progresivamente:
 * Comparación de sesiones.
 * Integración con Garmin, Apple Watch y otros dispositivos.
 
-### Entrenamiento híbrido
+#### Entrenamiento híbrido
 
 Esta debería ser una ventaja particular de Allfit Space:
 
@@ -247,7 +254,7 @@ Esta debería ser una ventaja particular de Allfit Space:
 
 Runna ya demuestra el valor de ofrecer planes simples, personalizados y ajustables según capacidad, calendario y objetivos; Allfit debería llevar esa lógica a múltiples disciplinas, no exclusivamente al running.
 
-## 5.3 Explore
+### 5.3 Explore
 
 El marketplace y capa de descubrimiento.
 
@@ -280,7 +287,7 @@ Recuperación
 Nutrición
 ```
 
-### Marketplace de entrenadores
+#### Marketplace de entrenadores
 
 Cada entrenador tendría:
 
@@ -309,7 +316,7 @@ La persona podría:
 * Recibir el entrenamiento directamente.
 * Cambiar o terminar la relación conservando sus datos.
 
-### Marketplace de gimnasios
+#### Marketplace de gimnasios
 
 Los centros podrían publicar:
 
@@ -330,7 +337,7 @@ Los centros podrían publicar:
 
 Mindbody y ClassPass validan el comportamiento de buscar, comparar y reservar experiencias desde una aplicación; Allfit Space añadiría a esa experiencia el historial deportivo, el entrenamiento autónomo y la relación continua con profesionales.
 
-## 5.4 Community
+### 5.4 Community
 
 La comunidad debe ayudar a entrenar, no maximizar tiempo de pantalla.
 
@@ -361,7 +368,7 @@ Evitaría convertirla en una copia de Instagram. El contenido debería estar vin
 
 Las funciones sociales de Hevy y Strava muestran que los perfiles, clubes, retos, comparaciones y actividades compartidas pueden reforzar la motivación cuando permanecen conectadas al entrenamiento.
 
-## 5.5 You
+### 5.5 You
 
 El perfil fitness de la persona.
 
@@ -388,11 +395,11 @@ No sería únicamente una página de perfil social. Sería el archivo completo d
 
 ---
 
-# 6. Entrenar de tres maneras
+## 6. Entrenar de tres maneras
 
 La app debería permitir que una persona cambie libremente entre tres modelos.
 
-## Entrenamiento autónomo
+### Entrenamiento autónomo
 
 La persona crea sus rutinas o utiliza programas disponibles.
 
@@ -405,7 +412,7 @@ Allfit le ayuda a:
 * Encontrar ejercicios.
 * Mantener consistencia.
 
-## Entrenamiento asistido por IA
+### Entrenamiento asistido por IA
 
 La persona recibe planificación y adaptación automática, sin contratar inicialmente a un humano.
 
@@ -420,7 +427,7 @@ La IA puede:
 * Detectar falta de consistencia.
 * Proponer alternativas según equipos disponibles.
 
-## Entrenamiento con profesional
+### Entrenamiento con profesional
 
 Un entrenador humano administra el programa desde Allfit OS.
 
@@ -439,13 +446,13 @@ La IA no reemplaza necesariamente al entrenador. Puede actuar como copiloto del 
 
 ---
 
-# 7. Allfit Intelligence
+## 7. Allfit Intelligence
 
 La IA debe ser una capa transversal, no una pestaña de chatbot aislada.
 
-## Funciones ideales
+### Funciones ideales
 
-### Planificación
+#### Planificación
 
 > “Quiero correr mi primera media maratón sin dejar de entrenar fuerza cuatro días.”
 
@@ -459,13 +466,13 @@ La IA construye un plan inicial basado en:
 * Preferencias.
 * Recuperación disponible.
 
-### Adaptación
+#### Adaptación
 
 > “Dormí mal y siento dolor muscular en las piernas.”
 
 La app puede reducir intensidad, cambiar el entrenamiento o proponer recuperación, mostrando siempre la razón.
 
-### Análisis
+#### Análisis
 
 > “¿Por qué no estoy progresando en press banca?”
 
@@ -479,13 +486,13 @@ Analiza:
 * Evolución de cargas.
 * Información disponible de recuperación.
 
-### Contexto operativo
+#### Contexto operativo
 
 > “Busca un gimnasio cerca de mi hotel que tenga rack y permita pases diarios.”
 
 La IA consulta el marketplace.
 
-### Copiloto para entrenadores
+#### Copiloto para entrenadores
 
 * Generación inicial de programas.
 * Resúmenes semanales.
@@ -494,7 +501,7 @@ La IA consulta el marketplace.
 * Preparación de mensajes.
 * Comparación entre plan y ejecución.
 
-## Límites
+### Límites
 
 Allfit no debería presentar recomendaciones algorítmicas como diagnósticos médicos. Debe distinguir claramente:
 
@@ -507,11 +514,11 @@ Las decisiones de alta sensibilidad deben incluir advertencias, límites y deriv
 
 ---
 
-# 8. Rendimiento, recuperación y bienestar
+## 8. Rendimiento, recuperación y bienestar
 
 La app puede evolucionar hacia una visión integral sin convertirse en una aplicación médica.
 
-## Rendimiento
+### Rendimiento
 
 * Fuerza.
 * Potencia.
@@ -522,7 +529,7 @@ La app puede evolucionar hacia una visión integral sin convertirse en una aplic
 * Técnica.
 * Consistencia.
 
-## Recuperación
+### Recuperación
 
 * Sueño.
 * Estrés percibido.
@@ -535,7 +542,7 @@ La app puede evolucionar hacia una visión integral sin convertirse en una aplic
 
 Garmin, por ejemplo, calcula preparación para entrenar a partir de variables como sueño, recuperación, HRV, carga aguda y estrés. Allfit podría usar señales disponibles para ofrecer contexto, pero evitando presentar un número opaco como una verdad absoluta.
 
-## Nutrición
+### Nutrición
 
 Inicialmente:
 
@@ -558,11 +565,11 @@ No intentaría competir desde el primer día con una base nutricional global com
 
 ---
 
-# 9. Gimnasios conectados
+## 9. Gimnasios conectados
 
 Cuando una persona se vincule con un gimnasio que utiliza Allfit OS, la app habilitaría un modo contextual.
 
-## Dentro del gimnasio
+### Dentro del gimnasio
 
 * Membresía digital.
 * Código QR o NFC.
@@ -577,7 +584,7 @@ Cuando una persona se vincule con un gimnasio que utiliza Allfit OS, la app habi
 * Compras.
 * Historial de visitas.
 
-## Futuro
+### Futuro
 
 * Detección automática de entrada.
 * Máquinas conectadas.
@@ -592,7 +599,7 @@ La investigación ya ha demostrado técnicamente la posibilidad de reconocer y r
 
 ---
 
-# 10. Datos e integraciones
+## 10. Datos e integraciones
 
 Allfit no debería exigir que una persona abandone todos sus dispositivos actuales.
 
@@ -611,7 +618,7 @@ Debe integrarse con:
 
 HealthKit y Health Connect permiten que las aplicaciones lean y escriban información de entrenamiento con autorización del usuario, incluyendo sesiones, frecuencia cardiaca, rutas, pasos y otras métricas. Ambos ecosistemas están diseñados alrededor de permisos específicos por tipo de información, por lo que Allfit debe solicitar únicamente los datos necesarios para cada función.
 
-## Principios de datos
+### Principios de datos
 
 * La persona controla sus datos.
 * Los permisos son granulares.
@@ -624,13 +631,13 @@ HealthKit y Health Connect permiten que las aplicaciones lean y escriban informa
 
 ---
 
-# 11. El modelo de negocio
+## 11. El modelo de negocio
 
 Allfit One puede capturar valor desde varios lados sin cobrar por cada acción.
 
-## Usuarios
+### Usuarios
 
-### Gratuito
+#### Gratuito
 
 * Registro de entrenamientos.
 * Rutinas limitadas o suficientes para uso básico.
@@ -640,7 +647,7 @@ Allfit One puede capturar valor desde varios lados sin cobrar por cada acción.
 * Reservas y compras.
 * Comunidad.
 
-### Premium
+#### Premium
 
 * Analítica avanzada.
 * Planificación adaptativa.
@@ -651,7 +658,7 @@ Allfit One puede capturar valor desde varios lados sin cobrar por cada acción.
 * Historial avanzado.
 * Herramientas especializadas.
 
-## Entrenadores y negocios
+### Entrenadores y negocios
 
 Ingresos mediante Allfit OS:
 
@@ -663,7 +670,7 @@ Ingresos mediante Allfit OS:
 * Analítica.
 * Integraciones.
 
-## Marketplace
+### Marketplace
 
 * Comisión por contratación.
 * Comisión por reservas.
@@ -674,7 +681,7 @@ Ingresos mediante Allfit OS:
 * Servicios destacados, claramente identificados.
 * Logística y comercio futuro.
 
-## Productos propios
+### Productos propios
 
 * Suplementación.
 * Ropa.
@@ -688,35 +695,35 @@ La app se convertiría en el principal canal de distribución de todo el ecosist
 
 ---
 
-# 12. La ventaja competitiva
+## 12. La ventaja competitiva
 
 Allfit One no ganará por desarrollar un mejor temporizador de descansos.
 
 Su defensa estaría compuesta por cinco elementos.
 
-## 1. Identidad fitness longitudinal
+### 1. Identidad fitness longitudinal
 
 Años de entrenamiento, relaciones, métricas, membresías y progreso en un único perfil.
 
-## 2. Red de oferta y demanda
+### 2. Red de oferta y demanda
 
 Personas buscando fitness y profesionales u organizaciones ofreciéndolo.
 
-## 3. Integración con Allfit OS
+### 3. Integración con Allfit OS
 
 La oferta del marketplace no se administra manualmente en dos lugares. Horarios, cupos, precios, membresías y programas salen directamente de la operación real.
 
-## 4. Inteligencia contextual
+### 4. Inteligencia contextual
 
 La IA conoce el entrenamiento, calendario, preferencias, instalaciones, entrenador y objetivos autorizados de la persona.
 
-## 5. Ecosistema físico y digital
+### 5. Ecosistema físico y digital
 
 Software, profesionales, gimnasios, eventos y productos conectados bajo una misma cuenta.
 
 ---
 
-# 13. La métrica principal
+## 13. La métrica principal
 
 La métrica norte no debería ser tiempo dentro de la aplicación.
 
@@ -749,11 +756,11 @@ Métricas secundarias:
 
 ---
 
-# 14. Qué construir primero
+## 14. Qué construir primero
 
 La visión es amplia. El producto inicial no debe serlo.
 
-## Fase 1 — Núcleo de entrenamiento
+### Fase 1 — Núcleo de entrenamiento
 
 * Perfil fitness.
 * Rutinas.
@@ -769,7 +776,7 @@ Propuesta inicial:
 
 > **Entrena por tu cuenta o con un entrenador y lleva todo tu progreso en un solo lugar.**
 
-## Fase 2 — Profesionales y relaciones
+### Fase 2 — Profesionales y relaciones
 
 * Perfiles de entrenadores.
 * Mensajería.
@@ -781,7 +788,7 @@ Propuesta inicial:
 * Videollamadas o integración.
 * Marketplace inicial.
 
-## Fase 3 — Gimnasios y experiencias
+### Fase 3 — Gimnasios y experiencias
 
 * Descubrimiento.
 * Reservas.
@@ -792,7 +799,7 @@ Propuesta inicial:
 * Eventos.
 * Múltiples sedes.
 
-## Fase 4 — Multideporte e inteligencia
+### Fase 4 — Multideporte e inteligencia
 
 * Running.
 * Ciclismo.
@@ -802,7 +809,7 @@ Propuesta inicial:
 * Planificación adaptativa.
 * Copiloto de IA.
 
-## Fase 5 — Comercio y mundo físico
+### Fase 5 — Comercio y mundo físico
 
 * Suplementos.
 * Ropa.
@@ -813,7 +820,7 @@ Propuesta inicial:
 
 ---
 
-# 15. Qué no construir inicialmente
+## 15. Qué no construir inicialmente
 
 * Un feed social complejo.
 * Una tienda generalista.
@@ -831,7 +838,7 @@ La visión puede contener todo. La primera experiencia debe resolver una necesid
 
 ---
 
-# Definición final
+## Definición final
 
 > **Allfit One es el ecosistema que conecta a personas, profesionales y organizaciones alrededor de una única identidad fitness.**
 

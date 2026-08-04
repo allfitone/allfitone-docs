@@ -8,16 +8,26 @@ info:
     Allfit OS and Allfit Space. Every operation maps to exactly one OP-* entry.
     Endpoints outside this file remain non-implementable until added through
     the contract-first gate.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
 servers:
   - url: /
 tags:
   - name: OS Planning
+    description: Planning commands and queries performed from Allfit OS.
   - name: Space Agenda
+    description: Personal agenda queries exposed to Allfit Space.
   - name: Space Execution
+    description: Workout execution commands performed from Allfit Space.
   - name: OS Execution
+    description: Authorized workout execution queries exposed to Allfit OS.
   - name: Space Privacy
+    description: Consent and privacy commands controlled by the person.
   - name: Space Nutrition
+    description: Personal nutrition capture and goal operations.
   - name: OS Nutrition
+    description: Authorized professional nutrition operations.
 x-allfit-contract-gate:
   source: V1_OPERATIONS_MATRIX.md
   rule: No endpoint may be implemented before it has an OpenAPI operation and x-allfit-operation.
@@ -1225,9 +1235,6 @@ components:
     ExecutionStatus:
       type: string
       enum: [in_progress, paused, completed, abandoned]
-    ValidationStatus:
-      type: string
-      enum: [pending, valid, invalid]
     ScopeCode:
       type: string
       enum:
@@ -1814,37 +1821,29 @@ components:
 
     NutrientValue:
       type: object
-      additionalProperties: false
+      propertyNames:
+        enum: [nutrient_code, value, unit]
       required: [nutrient_code, value, unit]
       example:
         nutrient_code: protein
         value: 32
         unit: g
-      allOf:
-        - if:
-            properties:
-              nutrient_code:
-                const: energy
-          then:
-            properties:
-              unit:
-                const: kcal
-        - if:
-            properties:
-              nutrient_code:
-                const: water
-          then:
-            properties:
-              unit:
-                const: ml
-        - if:
-            properties:
-              nutrient_code:
-                enum: [protein, carbohydrates, fat, fiber]
-          then:
-            properties:
-              unit:
-                const: g
+      oneOf:
+        - properties:
+            nutrient_code:
+              const: energy
+            unit:
+              const: kcal
+        - properties:
+            nutrient_code:
+              const: water
+            unit:
+              const: ml
+        - properties:
+            nutrient_code:
+              enum: [protein, carbohydrates, fat, fiber]
+            unit:
+              const: g
       properties:
         nutrient_code:
           $ref: '#/components/schemas/NutrientCode'
@@ -1857,7 +1856,8 @@ components:
 
     NutritionMealItem:
       type: object
-      additionalProperties: false
+      propertyNames:
+        enum: [position, name, quantity, quantity_unit, nutrients]
       required: [position, name, quantity, quantity_unit, nutrients]
       example:
         position: 1
@@ -2177,7 +2177,8 @@ components:
 
     NutritionGoalTarget:
       type: object
-      additionalProperties: false
+      propertyNames:
+        enum: [nutrient_code, mode, minimum, maximum, exact, unit]
       required: [nutrient_code, mode, minimum, maximum, exact, unit]
       example:
         nutrient_code: protein
@@ -2187,78 +2188,59 @@ components:
         exact: null
         unit: g
       allOf:
-        - if:
-            properties:
-              nutrient_code:
-                const: energy
-          then:
-            properties:
-              unit:
-                const: kcal
-        - if:
-            properties:
-              nutrient_code:
-                const: water
-          then:
-            properties:
-              unit:
-                const: ml
-        - if:
-            properties:
-              nutrient_code:
-                enum: [protein, carbohydrates, fat, fiber]
-          then:
-            properties:
-              unit:
-                const: g
-        - if:
-            properties:
-              mode:
-                const: minimum
-          then:
-            properties:
-              minimum:
-                type: number
-              maximum:
-                type: 'null'
-              exact:
-                type: 'null'
-        - if:
-            properties:
-              mode:
-                const: maximum
-          then:
-            properties:
-              minimum:
-                type: 'null'
-              maximum:
-                type: number
-              exact:
-                type: 'null'
-        - if:
-            properties:
-              mode:
-                const: range
-          then:
-            properties:
-              minimum:
-                type: number
-              maximum:
-                type: number
-              exact:
-                type: 'null'
-        - if:
-            properties:
-              mode:
-                const: exact
-          then:
-            properties:
-              minimum:
-                type: 'null'
-              maximum:
-                type: 'null'
-              exact:
-                type: number
+        - oneOf:
+            - properties:
+                nutrient_code:
+                  const: energy
+                unit:
+                  const: kcal
+            - properties:
+                nutrient_code:
+                  const: water
+                unit:
+                  const: ml
+            - properties:
+                nutrient_code:
+                  enum: [protein, carbohydrates, fat, fiber]
+                unit:
+                  const: g
+        - oneOf:
+            - properties:
+                mode:
+                  const: minimum
+                minimum:
+                  type: number
+                maximum:
+                  type: 'null'
+                exact:
+                  type: 'null'
+            - properties:
+                mode:
+                  const: maximum
+                minimum:
+                  type: 'null'
+                maximum:
+                  type: number
+                exact:
+                  type: 'null'
+            - properties:
+                mode:
+                  const: range
+                minimum:
+                  type: number
+                maximum:
+                  type: number
+                exact:
+                  type: 'null'
+            - properties:
+                mode:
+                  const: exact
+                minimum:
+                  type: 'null'
+                maximum:
+                  type: 'null'
+                exact:
+                  type: number
       properties:
         nutrient_code:
           $ref: '#/components/schemas/NutrientCode'
@@ -2380,35 +2362,39 @@ components:
 
     NutritionGoalVersion:
       type: object
-      additionalProperties: false
-      allOf:
-        - if:
-            properties:
-              origin:
-                const: self
-            required: [origin]
-          then:
-            properties:
-              author:
-                properties:
-                  kind:
-                    const: self
-        - if:
-            properties:
-              origin:
-                const: professional
-            required: [origin]
-          then:
-            properties:
-              rationale:
-                type: string
-                minLength: 1
-                maxLength: 2000
-                pattern: '.*\S.*'
-              author:
-                properties:
-                  kind:
-                    const: professional
+      propertyNames:
+        enum:
+          - id
+          - version_number
+          - origin
+          - status
+          - rationale
+          - targets
+          - author
+          - created_at
+          - origin_relationship_id
+          - decision
+          - applied_scope
+      oneOf:
+        - properties:
+            origin:
+              const: self
+            author:
+              properties:
+                kind:
+                  const: self
+        - properties:
+            origin:
+              const: professional
+            rationale:
+              type: string
+              minLength: 1
+              maxLength: 2000
+              pattern: '.*\S.*'
+            author:
+              properties:
+                kind:
+                  const: professional
       required:
         [id, version_number, origin, status, rationale, targets, author, created_at,
          origin_relationship_id, decision, applied_scope]

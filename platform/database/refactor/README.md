@@ -2,11 +2,11 @@
 
 **Versión de revisión:** 4<br>
 **Fecha:** 3 de agosto de 2026<br>
-**Productos:** Allfit OS + Allfit Space
+**Productos:** Allfit One — OS, Space y Backoffice
 
 ## Objetivo
 
-Esta carpeta reúne el análisis, las decisiones, el alcance y el plan para reconstruir la base de datos de Allfit sobre una base sólida y compartida por Allfit OS y Allfit Space.
+Esta carpeta reúne el análisis, las decisiones, el alcance y el plan para reconstruir la base de datos sobre una base sólida y compartida por el ecosistema Allfit One.
 
 El objetivo no es migrar mecánicamente el esquema actual. No existen clientes ni datos productivos que obliguen a conservarlo. El esquema actual se utiliza como evidencia para identificar requisitos, patrones útiles y deuda que no debe trasladarse al nuevo diseño. Allfit V1 es greenfield: no migra, importa ni conserva datos, IDs o compatibilidad de Factory Fitness.
 
@@ -122,7 +122,7 @@ Dimensión actual: **9 dominios conceptuales, 11 schemas físicos, 115 tablas, 7
 
 ## Decisiones acordadas
 
-- Los productos serán Allfit OS y Allfit Space.
+- El ecosistema documentado se compone de Allfit OS, Allfit Space y Allfit Backoffice.
 - Amazon Cognito será la única fuente de autenticación.
 - Habrá un Cognito User Pool compartido por ambiente y app clients separados por producto.
 - Supabase se utilizará únicamente como PostgreSQL administrado.

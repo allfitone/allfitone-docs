@@ -1,4 +1,4 @@
-# ERD conceptual V1 — Allfit OS + Allfit Space
+# ERD conceptual V1 — Allfit One
 
 **Estado:** aprobado y recertificado<br>
 **Fecha de consolidación:** 21 de julio de 2026<br>

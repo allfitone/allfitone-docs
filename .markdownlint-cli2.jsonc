@@ -1,0 +1,19 @@
+{
+  "config": {
+    "default": false,
+    "MD001": true,
+    "MD003": {
+      "style": "atx"
+    },
+    "MD009": true,
+    "MD010": true,
+    "MD012": {
+      "maximum": 1
+    },
+    "MD024": {
+      "siblings_only": true
+    },
+    "MD025": true,
+    "MD047": true
+  }
+}

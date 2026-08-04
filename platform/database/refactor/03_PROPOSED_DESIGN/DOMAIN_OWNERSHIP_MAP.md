@@ -1,4 +1,4 @@
-# Mapa de dominios y ownership — Allfit OS + Allfit Space
+# Mapa de dominios y ownership — Allfit One
 
 **Estado:** aprobado y recertificado<br>
 **Fecha de inicio:** 20 de julio de 2026<br>

@@ -2,11 +2,11 @@
 
 ## Visión del sistema operativo para profesionales y organizaciones fitness
 
-> **Estado del documento:** visión de producto alineada con la baseline en revisión de `dev/refactor` al 22 de julio de 2026.
+> **Estado del documento:** visión de producto alineada con la baseline técnica documentada en `platform/database/refactor`.
 
 Este documento describe la dirección completa de Allfit OS. No reemplaza las decisiones de arquitectura, el glosario, el alcance V1 ni el modelo conceptual del refactor.
 
-Cuando una capacidad de esta visión todavía no pertenece a V1, se indica expresamente como **expansión futura**. Si existe una diferencia entre este documento y las fuentes normativas de `dev/refactor`, prevalecen:
+Cuando una capacidad de esta visión todavía no pertenece a V1, se indica expresamente como **expansión futura**. Si existe una diferencia entre este documento y las fuentes normativas de `platform/database/refactor`, prevalecen:
 
 1. [ALLFIT_ARCHITECTURE_DECISIONS.md](../../platform/database/refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md).
 2. [ALLFIT_DOMAIN_GLOSSARY.md](../../platform/database/refactor/03_PROPOSED_DESIGN/ALLFIT_DOMAIN_GLOSSARY.md).
@@ -18,7 +18,7 @@ El panel administrativo existente de Factory Fitness se utiliza únicamente como
 
 ---
 
-# 1. La tesis central
+## 1. La tesis central
 
 **Allfit OS debe convertirse en el sistema operativo desde el cual un profesional o una organización ofrece fitness.**
 
@@ -56,9 +56,9 @@ Allfit OS no debe administrar una copia aislada del cliente. Debe operar, con au
 
 ---
 
-# 2. El ecosistema completo
+## 2. El ecosistema completo
 
-ALLFIT ONE tendría dos productos principales sobre dominios compartidos:
+ALLFIT ONE tiene tres productos sobre dominios compartidos:
 
 ```text
 ALLFIT ONE
@@ -66,11 +66,14 @@ ALLFIT ONE
 ├── Allfit Space
 │   Producto para personas
 │
-└── Allfit OS
-    Producto para profesionales y organizaciones
+├── Allfit OS
+│   Producto para profesionales y organizaciones
+│
+└── Allfit Backoffice
+    Producto interno para operar y gobernar la plataforma
 ```
 
-## Allfit Space
+### Allfit Space
 
 La persona:
 
@@ -81,7 +84,7 @@ La persona:
 - Registra y consulta su progreso.
 - Conserva continuidad al cambiar de profesional u organización.
 
-## Allfit OS
+### Allfit OS
 
 El profesional o la organización:
 
@@ -92,6 +95,15 @@ El profesional o la organización:
 - Consulta únicamente los datos autorizados.
 - Acompaña la ejecución y analiza resultados.
 - Administra su oferta, agenda y negocio cuando esas capacidades entren formalmente en alcance.
+
+### Allfit Backoffice
+
+El equipo autorizado de Allfit:
+
+- Supervisa el estado operativo y comercial del ecosistema.
+- Atiende incidencias mediante metadatos mínimos y acciones dedicadas.
+- Publica catálogos, reglas y planes globales.
+- Gestiona accesos internos, obligaciones legales y operaciones excepcionales con separación de deberes.
 
 ```text
 Allfit Space                         Allfit OS
@@ -105,11 +117,11 @@ Ejecuta y registra                   Acompaña y analiza
 Conserva su historial        ↔        Conserva sus activos y evidencia autorizada
 ```
 
-Los productos comparten hechos de dominio; no sincronizan dos versiones de la misma persona, relación, sesión o resultado.
+Los tres productos consumen los mismos hechos de dominio mediante contratos y permisos diferentes; no sincronizan copias de una persona, relación, sesión o resultado.
 
 ---
 
-# 3. El concepto más importante: una organización no es dueña del Fitness ID
+## 3. El concepto más importante: una organización no es dueña del Fitness ID
 
 La unidad central de Allfit OS no debe ser un “usuario del gimnasio” duplicado dentro de cada negocio. Debe ser una **relación profesional explícita entre una persona y una organización**.
 
@@ -147,13 +159,13 @@ Ser propietario o administrador de la organización no concede acceso automátic
 
 ---
 
-# 4. Toda operación profesional ocurre dentro de una organización
+## 4. Toda operación profesional ocurre dentro de una organización
 
 Allfit OS debe soportar desde un entrenador independiente hasta una red de centros sin mantener modelos incompatibles.
 
 El perfil profesional pertenece a la persona. Sin embargo, para prestar servicios, gestionar relaciones, asignar programas o recibir pagos mediante Allfit OS, el profesional actúa dentro de una organización activa.
 
-## Práctica unipersonal
+### Práctica unipersonal
 
 El onboarding de un profesional independiente crea:
 
@@ -165,7 +177,7 @@ La organización puede incorporar después asistentes, administradores u otros p
 
 “Independiente” describe una etapa operativa, no un tipo permanente de profesional.
 
-## Organización con equipo
+### Organización con equipo
 
 Una organización puede representar progresivamente:
 
@@ -179,13 +191,13 @@ Una organización puede representar progresivamente:
 
 El tipo representa la actividad principal, no el tamaño de la organización.
 
-## Varias organizaciones
+### Varias organizaciones
 
 Una persona profesional puede participar en varias organizaciones con membresías, roles, asignaciones y capacidades diferentes. Entrar a otra organización no crea otro perfil profesional ni otro Fitness ID.
 
 ---
 
-# 5. El producto no debe organizarse como una lista infinita de módulos
+## 5. El producto no debe organizarse como una lista infinita de módulos
 
 El panel administrativo actual demuestra el valor de áreas como clientes, agenda, actividades, ejercicios, rutinas, planes, analítica, equipo, sedes, CRM y monetización. La nueva experiencia debe conservar lo útil, pero agruparlo alrededor del trabajo que la organización intenta completar.
 
@@ -215,9 +227,9 @@ Configuración, ayuda y administración de cuenta permanecen como utilidades, no
 
 ---
 
-# 6. Las cinco áreas principales
+## 6. Las cinco áreas principales
 
-## 6.1 Resumen
+### 6.1 Resumen
 
 El centro operativo diario.
 
@@ -254,7 +266,7 @@ Adherencia semanal: 75%
 
 El panel existente de Factory Fitness aporta patrones valiosos para esta área: resumen del día, clientes activos, adherencia, intensidad, alertas y agenda. En Allfit OS esos indicadores deben derivarse del nuevo modelo de planificación, ejecución, procedencia y autorización.
 
-## 6.2 Personas
+### 6.2 Personas
 
 El centro de las relaciones profesionales.
 
@@ -286,7 +298,7 @@ La ficha de una persona puede organizarse de forma contextual en:
 
 El panel actual ofrece referencias útiles como resumen, calendario, bitácora, entrenamiento, progreso, equipo y perfil. Nutrición y estado financiero pueden incorporarse en fases posteriores, pero no forman parte de la baseline V1.
 
-## 6.3 Entrenamiento
+### 6.3 Entrenamiento
 
 El motor profesional de planificación y seguimiento.
 
@@ -316,11 +328,11 @@ Reglas esenciales:
 - Una sesión planificada puede tener varios intentos, pero solo una ejecución completada y válida es primaria.
 - Las correcciones conservan original, actor, motivo, procedencia y fecha.
 
-## 6.4 Operación
+### 6.4 Operación
 
 El lugar para organizar cómo se presta el servicio.
 
-### Incluido en la baseline V1
+#### Incluido en la baseline V1
 
 - Organización y estado.
 - Sede básica.
@@ -331,7 +343,7 @@ El lugar para organizar cómo se presta el servicio.
 - Asignación de profesionales a relaciones.
 - Historial de reasignaciones.
 
-### Expansión futura
+#### Expansión futura
 
 - Agenda de oferta.
 - Clases grupales.
@@ -345,11 +357,11 @@ El lugar para organizar cómo se presta el servicio.
 
 Las pantallas actuales de agenda, actividades, ubicaciones, capacidad y reglas de reserva son referencias para esta expansión. No justifican crear tablas o permisos de booking en V1.
 
-## 6.5 Negocio
+### 6.5 Negocio
 
 El lugar para convertir una buena operación en una organización sostenible.
 
-### Expansión futura
+#### Expansión futura
 
 - CRM y pipeline comercial.
 - Oferta y paquetes.
@@ -368,7 +380,7 @@ El panel actual demuestra flujos útiles de CRM, planes y membresías, suscripto
 
 ---
 
-# 7. Invitaciones sin crear personas en nombre de otras personas
+## 7. Invitaciones sin crear personas en nombre de otras personas
 
 Allfit OS puede iniciar una relación, pero no apropiarse del registro.
 
@@ -407,25 +419,25 @@ Una persona que ya usa Allfit Space acepta con su cuenta y `person_id` existente
 
 ---
 
-# 8. Privacidad como capacidad de producto
+## 8. Privacidad como capacidad de producto
 
 La privacidad no debe aparecer únicamente en una política legal. Debe formar parte de la operación diaria de Allfit OS.
 
 V1 define cuatro scopes independientes:
 
-## `relationship_training`
+### `relationship_training`
 
 Prescripción, versiones, sesiones, intentos y resultados producidos dentro de la relación.
 
-## `prior_training_history`
+### `prior_training_history`
 
 Sesiones anteriores o autónomas, resultados tipados, récords y procedencia general autorizados.
 
-## `body_progress`
+### `body_progress`
 
 Medidas, composición, perímetros, tendencias y fotos elegidas por la persona.
 
-## `health_context`
+### `health_context`
 
 Dolor, limitaciones, restricciones, recuperación, fatiga, sueño o readiness dentro de la finalidad fitness autorizada.
 
@@ -449,7 +461,7 @@ Allfit OS debe explicar de manera comprensible:
 
 ---
 
-# 9. Una relación debe poder terminar correctamente
+## 9. Una relación debe poder terminar correctamente
 
 Muchos productos diseñan cuidadosamente el alta y apenas consideran la salida. En Allfit OS, terminar una relación es un flujo central.
 
@@ -476,7 +488,7 @@ Una organización nueva no hereda gestión, consentimiento o acceso. Debe inicia
 
 ---
 
-# 10. Operar varias disciplinas sin convertir todo en fuerza
+## 10. Operar varias disciplinas sin convertir todo en fuerza
 
 Allfit OS debe funcionar para fuerza, running, movilidad y experiencias híbridas desde un lenguaje común.
 
@@ -514,11 +526,11 @@ La baseline debe validar al menos:
 
 ---
 
-# 11. Seguimiento y analítica orientados a decisiones
+## 11. Seguimiento y analítica orientados a decisiones
 
 La analítica de Allfit OS debe ayudar a intervenir, no solo a reportar.
 
-## V1
+### V1
 
 Puede derivar, con autorización y procedencia:
 
@@ -530,7 +542,7 @@ Puede derivar, con autorización y procedencia:
 - Comparación entre prescripción y ejecución.
 - Señales de inactividad o necesidad de revisión basadas en reglas explícitas.
 
-## Expansión futura
+### Expansión futura
 
 - Retención de clientes.
 - Ocupación y capacidad.
@@ -552,20 +564,20 @@ Una gráfica no puede revelar indirectamente una sesión, categoría o relación
 
 ---
 
-# 12. Allfit Intelligence para profesionales
+## 12. Allfit Intelligence para profesionales
 
 La inteligencia artificial debe convertirse en una capa transversal de asistencia, no en un chatbot aislado ni en una autoridad clínica.
 
-## Capacidades futuras posibles
+### Capacidades futuras posibles
 
-### Copiloto de planificación
+#### Copiloto de planificación
 
 - Proponer borradores de plantillas o programas.
 - Adaptar una prescripción a disponibilidad y equipamiento.
 - Detectar conflictos entre fuerza y resistencia.
 - Resumir diferencias entre lo planificado y lo ejecutado.
 
-### Copiloto de seguimiento
+#### Copiloto de seguimiento
 
 - Preparar un resumen semanal por persona.
 - Priorizar revisiones pendientes.
@@ -573,19 +585,19 @@ La inteligencia artificial debe convertirse en una capa transversal de asistenci
 - Proponer preguntas para un check-in.
 - Redactar mensajes que el profesional revisa antes de enviar.
 
-### Copiloto operativo
+#### Copiloto operativo
 
 - Resumir ocupación, agenda o incidencias.
 - Ayudar a configurar servicios y horarios.
 - Detectar inconsistencias administrativas.
 
-### Copiloto de negocio
+#### Copiloto de negocio
 
 - Resumir el pipeline comercial.
 - Detectar renovaciones próximas.
 - Explicar variaciones de ingresos o retención.
 
-## Límites
+### Límites
 
 - La IA contextual está explícitamente diferida de V1.
 - No se crean tablas, permisos o JSON genéricos de IA en la baseline.
@@ -597,11 +609,11 @@ La inteligencia artificial debe convertirse en una capa transversal de asistenci
 
 ---
 
-# 13. Administración organizacional y administración de plataforma
+## 13. Administración organizacional y administración de plataforma
 
 Allfit OS debe distinguir dos niveles que el panel actual ya sugiere, pero que no deben mezclarse.
 
-## Administración de una organización
+### Administración de una organización
 
 Para owners y administradores autorizados:
 
@@ -614,7 +626,7 @@ Para owners y administradores autorizados:
 - Branding y preferencias operativas cuando correspondan.
 - Facturación SaaS en una fase posterior.
 
-## Operación profesional
+### Operación profesional
 
 Para profesionales asignados:
 
@@ -623,7 +635,7 @@ Para profesionales asignados:
 - Sesiones y resultados autorizados.
 - Propuestas, observaciones y seguimiento.
 
-## Administración interna de ALLFIT ONE
+### Administración interna de ALLFIT ONE
 
 Para operaciones de plataforma estrictamente controladas:
 
@@ -640,11 +652,11 @@ El selector de workspaces del panel existente es una referencia de usabilidad, n
 
 ---
 
-# 14. Arquitectura y datos compartidos
+## 14. Arquitectura y datos compartidos
 
 La visión de producto debe respetar las decisiones técnicas ya acordadas.
 
-## Identidad y autenticación
+### Identidad y autenticación
 
 - Amazon Cognito es la única fuente de autenticación.
 - Existe un User Pool compartido por ambiente.
@@ -653,7 +665,7 @@ La visión de producto debe respetar las decisiones técnicas ya acordadas.
 - Cognito no modela roles de negocio, relaciones o permisos fitness.
 - V1 admite únicamente personas de 18 años o más.
 
-## Persistencia y acceso
+### Persistencia y acceso
 
 - Supabase se utiliza únicamente como PostgreSQL administrado.
 - Space y OS acceden exclusivamente mediante una API propia.
@@ -661,7 +673,7 @@ La visión de producto debe respetar las decisiones técnicas ya acordadas.
 - Backend, privilegios mínimos y RLS transaccional forman defensa en profundidad.
 - Un único repositorio y pipeline son autoridad de migraciones.
 
-## Dominios de la baseline
+### Dominios de la baseline
 
 ```text
 Identidad
@@ -675,7 +687,7 @@ Ejecución
 
 Los dominios pertenecen al ecosistema ALLFIT ONE, no a una aplicación concreta. Space y OS presentan capacidades diferentes sobre las mismas fuentes de verdad.
 
-## Procedencia e historial
+### Procedencia e historial
 
 Los datos materiales distinguen:
 
@@ -689,11 +701,11 @@ Procedencia, actor capturador, método y verificación son dimensiones separadas
 
 ---
 
-# 15. El modelo de negocio
+## 15. El modelo de negocio
 
 Allfit OS puede capturar valor como infraestructura operativa y como capa de transacción del ecosistema.
 
-## Suscripción SaaS
+### Suscripción SaaS
 
 Planes futuros por combinación de:
 
@@ -706,7 +718,7 @@ Planes futuros por combinación de:
 - Integraciones.
 - Soporte y controles empresariales.
 
-## Transacciones
+### Transacciones
 
 Cuando comercio entre formalmente en alcance:
 
@@ -717,7 +729,7 @@ Cuando comercio entre formalmente en alcance:
 - Entradas a eventos.
 - Comisiones de marketplace.
 
-## Servicios empresariales
+### Servicios empresariales
 
 - Marca y experiencia personalizadas.
 - Integraciones dedicadas.
@@ -729,39 +741,39 @@ La monetización no debe debilitar la portabilidad del Fitness ID. Una organizac
 
 ---
 
-# 16. La ventaja competitiva
+## 16. La ventaja competitiva
 
 Allfit OS no ganará únicamente por crear rutinas más rápido.
 
 Su defensa estaría compuesta por seis elementos.
 
-## 1. Relación nativa con Allfit Space
+### 1. Relación nativa con Allfit Space
 
 La planificación profesional llega directamente a la experiencia diaria de la persona y los resultados regresan como hechos autorizados, sin importaciones manuales ni perfiles duplicados.
 
-## 2. Fitness ID longitudinal y portátil
+### 2. Fitness ID longitudinal y portátil
 
 La persona conserva continuidad. El profesional recibe contexto autorizado más útil que una ficha creada desde cero en cada herramienta.
 
-## 3. Operación organizacional flexible
+### 3. Operación organizacional flexible
 
 La misma raíz soporta una práctica unipersonal que después incorpora equipo, y organizaciones con varias sedes y roles, sin cambiar de identidad.
 
-## 4. Entrenamiento multidisciplina y versionado
+### 4. Entrenamiento multidisciplina y versionado
 
 Fuerza, running, movilidad e híbrido comparten una arquitectura sin reducirse a una tabla universal llena de excepciones.
 
-## 5. Privacidad operacional
+### 5. Privacidad operacional
 
 Relaciones, scopes, capacidades, procedencia y terminación están incorporados al producto, no añadidos como controles secundarios.
 
-## 6. Conexión entre servicio, operación y negocio
+### 6. Conexión entre servicio, operación y negocio
 
 Con el tiempo, planificación, clases, reservas, membresías, pagos, marketplace e inteligencia pueden operar sobre los mismos dominios y eventos, entrando por fases completas y gobernadas.
 
 ---
 
-# 17. La métrica principal
+## 17. La métrica principal
 
 La métrica norte de Allfit OS no debería ser el número de pantallas visitadas ni la cantidad de planes creados.
 
@@ -787,13 +799,13 @@ Métricas secundarias:
 
 ---
 
-# 18. Qué construir primero
+## 18. Qué construir primero
 
 La visión es amplia. La baseline V1 no debe serlo.
 
-## Fase 1 — Baseline compartida de identidad y entrenamiento
+### Fase 1 — Baseline compartida de identidad y entrenamiento
 
-Esta fase corresponde al alcance actual de `dev/refactor`.
+Esta fase corresponde al alcance actual de `platform/database/refactor`.
 
 - Registro directo adulto en Space.
 - Cognito como autenticación única.
@@ -819,7 +831,7 @@ Propuesta inicial:
 
 > **Invita, planifica y acompaña a tus clientes mientras cada persona conserva una sola identidad y el control de sus datos.**
 
-## Fase 2 — Experiencia profesional y colaboración de equipo
+### Fase 2 — Experiencia profesional y colaboración de equipo
 
 Después de aprobar e implementar la baseline:
 
@@ -832,7 +844,7 @@ Después de aprobar e implementar la baseline:
 
 Cada ampliación material requiere volver a alcance, ADR, ownership, modelo, seguridad y pruebas.
 
-## Fase 3 — Agenda, clases y operación de sedes
+### Fase 3 — Agenda, clases y operación de sedes
 
 - Oferta de actividades.
 - Horarios y recurrencia.
@@ -843,7 +855,7 @@ Cada ampliación material requiere volver a alcance, ADR, ownership, modelo, seg
 - Varias sedes.
 - Control de acceso y ocupación.
 
-## Fase 4 — Negocio y marketplace
+### Fase 4 — Negocio y marketplace
 
 - CRM.
 - Productos y precios.
@@ -854,7 +866,7 @@ Cada ampliación material requiere volver a alcance, ADR, ownership, modelo, seg
 - Perfiles públicos y reseñas.
 - Analítica comercial.
 
-## Fase 5 — Integraciones e inteligencia
+### Fase 5 — Integraciones e inteligencia
 
 - Wearables productivos.
 - Recuperación avanzada.
@@ -865,7 +877,7 @@ Cada ampliación material requiere volver a alcance, ADR, ownership, modelo, seg
 
 ---
 
-# 19. Qué no construir inicialmente
+## 19. Qué no construir inicialmente
 
 - Booking o clases escondidos dentro de planificación.
 - Comercio escondido dentro de relaciones.
@@ -887,39 +899,39 @@ La ausencia deliberada de una capacidad diferida es parte de la calidad de la ba
 
 ---
 
-# 20. Principios de producto
+## 20. Principios de producto
 
-## La persona conserva continuidad
+### La persona conserva continuidad
 
 Terminar una relación no elimina su historia ni la obliga a comenzar de nuevo.
 
-## La organización opera con límites claros
+### La organización opera con límites claros
 
 Solo ve y modifica lo necesario para la relación, finalidad, rol y periodo vigentes.
 
-## La interfaz refleja el dominio
+### La interfaz refleja el dominio
 
 Relación, asignación, consentimiento, versión y ejecución no se reducen a etiquetas ambiguas como “cliente activo” o “plan actual”.
 
-## Lo publicado no cambia retroactivamente
+### Lo publicado no cambia retroactivamente
 
 Versiones y snapshots permiten explicar qué se prescribió y qué se ejecutó en cada momento.
 
-## Los derivados no evaden la privacidad
+### Los derivados no evaden la privacidad
 
 Gráficas, alertas, resúmenes e IA respetan la clasificación y autorización de sus datos de origen.
 
-## Las capacidades futuras entran completas
+### Las capacidades futuras entran completas
 
 Cada dominio nuevo incorpora lenguaje, ownership, privacidad, arquitectura, modelo, migraciones, RLS, contratos, pruebas y observabilidad.
 
-## El sistema ayuda a actuar
+### El sistema ayuda a actuar
 
 Cada área debe priorizar decisiones y próximos pasos sobre administración pasiva.
 
 ---
 
-# Definición final
+## Definición final
 
 > **Allfit OS es el sistema operativo para profesionales y organizaciones fitness que permite organizar equipos, establecer relaciones autorizadas, crear planificación multidisciplina, acompañar la ejecución y hacer crecer servicios conectados con el Fitness ID de cada persona.**
 

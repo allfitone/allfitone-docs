@@ -1,4 +1,4 @@
-# Fases para diseñar la nueva BD de Allfit OS + Allfit Space
+# Fases para diseñar la nueva BD de Allfit One
 
 **Fecha:** 3 de agosto de 2026<br>
 **Modalidad:** implementación incremental por rebanadas de HU asistida por IA.<br>
@@ -33,9 +33,9 @@ Al terminar deben existir:
 - ERD conceptual y lógico;
 - diccionario de tablas;
 - matriz de RLS;
-- contratos iniciales de Space y OS;
+- contratos iniciales de Space, OS y Backoffice;
 - migraciones, seeds y pruebas locales;
-- flujo vertical validado desde los dos productos;
+- flujo vertical validado desde los productos involucrados en la rebanada;
 - lista explícita de lo que queda fuera de V1.
 
 ## Regla de trabajo con IA
@@ -643,11 +643,13 @@ La lista siguiente describe el resultado acumulado de Fase 5. Cada rebanada ejec
 
 ### Entregables
 
-- [Initial migration chain](https://github.com/dinnartec/allfitone-os/tree/main/supabase/migrations).
-- [Database seed](https://github.com/dinnartec/allfitone-os/blob/main/supabase/seed.sql).
-- [Database views and RPCs](https://github.com/dinnartec/allfitone-os/tree/main/supabase/schemas).
-- [Generated database types](https://github.com/dinnartec/allfitone-os/blob/main/supabase/types/database.types.ts).
-- [Locally rebuildable database](https://github.com/dinnartec/allfitone-os/tree/main/supabase).
+Los siguientes son destinos previstos dentro de `allfitone-os`; se convertirán en enlaces cuando existan los artefactos:
+
+- cadena inicial de migraciones: `supabase/migrations/`;
+- seed de base de datos: `supabase/seed.sql`;
+- vistas y RPC: `supabase/schemas/`;
+- tipos generados: `supabase/types/database.types.ts`;
+- reconstrucción local: `supabase/`.
 
 ### Criterio de salida
 
@@ -659,7 +661,7 @@ Cualquier integrante puede reconstruir la BD desde cero sin pasos manuales.
 
 ### Objetivo
 
-Probar que el diseño funciona desde ambos productos y que no permite accesos indebidos.
+Probar que el diseño funciona desde los productos involucrados en cada rebanada y que no permite accesos indebidos.
 
 ### Pruebas obligatorias
 
@@ -796,8 +798,10 @@ Probar que el diseño funciona desde ambos productos y que no permite accesos in
 
 ### Entregables
 
-- [SQL/pgTAP tests](https://github.com/dinnartec/allfitone-os/tree/main/supabase/tests/database).
-- [Space/OS API integration tests](https://github.com/dinnartec/allfitone-os/tree/main/tests/integration/space_os).
+Los siguientes son destinos previstos dentro de `allfitone-os`:
+
+- pruebas SQL/pgTAP: `supabase/tests/database/`;
+- pruebas de integración de la API Space/OS: `tests/integration/space_os/`;
 - `05_VALIDATION/V1_SECURITY_AND_INTEGRITY_REPORT.md`.
 - `05_VALIDATION/V1_APPROVED_BASELINE.md`.
 - `05_VALIDATION/NEXT_DOMAIN_BACKLOG.md`.

@@ -12,7 +12,7 @@ entenderlo ni para construir a partir de él.
 ## 1. Cómo se lee una historia
 
 ```markdown
-#### HU-SP-046 — Título escrito desde quien actúa
+### HU-SP-046 — Título escrito desde quien actúa
 
 **Como** <quién>
 **quiero** <qué>
@@ -77,7 +77,7 @@ movilidad no se organizan en series y repeticiones.
 
 ## E-SP-00 · Entrar a la aplicación
 
-#### HU-SP-001 — Crear mi cuenta
+### HU-SP-001 — Crear mi cuenta
 
 **Como** persona que descarga la aplicación
 **quiero** crear una cuenta
@@ -92,7 +92,7 @@ movilidad no se organizan en series y repeticiones.
 3. Si ese correo ya tiene cuenta, el mensaje **no me lo confirma**: me dice que revise su correo, exista o no. Así nadie averigua quién está registrado.
 4. Crear la cuenta todavía **no me da Fitness ID**: eso ocurre al completar el registro.
 
-#### HU-SP-002 — Iniciar sesión
+### HU-SP-002 — Iniciar sesión
 
 **Como** persona registrada
 **quiero** entrar a mi cuenta
@@ -107,7 +107,7 @@ movilidad no se organizan en series y repeticiones.
 3. Si dejé el registro a medias, la aplicación me lleva al punto donde lo dejé.
 4. Mi sesión se mantiene entre aperturas: no tengo que entrar cada vez que abro la app.
 
-#### HU-SP-003 — Cerrar sesión
+### HU-SP-003 — Cerrar sesión
 
 **Como** persona
 **quiero** cerrar sesión
@@ -120,7 +120,7 @@ movilidad no se organizan en series y repeticiones.
 1. Al cerrar sesión no queda nada mío consultable en el teléfono.
 2. Si tengo un entrenamiento sin sincronizar, **se me avisa antes** de cerrar, para no perderlo.
 
-#### HU-SP-004 — Recuperar mi contraseña
+### HU-SP-004 — Recuperar mi contraseña
 
 **Como** persona que olvidó su contraseña
 **quiero** restablecerla
@@ -134,7 +134,7 @@ movilidad no se organizan en series y repeticiones.
 2. El mensaje es el mismo exista o no la cuenta.
 3. Al cambiar la contraseña se cierran mis sesiones en otros dispositivos.
 
-#### HU-SP-005 — Cambiar mi contraseña
+### HU-SP-005 — Cambiar mi contraseña
 
 **Como** persona
 **quiero** cambiar mi contraseña
@@ -151,7 +151,7 @@ movilidad no se organizan en series y repeticiones.
 
 ## E-SP-01 · Registro y onboarding
 
-#### HU-SP-006 — Empezar mi registro
+### HU-SP-006 — Empezar mi registro
 
 **Como** persona que acaba de crear su cuenta
 **quiero** iniciar el registro en Allfit Space
@@ -167,7 +167,7 @@ movilidad no se organizan en series y repeticiones.
 4. Si llegué desde una invitación, esa invitación queda asociada a mi registro pero no se acepta por el hecho de registrarme.
 5. El registro necesita conexión: no puede completarse en modo local.
 
-#### HU-SP-007 — Acreditar que soy mayor de edad
+### HU-SP-007 — Acreditar que soy mayor de edad
 
 **Como** persona en proceso de registro
 **quiero** acreditar mi edad
@@ -183,7 +183,7 @@ movilidad no se organizan en series y repeticiones.
 4. No se me exige entregar la fecha de nacimiento completa si una declaración de mayoría de edad resuelve el control.
 5. La acreditación queda registrada con la política que se me aplicó y el momento en que ocurrió.
 
-#### HU-SP-008 — Activar mi Fitness ID
+### HU-SP-008 — Activar mi Fitness ID
 
 **Como** persona que acreditó su edad y aceptó los términos
 **quiero** completar el registro
@@ -200,7 +200,7 @@ movilidad no se organizan en series y repeticiones.
 5. Si toco dos veces por error, sigo teniendo una sola identidad.
 6. Activarme no crea organización, relación profesional, asignación ni permiso de datos.
 
-#### HU-SP-009 — Ver mi identidad y mis cuentas
+### HU-SP-009 — Ver mi identidad y mis cuentas
 
 **Como** persona registrada
 **quiero** ver mi Fitness ID y qué cuentas de acceso tengo vinculadas
@@ -214,7 +214,7 @@ movilidad no se organizan en series y repeticiones.
 2. Esta vista no muestra mis permisos concedidos ni mis relaciones: cada cosa tiene su propio lugar.
 3. Puedo consultarla sin conexión sobre lo ya descargado, pero nunca se usa para decidir qué puedo hacer.
 
-#### HU-SP-010 — Decirle a Allfit qué quiero lograr
+### HU-SP-010 — Decirle a Allfit qué quiero lograr
 
 **Como** persona que acaba de activar su cuenta
 **quiero** decir cuál es mi objetivo
@@ -228,7 +228,7 @@ movilidad no se organizan en series y repeticiones.
 2. Puedo elegir solo uno como principal, para que la aplicación tenga una dirección.
 3. Puedo cambiarlo cuando quiera desde mi perfil.
 
-#### HU-SP-011 — Registrar mis datos físicos
+### HU-SP-011 — Registrar mis datos físicos
 
 **Como** persona en el onboarding
 **quiero** registrar mi peso y mi estatura
@@ -242,7 +242,7 @@ movilidad no se organizan en series y repeticiones.
 2. Estos datos son **míos**: quedan como mi primer registro de progreso y puedo actualizarlos cuando quiera.
 3. Puedo saltarme este paso; la aplicación funciona sin ellos, aunque el progreso será menos preciso.
 
-#### HU-SP-012 — Contar qué entreno y desde cuándo
+### HU-SP-012 — Contar qué entreno y desde cuándo
 
 **Como** persona en el onboarding
 **quiero** decir qué practico y con cuánta experiencia
@@ -256,7 +256,7 @@ movilidad no se organizan en series y repeticiones.
 2. Digo cuánta experiencia tengo en cada una, en términos simples: empezando, con algo de práctica, con experiencia.
 3. Digo cuántos días a la semana puedo entrenar y cuánto tiempo tengo por sesión.
 
-#### HU-SP-013 — Contar dónde entreno y con qué
+### HU-SP-013 — Contar dónde entreno y con qué
 
 **Como** persona en el onboarding
 **quiero** decir dónde entreno y qué equipo tengo
@@ -270,7 +270,7 @@ movilidad no se organizan en series y repeticiones.
 2. Marco el equipo con el que cuento, de una lista.
 3. Si entreno en casa con poco equipo, eso queda claro y se tiene en cuenta.
 
-#### HU-SP-014 — Avisar si tengo alguna limitación
+### HU-SP-014 — Avisar si tengo alguna limitación
 
 **Como** persona con una lesión o una molestia
 **quiero** avisarlo desde el principio
@@ -285,7 +285,7 @@ movilidad no se organizan en series y repeticiones.
 3. Puedo dejarlo en blanco y agregarlo después.
 4. Es de las categorías más delicadas y solo la ve un gimnasio si tengo relación con él.
 
-#### HU-SP-015 — Saltarme el onboarding y retomarlo después
+### HU-SP-015 — Saltarme el onboarding y retomarlo después
 
 **Como** persona con prisa
 **quiero** empezar a usar la aplicación sin llenar todo
@@ -304,7 +304,7 @@ movilidad no se organizan en series y repeticiones.
 
 ## E-SP-02 · Invitaciones y relaciones
 
-#### HU-SP-016 — Ver qué me está proponiendo una organización
+### HU-SP-016 — Ver qué me está proponiendo una organización
 
 **Como** persona que recibió una invitación
 **quiero** ver quién me invita y qué me está proponiendo exactamente
@@ -320,7 +320,7 @@ movilidad no se organizan en series y repeticiones.
 4. Una invitación inválida y una vencida se ven igual: no puedo deducir cuál es cuál.
 5. Abrir la invitación no acepta nada.
 
-#### HU-SP-017 — Aceptar o rechazar cada propuesta por separado
+### HU-SP-017 — Aceptar o rechazar cada propuesta por separado
 
 **Como** persona invitada
 **quiero** decidir cada propuesta de forma independiente
@@ -338,7 +338,7 @@ movilidad no se organizan en series y repeticiones.
 6. Si ya tenía cuenta, acepto con mi identidad existente y mi historial anterior no se comparte hacia atrás.
 7. Reintentar la decisión no crea vínculos duplicados.
 
-#### HU-SP-018 — Ver mis relaciones profesionales
+### HU-SP-018 — Ver mis relaciones profesionales
 
 **Como** persona
 **quiero** ver con qué organizaciones tengo o tuve una relación
@@ -352,7 +352,7 @@ movilidad no se organizan en series y repeticiones.
 2. Cuando volví a trabajar con la misma organización, veo el enlace a la relación anterior.
 3. Ver la continuidad no concede a la relación nueva ningún acceso a lo de la anterior.
 
-#### HU-SP-019 — Ver la historia de una relación
+### HU-SP-019 — Ver la historia de una relación
 
 **Como** persona
 **quiero** consultar qué ha pasado en una relación
@@ -366,7 +366,7 @@ movilidad no se organizan en series y repeticiones.
 2. El registro no se edita ni se borra.
 3. Si la organización declaró un motivo de terminación, no lo veo: cada parte solo ve el motivo que declaró.
 
-#### HU-SP-020 — Terminar una relación profesional
+### HU-SP-020 — Terminar una relación profesional
 
 **Como** persona
 **quiero** terminar mi relación con una organización
@@ -389,7 +389,7 @@ movilidad no se organizan en series y repeticiones.
 
 ## E-SP-03 · Perfil fitness, cuerpo y salud
 
-#### HU-SP-021 — Declarar mi contexto de entrenamiento
+### HU-SP-021 — Declarar mi contexto de entrenamiento
 
 **Como** persona
 **quiero** declarar mis objetivos, disciplinas, experiencia, disponibilidad y equipamiento
@@ -405,7 +405,7 @@ movilidad no se organizan en series y repeticiones.
 4. Puedo declarar sin conexión y se sincroniza después.
 5. Solo se me permiten atributos del catálogo de perfil; no es un campo libre.
 
-#### HU-SP-022 — Corregir algo que declaré
+### HU-SP-022 — Corregir algo que declaré
 
 **Como** persona
 **quiero** corregir un dato que declaré
@@ -420,7 +420,7 @@ movilidad no se organizan en series y repeticiones.
 3. No puedo editar la observación de un profesional; para eso existe el flujo de propuesta en sentido contrario.
 4. Dos correcciones seguidas producen dos versiones ordenadas; ninguna se pierde.
 
-#### HU-SP-023 — Ver mi perfil fitness
+### HU-SP-023 — Ver mi perfil fitness
 
 **Como** persona
 **quiero** ver mi perfil completo
@@ -435,7 +435,7 @@ movilidad no se organizan en series y repeticiones.
 3. Cuando hay varias versiones de un dato, el perfil me explica cuál está mostrando y por qué.
 4. Las alternativas no se ocultan ni se borran.
 
-#### HU-SP-024 — Ver todas las versiones de un dato de mi perfil
+### HU-SP-024 — Ver todas las versiones de un dato de mi perfil
 
 **Como** persona
 **quiero** consultar el historial de un atributo concreto
@@ -449,7 +449,7 @@ movilidad no se organizan en series y repeticiones.
 2. De cada una veo su origen, quién la capturó, con qué método y si está verificada, como cosas separadas.
 3. Una observación profesional nunca aparece presentada como si la hubiera declarado yo.
 
-#### HU-SP-025 — Registrar una medición o foto de progreso corporal
+### HU-SP-025 — Registrar una medición o foto de progreso corporal
 
 **Como** persona que sigue su evolución física
 **quiero** registrar medidas, composición o fotos
@@ -465,7 +465,7 @@ movilidad no se organizan en series y repeticiones.
 4. Solo se comparte la foto que yo elijo; mi galería nunca se expone.
 5. Puedo registrar sin conexión y la imagen sube al recuperar la red.
 
-#### HU-SP-026 — Ver mi progreso corporal
+### HU-SP-026 — Ver mi progreso corporal
 
 **Como** persona
 **quiero** consultar mis mediciones y fotos
@@ -478,7 +478,7 @@ movilidad no se organizan en series y repeticiones.
 1. Veo mis registros ordenados por fecha de medición.
 2. Los enlaces a mis fotos son temporales y no se pueden adivinar ni compartir por accidente.
 
-#### HU-SP-027 — Eliminar un registro de progreso corporal
+### HU-SP-027 — Eliminar un registro de progreso corporal
 
 **Como** persona
 **quiero** eliminar una medición o una foto
@@ -493,7 +493,7 @@ movilidad no se organizan en series y repeticiones.
 3. Si la imagen no se puede borrar del almacenamiento, no se me reporta como eliminada: el proceso sigue intentándolo.
 4. La eliminación no se confirma desde mi teléfono: necesita conexión.
 
-#### HU-SP-028 — Declarar dolor, lesión o limitación
+### HU-SP-028 — Declarar dolor, lesión o limitación
 
 **Como** persona con una molestia o restricción
 **quiero** declararla
@@ -520,7 +520,7 @@ separado ni me llegan solicitudes después.
 Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera y
 **esconder** una sesión concreta.
 
-#### HU-SP-029 — Ver qué voy a compartir antes de aceptar
+### HU-SP-029 — Ver qué voy a compartir antes de aceptar
 
 **Como** persona a la que un gimnasio invita
 **quiero** ver exactamente qué información va a ver de mí
@@ -535,7 +535,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 3. Lo que se me presentó queda guardado tal como lo vi. Si mañana cambian las definiciones, a mí me sigue aplicando la que acepté.
 4. **Aceptar la relación autoriza todo eso de una vez.** No hay un segundo paso ni una espera.
 
-#### HU-SP-030 — Ver todo lo que comparto y con quién
+### HU-SP-030 — Ver todo lo que comparto y con quién
 
 **Como** persona con relaciones con gimnasios
 **quiero** un panel con todo lo que estoy compartiendo
@@ -550,7 +550,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 3. Veo también los gimnasios con los que terminé y qué conservan de lo que compartí.
 4. A los 12 meses se me recuerda revisar esto. Si no respondo **no se corta nada**: es un recordatorio, no un vencimiento.
 
-#### HU-SP-031 — Dejar de compartir una categoría
+### HU-SP-031 — Dejar de compartir una categoría
 
 **Como** persona que compartió información
 **quiero** revocar ese permiso cuando quiera
@@ -568,7 +568,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 6. Si la organización tenía abierta una consulta del historial de una relación terminada, queda cerrada.
 7. Si el sistema no puede garantizar que todo lo derivado dejó de ser legible, la revocación no se reporta como hecha: se reintenta.
 
-#### HU-SP-032 — Ocultar una sesión propia para una organización
+### HU-SP-032 — Ocultar una sesión propia para una organización
 
 **Como** persona con más de una relación
 **quiero** ocultar una sesión concreta para una organización
@@ -585,7 +585,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 5. Ocultar no deshace lo que alguien ya vio legítimamente.
 6. **No** puedo ocultar una sesión que se produjo dentro de esa misma relación. La protección es de **base de datos**: un guardián rechaza la fila si la sesión pertenece a esa relación, así que la regla no depende de que la aplicación la recuerde.
 
-#### HU-SP-033 — Volver a compartir una sesión oculta
+### HU-SP-033 — Volver a compartir una sesión oculta
 
 **Como** persona
 **quiero** revertir una ocultación
@@ -600,7 +600,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 3. Si la relación ya terminó, volver a compartir **no amplía** lo que la organización puede ver: la ventana congelada solo puede reducirse.
 4. Una relación nueva no hereda mis preferencias: exige su propia decisión.
 
-#### HU-SP-034 — Ver qué sesiones tengo ocultas
+### HU-SP-034 — Ver qué sesiones tengo ocultas
 
 **Como** persona
 **quiero** consultar mis ocultaciones
@@ -613,7 +613,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 1. Solo yo veo mis ocultaciones.
 2. Ninguna organización puede consultarlas ni deducirlas comparando conteos.
 
-#### HU-SP-035 — Pedir que se eliminen mis datos
+### HU-SP-035 — Pedir que se eliminen mis datos
 
 **Como** persona
 **quiero** solicitar la eliminación de categorías concretas o de mi cuenta completa
@@ -630,7 +630,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 5. Si un dato está retenido por una obligación, se me informa como suspendido, con el motivo y hasta cuándo.
 6. El plazo objetivo de resolución es de 30 días.
 
-#### HU-SP-036 — Seguir el estado de mi solicitud de eliminación
+### HU-SP-036 — Seguir el estado de mi solicitud de eliminación
 
 **Como** persona que pidió la eliminación de sus datos
 **quiero** ver cómo se resolvió cada parte
@@ -648,7 +648,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 
 ## E-SP-05 · Agenda y asignaciones
 
-#### HU-SP-037 — Ver qué tengo que entrenar
+### HU-SP-037 — Ver qué tengo que entrenar
 
 **Como** persona con entrenamiento asignado o propio
 **quiero** ver mis sesiones planificadas de los próximos días
@@ -664,7 +664,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 4. Las sesiones de una asignación que quedó sin profesional aparecen como **pausadas**, nunca como incumplidas.
 5. Puedo consultar la agenda ya descargada aunque esté sin conexión.
 
-#### HU-SP-038 — Ver el detalle de un programa asignado
+### HU-SP-038 — Ver el detalle de un programa asignado
 
 **Como** persona con un programa asignado
 **quiero** ver de dónde viene y en qué estado está
@@ -677,7 +677,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 1. Veo la versión exacta que me asignaron, los ajustes personales que se le hicieron, qué organización lo creó y si sigue administrado.
 2. Puedo ver esto **incluso después** de terminar la relación: es el registro de lo que se me prescribió.
 
-#### HU-SP-039 — Leer el contenido exacto que me asignaron
+### HU-SP-039 — Leer el contenido exacto que me asignaron
 
 **Como** persona con un programa asignado
 **quiero** leer completo el contenido que voy a ejecutar
@@ -691,7 +691,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 2. Eso no me da acceso al resto del catálogo de esa organización.
 3. El contenido no cambia por debajo: si la organización publica una versión nueva, la mía sigue siendo la que me asignaron.
 
-#### HU-SP-040 — Asignarme un programa por mi cuenta
+### HU-SP-040 — Asignarme un programa por mi cuenta
 
 **Como** persona que entrena sola
 **quiero** asignarme un programa
@@ -707,7 +707,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 4. Ninguna organización la ve, salvo que yo comparta explícitamente esa categoría.
 5. Si se solapa con otro programa activo, se me advierte pero no se me bloquea.
 
-#### HU-SP-041 — Decidir qué pasa con mi plan cuando termina la relación
+### HU-SP-041 — Decidir qué pasa con mi plan cuando termina la relación
 
 **Como** persona cuya relación terminó
 **quiero** decidir si continúo con el programa por mi cuenta o lo termino
@@ -727,7 +727,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 
 ## E-SP-06 · Contenido de entrenamiento personal
 
-#### HU-SP-042 — Crear una plantilla de sesión propia
+### HU-SP-042 — Crear una plantilla de sesión propia
 
 **Como** persona que arma su propio entrenamiento
 **quiero** crear una plantilla de sesión
@@ -741,7 +741,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 2. La plantilla existe como identidad estable antes de que yo publique nada.
 3. En fuerza la interfaz puede llamarla "rutina"; el concepto sigue siendo plantilla de sesión.
 
-#### HU-SP-043 — Editar el borrador de mi plantilla
+### HU-SP-043 — Editar el borrador de mi plantilla
 
 **Como** persona
 **quiero** editar mi plantilla mientras la construyo
@@ -756,7 +756,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 3. Los objetivos de cada paso deben corresponder al tipo de actividad; si no, no se acepta.
 4. Este trabajo requiere conexión: no hay modo local para editar contenido.
 
-#### HU-SP-044 — Publicar una versión de mi plantilla
+### HU-SP-044 — Publicar una versión de mi plantilla
 
 **Como** persona
 **quiero** publicar mi plantilla
@@ -771,7 +771,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 3. Si el borrador está incompleto, se me dice exactamente qué falta.
 4. Publicar dos veces el mismo contenido no crea dos versiones.
 
-#### HU-SP-045 — Partir de una versión anterior
+### HU-SP-045 — Partir de una versión anterior
 
 **Como** persona
 **quiero** crear un borrador a partir de una versión publicada
@@ -784,7 +784,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 1. El borrador nuevo conserva de dónde viene.
 2. No puedo partir del contenido de una organización: en V1 no hay contenido compartido entre organizaciones.
 
-#### HU-SP-046 — Retirar una versión de mi plantilla
+### HU-SP-046 — Retirar una versión de mi plantilla
 
 **Como** persona
 **quiero** marcar una versión como retirada
@@ -797,7 +797,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 1. Retirar impide **componer contenido nuevo** con esa versión.
 2. No altera programas ya publicados, ni asignaciones activas, ni sesiones ya planificadas: el historial no se toca.
 
-#### HU-SP-047 — Crear y editar un programa propio
+### HU-SP-047 — Crear y editar un programa propio
 
 **Como** persona
 **quiero** armar un programa combinando mis plantillas
@@ -811,7 +811,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 2. No puedo componer con un borrador de plantilla.
 3. Si uso versiones retiradas puedo seguir editando, pero al publicar se me advierte.
 
-#### HU-SP-048 — Publicar una versión de mi programa
+### HU-SP-048 — Publicar una versión de mi programa
 
 **Como** persona
 **quiero** publicar mi programa
@@ -825,7 +825,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 2. La versión publicada queda fija; adoptar una plantilla nueva exige publicar otra versión del programa.
 3. Publicar necesita al menos una posición.
 
-#### HU-SP-049 — Retirar una versión de mi programa
+### HU-SP-049 — Retirar una versión de mi programa
 
 **Como** persona
 **quiero** retirar una versión de mi programa
@@ -838,7 +838,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 1. Retirar impide asignaciones nuevas.
 2. No cancela ni altera las asignaciones vigentes ni sus sesiones.
 
-#### HU-SP-050 — Ver mi contenido propio
+### HU-SP-050 — Ver mi contenido propio
 
 **Como** persona que crea contenido
 **quiero** ver mis plantillas y programas
@@ -855,7 +855,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 
 ## E-SP-07 · Registro de ejecución
 
-#### HU-SP-051 — Empezar una sesión planificada
+### HU-SP-051 — Empezar una sesión planificada
 
 **Como** persona con una sesión en la agenda
 **quiero** empezarla
@@ -871,7 +871,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 4. Si toco dos veces o se corta la red, sigo teniendo **un solo** intento, no dos.
 5. Al empezar queda fijado con qué reglas se va a validar mi sesión, y esas reglas no cambian después.
 
-#### HU-SP-052 — Entrenar algo que no estaba planificado
+### HU-SP-052 — Entrenar algo que no estaba planificado
 
 **Como** persona que entrena por su cuenta
 **quiero** registrar una sesión que no estaba en mi agenda
@@ -885,7 +885,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 2. Por defecto es actividad autónoma: **ninguna organización la ve** salvo que yo comparta esa categoría.
 3. Es el caso más frecuente de uso sin conexión y debe funcionar completamente offline.
 
-#### HU-SP-053 — Retomar una sesión que quedó a medias
+### HU-SP-053 — Retomar una sesión que quedó a medias
 
 **Como** persona a la que se le interrumpió el entrenamiento
 **quiero** retomar donde estaba
@@ -899,7 +899,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 2. Se conservan las horas originales de inicio.
 3. Una desconexión a mitad de sesión no puede multiplicar mis sesiones.
 
-#### HU-SP-054 — Abandonar una sesión
+### HU-SP-054 — Abandonar una sesión
 
 **Como** persona que no va a terminar su entrenamiento
 **quiero** abandonarlo
@@ -913,7 +913,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 2. Un intento abandonado nunca cuenta para adherencia.
 3. Queda en mi historial: no desaparece.
 
-#### HU-SP-055 — Guardar resultados mientras entreno
+### HU-SP-055 — Guardar resultados mientras entreno
 
 **Como** persona con una sesión iniciada
 **quiero** guardar mis series a medida que entreno
@@ -931,7 +931,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 6. Si registro dolor durante la sesión, se trata como contexto de salud y no lo ve nadie sin ese permiso, aunque la sesión sí sea visible.
 7. Una sesión híbrida exige al menos dos bloques de familias distintas, con la transición explícita. La protección es de **base de datos**: al cerrar la sesión un guardián verifica que existan al menos dos familias, porque es una condición entre varios bloques y no se puede comprobar bloque por bloque.
 
-#### HU-SP-056 — Cerrar la sesión
+### HU-SP-056 — Cerrar la sesión
 
 **Como** persona que terminó de entrenar
 **quiero** cerrar la sesión
@@ -952,7 +952,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 
 ## E-SP-08 · Historial, correcciones y progreso
 
-#### HU-SP-057 — Ver mi historial de sesiones
+### HU-SP-057 — Ver mi historial de sesiones
 
 **Como** persona
 **quiero** consultar todo lo que he entrenado
@@ -965,7 +965,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 1. Veo **todo lo mío**: intentos abandonados, sesiones anuladas, sesiones que oculté a terceros, observaciones que me dejó un profesional y el historial de correcciones.
 2. Puedo consultar mi historial descargado sin conexión.
 
-#### HU-SP-058 — Corregir una sesión ya cerrada
+### HU-SP-058 — Corregir una sesión ya cerrada
 
 **Como** persona
 **quiero** corregir un dato de una sesión pasada
@@ -980,7 +980,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 3. Lo que se calculó a partir de ese dato se recalcula o se invalida, no se queda desactualizado.
 4. Si mi corrección deja la sesión por debajo de un mínimo, baja de nivel de detalle en lugar de quedar en un estado inválido silencioso.
 
-#### HU-SP-059 — Elegir qué intento cuenta
+### HU-SP-059 — Elegir qué intento cuenta
 
 **Como** persona que intentó una sesión más de una vez
 **quiero** elegir cuál cuenta como la buena
@@ -995,7 +995,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 3. Nunca ocurre de forma automática ni silenciosa.
 4. Cambiarlo recalcula mi adherencia y mi progreso.
 
-#### HU-SP-060 — Anular una sesión que no refleja lo que pasó
+### HU-SP-060 — Anular una sesión que no refleja lo que pasó
 
 **Como** persona
 **quiero** anular una sesión
@@ -1010,7 +1010,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 3. Si anulo la que contaba, **no se promueve otra en silencio**: la sesión queda sin una válida hasta que yo elija.
 4. Mi progreso y mi adherencia se recalculan.
 
-#### HU-SP-061 — Ver mi progreso
+### HU-SP-061 — Ver mi progreso
 
 **Como** persona que entrena con constancia
 **quiero** ver mi evolución
@@ -1024,7 +1024,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 2. Un progreso calculado con mi peso corporal **es** información corporal y se protege como tal.
 3. Un indicador que no se puede calcular no se muestra aproximado: no se muestra.
 
-#### HU-SP-062 — Ver correcciones que me proponen
+### HU-SP-062 — Ver correcciones que me proponen
 
 **Como** persona con un profesional asignado
 **quiero** ver qué correcciones me está proponiendo
@@ -1037,7 +1037,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 1. Veo cada propuesta con su estado y su fecha de vencimiento.
 2. Una propuesta cancelada porque terminó la relación aparece como cancelada; no desaparece.
 
-#### HU-SP-063 — Aceptar o rechazar una corrección
+### HU-SP-063 — Aceptar o rechazar una corrección
 
 **Como** persona
 **quiero** decidir si acepto la corrección que me propone un profesional
@@ -1057,7 +1057,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 
 ## E-SP-09 · Catálogo y funcionamiento sin conexión
 
-#### HU-SP-064 — Poder entrenar sin conexión
+### HU-SP-064 — Poder entrenar sin conexión
 
 **Como** persona que entrena en un gimnasio con mala señal
 **quiero** que la aplicación tenga lo necesario descargado
@@ -1072,7 +1072,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 3. **Solo** el registro de entrenamiento y la edición de mi perfil funcionan sin conexión. Permisos, consentimientos y terminaciones **siempre** exigen conexión y nunca se dan por hechos.
 4. Nada pendiente de sincronizar se me muestra como confirmado.
 
-#### HU-SP-065 — Buscar un movimiento
+### HU-SP-065 — Buscar un movimiento
 
 **Como** persona armando o registrando su entrenamiento
 **quiero** buscar un movimiento por nombre
@@ -1088,7 +1088,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 4. El catálogo global está en español; la estructura admite traducciones más adelante.
 5. Una sesión válida puede no referenciar ningún movimiento: no es obligatorio.
 
-#### HU-SP-066 — Saber con qué equipamiento cuento
+### HU-SP-066 — Saber con qué equipamiento cuento
 
 **Como** persona
 **quiero** consultar el equipamiento del catálogo
@@ -1117,7 +1117,7 @@ comidas no autoriza objetivos.
 **Identificar una comida escaneándola con IA está diferido de V1**, igual que el
 catálogo de alimentos, los códigos de barras y las recetas.
 
-#### HU-SP-067 — Registrar una comida
+### HU-SP-067 — Registrar una comida
 
 **Como** persona que quiere seguir su alimentación
 **quiero** registrar lo que comí, con sus ítems y nutrientes
@@ -1134,7 +1134,7 @@ catálogo de alimentos, los códigos de barras y las recetas.
 5. Si algo del registro es inválido, no se guarda nada a medias: o entra completo o no entra.
 6. Mis resúmenes diarios se actualizan como parte del mismo registro, no más tarde.
 
-#### HU-SP-068 — Ver lo que he comido
+### HU-SP-068 — Ver lo que he comido
 
 **Como** persona que registra su alimentación
 **quiero** consultar mis comidas
@@ -1149,7 +1149,7 @@ catálogo de alimentos, los códigos de barras y las recetas.
 3. La aplicación puede combinar lo que tengo descargado con mis borradores locales sin enviarlos al servidor.
 4. Nunca veo la comida de otra persona: no aparece en la lista ni se puede abrir por su identificador.
 
-#### HU-SP-069 — Corregir una comida o cambiar su foto
+### HU-SP-069 — Corregir una comida o cambiar su foto
 
 **Como** persona que registró mal una comida
 **quiero** corregirla o adjuntar y reemplazar su foto
@@ -1167,7 +1167,7 @@ catálogo de alimentos, los códigos de barras y las recetas.
 6. La foto anterior se elimina después de confirmar el cambio, no antes.
 7. Puedo sincronizar la corrección desde un borrador y adjuntar la foto al recuperar la conexión.
 
-#### HU-SP-070 — Eliminar una comida
+### HU-SP-070 — Eliminar una comida
 
 **Como** persona
 **quiero** eliminar una comida de mi registro
@@ -1184,7 +1184,7 @@ catálogo de alimentos, los códigos de barras y las recetas.
 5. Puedo dejar la intención encolada sin conexión, pero es el servidor quien decide contra el estado real.
 6. La eliminación no se reporta como completada hasta que se confirma en todos los sistemas.
 
-#### HU-SP-071 — Ver mis resúmenes diarios
+### HU-SP-071 — Ver mis resúmenes diarios
 
 **Como** persona que registra sus comidas
 **quiero** ver el consolidado por día
@@ -1199,7 +1199,7 @@ catálogo de alimentos, los códigos de barras y las recetas.
 3. Un rango inválido se rechaza; el sistema no aproxima ni completa valores.
 4. Mis borradores locales no se presentan como si fueran resumen confirmado.
 
-#### HU-SP-072 — Ver mis metas nutricionales y lo que me proponen
+### HU-SP-072 — Ver mis metas nutricionales y lo que me proponen
 
 **Como** persona con objetivos nutricionales
 **quiero** ver mi meta vigente y las propuestas pendientes
@@ -1214,7 +1214,7 @@ catálogo de alimentos, los códigos de barras y las recetas.
 3. **No veo el contexto interno del profesional** ni sus notas: solo la autoría mínima.
 4. Solo yo veo mis versiones, tanto las mías como las que me propusieron.
 
-#### HU-SP-073 — Fijar mi propia meta nutricional
+### HU-SP-073 — Fijar mi propia meta nutricional
 
 **Como** persona que entrena por su cuenta
 **quiero** publicar mi meta nutricional
@@ -1230,7 +1230,7 @@ catálogo de alimentos, los códigos de barras y las recetas.
 4. Los objetivos deben ser válidos y usar el catálogo vigente; si no, no se publica nada.
 5. Si dos publicaciones ocurren a la vez, el resultado es una sola meta activa, nunca dos.
 
-#### HU-SP-074 — Aceptar o rechazar una meta que me proponen
+### HU-SP-074 — Aceptar o rechazar una meta que me proponen
 
 **Como** persona a la que un profesional le propone objetivos nutricionales
 **quiero** decidir si los adopto
@@ -1260,7 +1260,7 @@ entrada, no hay credenciales de terceros y no existe ninguna categoría nueva qu
 proteger. Por eso esta épica no añade scopes, no cambia lo que un profesional
 puede ver y no toca la fórmula de acceso.
 
-#### HU-SP-075 — Publicar mis entrenamientos en Apple Health o Health Connect
+### HU-SP-075 — Publicar mis entrenamientos en Apple Health o Health Connect
 
 **Como** persona que usa Apple Health o Health Connect
 **quiero** que mis sesiones de Allfit aparezcan allí
@@ -1294,7 +1294,7 @@ bloque 4 ya introduce.
 
 ## E-SP-12 · Datos de contacto y notificaciones
 
-#### HU-SP-076 — Cambiar mi correo o mi teléfono
+### HU-SP-076 — Cambiar mi correo o mi teléfono
 
 **Como** persona registrada
 **quiero** cambiar mi correo o mi teléfono de contacto
@@ -1310,7 +1310,7 @@ bloque 4 ya introduce.
 4. Nunca quedo con un correo distinto en la aplicación y en el inicio de sesión: o cambian los dos o no cambia ninguno.
 5. Mis datos de contacto son míos y viven en mi perfil, no en el sistema de autenticación.
 
-#### HU-SP-077 — Verificar mi correo o mi teléfono
+### HU-SP-077 — Verificar mi correo o mi teléfono
 
 **Como** persona que cambió su contacto
 **quiero** verificarlo
@@ -1325,7 +1325,7 @@ bloque 4 ya introduce.
 3. Si el desafío venció, el contacto anterior sigue siendo el vigente y no pierdo nada.
 4. Verificar mi contacto no me da ningún permiso ni cambia lo que comparto.
 
-#### HU-SP-078 — Elegir cómo quiero que me avisen
+### HU-SP-078 — Elegir cómo quiero que me avisen
 
 **Como** persona
 **quiero** decidir por qué canal recibo cada tipo de aviso
@@ -1352,7 +1352,7 @@ La regla que gobierna la épica: **pagar y compartir datos son decisiones
 separadas.** Suscribirse no concede ningún permiso, y cancelar no revoca
 ninguno.
 
-#### HU-SP-079 — Ver qué planes ofrece mi gimnasio
+### HU-SP-079 — Ver qué planes ofrece mi gimnasio
 
 **Como** persona con relación con un gimnasio
 **quiero** ver los planes que ofrece y su precio
@@ -1366,7 +1366,7 @@ ninguno.
 2. Veo el precio, la moneda y si el cobro es mensual o anual.
 3. No veo planes retirados ni borradores.
 
-#### HU-SP-080 — Suscribirme a un plan
+### HU-SP-080 — Suscribirme a un plan
 
 **Como** persona que quiere entrenar en un gimnasio
 **quiero** suscribirme a uno de sus planes
@@ -1383,7 +1383,7 @@ ninguno.
 5. Solo puedo tener un plan vivo a la vez con el mismo gimnasio.
 6. Si el gimnasio no tiene su medio de cobro configurado, se me dice claramente en lugar de dejarme a medias.
 
-#### HU-SP-081 — Ver mi plan y mis pagos
+### HU-SP-081 — Ver mi plan y mis pagos
 
 **Como** persona suscrita
 **quiero** ver en qué estado está mi plan y qué he pagado
@@ -1397,7 +1397,7 @@ ninguno.
 2. Veo cada cobro con su resultado, incluidos los que fallaron.
 3. Nunca veo un dato de tarjeta, porque Allfit no lo tiene.
 
-#### HU-SP-082 — Cancelar mi plan
+### HU-SP-082 — Cancelar mi plan
 
 **Como** persona suscrita
 **quiero** cancelar mi plan cuando quiera
@@ -1415,7 +1415,7 @@ ninguno.
 
 ## E-SP-14 · Qué pasa si no pago
 
-#### HU-SP-083 — Entender qué pierdo si mi pago falla
+### HU-SP-083 — Entender qué pierdo si mi pago falla
 
 **Como** persona a la que se le venció la tarjeta
 **quiero** saber exactamente qué se me suspende y qué conservo
@@ -1449,7 +1449,7 @@ y lo sigue viendo.
 > plan, sin tocar código. Estas historias describen **cómo se comporta** el
 > sistema ante cualquier frontera, no cuál es.
 
-#### HU-SP-084 — Ver qué me da Premium
+### HU-SP-084 — Ver qué me da Premium
 
 **Como** persona que usa Allfit
 **quiero** ver qué incluye cada plan y cuánto cuesta
@@ -1464,7 +1464,7 @@ y lo sigue viendo.
 3. Ninguna función de privacidad aparece como algo que deba pagar, porque ninguna puede limitarse.
 4. Si Allfit cambia qué incluye cada plan, lo veo reflejado sin tener que actualizar la aplicación.
 
-#### HU-SP-085 — Suscribirme a Premium
+### HU-SP-085 — Suscribirme a Premium
 
 **Como** persona que entrena por su cuenta
 **quiero** pagarle a Allfit para tener la aplicación completa
@@ -1479,7 +1479,7 @@ y lo sigue viendo.
 3. Pagarle a Allfit **no comparte ninguno de mis datos con nadie** ni cambia mis permisos.
 4. Mis datos de tarjeta no los guarda Allfit.
 
-#### HU-SP-086 — Saber si tengo Premium y por qué
+### HU-SP-086 — Saber si tengo Premium y por qué
 
 **Como** persona
 **quiero** ver si tengo Premium y de dónde me viene
@@ -1495,7 +1495,7 @@ y lo sigue viendo.
 4. Ante cualquier duda el sistema me trata como plan gratuito, nunca al revés.
 5. Si Allfit endurece el plan gratuito, **a mí no me quita nada si ya estaba suscrita**: conservo la versión que acepté.
 
-#### HU-SP-087 — Cancelar mi Premium
+### HU-SP-087 — Cancelar mi Premium
 
 **Como** persona suscrita a Allfit
 **quiero** cancelar cuando quiera
@@ -1509,7 +1509,7 @@ y lo sigue viendo.
 2. Si además tengo plan activo con un gimnasio que incluye Premium, **lo conservo por esa vía**.
 3. Cancelar no afecta mi relación con ningún gimnasio ni ninguno de mis permisos.
 
-#### HU-SP-088 — Entender qué pasa con mi Premium si dejo de pagarle al gimnasio
+### HU-SP-088 — Entender qué pasa con mi Premium si dejo de pagarle al gimnasio
 
 **Como** persona cuyo Premium viene de su gimnasio
 **quiero** saber qué pierdo si mi plan con ellos se suspende
@@ -1529,7 +1529,7 @@ y lo sigue viendo.
 
 ## E-SP-16 · Hoy y navegación
 
-#### HU-SP-089 — Ver qué debo hacer hoy
+### HU-SP-089 — Ver qué debo hacer hoy
 
 **Como** persona que abre la aplicación
 **quiero** ver de una lo que me toca hoy
@@ -1545,7 +1545,7 @@ y lo sigue viendo.
 4. Si mi plan con el gimnasio está suspendido, lo veo aquí con claridad y sé qué hacer.
 5. Todo se muestra en mi zona horaria.
 
-#### HU-SP-090 — Moverme por la aplicación
+### HU-SP-090 — Moverme por la aplicación
 
 **Como** persona
 **quiero** llegar rápido a lo que uso
@@ -1559,7 +1559,7 @@ y lo sigue viendo.
 2. Si estoy entrenando, la sesión en curso está siempre a un toque, aunque me haya ido a otra parte.
 3. Lo que no tengo contratado o no aplica a mi caso **no aparece como una pantalla vacía**: simplemente no está.
 
-#### HU-SP-091 — Ver mis avisos
+### HU-SP-091 — Ver mis avisos
 
 **Como** persona
 **quiero** ver lo que me han notificado
@@ -1574,7 +1574,7 @@ y lo sigue viendo.
 3. Desde cada aviso llego a donde se resuelve.
 4. **Un aviso nunca contiene mis datos**: dice qué pasó y me lleva a la aplicación.
 
-#### HU-SP-092 — Saber cuándo estoy sin conexión
+### HU-SP-092 — Saber cuándo estoy sin conexión
 
 **Como** persona entrenando en un gimnasio con mala señal
 **quiero** saber qué está guardado y qué no
@@ -1590,7 +1590,7 @@ y lo sigue viendo.
 4. Si algo no se pudo sincronizar, se me dice cuál y por qué, y no se pierde.
 5. Las cosas que necesitan conexión —dar un permiso, pagar, terminar una relación— se muestran deshabilitadas con su motivo, no fallan al intentarlas.
 
-#### HU-SP-093 — Buscar en mi historial
+### HU-SP-093 — Buscar en mi historial
 
 **Como** persona con meses de entrenamiento
 **quiero** buscar una sesión o un movimiento
@@ -1604,7 +1604,7 @@ y lo sigue viendo.
 2. Puedo filtrar por periodo.
 3. Si no hay resultados se dice claramente.
 
-#### HU-SP-094 — Ajustar mis preferencias
+### HU-SP-094 — Ajustar mis preferencias
 
 **Como** persona
 **quiero** configurar unidades e idioma

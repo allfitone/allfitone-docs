@@ -12,7 +12,7 @@ entenderlo ni para construir a partir de él.
 ## 1. Cómo se lee una historia
 
 ```markdown
-#### HU-BO-012 — Título escrito desde quien actúa
+### HU-BO-012 — Título escrito desde quien actúa
 
 **Como** <quién>
 **quiero** <qué>
@@ -94,7 +94,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 ## E-BO-01 · Entrar
 
-#### HU-BO-001 — Iniciar sesión
+### HU-BO-001 — Iniciar sesión
 
 **Como** integrante del equipo de Allfit
 **quiero** entrar al Backoffice con mi cuenta
@@ -110,7 +110,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 4. La sesión del Backoffice es independiente de la de Allfit OS: entrar a uno no me mete al otro.
 5. Entrar no habilita ninguna operación: cada pantalla y acción comprueba un deber vigente y, para funciones sensibles, AAL2.
 
-#### HU-BO-002 — Cerrar sesión
+### HU-BO-002 — Cerrar sesión
 
 **Como** integrante del equipo
 **quiero** cerrar sesión
@@ -123,7 +123,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 1. Al cerrar sesión no queda nada consultable sin volver a entrar.
 2. La sesión caduca sola tras un tiempo de inactividad.
 
-#### HU-BO-003 — Recuperar mi contraseña
+### HU-BO-003 — Recuperar mi contraseña
 
 **Como** integrante del equipo que olvidó su contraseña
 **quiero** restablecerla
@@ -141,7 +141,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 ## E-BO-02 · Panel de inicio
 
-#### HU-BO-004 — Ver cómo va el negocio
+### HU-BO-004 — Ver cómo va el negocio
 
 **Como** fundador
 **quiero** abrir el Backoffice y ver el estado de Allfit
@@ -159,7 +159,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 6. Si algo no se puede calcular aparece vacío, **no en cero**. Cero y "no sé" son cosas distintas.
 7. El panel exige el deber `view_platform_metrics`; sólo expone agregados con umbral mínimo y nunca permite navegar desde una cifra hasta el contenido de una persona.
 
-#### HU-BO-005 — Ver qué necesita atención
+### HU-BO-005 — Ver qué necesita atención
 
 **Como** integrante del equipo
 **quiero** que el panel me muestre lo pendiente o atascado
@@ -180,7 +180,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 ## E-BO-03 · Personas
 
-#### HU-BO-006 — Buscar a una persona
+### HU-BO-006 — Buscar a una persona
 
 **Como** integrante del equipo atendiendo un caso
 **quiero** encontrar a alguien por su correo, nombre o identificador
@@ -195,7 +195,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 3. Si no hay resultados se dice claramente; no aparece una lista vacía sin explicación.
 4. La búsqueda exige `diagnose_support_metadata`, referencia de caso y queda registrada incluso si no encuentra resultados.
 
-#### HU-BO-007 — Ver el estado operativo de una persona
+### HU-BO-007 — Ver el estado operativo de una persona
 
 **Como** integrante del equipo
 **quiero** abrir su estado operativo minimizado
@@ -211,7 +211,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 4. La ficha exige `diagnose_support_metadata`, referencia de caso y registra la consulta.
 5. La ficha carga aunque falten datos y representa desconocido como vacío, nunca como cero o falso.
 
-#### HU-BO-008 — Ver el entrenamiento de una persona
+### HU-BO-008 — Ver el entrenamiento de una persona
 
 **Como** integrante del equipo atendiendo un problema de registro
 **quiero** ver sus sesiones y su agenda
@@ -228,7 +228,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 5. Sólo puedo consultar mediante mi propia ventana break-glass estándar, aprobada para esa persona, caso, propósito y categorías; dura como máximo 30 minutos.
 6. Cada lectura revalida AAL2, deber, quorum, categoría y vigencia, y registra resultado permitido o denegado antes de devolver contenido.
 
-#### HU-BO-009 — Ver cuerpo, salud y nutrición
+### HU-BO-009 — Ver cuerpo, salud y nutrición
 
 **Como** integrante del equipo
 **quiero** consultar sus mediciones, su contexto de salud y su registro de comidas
@@ -245,7 +245,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 5. Fotos, archivos y `nutrition_media` se rechazan antes de abrir la ventana; conocer que existe un medio no concede URL, referencia de storage ni bytes.
 6. Cada lectura revalida AAL2, deber, quorum, categoría y vigencia, y registra resultado permitido o denegado antes de devolver contenido.
 
-#### HU-BO-010 — Ayudar a corregir un dato de identidad
+### HU-BO-010 — Ayudar a corregir un dato de identidad
 
 **Como** integrante del equipo
 **quiero** iniciar el flujo seguro para que una persona corrija su nombre, correo o teléfono
@@ -268,7 +268,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 11. **No puedo tocar** su entrenamiento, su cuerpo, su salud ni su nutrición. Ese historial es suyo y se corrige desde su app.
 12. Quedan registrados quien inició la ayuda, la persona que confirmó, los estados y las fechas; la auditoría nunca conserva contraseñas, códigos ni secretos.
 
-#### HU-BO-011 — Reenviar una verificación, recuperación o invitación
+### HU-BO-011 — Reenviar una verificación, recuperación o invitación
 
 **Como** integrante del equipo
 **quiero** reenviar una invitación, verificación o recuperación pendiente
@@ -292,7 +292,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 ## E-BO-04 · Gimnasios
 
-#### HU-BO-012 — Buscar y listar gimnasios
+### HU-BO-012 — Buscar y listar gimnasios
 
 **Como** integrante del equipo
 **quiero** ver todos los gimnasios y buscar uno
@@ -306,7 +306,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 2. Busco por nombre.
 3. Distingo los que están operando de los que se crearon y nadie reclamó.
 
-#### HU-BO-013 — Ver la ficha de un gimnasio
+### HU-BO-013 — Ver la ficha de un gimnasio
 
 **Como** integrante del equipo
 **quiero** abrir un gimnasio y ver cómo está
@@ -323,7 +323,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 5. Veo si tiene su medio de cobro conectado, **sin ver ninguna credencial**.
 6. Veo si está habilitado para dar Premium a sus clientes.
 
-#### HU-BO-014 — Crear un gimnasio y entregárselo a su dueño
+### HU-BO-014 — Crear un gimnasio y entregárselo a su dueño
 
 **Como** fundador cerrando una venta
 **quiero** montar el gimnasio desde el Backoffice y entregárselo
@@ -342,7 +342,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 7. Queda registrado quién la creó y a quién se la entregó.
 8. Crear o cancelar organizaciones no reclamadas exige `manage_organization_lifecycle`, AAL2 y actor humano auditado.
 
-#### HU-BO-015 — Cancelar un gimnasio que nadie reclamó
+### HU-BO-015 — Cancelar un gimnasio que nadie reclamó
 
 **Como** integrante del equipo
 **quiero** eliminar una organización creada por error o nunca reclamada
@@ -357,7 +357,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 3. Queda registro de la cancelación.
 4. La acción exige `manage_organization_lifecycle`, AAL2 y no se deriva del rol base `allfit_admin`.
 
-#### HU-BO-016 — Suspender un gimnasio
+### HU-BO-016 — Suspender un gimnasio
 
 **Como** fundador
 **quiero** suspender a un gimnasio que incumplió
@@ -376,7 +376,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 7. Queda registrado quién lo suspendió, cuándo y con qué motivo.
 8. Suspender o reactivar exige `manage_organization_lifecycle`, AAL2 y motivo cerrado; el actor se conserva como persona y asignación de deber vigentes.
 
-#### HU-BO-017 — Cancelar la relación con un gimnasio
+### HU-BO-017 — Cancelar la relación con un gimnasio
 
 **Como** fundador
 **quiero** terminar definitivamente con un gimnasio
@@ -398,7 +398,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 ## E-BO-05 · Suscripciones y pagos
 
-#### HU-BO-018 — Ver los pagos de una persona
+### HU-BO-018 — Ver los pagos de una persona
 
 **Como** integrante del equipo atendiendo un reclamo de cobro
 **quiero** ver su suscripción y su historial de pagos
@@ -414,7 +414,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 4. **Nunca veo datos de tarjeta**, porque Allfit no los guarda.
 5. La consulta exige `view_billing_metadata`, referencia de caso y una proyección cerrada; pagos no son categoría break-glass.
 
-#### HU-BO-019 — Ver las suscripciones de un gimnasio
+### HU-BO-019 — Ver las suscripciones de un gimnasio
 
 **Como** integrante del equipo
 **quiero** ver todas las suscripciones de un gimnasio
@@ -429,7 +429,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 3. Si su medio de cobro no está conectado se ve claramente, porque explica que no tenga suscripciones.
 4. La consulta exige `view_billing_metadata` y sólo devuelve estados, periodos y agregados comerciales minimizados.
 
-#### HU-BO-020 — Ver los ingresos de Allfit Premium
+### HU-BO-020 — Ver los ingresos de Allfit Premium
 
 **Como** fundador
 **quiero** ver quién le paga Premium a Allfit y cuánto entra
@@ -448,7 +448,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 ## E-BO-06 · Contenido global y verificación
 
-#### HU-BO-021 — Verificar el título de un profesional
+### HU-BO-021 — Verificar el título de un profesional
 
 **Como** integrante del equipo
 **quiero** comprobar que un título profesional es real y dejarlo verificado
@@ -474,7 +474,7 @@ nadie verifica, esa función no se puede usar.
 7. Cambiar el nombre declarado no modifica esta verificación. Si deja de ser compatible con la credencial, se abre una revisión nueva y el evento anterior permanece intacto.
 8. Decidir exige `verify_professional_credentials`, AAL2, asignación vigente y ausencia de conflicto; `curate_global_catalog` no concede esta capacidad.
 
-#### HU-BO-022 — Publicar el catálogo global
+### HU-BO-022 — Publicar el catálogo global
 
 **Como** integrante del equipo
 **quiero** publicar disciplinas, tipos de actividad, movimientos y equipamiento
@@ -489,7 +489,7 @@ nadie verifica, esa función no se puede usar.
 3. Archivar algo lo retira de las búsquedas pero **no rompe** las sesiones ni las plantillas que ya lo usaban.
 4. Publicar o archivar exige `curate_global_catalog`, AAL2 y una asignación vigente.
 
-#### HU-BO-023 — Publicar las reglas de validación de una actividad
+### HU-BO-023 — Publicar las reglas de validación de una actividad
 
 **Como** integrante del equipo
 **quiero** publicar qué datos mínimos exige cada tipo de actividad
@@ -504,7 +504,7 @@ nadie verifica, esa función no se puede usar.
 3. Publicar una versión nueva **no reinterpreta** las sesiones ya registradas.
 4. Publicar exige `curate_global_catalog`, AAL2 y una asignación vigente.
 
-#### HU-BO-024 — Publicar las definiciones de permiso
+### HU-BO-024 — Publicar las definiciones de permiso
 
 **Como** integrante del equipo
 **quiero** publicar qué abarca exactamente cada permiso que una persona concede
@@ -523,7 +523,7 @@ nadie verifica, esa función no se puede usar.
 
 ## E-BO-07 · Planes de Allfit y Premium
 
-#### HU-BO-025 — Publicar un plan de Allfit
+### HU-BO-025 — Publicar un plan de Allfit
 
 **Como** fundador
 **quiero** publicar los planes que Allfit le vende a las personas
@@ -539,7 +539,7 @@ nadie verifica, esa función no se puede usar.
 4. Ninguna función de privacidad puede limitarse: ni ver quién accedió a sus datos, ni pedir su eliminación, ni administrar permisos.
 5. Publicar un plan exige `manage_platform_commercial`, AAL2 y revisión por otra persona cuando cambia precio o funciones.
 
-#### HU-BO-026 — Definir qué incluye cada plan
+### HU-BO-026 — Definir qué incluye cada plan
 
 **Como** fundador
 **quiero** decidir qué funciones y con qué límite tiene cada plan
@@ -555,7 +555,7 @@ nadie verifica, esa función no se puede usar.
 4. Veo qué cambia respecto de la versión anterior antes de publicar.
 5. Publicar exige `manage_platform_commercial`, AAL2 y conserva actor, asignación de deber y versión anterior.
 
-#### HU-BO-027 — Habilitar a un gimnasio para dar Premium
+### HU-BO-027 — Habilitar a un gimnasio para dar Premium
 
 **Como** fundador que cerró un acuerdo con un gimnasio
 **quiero** marcar que sus clientes activos tienen Premium
@@ -575,7 +575,7 @@ nadie verifica, esa función no se puede usar.
 
 ## E-BO-08 · Equipo de Allfit
 
-#### HU-BO-028 — Dar o quitar acceso a alguien del equipo
+### HU-BO-028 — Dar o quitar acceso a alguien del equipo
 
 **Como** fundador
 **quiero** dar o quitar el rol base y deberes de plataforma
@@ -592,7 +592,7 @@ nadie verifica, esa función no se puede usar.
 5. Quitar el rol revoca la sesión; suspender, revocar o vencer un deber corta inmediatamente sus operaciones y cierra ventanas break-glass del solicitante afectado.
 6. El historial de roles y deberes se conserva; retirar no borra ni reescribe.
 
-#### HU-BO-029 — Ver quién del equipo tiene acceso
+### HU-BO-029 — Ver quién del equipo tiene acceso
 
 **Como** fundador
 **quiero** ver quién puede entrar al Backoffice
@@ -606,7 +606,7 @@ nadie verifica, esa función no se puede usar.
 2. Veo sus deberes vigentes, suspendidos, vencidos o revocados, con vigencia, AAL, otorgante y última recertificación.
 3. La consulta exige `manage_platform_access` o `audit_platform_access`; ninguna organización ni persona externa puede verla.
 
-#### HU-BO-030 — Ver el registro de accesos
+### HU-BO-030 — Ver el registro de accesos
 
 **Como** responsable independiente de seguridad o privacidad
 **quiero** consultar quién del equipo miró los datos de quién
@@ -622,7 +622,7 @@ nadie verifica, esa función no se puede usar.
 4. **El registro no se puede editar ni borrar.**
 5. La consulta exige `audit_platform_access`, AAL2 y no permite revisar como auditor independiente un caso break-glass que solicité o aprobé.
 
-#### HU-BO-031 — Diagnosticar un problema técnico
+### HU-BO-031 — Diagnosticar un problema técnico
 
 **Como** integrante del equipo
 **quiero** ver el estado técnico de una operación que falló
@@ -641,7 +641,7 @@ nadie verifica, esa función no se puede usar.
 
 ## E-BO-09 · Obligaciones legales
 
-#### HU-BO-032 — Seguir las solicitudes de eliminación de datos
+### HU-BO-032 — Seguir las solicitudes de eliminación de datos
 
 **Como** integrante del equipo
 **quiero** ver y hacer seguimiento a las solicitudes de eliminación
@@ -656,7 +656,7 @@ nadie verifica, esa función no se puede usar.
 3. El plazo objetivo son 30 días y el panel avisa cuando alguna se acerca al límite.
 4. La consulta exige `manage_privacy_requests`, AAL2 y sólo muestra los datos necesarios para la disposición.
 
-#### HU-BO-033 — Suspender una eliminación por una obligación legal
+### HU-BO-033 — Suspender una eliminación por una obligación legal
 
 **Como** responsable ante un requerimiento
 **quiero** suspender la eliminación de datos concretos

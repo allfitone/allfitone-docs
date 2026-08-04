@@ -1,4 +1,4 @@
-# Alcance de base de datos V1 — Allfit OS + Allfit Space
+# Alcance de base de datos V1 — Allfit One
 
 **Estado:** aprobado; acceso Backoffice recertificado por ADR-028<br>
 **Fecha de consolidación:** 20 de julio de 2026<br>
@@ -8,7 +8,7 @@
 
 ## 1. Propósito
 
-Este documento define la frontera funcional y de datos de la primera baseline de base de datos para Allfit OS y Allfit Space.
+Este documento define la frontera funcional y de datos de la primera baseline de base de datos para el ecosistema Allfit One, consumida por OS, Space y Backoffice.
 
 Responde:
 

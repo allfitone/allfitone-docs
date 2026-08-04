@@ -1,4 +1,4 @@
-# Glosario de dominio — Allfit OS + Allfit Space
+# Glosario de dominio — Allfit One
 
 **Fecha:** 28 de julio de 2026
 **Estado:** aprobado y recertificado con Nutrición V1.<br>

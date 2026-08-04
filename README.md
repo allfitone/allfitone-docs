@@ -1,8 +1,8 @@
 # Allfit One Documentation
 
-Repositorio central de la documentación técnica y de alcance utilizada para desarrollar Allfit One.
+Repositorio central de la documentación técnica transversal y de la definición detallada de los productos que componen Allfit One.
 
-Aquí vive la documentación que anteriormente estaba distribuida entre `allfitone-os` y `allfitone-space`: especificaciones de producto, historias de usuario, decisiones de arquitectura, contratos y diseño de base de datos. Las especificaciones y HU se conservan porque son la fuente de alcance y trazabilidad de la implementación técnica.
+Aquí viven las especificaciones de producto, historias de usuario, decisiones de arquitectura, contratos y modelos compartidos por el ecosistema. Cada repositorio de implementación conserva la documentación necesaria para desarrollar, operar y mantener su propio código.
 
 ## Productos
 
@@ -10,7 +10,7 @@ Aquí vive la documentación que anteriormente estaba distribuida entre `allfito
 | --- | --- |
 | Allfit OS | [Especificación e historias de usuario](products/os/README.md) |
 | Allfit Space | [Especificación e historias de usuario](products/space/README.md) |
-| Allfit Backoffice | [Historias de usuario](products/backoffice/README.md) |
+| Allfit Backoffice | [Especificación e historias de usuario](products/backoffice/README.md) |
 
 La estructura admite nuevos productos mediante un directorio adicional en `products/<slug>/`.
 
@@ -22,16 +22,26 @@ La estructura admite nuevos productos mediante un directorio adicional en `produ
 - [Diseño propuesto](platform/database/refactor/03_PROPOSED_DESIGN/)
 - [Plan de ejecución](platform/database/refactor/04_EXECUTION/)
 
-## Límites
+## Frontera documental
 
-- `allfitone-os`, `allfitone-space` y `allfitone-backoffice` no almacenan esta documentación.
-- Los documentos propios de `allfitone-design-system` y `allfitone-landing-page` permanecen en esos repositorios.
-- No se duplican README, PRODUCT, DESIGN, changelogs ni guías pertenecientes a otros repositorios.
+| `allfitone-docs` | Repositorios de implementación |
+| --- | --- |
+| Definición, alcance e historias de cada producto | README y navegación del repositorio |
+| Arquitectura y decisiones que afectan a más de un producto | Instalación, desarrollo, pruebas y despliegue |
+| Contratos compartidos de API, datos, identidad y seguridad | Arquitectura y decisiones internas de la implementación |
+| Iniciativas técnicas transversales y su trazabilidad | Changelog, contribución, operación y mantenimiento local |
+
+- `allfitone-os`, `allfitone-space`, `allfitone-backoffice`, `allfitone-design-system` y `allfitone-landing-page` mantienen la documentación propia que necesitan.
+- Una fuente de verdad no se copia entre repositorios: se conserva en su propietario y los demás documentos la enlazan.
+- Si una decisión inicialmente local pasa a afectar a varios productos, su definición normativa se traslada a este repositorio y la documentación local conserva el enlace y el detalle de implementación.
 
 ## Validación
 
 ```bash
+npm ci
 npm run check
 ```
 
-La validación comprueba que todos los enlaces internos apunten a archivos o directorios existentes.
+La validación comprueba la estructura básica de Markdown, los enlaces y anchors internos, y el contrato OpenAPI 3.1.
+
+Las reglas para decidir dónde vive cada documento y cómo mantener sus fuentes de verdad están en [CONTRIBUTING.md](CONTRIBUTING.md).
