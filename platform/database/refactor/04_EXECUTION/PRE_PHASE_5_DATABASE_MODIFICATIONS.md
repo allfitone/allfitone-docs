@@ -91,6 +91,7 @@ El documento registra las decisiones de alcance aprobadas y las brechas de traza
 | `DB-P5-013` | P0 | Tipar referencias de perfil a catálogos | Pendiente |
 | `DB-P5-014` | P0 | Recompilar integridad, RLS e idempotencia | Pendiente |
 | `DB-P5-015` | P0 | Cerrar retención y anonimización física | Pendiente legal/producto |
+| `DB-P5-019` | P0 | Recertificar AuthKit, PKCE, claims y evidencia AAL2 | Pendiente antes de autenticación o Backoffice sensible |
 | `DB-P5-016` | P1 | Sustentar búsquedas y métricas de Backoffice | Pendiente |
 | `DB-P5-017` | P1 | Cerrar eventos, outbox, entregas y DLQ | Pendiente |
 | `DB-P5-018` | P1 | Completar contratos y OpenAPI | Pendiente |
@@ -111,6 +112,20 @@ Los socios acordaron el 3 de agosto de 2026 implementar la base de datos de form
 
 El diseño de Fases 1–4 sigue siendo referencia y mapa de riesgos, pero deja de ser una orden para materializar todo el modelo antes de validar flujos verticales. Una decisión transversal o irreversible se cierra antes de la primera HU que dependa de ella, no necesariamente antes de cualquier trabajo de Fase 5.
 
+### 4.2 Cambio de proveedor de autenticación
+
+`DB-P5-019` sustituye Cognito por WorkOS AuthKit sin cambiar la separación entre identidad externa y persona de dominio. Antes de implementar autenticación debe cerrar:
+
+- un environment WorkOS aislado por ambiente Allfit y Applications separadas para Space, OS y Backoffice;
+- Authorization Code con PKCE para Space, sin API key o client secret en el bundle;
+- validación de JWKS, `iss`, `exp`, `iat`, `sub`, `sid` y `client_id` por superficie;
+- rechazo de `org_id`, `role` y `permissions` de WorkOS como autoridad de dominio;
+- ciclo de refresh, rotación, cierre y revocación de sesiones;
+- binding de invitaciones por email al email verificado por WorkOS y decisión explícita para celular; AuthKit no prueba por sí solo control del teléfono;
+- evidencia verificable de MFA/step-up para establecer `aal2`, incluida la ruta SSO; `auth_time` solo prueba frescura y no basta por sí mismo.
+
+Hasta cerrar el último punto, cualquier operación que exija AAL2 permanece bloqueada y falla cerrada.
+
 ## 5. Identidad, contacto y recuperación
 
 ### 5.1 Problema
@@ -119,7 +134,7 @@ Las HU `HU-SP-076`, `HU-SP-077`, `HU-BO-010` y `HU-BO-011` exigen:
 
 - conservar el contacto anterior mientras el nuevo está pendiente;
 - verificar antes de promover;
-- coordinar el correo de perfil y el correo de ingreso en Cognito;
+- coordinar el correo de perfil y el correo de ingreso en WorkOS AuthKit;
 - registrar iniciado, esperando verificación, confirmado, vencido, cancelado y fallido;
 - permitir reenvío sin revelar código, token o enlace completo;
 - conservar autoría y fechas;
@@ -171,7 +186,7 @@ Columnas mínimas:
 
 - Solo una solicitud pendiente por persona y tipo de contacto.
 - El contacto vigente no cambia antes de `confirmed`.
-- La promoción del contacto en PostgreSQL y Cognito usa una saga cerrada y compensable: una falla no deja dos valores efectivos.
+- La promoción del email en PostgreSQL y WorkOS usa una saga cerrada y compensable: una falla no deja dos valores efectivos. El teléfono no se sincroniza como identidad de AuthKit y usa su propio contrato de verificación.
 - El contacto nuevo satisface unicidad sin permitir enumeración.
 - `confirmed`, `expired` y `cancelled` son terminales.
 - Reenviar no cambia sujeto, destino, finalidad o acción.
@@ -186,7 +201,7 @@ Columnas mínimas:
 - Dos solicitudes concurrentes no crean dos contactos pendientes efectivos.
 - Reenvío no revive una solicitud vencida.
 - Colisión de contacto produce respuesta indistinguible.
-- Falla de Cognito no modifica PostgreSQL; falla posterior de PostgreSQL ejecuta compensación o deja el caso recuperable sin doble vigencia.
+- Falla de WorkOS AuthKit no modifica PostgreSQL; falla posterior de PostgreSQL ejecuta compensación o deja el caso recuperable sin doble vigencia.
 - Backoffice solo ve estado y contacto parcialmente oculto.
 - Ningún log, evento u outbox contiene códigos o enlaces completos.
 

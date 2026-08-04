@@ -49,7 +49,7 @@ También custodia el sobre de invitación previo al registro. La invitación per
 ### 3.2 Qué pertenece a Identidad
 
 - una única persona canónica por ser humano dentro del ecosistema;
-- el vínculo entre esa persona y su cuenta externa autenticada por Cognito;
+- el vínculo entre esa persona y su cuenta externa autenticada por WorkOS AuthKit;
 - los intentos de onboarding y la evidencia versionada de elegibilidad adulta;
 - los datos privados mínimos de identidad y contacto con finalidad propia;
 - el perfil fitness personal y sus afirmaciones tipadas;
@@ -62,7 +62,7 @@ También custodia el sobre de invitación previo al registro. La invitación per
 
 | Concepto excluido | Dominio responsable | Motivo |
 | --- | --- | --- |
-| Credencial, contraseña, MFA, sesión o token | Amazon Cognito / infraestructura de autenticación | Cognito autentica; Allfit solo conserva el vínculo estable con el sujeto externo |
+| Credencial, contraseña, MFA, sesión o token | WorkOS AuthKit / infraestructura de autenticación | WorkOS AuthKit autentica; Allfit solo conserva el vínculo estable con el sujeto externo |
 | Organización, sede, membresía y rol interno | Organizaciones | Son contexto operativo, no identidad personal |
 | Relación profesional-persona | Relaciones | “Cliente” es un rol contextual, no una segunda persona |
 | Consentimiento, grant o definición de scope | Privacidad | El acceso compartido no forma parte de la identidad ni nace de una invitación |
@@ -81,7 +81,7 @@ Esto implica:
 
 - existe un solo Fitness ID por persona activa en V1;
 - no se crea otro Fitness ID al aceptar una invitación, entrar a una organización, contratar otro profesional o usar otro producto;
-- `person_id`, el identificador público del Fitness ID y el `sub` de Cognito son conceptos distintos, aunque el modelo lógico puede decidir cómo materializarlos;
+- `person_id`, el identificador público del Fitness ID y el `sub` de WorkOS AuthKit son conceptos distintos, aunque el modelo lógico puede decidir cómo materializarlos;
 - cerrar una cuenta revoca el acceso, pero la disposición de cada categoría del Fitness ID sigue su política propia;
 - una organización nunca obtiene ownership del Fitness ID completo.
 
@@ -90,7 +90,7 @@ Esto implica:
 | Concepto | Definición conceptual | Fuente de verdad |
 | --- | --- | --- |
 | Persona | Ser humano canónico que actúa con diferentes roles sin duplicar identidad | Identidad |
-| Cuenta de acceso | Vínculo local entre la persona y un sujeto externo `(provider, issuer, subject)` de Cognito | Cognito para autenticación; Identidad para el vínculo local |
+| Cuenta de acceso | Vínculo local entre la persona y un sujeto externo `(provider, issuer, subject)` de WorkOS AuthKit | WorkOS AuthKit para autenticación; Identidad para el vínculo local |
 | Intento de onboarding | Flujo previo a activar una persona, incluso cuando termina por no elegibilidad | Identidad |
 | Evidencia de elegibilidad | Resultado versionado de aplicar la política adulta al onboarding | Identidad y su política de elegibilidad |
 | Fitness ID | Agregado longitudinal personal compuesto por datos canónicos de varios dominios | Persona como raíz; cada dominio para los hechos que aporta |
@@ -108,7 +108,7 @@ Los nombres anteriores son conceptuales. Por ejemplo, “afirmación de perfil�
 | Concepto | Dueño lógico | Quién crea | Quién modifica | Quién consulta |
 | --- | --- | --- | --- | --- |
 | Persona | La propia persona; Allfit custodia el registro canónico | Servicio de registro, solo después de control personal, elegibilidad y onboarding | La persona modifica sus datos permitidos; estados restrictivos cambian mediante flujos autorizados y auditados | La persona; plataforma por necesidad técnica; terceros únicamente por contrato, relación, finalidad y grant aplicables |
-| Cuenta de acceso | La persona controla su uso; Allfit administra seguridad | Cognito crea el sujeto; Identidad crea el vínculo local durante onboarding | Cognito gestiona autenticación; Identidad vincula, bloquea o desvincula mediante flujo coordinado | La persona y servicios técnicos mínimos; una organización no administra la cuenta personal |
+| Cuenta de acceso | La persona controla su uso; Allfit administra seguridad | WorkOS AuthKit crea el sujeto; Identidad crea el vínculo local durante onboarding | WorkOS AuthKit gestiona autenticación; Identidad vincula, bloquea o desvincula mediante flujo coordinado | La persona y servicios técnicos mínimos; una organización no administra la cuenta personal |
 | Intento de onboarding | La persona es sujeto del dato; Allfit custodia seguridad y decisión | La propia persona inicia registro o aceptación de invitación | Flujo de onboarding añade estados y evidencia; no se reescribe un resultado para volverlo elegible | La persona y soporte restringido; la organización solo conoce el resultado necesario de su invitación, no detalles privados |
 | Evidencia de elegibilidad | La persona es sujeto; Allfit es fuente de la decisión aplicada | La declaración proviene de la persona y el backend aplica la política vigente | Se agregan reevaluaciones o revisiones autorizadas; no se sobrescribe la evidencia anterior | Identidad, seguridad y soporte restringido; otros dominios consumen solo el resultado necesario |
 | Fitness ID | La persona | Se activa al crear la persona elegible | Cada dominio añade o revisa sus propios hechos; no existe edición global destructiva | La persona; terceros solo mediante relación, finalidad, scope, nivel de acceso y capacidad vigentes |
@@ -124,7 +124,7 @@ Los nombres anteriores son conceptuales. Por ejemplo, “afirmación de perfil�
 | Concepto | Al terminar una relación profesional | Qué se conserva | Qué inicia disposición | Resultado esperado / suspensión válida |
 | --- | --- | --- | --- | --- |
 | Persona | Continúa intacta y desaparece de listados operativos de la organización | Identificador canónico mientras exista finalidad y evidencia mínima restringida cuando aplique | Cierre de cuenta, solicitud válida, fin de finalidad o descubrimiento de no elegibilidad | Eliminar o anonimizar categorías aplicables; conservar solo evidencia mínima bajo plazo. Un hold documentado puede suspender una categoría concreta |
-| Cuenta de acceso | No cambia por terminar una relación | Vínculo mientras la cuenta esté activa; evidencia técnica mínima tras cierre cuando sea necesaria | Cierre, compromiso, inactividad conforme a política o no elegibilidad | Revocar sesiones, deshabilitar/eliminar en Cognito y desvincular localmente; no borrar automáticamente hechos legítimos de otros dominios |
+| Cuenta de acceso | No cambia por terminar una relación | Vínculo mientras la cuenta esté activa; evidencia técnica mínima tras cierre cuando sea necesaria | Cierre, compromiso, inactividad conforme a política o no elegibilidad | Revocar sesiones, deshabilitar/eliminar en WorkOS AuthKit y desvincular localmente; no borrar automáticamente hechos legítimos de otros dominios |
 | Intento de onboarding | No aplica | Evidencia mínima de intentos elegibles; retención corta y separada para intentos no elegibles | Abandono, expiración, no elegibilidad o finalización | Eliminar datos transitorios al vencer la ventana; hold únicamente por seguridad, abuso o deber documentado |
 | Evidencia de elegibilidad | No cambia | Regla, versión, resultado, método, procedencia y tiempo mínimos | Cierre, reemplazo de finalidad o vencimiento de política de retención | Conservar restringida o disponer según política; nunca mantener fecha de nacimiento completa sin finalidad propia |
 | Fitness ID | La persona lo conserva; la organización pierde acceso en vivo y escritura, pero puede conservar la ventana histórica `frozen` definida por ADR-005 | Historial personal válido y hechos de cada dominio según su política | Cierre del Fitness ID, solicitud válida o vencimiento de finalidad por categoría | No existe borrado global por terminar una relación; cada categoría se elimina, anonimiza o retiene de forma restringida |
@@ -144,7 +144,7 @@ flowchart TD
     start{"¿Cómo inicia?"}
     direct["Registro directo en Space"]
     invitation["Invitación opcional desde OS"]
-    auth["La persona controla y verifica Cognito"]
+    auth["La persona controla y verifica WorkOS AuthKit"]
     eligibility{"Elegibilidad adulta"}
     blocked["Intento no elegible o en revisión<br/>sin persona ni Fitness ID"]
     onboarding["Términos y onboarding personal"]
@@ -190,7 +190,7 @@ flowchart TD
 
 #### Intento no elegible
 
-1. Puede existir temporalmente un sujeto externo en Cognito y un intento de onboarding.
+1. Puede existir temporalmente un sujeto externo en WorkOS AuthKit y un intento de onboarding.
 2. No se crea persona local, perfil, Fitness ID, membresía, relación, asignación o grant.
 3. Se bloquea el acceso operativo y se inicia la política corta de deshabilitación, eliminación y retención mínima.
 
@@ -198,7 +198,7 @@ flowchart TD
 
 | Dominio o sistema | Identidad entrega | Identidad recibe | Regla de frontera |
 | --- | --- | --- | --- |
-| Cognito | Contexto para onboarding y acciones coordinadas de cierre/bloqueo | `(issuer, subject)`, contacto verificado y estado de autenticación | Autenticado no significa persona elegible ni autorizada |
+| WorkOS AuthKit | Contexto para onboarding y acciones coordinadas de cierre/bloqueo | `(issuer, subject)`, email verificado y estado de autenticación | Autenticado no significa persona elegible ni autorizada; un celular requiere prueba separada |
 | Organizaciones | `person_id` y perfil profesional mínimo permitido | Organización/emisor válidos para invitaciones y membresías materializadas | Organización y membresía nunca se almacenan como atributos de persona |
 | Relaciones | Referencias canónicas de persona y profesional | Inicio, vigencia y terminación de vínculos | Cliente/profesional son roles contextuales; la persona no se duplica |
 | Privacidad | Sujeto, categorías y procedencia necesarias para evaluar acceso | Grants, scopes, niveles de acceso y revocaciones | Identidad no interpreta una invitación o relación como consentimiento global |
@@ -210,10 +210,10 @@ flowchart TD
 
 1. Space y OS referencian la misma persona canónica y nunca mantienen copias por producto.
 2. Una persona puede registrarse y usar Space sin invitación, organización o relación profesional.
-3. OS nunca crea una cuenta Cognito o una persona en nombre del destinatario.
+3. OS nunca crea un usuario WorkOS o una persona en nombre del destinatario.
 4. Una invitación pendiente no es una persona, cuenta, perfil, consentimiento, membresía, relación o asignación.
 5. Una persona existente acepta invitaciones posteriores con el mismo `person_id` y Fitness ID.
-6. Cognito autentica, pero `(issuer, subject)` no reemplaza la identidad de dominio.
+6. WorkOS AuthKit autentica, pero `(issuer, subject)` no reemplaza la identidad de dominio.
 7. Toda persona activa en V1 tiene evidencia versionada de elegibilidad de 18 años o más.
 8. Ausencia, fallo o estado desconocido de elegibilidad nunca habilitan acceso.
 9. V1 no crea menores, representantes, dependientes, cuentas familiares o perfiles tutelados.
@@ -854,7 +854,7 @@ En V1 solo la propia persona adulta concede o rechaza permisos sobre su Fitness 
 | Términos generales, política de privacidad o aceptación contractual | Dominio legal/compliance correspondiente | Tienen texto, finalidad y evidencia propias; no son grants de coaching |
 | Contrato, orden, factura, pago o membresía comercial | Dominio futuro de comercio | Su base y retención no se modelan como consentimiento de Fitness ID |
 | Permiso de publicación, marketing, IA, investigación o entrenamiento de modelos | Dominios futuros | Ninguno se hereda de los siete scopes V1 |
-| Credencial, token o sesión de autenticación | Cognito / seguridad | Autenticación identifica al actor, pero no autoriza tratamiento de datos |
+| Credencial, token o sesión de autenticación | WorkOS AuthKit / seguridad | Autenticación identifica al actor, pero no autoriza tratamiento de datos |
 
 ### 6.4 Consentimiento, evento y grant
 
@@ -2632,7 +2632,7 @@ Demostrar que una persona adulta puede registrarse directamente en Allfit Space,
 
 #### Precondiciones
 
-- La persona no tiene cuenta Cognito ni `person_id` previo.
+- La persona no tiene usuario WorkOS ni `person_id` previo.
 - No existe invitación de OS.
 - No existe organización, membresía, relación profesional, asignación o grant.
 - La persona declara cumplir la política global de elegibilidad de 18 años o más.
@@ -2648,14 +2648,14 @@ Al finalizar existe una sola persona canónica vinculada a una sola cuenta local
 sequenceDiagram
     actor Person as "Persona adulta"
     participant Space as "Allfit Space"
-    participant Cognito as "Amazon Cognito"
+    participant Auth as "WorkOS AuthKit"
     participant Identity as "Identidad"
     participant Catalog as "Catálogo"
     participant Execution as "Ejecución"
 
     Person->>Space: Iniciar registro directo
-    Space->>Cognito: SignUp/login iniciado por la persona
-    Cognito-->>Person: Verificar email o celular
+    Space->>Auth: Registro/autenticación iniciados por la persona
+    Auth-->>Person: Verificar email o celular
     Person->>Identity: Declarar elegibilidad y completar onboarding
     Identity->>Identity: Evaluar política adulta versionada
     Identity->>Identity: Crear persona + vínculo de cuenta + Fitness ID
@@ -2673,14 +2673,14 @@ Space coordina la experiencia, pero no es fuente de verdad ni owner de las entid
 
 #### Paso 1 — Autenticación controlada por la persona
 
-La persona inicia SignUp o login desde Space. Cognito crea el sujeto externo y verifica control del email o celular.
+La persona inicia el registro o login desde Space. WorkOS AuthKit crea el usuario externo y verifica control del email. Verificar un celular requiere el contrato separado definido por ADR-002/`DB-P5-019`.
 
 En este momento:
 
-- puede existir un sujeto temporal en Cognito;
+- puede existir un sujeto temporal en WorkOS AuthKit;
 - todavía no existe `identity.people` ni Fitness ID;
 - autenticación no demuestra elegibilidad adulta;
-- Space no asigna rol de negocio desde claims de Cognito;
+- Space no asigna rol de negocio desde claims de WorkOS AuthKit;
 - no existe cuenta local activa hasta completar el onboarding elegible.
 
 Si se repite el flujo con el mismo sujeto externo, el vínculo local debe converger mediante la unicidad de `(provider, issuer, subject)` y la idempotencia del onboarding.
@@ -2704,7 +2704,7 @@ Si el resultado es `ineligible_age`, desconocido, falla o requiere revisión:
 
 - no se crea persona, cuenta local, perfil o Fitness ID;
 - no se recopilan datos corporales, de salud o entrenamiento;
-- el sujeto Cognito no obtiene endpoints operativos;
+- el usuario WorkOS no obtiene endpoints operativos;
 - comienza su flujo corto de restricción, deshabilitación y disposición.
 
 Solo el resultado elegible permite continuar con términos, onboarding y creación canónica.
@@ -2714,7 +2714,7 @@ Solo el resultado elegible permite continuar con términos, onboarding y creaci�
 Identidad crea o vincula transaccionalmente:
 
 - una persona canónica;
-- una cuenta local asociada al sujeto Cognito;
+- una cuenta local asociada al usuario WorkOS;
 - el Fitness ID longitudinal de esa persona;
 - evidencia de onboarding y elegibilidad;
 - el perfil inicial o su capacidad de recibir afirmaciones.
@@ -2836,7 +2836,7 @@ Space no persiste una copia autoritativa del historial. OS tampoco recibe o sinc
 
 | Concepto | Dominio/fuente | Se crea en el escenario | Owner o sujeto |
 | --- | --- | --- | --- |
-| Sujeto autenticado | Cognito | Sí | La persona controla la cuenta; Cognito autentica |
+| Sujeto autenticado | WorkOS AuthKit | Sí | La persona controla la cuenta; WorkOS AuthKit autentica |
 | Intento de onboarding | Identidad | Sí | Persona como sujeto; Allfit custodia seguridad |
 | Evidencia de elegibilidad | Identidad | Sí, solo evidencia mínima | Persona como sujeto; Identidad aplica política |
 | Persona canónica | Identidad | Sí | Persona |
@@ -2871,7 +2871,7 @@ Space no persiste una copia autoritativa del historial. OS tampoco recibe o sinc
 | --- | --- |
 | Falla o ausencia de elegibilidad | No crea persona, perfil, Fitness ID o datos fitness |
 | Retry concurrente de onboarding | Crea como máximo una persona y un vínculo de cuenta |
-| Token Cognito válido sin cuenta local | Solo accede al onboarding, no al Fitness ID |
+| Token WorkOS AuthKit válido sin cuenta local | Solo accede al onboarding, no al Fitness ID |
 | Persona intenta usar `person_id` ajeno | Backend/RLS deniegan sin filtrar datos |
 | Doble inicio con misma intención idempotente | Reutiliza la misma sesión cuando corresponda; no duplica actividad por transporte |
 | Doble finalización | Converge al mismo estado y no duplica resultados/eventos |
@@ -2884,7 +2884,7 @@ Space no persiste una copia autoritativa del historial. OS tampoco recibe o sinc
 | Evento | Efecto |
 | --- | --- |
 | Cierre de sesión/login | Revoca tokens/sesión técnica; no elimina Fitness ID |
-| Cierre de cuenta/Fitness ID | Revoca Cognito y vínculo local; cada categoría inicia su política de disposición |
+| Cierre de cuenta/Fitness ID | Revoca WorkOS AuthKit y vínculo local; cada categoría inicia su política de disposición |
 | Supresión válida de historial | Elimina sesiones/resultados/derivados incluidos, salvo mínimo afectado por obligación o hold |
 | Conservación estadística legítima | Solo mediante anonimización irreversible antes de conservar |
 | Hold documentado | Suspende únicamente los targets incluidos; no habilita acceso operativo |
@@ -3038,13 +3038,13 @@ Si la entrega falla, la invitación puede conservar su estado y evidencia operat
 
 Este escenario termina antes de cualquier decisión. Si el destinatario continúa después:
 
-1. inicia personalmente SignUp o login en Cognito;
+1. inicia personalmente el registro o autenticación mediante AuthKit;
 2. verifica control del mismo contacto normalizado;
 3. acredita elegibilidad adulta y completa términos/onboarding;
 4. Identidad crea o reutiliza la persona, cuenta local y Fitness ID;
 5. decide cada intención por separado.
 
-Puede existir temporalmente un sujeto Cognito después de iniciar el enlace y seguir sin existir una persona de dominio. Autenticarse no materializa la invitación: faltan elegibilidad, onboarding y decisiones explícitas.
+Puede existir temporalmente un usuario WorkOS después de iniciar el enlace y seguir sin existir una persona de dominio. Autenticarse no materializa la invitación: faltan elegibilidad, onboarding y decisiones explícitas.
 
 Si el contacto ya correspondía a una persona de Space, la invitación sigue naciendo sin `person_id` visible o inferido para la organización. La asociación con esa persona se realiza únicamente después de autenticación y coincidencia del contacto verificado; esa convergencia se valida en el escenario 4.
 
@@ -3061,7 +3061,7 @@ Si el contacto ya correspondía a una persona de Space, la invitación sigue nac
 | Token hasheado | Identidad/seguridad | Sí | Allfit custodia seguridad; no es dato de perfil |
 | Intenciones tipadas | Identidad | Sí | Organización sobre la propuesta; destinatario sobre la decisión futura |
 | Eventos de entrega | Identidad/infraestructura de notificación | Cuando ocurran | Allfit custodia evidencia operativa mínima |
-| Sujeto Cognito del destinatario | Cognito | No en el recorrido pendiente base | No aplica |
+| Usuario WorkOS del destinatario | WorkOS AuthKit | No en el recorrido pendiente base | No aplica |
 | Persona/cuenta/Fitness ID del destinatario | Identidad | No | No aplica |
 | Membresía del destinatario | Organizaciones | No | No aplica |
 | Relación de servicio | Relaciones | No | No aplica |
@@ -3122,7 +3122,7 @@ Un hold de seguridad documentado puede suspender la disposición de targets conc
 | Riesgo | Resultado del recorrido |
 | --- | --- |
 | Contacto tratado como persona | No ocurre: el destino pertenece al sobre y no recibe `person_id` |
-| Cuenta Cognito creada por OS | No ocurre: solo el titular puede iniciar autenticación |
+| Usuario WorkOS creado por OS | No ocurre: solo el titular puede iniciar autenticación |
 | Cliente provisional en Relaciones | No ocurre: la intención permanece en Identidad hasta ser aceptada |
 | Membresía provisional en Organizaciones | No ocurre: el rol propuesto no es un miembro efectivo |
 | Asignación provisional en Planificación | No ocurre: se referencia programa/versión sin crear asignación |
@@ -3176,7 +3176,7 @@ Al finalizar existen una persona canónica, una cuenta local, un Fitness ID y un
 sequenceDiagram
     actor Person as "Persona invitada"
     participant UI as "Space / flujo de aceptación"
-    participant Cognito as "Amazon Cognito"
+    participant Auth as "WorkOS AuthKit"
     participant Identity as "Identidad"
     participant Organizations as "Organizaciones"
     participant Relations as "Relaciones"
@@ -3184,8 +3184,8 @@ sequenceDiagram
     participant Privacy as "Privacidad"
 
     Person->>UI: Abrir invitación vigente
-    UI->>Cognito: SignUp iniciado por la persona
-    Cognito-->>Person: Verificar contacto invitado
+    UI->>Auth: Registro iniciado por la persona
+    Auth-->>Person: Devolver email verificado
     Person->>Identity: Elegibilidad, términos y onboarding
     Identity->>Identity: Preparar persona + cuenta + Fitness ID
     Identity-->>Person: Presentar cada intención por separado
@@ -3207,13 +3207,13 @@ La secuencia describe responsabilidades conceptuales. Como los dominios comparte
 
 La persona inicia personalmente SignUp desde el enlace. El backend valida:
 
-- access token de Cognito, incluidos firma, issuer, expiración, `token_use` y app client;
+- access token de AuthKit, incluidos firma mediante JWKS, `iss`, `exp`, `iat`, `sub`, `sid` y `client_id` de la WorkOS Application esperada;
 - contacto verificado;
 - coincidencia exacta entre el contacto normalizado y el destino de la invitación;
 - token de invitación, estado, expiración y no revocación;
 - controles de rate limiting, abuso e idempotencia.
 
-Conocer el token sin controlar el contacto no permite continuar. Cognito autentica al sujeto externo, pero todavía no sustituye elegibilidad, onboarding ni autorización de dominio.
+Conocer el token sin controlar el contacto no permite continuar. WorkOS AuthKit autentica al sujeto externo, pero todavía no sustituye elegibilidad, onboarding ni autorización de dominio.
 
 #### Paso 2 — Elegibilidad y onboarding propios
 
@@ -3222,7 +3222,7 @@ La persona declara y acredita lo necesario para aplicar la política adulta vers
 - evidencia mínima de elegibilidad;
 - aceptación de términos de plataforma y política de privacidad;
 - finalización del onboarding;
-- vínculo entre el sujeto Cognito y la cuenta local.
+- vínculo entre el usuario WorkOS y la cuenta local.
 
 La organización no completa ninguno de estos pasos ni recibe los datos privados usados para resolverlos. Los términos no se marcan como aceptados por abrir el enlace o por aceptar una relación.
 
@@ -3317,9 +3317,9 @@ Cuando todas las intenciones quedaron decididas:
 
 | Concepto | Dominio/fuente | Resultado | Owner, responsable o sujeto |
 | --- | --- | --- | --- |
-| Sujeto autenticado | Cognito | Creado y verificado por la persona | Persona controla la cuenta; Cognito autentica |
+| Sujeto autenticado | WorkOS AuthKit | Creado y verificado por la persona | Persona controla la cuenta; WorkOS AuthKit autentica |
 | Persona canónica | Identidad | Creada una vez | Persona |
-| Cuenta local | Identidad | Vinculada al sujeto Cognito | Persona; Allfit administra vínculo técnico |
+| Cuenta local | Identidad | Vinculada al usuario WorkOS | Persona; Allfit administra vínculo técnico |
 | Fitness ID | Identidad como raíz/agregado | Activado una vez | Persona |
 | Evidencias de elegibilidad/onboarding/términos | Identidad | Creadas separadamente | Persona como sujeto; Allfit custodia evidencia |
 | Invitación | Identidad | Pasa a `completed` | Organización responsable de la propuesta; persona completa el sobre |
@@ -3366,7 +3366,7 @@ Un retry con la misma clave devuelve las mismas referencias y estados. No crea o
 
 | Caso | Resultado obligatorio |
 | --- | --- |
-| Contacto Cognito distinto al destino | No vincula invitación ni materializa intenciones |
+| Email verificado por WorkOS distinto al destino | No vincula invitación ni materializa intenciones |
 | Token expirado, revocado o ya completado por otra persona | Falla cerrado; no crea entidades destino |
 | Retry después del commit con respuesta perdida | Devuelve persona, relación y decisiones existentes |
 | Dos confirmaciones concurrentes de la misma persona | Una materialización; ambas convergen al mismo resultado |
@@ -3497,7 +3497,7 @@ Demostrar que una persona registrada directamente en Space puede aceptar posteri
 #### Precondiciones
 
 - La persona adulta completó el escenario Space-only y conserva una cuenta local activa, un `person_id`, un Fitness ID, perfil y al menos una sesión autónoma.
-- Su cuenta local está vinculada a un sujeto Cognito mediante `(provider, issuer, subject)`.
+- Su cuenta local está vinculada a un usuario WorkOS mediante `(provider, issuer, subject)`.
 - La invitación `client_invitation` está vigente y su destino coincide con un contacto verificado controlado por esa cuenta.
 - La invitación contiene `service_relationship` y `program_assignment` con una versión exacta de programa dependiente de la relación.
 - La organización, el profesional responsable, su membresía/capacidad y la versión propuesta continúan vigentes.
@@ -3524,7 +3524,7 @@ La invitación queda completada por el `person_id` existente. Relaciones crea el
 sequenceDiagram
     actor Person as "Persona existente"
     participant UI as "Space / flujo de aceptación"
-    participant Cognito as "Amazon Cognito"
+    participant Auth as "WorkOS AuthKit"
     participant Identity as "Identidad"
     participant Organizations as "Organizaciones"
     participant Relations as "Relaciones"
@@ -3533,8 +3533,8 @@ sequenceDiagram
     participant Execution as "Ejecución"
 
     Person->>UI: Abrir invitación e iniciar sesión
-    UI->>Cognito: Login controlado por la persona
-    Cognito-->>Identity: issuer + subject + contacto verificado
+    UI->>Auth: Login controlado por la persona
+    Auth-->>Identity: issuer + subject + email verificado
     Identity->>Identity: Resolver cuenta y person_id existentes
     Identity->>Identity: Validar contacto contra destino de invitación
     Identity-->>Person: Presentar intenciones y versiones exactas
@@ -3555,7 +3555,7 @@ El flujo añade contextos al agregado longitudinal, pero no mueve los hechos ent
 
 #### Paso 1 — Autenticación con la cuenta existente
 
-La persona inicia login, no SignUp administrativo ni creación de usuario desde OS. Cognito autentica al sujeto y el backend resuelve primero la restricción única `(provider, issuer, subject)` hacia la cuenta local y el `person_id` existentes.
+La persona inicia login, no SignUp administrativo ni creación de usuario desde OS. WorkOS AuthKit autentica al sujeto y el backend resuelve primero la restricción única `(provider, issuer, subject)` hacia la cuenta local y el `person_id` existentes.
 
 Esta resolución debe devolver exactamente:
 
@@ -3586,7 +3586,7 @@ OS continúa sin recibir una respuesta del tipo “este contacto ya estaba regis
 Antes de materializar propuestas, el sistema mantiene sin cambios:
 
 - `person_id` e identificador público del Fitness ID;
-- vínculo de cuenta Cognito;
+- vínculo de usuario WorkOS;
 - perfil, afirmaciones, procedencia y revisiones;
 - sesiones autónomas, segmentos, resultados y derivados;
 - objetivos, preferencias y demás datos personales;
@@ -3666,7 +3666,7 @@ No se “migra” la persona de Space a OS. Ambos productos consultan mediante l
 
 | Concepto | Dominio/fuente | Antes | Después |
 | --- | --- | --- | --- |
-| Sujeto Cognito | Cognito | Existente | El mismo |
+| Usuario WorkOS | WorkOS AuthKit | Existente | El mismo |
 | Cuenta local | Identidad | Existente y activa | La misma; no se crea otra |
 | Persona canónica | Identidad | Existente | Mismo `person_id` |
 | Fitness ID | Identidad como raíz/agregado | Existente con perfil e historial | El mismo; compone nuevas referencias |
@@ -3713,7 +3713,7 @@ Un retry nunca vuelve a ejecutar onboarding ni crea un segundo Fitness ID. Las r
 | --- | --- |
 | Persona autenticada con contacto distinto | No reclama el sobre ni revela datos del destinatario esperado |
 | Persona intenta SignUp aunque ya tiene cuenta | El flujo orienta a login/recuperación; OS no crea otra cuenta |
-| Otro sujeto Cognito verifica un contacto coincidente | No fusiona personas automáticamente; bloquea y deriva a recuperación/revisión segura |
+| Otro usuario WorkOS presenta un email verificado coincidente | No fusiona personas automáticamente; bloquea y deriva a recuperación/revisión segura |
 | Evidencia de elegibilidad vigente falta o está restringida | Falla cerrado y resuelve el requisito personal sin crear otra identidad |
 | Retry con respuesta perdida | Devuelve mismo `person_id`, relación, asignación e invitación completada |
 | Dos confirmaciones concurrentes | Una sola materialización por intención y un solo `completed_by_person_id` |
@@ -4674,7 +4674,7 @@ Demostrar que el cierre de una cuenta y una solicitud válida de supresión prod
 
 #### Precondiciones
 
-- Existe una persona con cuenta Cognito, cuenta local, Fitness ID, perfil, preferencias, sesiones, resultados, medidas, una fotografía de progreso y datos de salud.
+- Existe una persona con usuario WorkOS, cuenta local, Fitness ID, perfil, preferencias, sesiones, resultados, medidas, una fotografía de progreso y datos de salud.
 - La persona tuvo una relación profesional ya terminada, con consentimientos, revocaciones, eventos de acceso y evidencia bilateral.
 - Existen eventos de consentimiento, acceso y seguridad; un target concreto de evidencia bilateral/seguridad está bajo un hold vigente y documentado.
 - La organización conserva un programa master propio que fue usado para una asignación de la persona.
@@ -4692,7 +4692,7 @@ El programa master de la organización permanece con su owner y autoría. Puede 
 
 | Categoría/target | Decisión | Motivo/condición | Resultado |
 | --- | --- | --- | --- |
-| Sesiones Cognito y tokens | Revocar + `delete` | Cierre de cuenta | Sin autenticación o sesión reutilizable |
+| Sesiones WorkOS AuthKit y tokens | Revocar + `delete` | Cierre de cuenta | Sin autenticación o sesión reutilizable |
 | Cuenta local y vínculo externo | Desvincular/eliminar según integridad | Fin de acceso | No permite login ni resolución operativa del Fitness ID |
 | Nombre, email, celular y PII privada | `delete` | Solicitud válida/cierre | Eliminación física; no quedan en tombstone |
 | Perfil, preferencias y afirmaciones personales | `delete` | Alcance de supresión | Se eliminan fuentes y proyecciones |
@@ -4713,7 +4713,7 @@ El programa master de la organización permanece con su owner y autoría. Puede 
 sequenceDiagram
     actor Person as "Persona"
     participant Privacy as "Privacidad"
-    participant Identity as "Identidad / Cognito"
+    participant Identity as "Identidad / WorkOS AuthKit"
     participant Relations as "Relaciones"
     participant Domains as "Planificación / Ejecución"
     participant Derived as "Cachés / índices / analítica"
@@ -4743,7 +4743,7 @@ sequenceDiagram
 El cierre no espera a que terminen todos los jobs de disposición para bloquear operación. La transición coordinada:
 
 - revoca sesiones y refresh tokens;
-- deshabilita/elimina acceso Cognito conforme al flujo aplicable;
+- deshabilita/elimina acceso WorkOS AuthKit conforme al flujo aplicable;
 - bloquea la cuenta local y el Fitness ID para endpoints ordinarios;
 - termina relaciones activas y congela sus grants en el mismo `T`; la disposición posterior elimina o anonimiza el acceso identificable;
 - cancela exportaciones, notificaciones e integraciones pendientes;

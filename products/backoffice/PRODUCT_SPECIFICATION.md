@@ -30,7 +30,7 @@ Backoffice no crea otra copia de personas, organizaciones, pagos o contenido. Co
 
 ## 3. Quién puede utilizarlo
 
-`allfit_admin` es únicamente la habilitación base para iniciar sesión mediante el app client Cognito exclusivo de Backoffice. No concede lectura ni escritura.
+`allfit_admin` es únicamente la habilitación base para iniciar sesión mediante la WorkOS Application exclusiva de Backoffice. No concede lectura ni escritura.
 
 Cada operación exige AAL2 y un deber temporal vigente, otorgado por otra persona durante un máximo de 90 días:
 

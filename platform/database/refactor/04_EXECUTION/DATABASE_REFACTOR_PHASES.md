@@ -76,11 +76,11 @@ Evitar que varias personas o repositorios produzcan modelos incompatibles.
 - Establecer que la BD remota no se modifica manualmente.
 - Confirmar que la base actual es evidencia, no la plantilla obligatoria.
 - Adoptar el flujo vertical asignar → ejecutar → revisar como frontera de V1.
-- Establecer como invariante que OS solo invita por email/celular y nunca ejecuta `AdminCreateUser` de Cognito ni crea personas.
-- Confirmar Cognito como única autenticación, con un User Pool compartido por ambiente y app clients separados para Space, OS y Backoffice.
+- Establecer como invariante que OS solo invita por email/celular y nunca ejecuta `Create User` de WorkOS AuthKit ni crea personas.
+- Confirmar WorkOS AuthKit como única autenticación, con un WorkOS environment compartido por ambiente y WorkOS Applications separadas para Space, OS y Backoffice.
 - Confirmar que solo la API propia accede a PostgreSQL; los clientes no usan PostgREST/Data API ni credenciales Supabase.
 - Confirmar que el perfil profesional pertenece a la persona, pero toda operación profesional en OS ocurre dentro de una organización; el onboarding `solo_professional` crea una `professional_practice` que puede crecer a equipo sin cambiar de identidad.
-- Confirmar independencia funcional y aislamiento operativo para Space/OS, aceptando Cognito, API y PostgreSQL como dependencias físicas compartidas en V1.
+- Confirmar independencia funcional y aislamiento operativo para Space/OS, aceptando WorkOS AuthKit, API y PostgreSQL como dependencias físicas compartidas en V1.
 - Acordar antes de producción SLO, RTO y RPO medibles; no inferirlos de la topología.
 
 ### Trabajo de IA
@@ -152,7 +152,7 @@ Para cada concepto responder:
 
 Decisión central:
 
-> La persona es el sujeto del Fitness ID y puede registrarse directamente en Space sin invitación. Antes de completar un onboarding elegible no existe persona ni cuenta local; si el flujo inició desde OS existe una invitación separada y puede existir temporalmente un sujeto Cognito. OS nunca registra a alguien en su nombre. V1 solo activa personas de 18 años o más.
+> La persona es el sujeto del Fitness ID y puede registrarse directamente en Space sin invitación. Antes de completar un onboarding elegible no existe persona ni cuenta local; si el flujo inició desde OS existe una invitación separada y puede existir temporalmente un usuario WorkOS. OS nunca registra a alguien en su nombre. V1 solo activa personas de 18 años o más.
 
 ### Alcance V1
 
@@ -326,7 +326,7 @@ Por cada operación definir:
 Para cada recurso y operación especificar:
 
 - petición sin autenticar;
-- cuenta Cognito registrada;
+- usuario WorkOS registrado;
 - persona autenticada;
 - profesional;
 - administrador de organización;
@@ -442,7 +442,7 @@ Para completar `Retención y eliminación` se debe:
 
 ### Revisiones obligatorias
 
-- Cognito y su `sub` están separados de la persona de dominio.
+- WorkOS AuthKit y su `sub` están separados de la persona de dominio.
 - Lo planificado está separado de lo ejecutado.
 - Una asignación referencia una versión inmutable.
 - Una asignación separa origen inmutable y gestión efectiva; terminar la relación la desacopla y pausa sin copiarla.
@@ -724,7 +724,7 @@ Probar que el diseño funciona desde los productos involucrados en cada rebanada
 - datos retenidos quedan fuera de endpoints operativos, marketing, IA y analítica identificable;
 - una restauración reaplica disposiciones y no resucita datos eliminados;
 - V1 rechaza menores antes de crear persona o materializar invitaciones y no ofrece representantes ni consentimiento parental;
-- un sujeto Cognito no elegible permanece sin acceso de dominio y converge a deshabilitación/eliminación;
+- un usuario WorkOS no elegible permanece sin acceso de dominio y converge a deshabilitación/eliminación;
 - descubrir posteriormente que una persona es menor restringe sesiones/grants y activa el flujo de disposición;
 - una declaración, observación profesional e inferencia divergentes coexisten sin overwrite y la proyección explica su selección;
 - un profesional solo revisa su observación y no convierte una declaración transcrita en autoría propia;
@@ -858,7 +858,7 @@ Las fases son puertas de calidad, no bloques de tiempo. Desde Fase 5 se aplican 
 - se discuten columnas antes de definir conceptos;
 - una entidad “pertenece a Space” y otra copia “pertenece a OS”;
 - se añade `organization_id` a todas las tablas;
-- el `sub` de Cognito representa persona, cliente y miembro simultáneamente;
+- el `sub` de WorkOS AuthKit representa persona, cliente y miembro simultáneamente;
 - un cliente accede directamente a PostgreSQL, PostgREST o una clave Supabase;
 - el backend usa contexto RLS de sesión en vez de contexto local a la transacción;
 - una plantilla editable también representa el historial ejecutado;

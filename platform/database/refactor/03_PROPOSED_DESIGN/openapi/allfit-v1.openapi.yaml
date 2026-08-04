@@ -862,7 +862,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Cognito access token validated for the selected surface.
+      description: WorkOS AuthKit access token validated for the selected surface.
 
   parameters:
     OrganizationId:

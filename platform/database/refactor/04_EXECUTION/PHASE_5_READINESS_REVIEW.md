@@ -5,6 +5,7 @@
 **Revisión del repositorio:** correcciones P1/P2 de ADR-027 y drift contractual tardío propagadas; baseline recertificada<br>
 **Estado:** **GO CONDICIONADO — reabierto por DT-017**<br>
 **Nota del 30 de julio de 2026:** el dominio de pagos (DT-017) incorporó un schema nuevo, seis tablas, dieciséis operaciones y tres invariantes. Esta revisión **debe volver a correrse** sobre la baseline resultante antes de dar el GO por firme. El inventario pasó de 99 a 107 tablas y de 150 a 171 operaciones.<br>
+**Nota del 3 de agosto de 2026:** las menciones a Cognito conservan la dependencia evaluada históricamente el 28 de julio. ADR-002 las supersede con WorkOS AuthKit y `DB-P5-019` exige recertificar autenticación antes de implementar.<br>
 **Progreso P0:** 8 de 8 bloqueos resueltos; 0 activos<br>
 **Progreso P1:** P1-01, P1-02 y los tres hallazgos P1 de Nutrición resueltos; P1-03..07 pendientes según sus hitos<br>
 **Alcance:** consistencia y preparación de las Fases 1 a 4 antes de traducir el diseño a migraciones, seeds, RLS, funciones y contratos ejecutables.

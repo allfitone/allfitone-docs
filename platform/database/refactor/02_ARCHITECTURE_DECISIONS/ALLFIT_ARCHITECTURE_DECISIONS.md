@@ -1,7 +1,7 @@
 # ADR — Decisiones de arquitectura de Allfit
 
-**Estado general:** aprobado y recertificado para Fase 5<br>
-**Fecha de consolidación:** 28 de julio de 2026<br>
+**Estado general:** mixto; cada ADR conserva su estado y la ejecución avanza con gates por rebanada<br>
+**Fecha de consolidación:** 3 de agosto de 2026<br>
 **Alcance:** identidad, invitaciones, autenticación, acceso a PostgreSQL, operación profesional, consentimiento, terminación de relaciones, retención y disposición de datos, entrenamiento multidisciplina y Nutrición no clínica.
 
 ## Índice de decisiones
@@ -9,7 +9,7 @@
 | ADR | Decisión |
 | --- | --- |
 | ADR-001 | Registro directo en Space e invitaciones opcionales desde OS |
-| ADR-002 | Cognito para identidad y Supabase únicamente como PostgreSQL |
+| ADR-002 | WorkOS AuthKit para autenticación y Supabase únicamente como PostgreSQL |
 | ADR-003 | Núcleo de entrenamiento multidisciplina |
 | ADR-004 | Operación profesional siempre dentro de una organización |
 | ADR-005 | Terminación de relaciones y retención restringida de datos |
@@ -54,7 +54,7 @@ Allfit Space debe permitir que cualquier persona elegible se registre y use su F
 
 Existen dos entradas al mismo flujo de identidad:
 
-1. **Registro directo en Space:** la persona inicia Cognito, acredita elegibilidad adulta, acepta términos y completa onboarding sin invitación.
+1. **Registro directo en Space:** la persona inicia personalmente el registro mediante WorkOS AuthKit, acredita elegibilidad adulta, acepta términos y completa onboarding sin invitación.
 2. **Invitación opcional desde OS:** OS emite una invitación por email o celular; la persona se registra o inicia sesión por sí misma y decide sus intenciones.
 
 La invitación no es requisito para crear una cuenta, activar el Fitness ID o usar las funciones personales de Space. El registro directo crea únicamente persona, cuenta, perfil inicial y evidencia propia del onboarding; no crea organización, membresía, relación profesional, asignación ni grants de servicio.
@@ -63,7 +63,7 @@ Allfit OS **solo puede emitir invitaciones por email o celular** para iniciar pr
 
 OS nunca puede:
 
-- ejecutar `AdminCreateUser` o crear cuentas Cognito en nombre del invitado;
+- usar la operación administrativa `Create User` de WorkOS o cualquier flujo equivalente para registrar al invitado;
 - crear una persona canónica en `identity.people`;
 - completar un perfil fitness;
 - aceptar términos o consentimientos;
@@ -76,9 +76,9 @@ Cuando el proceso se origina en OS, antes de la aceptación existe únicamente u
 
 1. Space permite registro directo sin invitación, organización o relación profesional.
 2. Una invitación no es una persona ni una cuenta.
-3. El email/celular de una invitación no se usa para crear automáticamente una cuenta Cognito.
-4. Solo el titular que controla el contacto puede iniciar/completar Cognito.
-5. El contacto verificado por Cognito debe coincidir con el destino normalizado de la invitación cuando esta exista.
+3. El email/celular de una invitación no se usa para crear automáticamente un usuario de WorkOS.
+4. Solo el titular que controla el contacto puede iniciar/completar el registro o autenticación mediante AuthKit.
+5. Si la invitación usa email, el email verificado por WorkOS debe coincidir con el destino normalizado. Si usa celular, la aceptación exige una prueba de control separada y aprobada; el token de AuthKit no prueba control del teléfono.
 6. Una invitación no concede permisos ni acceso a datos.
 7. La aceptación materializa únicamente las intenciones que la persona acepta.
 8. Una persona ya registrada en Space acepta la invitación con su identidad existente; no se crea otra.
@@ -92,12 +92,12 @@ Cuando el proceso se origina en OS, antes de la aceptación existe únicamente u
 sequenceDiagram
     participant P as "Persona"
     participant Space as "Allfit Space"
-    participant Auth as "Amazon Cognito"
+    participant Auth as "WorkOS AuthKit"
     participant DB as "Dominio Allfit"
 
     P->>Space: Iniciar registro sin invitación
-    Space->>Auth: SignUp/login iniciado por la persona
-    Auth-->>P: Verificar email/celular
+    Space->>Auth: Registro/autenticación iniciados por la persona
+    Auth-->>P: Verificar email
     P->>DB: Elegibilidad, términos y onboarding
     DB->>DB: Crear/vincular persona, cuenta y Fitness ID
     DB-->>P: Registro autónomo completado
@@ -110,14 +110,14 @@ sequenceDiagram
     participant OS as "Allfit OS"
     participant Inv as "Servicio de invitaciones"
     participant P as "Persona invitada"
-    participant Auth as "Amazon Cognito"
+    participant Auth as "WorkOS AuthKit"
     participant DB as "Dominio Allfit"
 
     OS->>Inv: Invitar email/celular + propósito
     Inv->>DB: Guardar invitación y token hasheado
     Inv-->>P: Enviar enlace/OTP
-    P->>Auth: Iniciar personalmente SignUp/login
-    Auth-->>P: Verificar email/celular
+    P->>Auth: Iniciar personalmente registro/autenticación
+    Auth-->>P: Verificar email
     P->>DB: Completar onboarding y decidir cada intención
     DB->>DB: Validar token, contacto, vigencia e idempotencia
     DB->>DB: Crear/vincular persona y materializar solo intenciones aceptadas
@@ -158,8 +158,8 @@ No crear una tabla “persona provisional”. Si se necesita CRM antes del regis
 
 La operación de aceptación debe:
 
-1. verificar el access token Cognito —firma, issuer, expiración, token_use y app client—;
-2. comprobar que el contacto verificado coincide con la invitación;
+1. verificar el access token de AuthKit —firma mediante JWKS, `iss`, `exp`, `iat`, `sub`, `sid` y `client_id` de la WorkOS Application esperada—;
+2. comprobar que la evidencia aprobada de control del canal coincide con la invitación;
 3. validar token, expiración, estado, organización e intenciones;
 4. encontrar la persona ya vinculada a la cuenta o crearla durante onboarding;
 5. registrar aceptación o rechazo individual de cada intención presentada;
@@ -180,12 +180,14 @@ La operación de aceptación debe:
 - El contacto se retiene únicamente durante el periodo necesario.
 - Toda aceptación, rechazo, expiración y revocación queda auditada.
 
+AuthKit verifica email como identidad primaria. La ruta de invitación por celular queda bloqueada hasta decidir e implementar un OTP propio o proveedor específico, con propósito, expiración, rate limit, evidencia y retención. Un desafío SMS antifraude de WorkOS Radar no se considera automáticamente prueba de identidad para aceptar una invitación.
+
 ### Consecuencias
 
 #### Positivas
 
 - La persona controla su identidad, términos y privacidad.
-- OS no necesita permisos administrativos para crear usuarios en Cognito.
+- OS no necesita permisos administrativos para crear usuarios en WorkOS.
 - Se evita crear usuarios falsos, incompletos o duplicados.
 - Las relaciones efectivas siempre apuntan a personas verificadas.
 - El modelo de RLS es más simple: no existen personas activas sin identidad autenticable.
@@ -199,7 +201,7 @@ La operación de aceptación debe:
 
 ### Escenarios de prueba obligatorios
 
-1. OS crea invitación y no aparece ningún usuario Cognito ni fila en `identity.people`.
+1. OS crea invitación y no aparece ningún usuario WorkOS ni fila en `identity.people`.
 2. Un token expirado o revocado no puede aceptarse.
 3. Una cuenta con email/celular diferente no puede aceptar la invitación.
 4. Una persona existente acepta sin crear duplicados.
@@ -215,10 +217,10 @@ La operación de aceptación debe:
 
 ---
 
-## ADR-002 — Cognito para identidad y Supabase únicamente como PostgreSQL
+## ADR-002 — WorkOS AuthKit para autenticación y Supabase únicamente como PostgreSQL
 
-**Estado:** en revisión<br>
-**Fecha:** 18 de julio de 2026
+**Estado:** aceptada para V1<br>
+**Fecha:** 3 de agosto de 2026
 
 ### Contexto
 
@@ -226,27 +228,30 @@ Allfit OS y Allfit Space compartirán identidad y datos, pero vivirán en reposi
 
 ### Decisión
 
-- Amazon Cognito será la única fuente de autenticación.
-- Existirá un Cognito User Pool compartido por ambiente.
-- Space y OS tendrán app clients separados dentro del mismo User Pool.
+- WorkOS AuthKit será la única fuente de autenticación.
+- Existirá un environment de WorkOS aislado por ambiente de Allfit.
+- Space, OS y Backoffice tendrán WorkOS Applications separadas dentro del mismo environment y compartirán la misma base de usuarios de ese environment.
 - Supabase se usará únicamente como servicio administrado de PostgreSQL.
 - Space y OS nunca se conectarán directamente a PostgreSQL ni usarán claves `anon`/`service_role`.
-- Una API/backend propio verificará los JWT de Cognito y será el único acceso runtime a la BD.
-- Identidad, organizaciones, roles, relaciones y consentimientos de negocio vivirán en PostgreSQL, no en Cognito Groups.
+- Una API/backend propio verificará los JWT de WorkOS AuthKit y será el único acceso runtime a la BD.
+- Personas, organizaciones, roles, relaciones, deberes y consentimientos de negocio vivirán en PostgreSQL. Las Organizations, roles, permissions y claims organizacionales de WorkOS no son autoridad de dominio para Allfit V1.
 - La RLS de PostgreSQL se conservará como defensa en profundidad usando contexto transaccional establecido por el backend.
 
 ### Arquitectura
 
 ```mermaid
 flowchart LR
-    space["Allfit Space"] --> spaceClient["Cognito app client<br/>Space"]
-    os["Allfit OS"] --> osClient["Cognito app client<br/>OS"]
+    space["Allfit Space"] --> spaceClient["WorkOS Application<br/>Space · cliente público PKCE"]
+    os["Allfit OS"] --> osClient["WorkOS Application<br/>OS"]
+    backoffice["Allfit Backoffice"] --> backofficeClient["WorkOS Application<br/>Backoffice"]
 
-    spaceClient --> pool["Cognito User Pool<br/>por ambiente"]
+    spaceClient --> pool["WorkOS environment<br/>por ambiente Allfit"]
     osClient --> pool
+    backofficeClient --> pool
 
     space --> api["API Allfit"]
     os --> api
+    backoffice --> api
     pool -->|"JWT firmado"| api
 
     api -->|"conexión pooled<br/>+ contexto RLS"| db[("Supabase PostgreSQL")]
@@ -256,43 +261,49 @@ flowchart LR
 
 ```text
 development
-├── Cognito User Pool allfit-dev
-│   ├── app client Space dev
-│   └── app client OS dev
+├── WorkOS environment allfit-dev
+│   ├── WorkOS Application Space dev
+│   ├── WorkOS Application OS dev
+│   └── WorkOS Application Backoffice dev
 └── Supabase project allfit-dev
 
 staging
-├── Cognito User Pool allfit-staging
-│   ├── app client Space staging
-│   └── app client OS staging
+├── WorkOS environment allfit-staging
+│   ├── WorkOS Application Space staging
+│   ├── WorkOS Application OS staging
+│   └── WorkOS Application Backoffice staging
 └── Supabase project allfit-staging
 
 production
-├── Cognito User Pool allfit-prod
-│   ├── app client Space prod
-│   └── app client OS prod
+├── WorkOS environment allfit-prod
+│   ├── WorkOS Application Space prod
+│   ├── WorkOS Application OS prod
+│   └── WorkOS Application Backoffice prod
 └── Supabase project allfit-prod
 ```
 
-No se crea un User Pool por repositorio o producto: eso produciría dos `sub` diferentes para una misma persona y obligaría a resolver identidad entre directorios.
+No se crea un environment por producto: las Applications del mismo environment comparten usuarios sin duplicar cuentas. Los environments sí permanecen aislados entre development, staging y production; sus usuarios, claves, webhooks y configuración no se promueven automáticamente.
+
+Space es una aplicación móvil pública y usa Authorization Code con PKCE; nunca incorpora una API key o client secret de WorkOS en el bundle. OS y Backoffice usan el flujo y almacenamiento de sesión apropiados para aplicaciones web, con redirect URIs y políticas de sesión independientes.
 
 ### Identidad externa y persona de dominio
 
-Cognito autentica una cuenta mediante:
+WorkOS AuthKit autentica un usuario mediante:
 
-- `issuer`: URL del User Pool;
-- `subject`: claim `sub`, estable dentro del User Pool;
-- `client_id`: app client que obtuvo el access token;
-- scopes y expiración del token.
+- `issuer`: claim `iss` del environment o dominio de autenticación configurado;
+- `subject`: claim `sub`, que contiene el WorkOS user ID;
+- `session_id`: claim `sid` de la sesión;
+- `client_id`: WorkOS Application que obtuvo el access token;
+- `iat`, `exp` y demás claims admitidos por el contrato de sesión.
 
 PostgreSQL mantiene la identidad de dominio:
 
 ```text
 identity.people
 └── identity.accounts
-    ├── provider = 'cognito'
+    ├── provider = 'workos'
     ├── issuer
-    ├── subject          # cognito sub
+    ├── subject          # WorkOS user ID del claim sub
     ├── person_id
     ├── created_at
     └── last_seen_at
@@ -301,7 +312,7 @@ identity.people
 Constraints recomendados:
 
 - `unique (provider, issuer, subject)`;
-- una cuenta Cognito activa pertenece a una sola persona;
+- un usuario WorkOS vinculado pertenece a una sola persona de dominio;
 - no usar email o celular como FK o identificador estable;
 - email/celular se consideran atributos verificables y mutables.
 
@@ -309,26 +320,29 @@ Constraints recomendados:
 
 La API debe validar antes de consultar la BD:
 
-1. firma contra JWKS del User Pool;
-2. `iss` permitido para el ambiente;
-3. `exp` y temporalidad;
-4. `token_use = 'access'`;
-5. `client_id` permitido para Space u OS;
-6. scopes requeridos por el endpoint;
-7. estado local de la cuenta/persona;
-8. membresías, relaciones y consentimientos en PostgreSQL.
+1. firma contra el JWKS correspondiente al `client_id` de la WorkOS Application;
+2. `iss` permitido para el environment o dominio de autenticación del ambiente;
+3. `exp`, `iat` y temporalidad;
+4. `sub` con formato de WorkOS user ID y `sid` de sesión;
+5. `client_id` permitido para la superficie Space, OS o Backoffice solicitada;
+6. estado local de la cuenta/persona;
+7. membresías, relaciones, deberes y consentimientos en PostgreSQL.
+
+Los claims `org_id`, `role` y `permissions` de WorkOS se ignoran para autorización de negocio. La organización efectiva continúa viajando explícitamente en la ruta de OS y se valida contra PostgreSQL.
+
+El claim `auth_time` permite exigir autenticación reciente mediante `max_age`, pero **no demuestra por sí solo que hubo MFA**. La política MFA de AuthKit se configura por environment y no se aplica de la misma forma a usuarios SSO, por lo que activarla no basta para inferir AAL2 en Backoffice. Antes de habilitar una operación que exige `aal2`, la integración debe fijar y probar cómo obtiene evidencia verificable de MFA/step-up desde WorkOS y cómo la ata a la sesión. Mientras esa evidencia no exista, el backend solo establece `app.authn_assurance = 'aal1'` y las operaciones AAL2 fallan cerradas.
 
 Decodificar un JWT sin verificar firma y claims no autentica a nadie.
 
 ### Contexto RLS en PostgreSQL
 
-No se utilizarán `auth.uid()` ni roles `anon`/`authenticated`. El backend verifica Cognito, resuelve la persona y establece contexto local dentro de la misma transacción:
+No se utilizarán `auth.uid()` ni roles `anon`/`authenticated`. El backend verifica WorkOS AuthKit, resuelve la persona y establece contexto local dentro de la misma transacción:
 
 ```sql
 begin;
 
 select set_config('app.current_person_id', $1, true);
-select set_config('app.cognito_subject', $2, true);
+select set_config('app.workos_user_id', $2, true);
 select set_config('app.client_id', $3, true);
 select set_config('app.request_id', $4, true);
 
@@ -379,18 +393,18 @@ El backend no debe conectarse como `postgres` ni como propietario de las tablas.
 
 La decisión documentada en la sección ADR-001 permanece:
 
-- Space permite que la persona inicie SignUp/login y onboarding sin invitación.
+- Space permite que la persona inicie registro/autenticación con AuthKit y onboarding sin invitación.
 - El registro directo crea el Fitness ID sin organización, membresía, relación, asignación o grant de servicio.
 - OS crea `identity.invitations` con email/celular.
-- OS nunca ejecuta `AdminCreateUser` de Cognito.
-- La persona inicia personalmente SignUp/login en Cognito.
+- OS nunca usa la operación administrativa `Create User` de WorkOS para registrar a un invitado.
+- La persona inicia personalmente el registro o autenticación mediante AuthKit.
 - Si ya tiene cuenta, inicia sesión con la existente.
 - La API valida que el contacto verificado coincida con la invitación.
 - Después materializa persona, membresía, relación o asignación aceptada.
 
 Una persona registrada directamente en Space puede aceptar después una invitación con la misma cuenta y `person_id`; la invitación nunca crea una segunda identidad.
 
-Un registro iniciado por la persona puede producir temporalmente una cuenta Cognito antes de finalizar el onboarding de dominio. Eso no autoriza acceso a datos: hasta crear/vincular `identity.accounts`, la API debe responder con estado `registration_incomplete` y limitar los endpoints disponibles.
+Un registro iniciado por la persona puede producir temporalmente un usuario WorkOS antes de finalizar el onboarding de dominio. Eso no autoriza acceso a datos: hasta crear/vincular `identity.accounts`, la API debe responder con estado `registration_incomplete` y limitar los endpoints disponibles.
 
 ### Qué componentes de Supabase no se utilizarán
 
@@ -402,12 +416,21 @@ Un registro iniciado por la persona puede producir temporalmente una cuenta Cogn
 
 Storage, Realtime o Edge Functions requerirían un ADR separado antes de incorporarse; no forman parte de esta decisión.
 
+### Referencias de WorkOS
+
+- [Applications: clientes separados con una base de usuarios compartida](https://workos.com/docs/authkit/applications).
+- [Environments: aislamiento de usuarios, claves y configuración](https://workos.com/docs/authkit/environments).
+- [Sessions: access tokens, JWKS y claims](https://workos.com/docs/authkit/sessions).
+- [Reauthentication: `auth_time` y `max_age`](https://workos.com/docs/authkit/reauthentication).
+- [Multi-Factor Authentication: configuración por environment y comportamiento SSO](https://workos.com/docs/authkit/mfa).
+- [Authorization Code con PKCE para clientes públicos](https://workos.com/docs/reference/authkit/authentication/get-authorization-url).
+
 ### Consecuencias
 
 #### Positivas
 
 - Identidad independiente de Supabase.
-- Un solo directorio Cognito compartido entre productos.
+- Una sola base de usuarios WorkOS compartida entre las Applications del mismo ambiente.
 - Ninguna credencial de BD llega a navegadores o móviles.
 - Autorización de negocio centralizada en PostgreSQL.
 - RLS continúa protegiendo frente a errores de consulta del backend.
@@ -418,21 +441,24 @@ Storage, Realtime o Edge Functions requerirían un ADR separado antes de incorpo
 - Se necesita una API propia para todo acceso a datos.
 - El backend debe verificar JWT y establecer correctamente el contexto RLS.
 - Se pierde la comodidad de `auth.uid()` y del acceso directo con `supabase-js`.
-- Cognito y Supabase deben desplegarse/configurarse coordinadamente por ambiente.
+- WorkOS y Supabase deben configurarse coordinadamente por ambiente.
 - Los tests deben cubrir identidad, pooler, contexto transaccional y RLS.
 
 ### Pruebas obligatorias
 
-1. Tokens de otro User Pool son rechazados.
-2. Tokens emitidos para un app client no autorizado son rechazados.
-3. ID tokens no se aceptan donde se exige access token.
+1. Tokens de otro WorkOS environment o issuer son rechazados.
+2. Tokens emitidos para un WorkOS Application no autorizado son rechazados.
+3. Ninguna credencial distinta del access token de AuthKit se acepta en la API.
 4. Token válido sin `identity.accounts` solo accede al onboarding.
 5. El `sub` resuelve exactamente una persona.
 6. Falta de contexto RLS produce cero filas/denegación.
 7. El contexto no sobrevive al `commit` ni se filtra entre conexiones pooled.
 8. `allfit_api` no puede desactivar RLS ni consultar como otra persona sin contexto válido.
-9. Space y OS aplican permisos diferentes sobre la misma persona.
-10. Ningún bundle frontend contiene credenciales de PostgreSQL.
+9. Space, OS y Backoffice aplican permisos diferentes sobre la misma persona.
+10. `org_id`, `role` o `permissions` de WorkOS nunca sustituyen la autorización de PostgreSQL.
+11. Space completa Authorization Code con PKCE sin client secret ni API key en el bundle.
+12. Una sesión sin evidencia verificable de MFA/step-up nunca establece `aal2`.
+13. Ningún bundle frontend contiene credenciales de PostgreSQL o API keys de WorkOS.
 
 ---
 
@@ -1548,7 +1574,7 @@ Revocar un grant elimina todo acceso del tercero. Terminar una relación corta e
 
 ### Identidad, integridad referencial y respaldos
 
-- Al cerrar la cuenta se deshabilita/elimina el acceso en Cognito, se revocan sesiones y se desvincula `identity.accounts` conforme al flujo coordinado.
+- Al cerrar la cuenta se deshabilita/elimina el acceso en WorkOS AuthKit, se revocan sesiones y se desvincula `identity.accounts` conforme al flujo coordinado.
 - `identity.person_private` y demás PII se eliminan. Puede permanecer un tombstone técnico sin PII únicamente si una referencia histórica legítima lo exige.
 - Un tombstone no conserva email, teléfono, nombre ni una llave accesible de reidentificación.
 - La supresión se propaga a cachés, índices, réplicas, storage y sistemas derivados.
@@ -1753,12 +1779,12 @@ La arquitectura necesita declarar qué fallos deben quedar aislados y cuáles fo
 En V1, independencia significa:
 
 - valor funcional y comercial propio para Space y OS;
-- frontends, app clients de Cognito y contratos HTTP separados;
+- frontends, WorkOS Applications y contratos HTTP separados;
 - despliegues de frontend independientes;
 - límites de dominio y módulos/workers extraíbles;
 - aislamiento operativo razonable mediante cuotas, pools, timeouts, rate limits y colas diferenciadas.
 
-No significa tolerancia física separada ante la caída total de PostgreSQL, Cognito o infraestructura API compartida. El ecosistema mantiene por ambiente un Cognito User Pool y un PostgreSQL/Supabase compartidos. Una indisponibilidad total de la fuente autoritativa puede degradar ambos productos y constituye un riesgo explícitamente aceptado para V1.
+No significa tolerancia física separada ante la caída total de PostgreSQL, WorkOS AuthKit o infraestructura API compartida. El ecosistema mantiene por ambiente un WorkOS environment y un PostgreSQL/Supabase compartidos. Una indisponibilidad total de la fuente autoritativa puede degradar ambos productos y constituye un riesgo explícitamente aceptado para V1.
 
 No se fijan SLO, RTO o RPO numéricos en este ADR. Deben acordarse antes de producción, medirse por producto y contrastarse con los límites reales de las dependencias compartidas.
 
@@ -1771,7 +1797,7 @@ No se fijan SLO, RTO o RPO numéricos en este ADR. Deben acordarse antes de prod
 | Worker o integración exclusiva de OS | Space continúa; OS reintenta mediante cola/DLQ sin bloquear requests síncronos |
 | Proveedor externo usado por V1 | El núcleo continúa cuando la operación puede degradarse; la capacidad afectada aplica timeout/circuit breaker |
 | Endpoint/módulo específico de un producto | El otro contrato permanece disponible si API y PostgreSQL compartidos están sanos |
-| Cognito | Login/refresh pueden fallar; la API solo acepta tokens vigentes que pueda verificar de forma segura |
+| WorkOS AuthKit | Login/refresh pueden fallar; la API solo acepta tokens vigentes que pueda verificar de forma segura |
 | PostgreSQL compartido | Ambos productos pierden operaciones que requieren estado autoritativo; se permiten únicamente degradaciones explícitas |
 | Caché, réplica o read model atrasado | Nunca concede permisos, consentimiento, capacidad, pago o estado confirmado |
 
@@ -1785,7 +1811,7 @@ No se fijan SLO, RTO o RPO numéricos en este ADR. Deben acordarse antes de prod
 
 ### Aislamiento operativo obligatorio desde V1
 
-- rate limits, presupuestos de concurrencia y observabilidad separados por app client/contrato;
+- rate limits, presupuestos de concurrencia y observabilidad separados por WorkOS Application/contrato;
 - límites de conexión, `statement_timeout` y queries cancelables para contener noisy neighbors;
 - colas, retries y dead-letter queues separadas por dominio o clase de trabajo;
 - circuit breakers y timeouts para proveedores externos;
@@ -1834,7 +1860,7 @@ La extracción se realiza por bounded context/dominio —por ejemplo booking, co
 
 #### Costos
 
-- PostgreSQL, Cognito y la infraestructura API compartida mantienen blast radius común.
+- PostgreSQL, WorkOS AuthKit y la infraestructura API compartida mantienen blast radius común.
 - Se requieren observabilidad, cuotas y pruebas de degradación desde el inicio.
 - El modo offline/draft necesita estados visibles, idempotencia y reconciliación.
 - Una separación futura seguirá siendo un proyecto explícito, no una consecuencia automática de usar schemas.
@@ -2202,17 +2228,17 @@ Una invitación puede existir antes de conocer la edad porque no es una persona 
 3. si es elegible, continúa el onboarding y puede aceptar intenciones por separado;
 4. si no es elegible, no crea persona, relación, membresía, asignación, consentimiento ni grant, y marca el intento como no elegible.
 
-Una organización que ya conoce que el destinatario es menor no debe invitarlo; si esa información llega al backend, la operación se rechaza. No se infiere mayoría de edad a partir de una invitación, medio de pago, afirmación del profesional, membresía o cuenta Cognito.
+Una organización que ya conoce que el destinatario es menor no debe invitarlo; si esa información llega al backend, la operación se rechaza. No se infiere mayoría de edad a partir de una invitación, medio de pago, afirmación del profesional, membresía o usuario WorkOS.
 
-### Cuenta Cognito temporal
+### Usuario WorkOS temporal
 
-La propia persona puede alcanzar el control de edad después de crear y verificar temporalmente un usuario en Cognito. Ese sujeto externo todavía no es una persona de dominio ni puede usar endpoints operativos.
+La propia persona puede alcanzar el control de edad después de crear y verificar temporalmente un usuario en WorkOS AuthKit. Ese sujeto externo todavía no es una persona de dominio ni puede usar endpoints operativos.
 
 Cuando el resultado es no elegible:
 
 - no se crea el vínculo local activo con un Fitness ID;
 - se bloquea el onboarding con estado `ineligible_age`;
-- la cuenta Cognito se deshabilita y elimina mediante una política corta, segura y auditable;
+- el usuario WorkOS se deshabilita y elimina mediante una política corta, segura y auditable;
 - se conserva únicamente la evidencia mínima necesaria para seguridad, prevención de reintentos abusivos y auditoría durante su plazo definido;
 - no se conservan datos fitness, corporales o de salud.
 
@@ -2242,7 +2268,7 @@ Los nombres físicos se decidirán en el modelo lógico. No se añadirá un simp
 2. `unknown`, ausencia de dato o fallo del control nunca significan mayoría de edad.
 3. La elegibilidad se aplica en backend y pruebas; términos y UI no son la única frontera.
 4. Ninguna intención de invitación se materializa antes de resolver la elegibilidad.
-5. Cognito autenticado no implica persona elegible ni Fitness ID activo.
+5. WorkOS AuthKit autenticado no implica persona elegible ni Fitness ID activo.
 6. Un tercero no puede declarar o aceptar la mayoría de edad en nombre del titular.
 7. La autorización parental no habilita excepciones en V1.
 8. Antes de resolver elegibilidad no se recopilan datos fitness, corporales o de salud.
@@ -2274,7 +2300,7 @@ Los nombres físicos se decidirán en el modelo lógico. No se añadirá un simp
 6. Una organización no puede marcar manualmente a un menor como elegible.
 7. El fallo o ausencia del control produce `review_required` o rechazo, nunca acceso operativo.
 8. Descubrir posteriormente que una persona es menor restringe la cuenta, revoca grants y activa disposición.
-9. Una cuenta Cognito temporal no elegible no puede consultar ni escribir datos de dominio y converge a eliminación.
+9. Un usuario WorkOS temporal no elegible no puede consultar ni escribir datos de dominio y converge a eliminación.
 10. La evidencia conserva versión y procedencia sin almacenar fecha de nacimiento completa cuando no existe otra finalidad.
 
 ### Referencias normativas de contexto
@@ -2886,7 +2912,7 @@ V1 separa dos actores de plataforma:
 - `A10` — soporte solicitante: diagnostica, solicita una ventana y, una vez aprobada, solo él puede ejercerla o cerrarla;
 - `A12` — aprobador de seguridad/privacidad: aprueba/rechaza o revisa; no puede ejercer, y quien aprobó un caso no registra su revisión posterior.
 
-`A10` y `A12` no son roles organizacionales, no pertenecen al catálogo `owner/admin/coach/staff` y no reciben autoridad mediante una membresía de gimnasio. Son deberes internos provisionados por el control de acceso de plataforma. El backend solo establece `actor_kind` y `platform_duty` después de validar esa autorización confiable; Cognito autentica, pero un grupo o claim enviado por el cliente nunca decide por sí solo la autorización.
+`A10` y `A12` no son roles organizacionales, no pertenecen al catálogo `owner/admin/coach/staff` y no reciben autoridad mediante una membresía de gimnasio. Son deberes internos provisionados por el control de acceso de plataforma. El backend solo establece `actor_kind` y `platform_duty` después de validar esa autorización confiable; WorkOS AuthKit autentica, pero un grupo o claim enviado por el cliente nunca decide por sí solo la autorización.
 
 Una aprobación válida exige:
 
@@ -3235,14 +3261,14 @@ RLS protege qué filas puede operar un actor, pero puede ser omitida por workers
 
 ### Contexto
 
-Space admite borradores locales que pueden permanecer sin conexión más de 24 horas. Conservar una respuesta HTTP por 24 horas no impide que, tras purgarla, el mismo comando vuelva a crear una ejecución, claim, medición o efecto crítico. Tampoco basta una key global sin actor, app client, superficie u operación, y un estado `processing` persistente podría bloquear reintentos después de un crash.
+Space admite borradores locales que pueden permanecer sin conexión más de 24 horas. Conservar una respuesta HTTP por 24 horas no impide que, tras purgarla, el mismo comando vuelva a crear una ejecución, claim, medición o efecto crítico. Tampoco basta una key global sin actor, WorkOS Application, superficie u operación, y un estado `processing` persistente podría bloquear reintentos después de un crash.
 
 Un `PUT` convergente reduce duplicados, pero no evita que un draft antiguo sobrescriba una revisión posterior. La idempotencia de transporte y la identidad de una intención de negocio son garantías distintas.
 
 ### Decisión
 
 1. Todo comando HTTP V1 que muta dominio exige `Idempotency-Key` UUIDv4 para replay y `Command-Id` UUIDv7 para identidad durable; jobs derivan ambas identidades con UUIDv5. `OP-SUP-003` no se deduplica porque cada lectura break-glass debe auditarse por separado.
-2. El servidor calcula principal, app client, superficie y `operation_code`; el caller no declara su scope.
+2. El servidor calcula principal, WorkOS Application, superficie y `operation_code`; el caller no declara su scope.
 3. La respuesta mínima expira a las 24 horas. El tombstone de comando permanece mientras el actor o agregado sean invocables y nunca contiene el body ni datos personales/de dominio.
 4. Repetir una identidad con hash distinto devuelve `409`. Repetirla con el mismo hash nunca ejecuta otra vez, aunque el response haya expirado.
 5. Receipt, efecto de dominio, auditoría y outbox se confirman en una sola transacción. Un constraint trigger impide confirmar `processing`; crash, `5xx` y errores retryables revierten todo.
@@ -3302,11 +3328,11 @@ Un `PUT` convergente reduce duplicados, pero no evita que un draft antiguo sobre
 
 ADR-018 separó una afirmación de su verificación y ADR-022 separó soporte solicitante (`A10`) de aprobación/auditoría (`A12`). Faltaba cerrar quién puede verificar, qué evidencia puede usar, cómo se recertifican esos deberes, cuántas aprobaciones exige una lectura excepcional y qué ocurre ante conflicto o abuso.
 
-Dejar esas decisiones a un grupo de Cognito, un procedimiento manual o una aprobación genérica permitiría convertir curaduría en autoridad universal, autoaprobar accesos sensibles o mantener deberes indefinidos.
+Dejar esas decisiones a un claim, role o permission de WorkOS, un procedimiento manual o una aprobación genérica permitiría convertir curaduría en autoridad universal, autoaprobar accesos sensibles o mantener deberes indefinidos.
 
 ### Decisión
 
-1. V1 solo verifica afirmaciones de **credenciales profesionales**. Contacto lo verifica Cognito; mayoría de edad continúa como declaración de elegibilidad; identidad documental, salud, biometría, afiliación comercial y perfil completo no reciben estado `authority_verified`.
+1. V1 solo verifica afirmaciones de **credenciales profesionales**. WorkOS verifica el email de autenticación; la prueba de control de celular pertenece al contrato separado de identidad. La mayoría de edad continúa como declaración de elegibilidad; identidad documental, salud, biometría, afiliación comercial y perfil completo no reciben estado `authority_verified`.
 2. `A11` es el actor de plataforma, pero verificar exige el deber separado `verify_professional_credentials`, AAL2 y una asignación interna vigente. Tener `curate_catalog` no concede verificación.
 3. Solo se admiten `official_registry_lookup` e `issuer_confirmation`. No se copian documentos: se conserva autoridad, referencia mínima, instante, resultado, fingerprint y versión de política.
 4. La verificación exige `valid_to`, con máximo de doce meses y nunca posterior al vencimiento publicado por la autoridad. Renovar, revocar o apelar crea otro evento; no reescribe la afirmación.
@@ -3450,7 +3476,7 @@ Las HU de Backoffice declaraban un único `allfit_admin` con acceso ordinario a 
 12. Toda lectura sensible permitida o denegada escribe `break_glass_events` y `privacy.access_events` antes de devolver contenido. Si no puede auditar, falla cerrada. La persona afectada ve actor, categoría, propósito, instante y resultado, no el expediente interno.
 13. Suspender, revocar o vencer `request_break_glass` cierra las ventanas abiertas del actor. Retirar el rol base revoca la sesión y todos sus deberes efectivos sin borrar historial.
 14. Ningún runtime usa owner, superuser o `BYPASSRLS`; el rol de conexión de soporte sólo ejecuta funciones/proyecciones cerradas.
-15. Backoffice usa un app client Cognito propio dentro del User Pool compartido y la API sólo acepta ese `client_id` en `/backoffice/v1`. Los app clients de Space u OS no obtienen acceso por compartir `sub` o `person_id`.
+15. Backoffice usa un WorkOS Application propia dentro del WorkOS environment compartido y la API sólo acepta ese `client_id` en `/backoffice/v1`. Los WorkOS Applications de Space u OS no obtienen acceso por compartir `sub` o `person_id`.
 16. El bootstrap inicial y una recuperación por pérdida total de autoridad no son endpoints. Una ceremonia operativa con aprobación de dos personas usa temporalmente `allfit_migrator` para insertar, en una sola transacción, al menos dos roles base y sus deberes `manage_platform_access` cruzados: cada destinatario tiene como otorgante a la otra persona. El pipeline deshabilita esa credencial al terminar y conserva evidencia; no hay seed ni excepción de autoasignación.
 
 ### Invariantes

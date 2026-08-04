@@ -28,12 +28,12 @@ flowchart TB
         core["Servicios de dominio<br/>compartidos"]
     end
 
-    cognito["Cognito User Pool<br/>por ambiente"]
+    workos["WorkOS environment<br/>por ambiente"]
     db[("PostgreSQL<br/>Supabase")]
 
-    spaceApp -->|"app client Space"| cognito
-    osApp -->|"app client OS"| cognito
-    backofficeApp -->|"app client Backoffice"| cognito
+    spaceApp -->|"Application Space · PKCE"| workos
+    osApp -->|"WorkOS Application OS"| workos
+    backofficeApp -->|"WorkOS Application Backoffice"| workos
     spaceApp --> space
     osApp --> os
     backofficeApp --> backoffice
@@ -78,10 +78,12 @@ Las dos únicas excepciones son `GET /os/v1/me` y `GET /os/v1/me/memberships`, q
 
 ### 3.1 Autenticación
 
-- `Authorization: Bearer <access_token>` de Cognito.
-- La API verifica firma, `issuer`, `exp` y **`client_id`**: un token emitido para Space u OS no opera contra `/backoffice/v1`, aunque la persona tenga cuenta. Cambiar de producto exige el app client correspondiente.
+- `Authorization: Bearer <access_token>` de WorkOS AuthKit.
+- La API verifica la firma mediante el JWKS de la Application y valida `iss`, `exp`, `iat`, `sub`, `sid` y **`client_id`**: un token emitido para Space u OS no opera contra `/backoffice/v1`, aunque la persona tenga cuenta. Cambiar de producto exige la WorkOS Application correspondiente.
 - El `sub` se resuelve a `ACCESS_ACCOUNT` y, si existe, a `PERSON`, **en la base**. Ningún identificador de dominio viaja en el token.
-- Cognito no transporta roles, organizaciones, consentimientos ni deberes de plataforma: viven en PostgreSQL (ADR-002 y ADR-028).
+- Los claims `org_id`, `role` y `permissions` que WorkOS pueda transportar se ignoran para autorización de negocio. Organizaciones, roles, relaciones, consentimientos y deberes de plataforma viven en PostgreSQL (ADR-002 y ADR-028).
+- Space usa Authorization Code con PKCE como cliente público y nunca contiene una API key o client secret de WorkOS.
+- `auth_time` permite comprobar frescura de reautenticación, pero no basta para establecer AAL2. Sin evidencia verificable de MFA/step-up, cualquier operación AAL2 falla cerrada.
 
 ### 3.2 Formato
 
@@ -112,7 +114,7 @@ Command-Id: <uuid-v7>
 | Efecto dispuesto | `410 command-effect-disposed` |
 | Falta uno de los headers | `400 idempotency-key-required` o `400 command-id-required` |
 
-Actor, app client, superficie y operación se derivan en servidor. El contrato completo está en [`V1_IDEMPOTENCY_CONTRACT.md`](./V1_IDEMPOTENCY_CONTRACT.md).
+Actor, WorkOS Application, superficie y operación se derivan en servidor. El contrato completo está en [`V1_IDEMPOTENCY_CONTRACT.md`](./V1_IDEMPOTENCY_CONTRACT.md).
 
 ### 3.4 Paginación
 
@@ -168,7 +170,7 @@ GET /space/v1/executions?limit=25&cursor=eyJ2IjoxLCJzIjoi...
 | `command-effect-disposed` | 410 | El comando ya se aplicó pero su efecto fue dispuesto; nunca se recrea |
 | `validation-failed` | 422 | Cuerpo mal formado o inválido |
 | `contract-validation-failed` | 422 | La ejecución no cumple el contrato de resultados. Incluye errores **tipados** por regla |
-| `rate-limited` | 429 | Cuota del app client o del dominio |
+| `rate-limited` | 429 | Cuota del WorkOS Application o del dominio |
 | `service-degraded` | 503 | Dependencia caída; la operación falla cerrada |
 
 Tres reglas que no se negocian:
@@ -476,7 +478,7 @@ Cada proyección de OS declara qué `SCOPE_DEFINITION` consume y en qué versió
 
 | Proyección | Scope · nivel | Field-set v1 | Excluido explícitamente |
 | --- | --- | --- | --- |
-| `identity.v_client_identity` | Ninguno | Nombre de presentación, identificador de relación, estado | Contacto, `sub` de Cognito, fecha de nacimiento, elegibilidad |
+| `identity.v_client_identity` | Ninguno | Nombre de presentación, identificador de relación, estado | Contacto, `sub` de WorkOS AuthKit, fecha de nacimiento, elegibilidad |
 | `identity.v_client_profile` | `relationship_training` · `read` | Atributos de entrenamiento con procedencia, autor capturador, método y estado de verificación | Cualquier atributo clasificado como corporal o de salud |
 | `identity.v_client_body_progress` | `body_progress` · `read` | Mediciones y composición seleccionadas, con unidad canónica y original; fotos **elegidas**, por URL firmada de vigencia corta | EXIF, geolocalización, galería no seleccionada, cualquier imagen no marcada por la persona |
 | `identity.v_client_health_context` | `health_context` · `read` | Dolor, limitación y recuperación declarados, minimizados | Historia clínica, diagnósticos, laboratorios, documentos médicos, biometría continua, inferencias médicas |
@@ -779,7 +781,7 @@ Cada endpoint declara qué hace cuando una dependencia falla. La tabla completa 
 | --- | --- |
 | OpenAPI y DTOs de endpoints fuera de las veintiuna operaciones de la primera rebanada | Contract-first, antes de implementar cada endpoint |
 | Enumeración definitiva de `SCOPE_RESOURCE_RULE` por versión | Fase 4 |
-| Valores concretos de rate limit por app client y dominio | `V1_DEGRADATION_AND_RECOVERY_MATRIX.md` |
+| Valores concretos de rate limit por WorkOS Application y dominio | `V1_DEGRADATION_AND_RECOVERY_MATRIX.md` |
 | Formato de `id`: opaco con prefijo o UUID desnudo | Fase 4, con la estrategia de identificadores |
 
 El OpenAPI, los DTOs exactos, la caché por operación, las URLs firmadas Space y el proxy autenticado OS de la primera rebanada quedaron cerrados por P1-01 en [`V1_OPENAPI_CONTRACT.md`](./V1_OPENAPI_CONTRACT.md).

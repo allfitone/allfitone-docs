@@ -384,7 +384,7 @@ El panel actual demuestra flujos útiles de CRM, planes y membresías, suscripto
 
 Allfit OS puede iniciar una relación, pero no apropiarse del registro.
 
-La organización solo invita por email o celular. Nunca crea una cuenta Cognito, una persona provisional o un Fitness ID en nombre del destinatario.
+La organización solo invita por email o celular. Nunca crea un usuario WorkOS, una persona provisional o un Fitness ID en nombre del destinatario.
 
 Una invitación puede transportar intenciones separadas:
 
@@ -658,11 +658,11 @@ La visión de producto debe respetar las decisiones técnicas ya acordadas.
 
 ### Identidad y autenticación
 
-- Amazon Cognito es la única fuente de autenticación.
-- Existe un User Pool compartido por ambiente.
-- Space y OS utilizan app clients separados.
-- La identidad externa de Cognito se separa de la persona/Fitness ID de dominio.
-- Cognito no modela roles de negocio, relaciones o permisos fitness.
+- WorkOS AuthKit es la única fuente de autenticación.
+- Existe un WorkOS environment compartido por ambiente.
+- Space, OS y Backoffice utilizan WorkOS Applications separadas.
+- La identidad externa de WorkOS AuthKit se separa de la persona/Fitness ID de dominio.
+- Los roles, Organizations y permissions de WorkOS no son autoridad de negocio; las relaciones y permisos fitness viven en PostgreSQL.
 - V1 admite únicamente personas de 18 años o más.
 
 ### Persistencia y acceso
@@ -808,7 +808,7 @@ La visión es amplia. La baseline V1 no debe serlo.
 Esta fase corresponde al alcance actual de `platform/database/refactor`.
 
 - Registro directo adulto en Space.
-- Cognito como autenticación única.
+- WorkOS AuthKit como autenticación única.
 - Una persona y un Fitness ID por sujeto.
 - Perfil profesional personal.
 - Onboarding de práctica unipersonal como organización.

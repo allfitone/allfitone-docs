@@ -61,7 +61,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Clasificación:** `identity_pii`.
 - **Columnas:** `id` · `given_name text` · `family_name text` · `display_name text` (derivada, para presentación) · `contact_email citext` (nullable hasta verificar) · `contact_email_verified_at timestamptz` (nullable) · `contact_phone text` (E.164, nullable) · `contact_phone_verified_at timestamptz` (nullable) · `status text` (`active`, `closed`) · `activated_at timestamptz`.
 - **FKs y borrado:** ninguna saliente. Es la raíz; no referencia a otros dominios.
-- **Uniques y checks:** `CHECK (status in ('active','closed'))`; `UNIQUE (contact_email) WHERE contact_email IS NOT NULL`; `UNIQUE (contact_phone) WHERE contact_phone IS NOT NULL`; `CHECK ((contact_email_verified_at IS NULL) OR (contact_email IS NOT NULL))` y equivalente para teléfono. **El correo de contacto y el correo de ingreso son el mismo dato**: cambiarlo exige actualizar Cognito y volver a verificar, en el flujo de `OP-IDN-021`. Los uniques son parciales y **nunca** se exponen: una consulta por contacto no existe en ninguna superficie, para preservar que una invitación no revele si el contacto ya tiene cuenta.
+- **Uniques y checks:** `CHECK (status in ('active','closed'))`; `UNIQUE (contact_email) WHERE contact_email IS NOT NULL`; `UNIQUE (contact_phone) WHERE contact_phone IS NOT NULL`; `CHECK ((contact_email_verified_at IS NULL) OR (contact_email IS NOT NULL))` y equivalente para teléfono. **El correo de contacto y el correo de ingreso son el mismo dato**: cambiarlo exige actualizar el usuario en WorkOS y volver a verificar, en el flujo de `OP-IDN-021`. Los uniques son parciales y **nunca** se exponen: una consulta por contacto no existe en ninguna superficie, para preservar que una invitación no revele si el contacto ya tiene cuenta.
 - **Actores:** lee la propia persona; escribe solo `activate_person` (INSERT) y el worker de privacidad (anonimización/cierre). Ningún profesional lee esta tabla directamente: usa `identity.v_client_identity`.
 - **RLS:** `auth.is_self(id)` para lectura y update; INSERT bloqueado salvo función de activación.
 - **Consultas:** por `id`; join desde casi todos los dominios.
@@ -71,10 +71,10 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 ### 4.2 `identity.access_accounts`
 
-- **Propósito:** vínculo entre una cuenta externa de Cognito y una persona de dominio.
+- **Propósito:** vínculo entre un usuario externo de WorkOS y una persona de dominio.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `identity_pii`.
-- **Columnas:** `id` · `provider text` (`cognito`) · `issuer text` · `subject text` (el `sub`) · `person_id uuid` (nullable hasta activar) · `linked_at timestamptz`.
+- **Columnas:** `id` · `provider text` (`workos`) · `issuer text` · `subject text` (el `sub`) · `person_id uuid` (nullable hasta activar) · `linked_at timestamptz`.
 - **FKs y borrado:** `person_id → identity.people(id) ON DELETE RESTRICT`.
 - **Uniques y checks:** `UNIQUE (provider, issuer, subject)`.
 - **Actores:** lee la propia cuenta/persona; escribe la función de activación. **Ninguna organización lee esta tabla:** el `sub` no sale de Identidad.

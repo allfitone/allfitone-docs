@@ -46,7 +46,7 @@ Este es un **modelo conceptual**, no el modelo lógico ni una especificación SQ
 
 | Dominio | Raíces conceptuales | Fuente de verdad |
 | --- | --- | --- |
-| Identidad | `PERSON`, cuentas, onboarding, perfil, invitaciones | Identidad; Cognito solo autentica |
+| Identidad | `PERSON`, cuentas, onboarding, perfil, invitaciones | Identidad; WorkOS AuthKit solo autentica |
 | Organizaciones | `ORGANIZATION`, sedes, membresías, roles y capacidades | Organizaciones |
 | Relaciones | `SERVICE_RELATIONSHIP`, profesionales asignados y vigencia | Relaciones |
 | Privacidad | scopes, consentimiento, grants, denegaciones y disposición | Privacidad |
@@ -128,7 +128,7 @@ erDiagram
 | Entidad conceptual | Papel en V1 | Regla estructural |
 | --- | --- | --- |
 | `PERSON` | Ser humano canónico y raíz del Fitness ID | Se crea solo después de control personal, elegibilidad adulta y onboarding válido |
-| `ACCESS_ACCOUNT` | Vínculo local con `(provider, issuer, subject)` de Cognito | Una cuenta externa no equivale a persona ni concede acceso de dominio |
+| `ACCESS_ACCOUNT` | Vínculo local con `(provider, issuer, subject)` de WorkOS AuthKit | Una cuenta externa no equivale a persona ni concede acceso de dominio |
 | `ONBOARDING_ATTEMPT` | Flujo previo a activar una persona | Puede terminar sin crear `PERSON` |
 | `ELIGIBILITY_EVIDENCE` | Aplicación versionada de la política adulta | Ausencia, fallo o `review_required` no significan elegibilidad |
 | `FITNESS_PROFILE_CLAIM` | Afirmación tipada, con autor, procedencia y vigencia | El modelo lógico la separará por estructura y sensibilidad; no será EAV universal |

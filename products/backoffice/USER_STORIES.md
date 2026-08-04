@@ -261,7 +261,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 4. Si no controla ningún contacto verificado, V1 **falla cerrado**: no cambio datos, no acepto fotos de documentos, no vinculo otra cuenta a su Fitness ID y cierro o escalo la atención como recuperación no disponible.
 5. El equipo ve contactos parcialmente ocultos y estados como iniciado, esperando verificación, confirmado, vencido, cancelado o fallido; nunca ve contraseñas, códigos ni enlaces completos.
 6. Un correo o teléfono nuevo debe verificarse antes de sustituir al anterior. Si ya pertenece a otra cuenta, se rechaza sin revelar quién lo usa.
-7. El correo de acceso en Cognito y el correo de contacto cambian como una sola decisión. Si una parte falla, ambas conservan el valor anterior.
+7. El correo de acceso en WorkOS AuthKit y el correo de contacto cambian como una sola decisión. Si una parte falla, ambas conservan el valor anterior.
 8. Al confirmar un nuevo correo se cierran las demás sesiones y se notifica al contacto anterior y al nuevo. Un cambio de teléfono también se notifica por los canales verificados disponibles.
 9. El nombre declarado lo modifica la persona. Cambiarlo no reescribe una credencial profesional verificada; una incompatibilidad abre una nueva revisión y conserva la evidencia anterior.
 10. Puedo reenviar una verificación pendiente o cancelar una intención sospechosa, pero nunca confirmar, marcar como verificado ni elegir el dato por la persona.

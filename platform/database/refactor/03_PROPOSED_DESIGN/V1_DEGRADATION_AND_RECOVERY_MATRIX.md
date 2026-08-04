@@ -21,19 +21,19 @@ ADR-014 ya lo decidió y aquí solo se opera: **independencia funcional, no tole
 | Sí significa | No significa |
 | --- | --- |
 | Valor propio de cada producto | Que Space sobreviva a la caída de PostgreSQL |
-| Frontends y app clients separados | Bases de datos separadas |
+| Frontends y WorkOS Applications separadas | Bases de datos separadas |
 | Contratos HTTP separados | Despliegues de backend obligatoriamente separados |
 | Despliegue de frontend independiente | Que un producto pueda escribir mientras el otro está caído |
 | Aislamiento por cuotas, pools, colas y timeouts | Aislamiento de fallo de la fuente de verdad |
 
-El ecosistema mantiene **por ambiente** un Cognito User Pool y un PostgreSQL compartidos. Su indisponibilidad total degrada ambos productos y es un riesgo **explícitamente aceptado** para V1.
+El ecosistema mantiene **por ambiente** un WorkOS environment y un PostgreSQL compartidos. Su indisponibilidad total degrada ambos productos y es un riesgo **explícitamente aceptado** para V1.
 
 ## 3. Dependencias y su clase
 
 | Dependencia | Clase | Compartida | Efecto de su caída total |
 | --- | --- | --- | --- |
 | PostgreSQL (Supabase) | Fuente de verdad | Sí | Ambos productos pierden toda operación autoritativa |
-| Cognito | Autenticación | Sí | Login y refresh fallan; los tokens vigentes siguen siendo verificables |
+| WorkOS AuthKit | Autenticación | Sí | Login y refresh fallan; los tokens vigentes siguen siendo verificables |
 | Registro interno de deberes | Autoridad temporal de `A10/A11/A12` | No para operación ordinaria; sí para verificación/break-glass | Esas capacidades fallan cerradas; no se confía en claims ni caché |
 | API Allfit | Cómputo | Sí en V1 | Ambos productos, salvo lo cacheado de solo lectura |
 | Outbox + workers | Asíncrono | Por dominio | Se retrasa lo asíncrono; lo síncrono continúa |
@@ -51,7 +51,7 @@ El ecosistema mantiene **por ambiente** un Cognito User Pool y un PostgreSQL com
 | Frontend de Space | Caído | **Sin efecto** | Sin efecto | — |
 | Frontend de OS | **Sin efecto** | Caído | Sin efecto | — |
 | PostgreSQL | Sin confirmaciones | Sin confirmaciones | En espera | Space conserva borradores locales; OS **no confirma nada** |
-| Cognito | Login y refresh fallan; token vigente sigue operando hasta expirar | Igual | Sin efecto | Ninguna: no se acepta un token no verificable |
+| WorkOS AuthKit | Login y refresh fallan; token vigente sigue operando hasta expirar | Igual | Sin efecto | Ninguna: no se acepta un token no verificable |
 | API completa | Solo caché de lectura | Solo caché de lectura | Sin efecto | Space registra en local |
 | Módulo de un producto | Ese contrato degrada | El otro continúa | Sin efecto | El prefijo de ruta aísla |
 | Worker de outbox | Notificaciones se retrasan | Igual | Acumula | Lo síncrono no se bloquea |
@@ -131,10 +131,10 @@ Valores **propuestos**. El objetivo no es el número exacto sino que exista un l
 | --- | --- | --- | --- |
 | Space, por persona | 120 req/min | 300 | `429` con `Retry-After` |
 | Space, escrituras de ejecución | 60 req/min | 120 | `429` |
-| Space, app client global | 20 000 req/min | — | `429` |
+| Space, WorkOS Application global | 20 000 req/min | — | `429` |
 | OS, por membresía | 300 req/min | 600 | `429` |
 | OS, lecturas de datos de clientes | 120 req/min | 240 | `429`; además se registra como patrón anómalo |
-| OS, app client global | 10 000 req/min | — | `429` |
+| OS, WorkOS Application global | 10 000 req/min | — | `429` |
 | Catálogo | 600 req/min por actor | 1 200 | `429` |
 | Soporte y break-glass | 30 req/min | 60 | `429` y alerta |
 
@@ -242,7 +242,7 @@ Toda métrica y todo log llevan: `surface` (space \| os \| catalog), `domain` (i
 
 Restricciones que deben quedar escritas junto a los números:
 
-1. La disponibilidad de Space **no puede ser mayor** que la de PostgreSQL y Cognito combinados. Prometer más sería prometer lo que la topología no da.
+1. La disponibilidad de Space **no puede ser mayor** que la de PostgreSQL y WorkOS AuthKit combinados. Prometer más sería prometer lo que la topología no da.
 2. El RPO de 15 minutos **no aplica a disposiciones ni transiciones de seguridad**: una restauración reaplica los `DISPOSITION_EVENT`, terminaciones, congelaciones, revocaciones, cierres de casos históricos y cierres/expiraciones break-glass posteriores al snapshot antes de devolver tráfico. Un dato eliminado no reaparece, una relación terminada no vuelve a verse como activa y una ventana cerrada o expirada no recupera autoridad.
 3. El modo offline de Space **no** mejora su SLO: mejora la experiencia durante una caída, no la disponibilidad del servicio.
 
@@ -308,7 +308,7 @@ Alimentan la suite de la Fase 6. Los diez primeros son los escenarios exigidos p
 | `D-10` | Propuesta de extracción de un dominio | Identifica fuente de verdad y consistencia; se rechaza si solo duplica tablas por producto |
 | `D-11` | Reintentos posteriores a recuperación | Idempotentes: no duplican ejecuciones, asignaciones ni invitaciones |
 | `D-12` | Restauración con disposiciones posteriores | Se reaplican **antes** de abrir tráfico; nada revive |
-| `D-13` | Cognito caído | Un token vigente sigue operando; uno no verificable se rechaza |
+| `D-13` | WorkOS AuthKit caído | Un token vigente sigue operando; uno no verificable se rechaza |
 | `D-14` | Revocación durante degradación | Se aplica o falla cerrada; nunca queda "revocado pero legible" |
 | `D-15` | Cola de disposición atascada | Alerta desde el primer ítem vencido |
 | `D-16` | Rate limit alcanzado en un producto | El otro conserva su presupuesto íntegro |

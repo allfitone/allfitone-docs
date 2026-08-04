@@ -96,7 +96,7 @@ refactor/
 | --- | --- | --- |
 | Current Architecture Diagram | Explicar la arquitectura técnica actual | Referencia |
 | Current Database Analysis | Documentar esquema, relaciones, seguridad y deuda actuales | Referencia |
-| Allfit Architecture Decisions | Registrar decisiones propuestas e invariantes | ADR-028 aprobada; resto de P0 en cierre |
+| Allfit Architecture Decisions | Registrar decisiones propuestas e invariantes | Estado por ADR; ADR-002 actualizada a WorkOS y su integración queda bajo `DB-P5-019` |
 | Allfit Domain Glossary | Establecer el lenguaje común del negocio | Recertificado para acceso Backoffice opción B |
 | Alcance BD V1 | Fijar la frontera funcional y de datos de la baseline | Recertificado para acceso Backoffice opción B |
 | Database Refactor Phases | Ordenar el trabajo y sus gates de calidad | Borrador ejecutable |
@@ -123,18 +123,18 @@ Dimensión actual: **9 dominios conceptuales, 11 schemas físicos, 115 tablas, 7
 ## Decisiones acordadas
 
 - El ecosistema documentado se compone de Allfit OS, Allfit Space y Allfit Backoffice.
-- Amazon Cognito será la única fuente de autenticación.
-- Habrá un Cognito User Pool compartido por ambiente y app clients separados por producto.
+- WorkOS AuthKit será la única fuente de autenticación.
+- Habrá un WorkOS environment compartido por ambiente y WorkOS Applications separadas por producto.
 - Supabase se utilizará únicamente como PostgreSQL administrado.
 - Space y OS accederán a los datos exclusivamente mediante una API propia.
 - Existirá un proyecto Supabase compartido por ambiente.
 - Una persona puede registrarse directamente en Space y activar su Fitness ID sin invitación, organización o relación profesional.
 - Allfit OS solo puede invitar por email o celular; nunca crea cuentas o personas.
 - La invitación es opcional para identidad: únicamente transporta propuestas iniciadas desde OS y una persona ya registrada la acepta con el mismo `person_id`.
-- La persona completa personalmente Cognito, registro, términos y onboarding.
+- La persona completa personalmente el registro o autenticación mediante AuthKit, los términos y el onboarding.
 - V1 solo activa Fitness IDs para personas de 18 años o más; menores, representantes, consentimiento parental y cuentas tuteladas quedan fuera del alcance.
-- La elegibilidad adulta se resuelve antes de crear la persona, recopilar datos fitness o materializar invitaciones; una cuenta Cognito temporal no concede acceso de dominio.
-- La identidad externa de Cognito se separa de la persona/Fitness ID de dominio.
+- La elegibilidad adulta se resuelve antes de crear la persona, recopilar datos fitness o materializar invitaciones; un usuario WorkOS temporal no concede acceso de dominio.
+- La identidad externa de WorkOS AuthKit se separa de la persona/Fitness ID de dominio.
 - Los datos se organizan por dominios, no por aplicación.
 - El núcleo de entrenamiento será multidisciplina.
 - Ejercicio y rutina son términos de interfaz para fuerza, no entidades universales.
@@ -187,7 +187,7 @@ Dimensión actual: **9 dominios conceptuales, 11 schemas físicos, 115 tablas, 7
 - Booking/clases, commerce/pagos internos o externos, membresías comerciales, wearables productivos, IA, nutrición clínica/terapéutica o automatizada, comunidad y eventos no generan DDL en la baseline.
 - `sensor_enriched` se define y prueba como contrato del núcleo, sin incorporar conectores, credenciales o raw streams productivos.
 - Una capacidad diferida entra después como rebanada vertical con ADR, ownership, privacidad, modelo, migraciones, RLS y pruebas propios; no mediante placeholders.
-- Space y OS tienen independencia funcional y aislamiento operativo, pero comparten en V1 Cognito y PostgreSQL como dominios físicos de fallo aceptados.
+- Space y OS tienen independencia funcional y aislamiento operativo, pero comparten en V1 WorkOS AuthKit y PostgreSQL como dominios físicos de fallo aceptados.
 - Los fallos locales se contienen con límites de recursos, colas y circuit breakers; autorización, consentimiento, capacidad y dinero fallan cerrados.
 - Una separación futura se decide por SLO, regulación, escala o incidentes demostrados y se ejecuta por dominio, no duplicando bases por producto.
 - La API propia se construye en Bun + TypeScript y expone cuatro superficies REST con OpenAPI: `/space/v1`, `/os/v1`, `/catalog/v1` y `/backoffice/v1`, cada una con versionado independiente.
@@ -215,6 +215,8 @@ Dimensión actual: **9 dominios conceptuales, 11 schemas físicos, 115 tablas, 7
 **Fase 4 — aprobación histórica del 28 de julio de 2026.** El modelo vigente contiene 115 tablas y cinco objetos físicos de Soporte tras ADR-028; esa dimensión ya está sincronizada entre ERD, catálogo y diccionario, pero no autoriza aún el DDL.
 
 El readiness vigente queda en **GO condicionado por rebanada** según [modificaciones de BD por rebanada](./04_EXECUTION/PRE_PHASE_5_DATABASE_MODIFICATIONS.md). Cada HU debe cerrar sus propios P0 antes de migrar; no se exige resolver Premium, pagos u otra épica para implementar una rebanada independiente. `DB-P5-002` ya está resuelto en diseño con la opción B.
+
+El cambio de autenticación a WorkOS AuthKit abre `DB-P5-019`: ninguna rebanada de autenticación ni operación AAL2 se implementa antes de cerrar PKCE, validación de claims, ciclo de sesión, binding de invitaciones por canal y evidencia verificable de MFA/step-up.
 
 Además de los P0, permanecen decisiones de ejecución registradas en el plan; se cierran antes de la primera rebanada que las necesite:
 

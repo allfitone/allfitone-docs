@@ -60,7 +60,7 @@ Un actor no es un rol ni un permiso: es el sujeto autenticado desde el que se ev
 | Actor | Descripción | Puede existir sin `PERSON` |
 | --- | --- | --- |
 | `A0` Anónimo | Petición sin autenticar | Sí |
-| `A1` Cuenta sin persona | Cuenta Cognito válida cuyo `ACCESS_ACCOUNT` todavía no vincula una `PERSON`. Solo puede operar sobre su propio onboarding | Sí |
+| `A1` Cuenta sin persona | Usuario WorkOS válido cuyo `ACCESS_ACCOUNT` todavía no vincula una `PERSON`. Solo puede operar sobre su propio onboarding | Sí |
 | `A2` Persona | `PERSON` activa con Fitness ID. Sujeto de Space | No |
 | `A3` Profesional coach | `PERSON` con `PROFESSIONAL_PROFILE` que opera mediante `ORGANIZATION_MEMBERSHIP` vigente con rol `coach` | No |
 | `A4` Admin de organización | Membresía vigente con rol `admin` | No |
@@ -109,7 +109,7 @@ No hay roles personalizados en V1. No hay alcance de rol por sede: `ORGANIZATION
 
 ## 4. Superficies
 
-| Superficie | Base | Sujeto | App client Cognito |
+| Superficie | Base | Sujeto | WorkOS Application |
 | --- | --- | --- | --- |
 | Space | `api.allfit.com/space/v1` | La persona autenticada | Space |
 | OS | `api.allfit.com/os/v1` | La organización en la que actúa el profesional | OS |
@@ -214,7 +214,7 @@ Algunas fichas cubren dos identificadores cuando la operación es simétrica —
 
 Este dominio es dueño de `PERSON`, `ACCESS_ACCOUNT`, `ONBOARDING_ATTEMPT`, `ELIGIBILITY_EVIDENCE`, `FITNESS_PROFILE_CLAIM`, `BODY_PROGRESS_RECORD`, `HEALTH_CONTEXT_CLAIM`, `PROFILE_VERIFICATION`, `PROFESSIONAL_PROFILE`, `INVITATION` e `INVITATION_INTENT`.
 
-Regla que gobierna todo el dominio: **una cuenta Cognito no es una persona**. Ninguna operación crea una `PERSON` sin control personal del sujeto, elegibilidad adulta resuelta y onboarding completo.
+Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Ninguna operación crea una `PERSON` sin control personal del sujeto, elegibilidad adulta resuelta y onboarding completo.
 
 | ID | Operación | Tipo | Actor |
 | --- | --- | --- | --- |
@@ -251,7 +251,7 @@ Regla que gobierna todo el dominio: **una cuenta Cognito no es una persona**. Ni
 | --- | --- |
 | **Tipo** | Comando |
 | **Superficie** | `POST /space/v1/onboarding-attempts` |
-| **Actor** | `A1` — cuenta Cognito válida sin persona vinculada |
+| **Actor** | `A1` — usuario WorkOS válido sin persona vinculada |
 | **Filtros obligatorios** | `ACCESS_ACCOUNT` derivado de `(issuer, subject)` del token verificado; la cuenta no debe tener ya una `PERSON` vinculada |
 | **Transacción** | Crear `ONBOARDING_ATTEMPT` y vincularlo a la cuenta externa. Si el flujo viene de una invitación, congelar el token de referencia sin materializar ninguna intención |
 | **Idempotencia** | `Idempotency-Key`. Una cuenta con un intento abierto y no vencido recibe el mismo intento en lugar de uno nuevo |
@@ -600,8 +600,8 @@ Regla que gobierna todo el dominio: **una cuenta Cognito no es una persona**. Ni
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | `identity_pii` |
 | **Evento de dominio** | `identity.contact_changed.v1` |
-| **Reglas** | **El correo de contacto y el correo de ingreso son el mismo dato.** Cambiarlo actualiza también la identidad en Cognito, y ambos lados quedan consistentes o no se aplica ninguno. El dueño del dato es el perfil de la persona, no el proveedor de autenticación. Un contacto en uso por otra persona se rechaza **sin revelar** que existe: el mensaje es el mismo que para un formato inválido, porque distinguirlos filtraría quién tiene cuenta en Allfit |
-| **Falla cerrada** | Si Cognito o el envío del desafío no confirman, no se cambia nada: nunca queda un correo distinto a cada lado |
+| **Reglas** | **El correo de contacto y el correo de ingreso son el mismo dato.** Cambiarlo actualiza también la identidad en WorkOS AuthKit, y ambos lados quedan consistentes o no se aplica ninguno. El dueño del dato es el perfil de la persona, no el proveedor de autenticación. Un contacto en uso por otra persona se rechaza **sin revelar** que existe: el mensaje es el mismo que para un formato inválido, porque distinguirlos filtraría quién tiene cuenta en Allfit |
+| **Falla cerrada** | Si WorkOS AuthKit o el envío del desafío no confirman, no se cambia nada: nunca queda un correo distinto a cada lado |
 
 #### `OP-IDN-022` — Verificar un contacto
 
@@ -748,7 +748,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Contacto de la persona invitada. La organización **no** aprende si ese contacto ya tiene cuenta |
 | **Evento de dominio** | `organization.staff_invited.v1` |
-| **Reglas** | OS nunca ejecuta `AdminCreateUser` ni crea personas. La invitación no crea cuenta, persona, perfil ni membresía: solo transporta una propuesta. El envío es asíncrono; un fallo del proveedor no invalida la invitación |
+| **Reglas** | OS nunca ejecuta `Create User` ni crea personas. La invitación no crea cuenta, persona, perfil ni membresía: solo transporta una propuesta. El envío es asíncrono; un fallo del proveedor no invalida la invitación |
 | **Falla cerrada** | Sin capacidad de invitar, rechazo |
 
 #### `OP-ORG-006` — Revocar una invitación emitida

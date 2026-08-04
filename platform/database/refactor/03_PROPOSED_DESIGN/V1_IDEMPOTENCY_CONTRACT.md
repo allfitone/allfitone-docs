@@ -33,11 +33,11 @@ El backend calcula el scope efectivo antes de abrir el comando:
 | Dimensión | Fuente |
 | --- | --- |
 | `principal_fingerprint` | SHA-256 de kind + ID canónico: `person_id` tras activación, `access_account.id` durante onboarding o principal de servicio estable |
-| `client_id` | `aud`/app client validado del token o identidad del worker |
+| `client_id` | Claim `client_id` de la WorkOS Application validada o identidad del worker |
 | `surface` | ruta resuelta por el servidor: `space`, `os`, `system` |
 | `operation_code` | operación `OP-*` asociada a la ruta o job |
 
-Ni actor, app client, superficie ni operación se aceptan desde body o headers libres.
+Ni actor, WorkOS Application, superficie ni operación se aceptan desde body o headers libres.
 
 La identidad de transporte es:
 
@@ -51,7 +51,7 @@ La identidad durable es:
 (principal_fingerprint, surface, operation_code, command_id)
 ```
 
-Esto permite repetir una misma clave accidental en otro actor u operación sin mezclar resultados, pero impide que el mismo comando se ejecute desde otro app client para evadir la deduplicación durable.
+Esto permite repetir una misma clave accidental en otro actor u operación sin mezclar resultados, pero impide que el mismo comando se ejecute desde otro WorkOS Application para evadir la deduplicación durable.
 
 ---
 

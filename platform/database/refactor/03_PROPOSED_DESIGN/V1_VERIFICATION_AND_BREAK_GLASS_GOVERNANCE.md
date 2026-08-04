@@ -50,7 +50,8 @@ Nutrición usa el `credential_type_code = nutrition_professional`. No crea otro 
 
 No usan `PROFILE_VERIFICATION`:
 
-- email o teléfono: los verifica Cognito;
+- email de autenticación: lo verifica WorkOS AuthKit;
+- teléfono: exige el contrato separado de prueba de control definido por ADR-002/`DB-P5-019`;
 - declaración 18+: es evidencia de elegibilidad `person_declared`, no identidad documental;
 - nombre o identidad civil;
 - salud, dolor, biometría o medidas corporales;
@@ -198,7 +199,7 @@ No se cachea, no se deduplica y no habilita escritura, exportación masiva o con
 
 ## 5. Provisionamiento y revisión
 
-La fuente de autoridad es el **registro interno de deberes de plataforma**, separado de Cognito, de los roles PostgreSQL y del rol base de Backoffice. Cada asignación conserva como mínimo:
+La fuente de autoridad es el **registro interno de deberes de plataforma**, separado de WorkOS AuthKit, de los roles PostgreSQL y del rol base de Backoffice. Cada asignación conserva como mínimo:
 
 ```text
 assignment_id
@@ -215,7 +216,7 @@ revoked_by_person_id
 revoked_at
 ```
 
-El backend lo consulta por un canal servidor-a-servidor en cada transacción sensible y solo entonces establece `app.platform_duty`. Un grupo de Cognito, header, payload o valor cacheado no sustituye esa comprobación. El registro conserva su propia auditoría de altas, recertificaciones, suspensiones y revocaciones; si no puede confirmar una asignación vigente, verificación y break-glass fallan cerrados.
+El backend lo consulta por un canal servidor-a-servidor en cada transacción sensible y solo entonces establece `app.platform_duty`. Un claim, role o permission de WorkOS, header, payload o valor cacheado no sustituye esa comprobación. El registro conserva su propia auditoría de altas, recertificaciones, suspensiones y revocaciones; si no puede confirmar una asignación vigente, verificación y break-glass fallan cerrados.
 
 | Deber | Modo | Otorga | Vigencia máxima | Recertifica |
 | --- | --- | --- | ---: | --- |

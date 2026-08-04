@@ -12,7 +12,7 @@ Para cada concepto se responden las mismas siete preguntas:
 2. ¿Qué no es?
 3. ¿Quién lo crea?
 4. ¿Quién es dueño del dato?
-5. ¿Puede existir sin una cuenta de acceso en Cognito?
+5. ¿Puede existir sin una cuenta de acceso en WorkOS AuthKit?
 6. ¿Cuál es su ciclo de vida?
 7. ¿Cuáles son sus ejemplos y contraejemplos?
 
@@ -21,14 +21,14 @@ Para cada concepto se responden las mismas siete preguntas:
 ## Decisiones transversales
 
 - La persona es la raíz del Fitness ID.
-- Cognito autentica; el claim `sub` no representa por sí solo a la persona de dominio.
+- WorkOS AuthKit autentica; el claim `sub` no representa por sí solo a la persona de dominio.
 - Una persona puede registrarse directamente en Space y activar su Fitness ID sin invitación, organización o relación profesional.
-- Allfit OS nunca crea cuentas Cognito ni personas. Solo crea invitaciones dirigidas a un email o celular.
+- Allfit OS nunca crea usuarios WorkOS ni personas. Solo crea invitaciones dirigidas a un email o celular.
 - Una invitación pendiente no es una persona, cuenta, membresía, relación, consentimiento ni asignación.
 - La persona invitada debe verificar su contacto y completar personalmente el registro antes de que existan esas entidades.
 - V1 solo activa personas de 18 años o más; no existen perfiles tutelados, representantes, consentimiento parental ni cuentas familiares.
 - Esta edad mínima fue ratificada el 23 de julio de 2026. Las personas de 14 a 17 años no entran como usuarios autónomos en V1; un soporte futuro deberá diseñarse como flujo representado independiente.
-- La elegibilidad adulta se resuelve antes de crear la persona, recopilar datos fitness o materializar intenciones; una cuenta Cognito temporal no demuestra elegibilidad.
+- La elegibilidad adulta se resuelve antes de crear la persona, recopilar datos fitness o materializar intenciones; un usuario WorkOS temporal no demuestra elegibilidad.
 - Una invitación contiene intenciones tipadas; cada intención se acepta o rechaza por separado y la aceptación parcial es válida.
 - Cliente, atleta y profesional son roles de una persona, no personas diferentes.
 - Una organización no es propietaria automática del historial fitness personal.
@@ -72,11 +72,11 @@ Para cada concepto se responden las mismas siete preguntas:
 | --- | --- |
 | **1. ¿Qué es?** | Un sobre temporal y opcional emitido desde OS para que el titular de un email o celular se registre o use su cuenta existente y decida propuestas tipadas de membresía, relación o programa. Contiene canal, destino normalizado, organización, emisor, propósito, expiración y token seguro. |
 | **2. ¿Qué no es?** | No es requisito para registrarse o usar Space. Tampoco es una persona, cuenta de acceso, perfil, membresía, relación profesional, consentimiento ni asignación, ni demuestra que el titular del contacto haya aceptado participar. |
-| **3. ¿Quién lo crea?** | Un miembro autorizado de una organización desde OS. El backend genera y envía el token; OS nunca invoca `AdminCreateUser` ni otro flujo administrativo de Cognito en nombre del invitado. |
+| **3. ¿Quién lo crea?** | Un miembro autorizado de una organización desde OS. El backend genera y envía el token; OS nunca invoca `Create User` ni otro flujo administrativo de WorkOS AuthKit en nombre del invitado. |
 | **4. ¿Quién es dueño del dato?** | La organización es responsable de la intención y su finalidad; Allfit custodia entrega y seguridad. El email/celular sigue siendo dato personal del destinatario y debe conservarse solo durante la vigencia/retención definida. |
 | **5. ¿Puede existir sin Auth?** | Sí. Esa es precisamente su función. El destinatario todavía no es un usuario ni una persona del dominio. |
 | **6. ¿Cuál es su ciclo de vida?** | Creada → enviada → entregada → abierta → completada, expirada, revocada o bloqueada por no elegibilidad. Cada intención pasa independientemente por propuesta, aceptación, rechazo, revocación o expiración. Completar no significa aceptar todo. El token es de un solo uso y se almacena hasheado. |
-| **7. Ejemplos y contraejemplos** | **Ejemplo:** Ana acepta la relación con su coach y rechaza el programa propuesto. **Contraejemplos:** OS crea a Ana con `AdminCreateUser` o un botón “aceptar todo” concede relación, programa y datos. |
+| **7. Ejemplos y contraejemplos** | **Ejemplo:** Ana acepta la relación con su coach y rechaza el programa propuesto. **Contraejemplos:** OS crea a Ana con `Create User` o un botón “aceptar todo” concede relación, programa y datos. |
 
 ### Implicación para la BD
 
@@ -90,15 +90,15 @@ Para cada concepto se responden las mismas siete preguntas:
 | --- | --- |
 | **1. ¿Qué es?** | El ser humano canónico alrededor del cual se construye el Fitness ID. Es el sujeto al que pertenecen identidad, preferencias, relaciones, historial de entrenamiento y progreso. La misma persona puede entrenar sola, ser cliente de varios profesionales y también prestar servicios profesionales. |
 | **2. ¿Qué no es?** | No es una credencial de acceso, un usuario de una organización, un cliente comercial, un profesional ni un perfil público. Tampoco es una copia distinta por cada gimnasio. |
-| **3. ¿Quién lo crea?** | El servicio de registro después de que la propia persona verifica email/celular, acredita elegibilidad de 18 años o más y completa el onboarding requerido. Puede originarse desde una invitación de OS o desde un registro espontáneo en Space. OS nunca crea la persona directamente. |
+| **3. ¿Quién lo crea?** | El servicio de registro después de que la propia persona verifica su email mediante WorkOS, acredita elegibilidad de 18 años o más y completa el onboarding requerido. Una invitación por celular exige además la prueba separada de control del canal. Puede originarse desde una invitación de OS o desde un registro espontáneo en Space. OS nunca crea la persona directamente. |
 | **4. ¿Quién es dueño del dato?** | La persona es el dueño lógico de su identidad e historial personal. Allfit actúa como custodio de la fuente canónica. Cada organización conserva autoría y responsabilidad sobre los registros operativos que haya producido, pero no obtiene propiedad sobre toda la persona. |
-| **5. ¿Puede existir sin cuenta Cognito?** | No como persona activa en V1. Antes de completar el registro directo no existe persona de dominio; si el flujo empezó desde OS puede existir una invitación separada. Por retención o auditoría, una persona podría permanecer anonimizada/archivada después de cerrar su cuenta, pero no nace sin que su titular complete Cognito y el onboarding. |
+| **5. ¿Puede existir sin usuario WorkOS?** | No como persona activa en V1. Antes de completar el registro directo no existe persona de dominio; si el flujo empezó desde OS puede existir una invitación separada. Por retención o auditoría, una persona podría permanecer anonimizada/archivada después de cerrar su cuenta, pero no nace sin que su titular complete WorkOS AuthKit y el onboarding. |
 | **6. ¿Cuál es su ciclo de vida?** | Elegibilidad adulta resuelta → registrada/activa → restringida o suspendida → eventualmente anonimizada/archivada. No se crea una persona nueva al entrar a otra organización. Las fusiones por duplicados excepcionales deben conservar alias, procedencia y auditoría. Si se descubre que es menor, se restringe y se inicia disposición; no se convierte en perfil tutelado. |
 | **7. Ejemplos y contraejemplos** | **Ejemplo:** Ana, adulta, entrena sola, pertenece a un gimnasio y contrata dos profesionales; continúa siendo una sola persona. **Contraejemplos:** crear tres filas de Ana, una por cada relación u organización, o activar el perfil de un menor porque su acudiente lo autorizó. |
 
 ### Implicación para la BD
 
-`identity.people` debe ser independiente de Cognito, pero `identity.accounts` nace vinculado a la persona durante el registro elegible. La declaración de mayoría de edad conserva política, método, procedencia y timestamp; no requiere guardar la fecha de nacimiento completa si no existe otra finalidad. Un intento no elegible no crea persona ni perfil. Los datos privados y sensibles pueden separarse en tablas específicas para simplificar RLS y consentimientos.
+`identity.people` debe ser independiente de WorkOS AuthKit, pero `identity.accounts` nace vinculado a la persona durante el registro elegible. La declaración de mayoría de edad conserva política, método, procedencia y timestamp; no requiere guardar la fecha de nacimiento completa si no existe otra finalidad. Un intento no elegible no crea persona ni perfil. Los datos privados y sensibles pueden separarse en tablas específicas para simplificar RLS y consentimientos.
 
 ---
 
@@ -106,13 +106,13 @@ Para cada concepto se responden las mismas siete preguntas:
 
 | Pregunta | Respuesta |
 | --- | --- |
-| **1. ¿Qué es?** | La identidad externa autenticada por Amazon Cognito. Se identifica por la combinación estable de `issuer` del User Pool y claim `sub`, y se vincula con la persona canónica mediante `identity.accounts`. Space, OS y Backoffice usan app clients separados del mismo User Pool por ambiente. |
+| **1. ¿Qué es?** | La identidad externa autenticada por WorkOS AuthKit. Se identifica por la combinación estable de `issuer` del WorkOS environment y claim `sub`, y se vincula con la persona canónica mediante `identity.accounts`. Space, OS y Backoffice usan WorkOS Applications separadas del mismo WorkOS environment por ambiente. |
 | **2. ¿Qué no es?** | No es la persona, su perfil fitness, su rol profesional ni su membresía en una organización. Borrar o bloquear una cuenta no debe borrar automáticamente a la persona ni su historial. |
-| **3. ¿Quién lo crea?** | Cognito cuando la propia persona inicia SignUp/SSO, verifica el contacto y completa el flujo permitido. Una invitación de OS puede iniciar la navegación, pero OS nunca usa `AdminCreateUser`. El backend crea el vínculo local durante el onboarding. |
+| **3. ¿Quién lo crea?** | WorkOS AuthKit cuando la propia persona inicia registro/SSO, verifica el email y completa el flujo permitido. Una invitación de OS puede iniciar la navegación, pero OS nunca usa `Create User`. El backend crea el vínculo local durante el onboarding. |
 | **4. ¿Quién es dueño del dato?** | El titular controla el uso de su cuenta; Allfit administra autenticación, seguridad y recuperación. Una organización puede invitar o solicitar acceso, pero no debe apropiarse de la cuenta personal. |
-| **5. ¿Puede existir sin Cognito?** | No. Por definición, la cuenta de acceso corresponde a un sujeto de Cognito. Puede existir una invitación pendiente, pero todavía no es una cuenta. |
-| **6. ¿Cuál es su ciclo de vida?** | Registro/verificación iniciada → activa → bloqueada o recuperación → desactivada/eliminada. La invitación es una entidad previa y separada. Los proveedores federados deben vincularse a un mismo usuario Cognito, no producir personas duplicadas. |
-| **7. Ejemplos y contraejemplos** | **Ejemplo:** `(issuer, sub)` de Cognito vinculado a Ana, aunque use email o un IdP federado. **Contraejemplo:** usar email/celular como identidad inmutable o tratar cada app client como una persona diferente. |
+| **5. ¿Puede existir sin WorkOS AuthKit?** | No. Por definición, la cuenta de acceso corresponde a un sujeto de WorkOS AuthKit. Puede existir una invitación pendiente, pero todavía no es una cuenta. |
+| **6. ¿Cuál es su ciclo de vida?** | Registro/verificación iniciada → activa → bloqueada o recuperación → desactivada/eliminada. La invitación es una entidad previa y separada. Los proveedores federados deben vincularse a un mismo usuario WorkOS AuthKit, no producir personas duplicadas. |
+| **7. Ejemplos y contraejemplos** | **Ejemplo:** `(issuer, sub)` de WorkOS AuthKit vinculado a Ana, aunque use email o un IdP federado. **Contraejemplo:** usar email/celular como identidad inmutable o tratar cada WorkOS Application como una persona diferente. |
 
 ### Implicación para la BD
 
@@ -676,7 +676,7 @@ Una persona tiene un único `goal_set`, múltiples versiones inmutables y como m
 ```mermaid
 erDiagram
     INVITATION o|--o| PERSON : "se materializa al aceptar"
-    PERSON ||--|| COGNITO_ACCOUNT : "se vincula mediante"
+    PERSON ||--|| ACCESS_ACCOUNT : "se vincula mediante"
     PERSON ||--o| FITNESS_PROFILE : "mantiene"
     PERSON ||--o| PROFESSIONAL : "puede ser"
 

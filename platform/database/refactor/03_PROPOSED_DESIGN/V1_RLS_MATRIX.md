@@ -18,7 +18,7 @@ La autorización de Allfit no vive en un solo lugar. Vive en cuatro, y cada capa
 
 ```mermaid
 flowchart TB
-    A["1. Autenticación<br/>Cognito verifica el JWT"]
+    A["1. Autenticación<br/>WorkOS AuthKit verifica el JWT"]
     B["2. Autorización de aplicación<br/>la API evalúa la fórmula completa"]
     C["3. RLS de PostgreSQL<br/>limita QUÉ FILAS son visibles"]
     D["4. Proyecciones y field-sets<br/>limitan QUÉ CAMPOS viajan"]
@@ -28,7 +28,7 @@ flowchart TB
 
 | Capa | Contra qué protege | Qué **no** hace |
 | --- | --- | --- |
-| Cognito | Suplantación de cuenta | No sabe nada de personas, organizaciones ni consentimientos |
+| WorkOS AuthKit | Suplantación de cuenta | No es autoridad sobre personas de dominio, organizaciones Allfit ni consentimientos |
 | Autorización de aplicación | Lógica de negocio incorrecta, operaciones no permitidas | No es suficiente sola: un `WHERE` olvidado la evade |
 | RLS | Un `WHERE` olvidado, un join mal escrito, un endpoint nuevo sin revisar | **No** filtra columnas: una fila visible es visible entera |
 | Proyecciones y field-sets | Que un campo de otra categoría viaje dentro de una fila legítima | No sustituye a RLS: no restringe qué filas se leen |
@@ -258,7 +258,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(person_id)` únicamente desde la función de activación.
 - **Índice para la policy** — único sobre `(provider, issuer, subject)`; índice sobre `person_id`.
 - **`T-ACCOUNT-1` (positiva)** — Una cuenta recién autenticada lee su propia fila sin persona vinculada.
-- **`T-ACCOUNT-2` (negativa)** — Ninguna organización, en ningún rol, lee `ACCESS_ACCOUNT` de nadie. El `sub` de Cognito no es visible fuera de Identidad.
+- **`T-ACCOUNT-2` (negativa)** — Ninguna organización, en ningún rol, lee `ACCESS_ACCOUNT` de nadie. El `sub` de WorkOS AuthKit no es visible fuera de Identidad.
 
 #### `ONBOARDING_ATTEMPT` · `ELIGIBILITY_EVIDENCE`
 
@@ -1057,7 +1057,7 @@ origen no confiable, **todo lo demás deja de valer**.
 | `A12/audit_platform_access` | Todas | — | — | — |
 | Cualquier otro | — | — | — | — |
 
-- **Condición RLS** — `auth.has_platform_role('allfit_admin') AND auth.has_platform_duty(<operación>) AND auth.aal()>=2`, todo resuelto **dentro de la transacción** contra las tablas. Nunca desde Cognito, cabecera, payload o caché. El código de operación determina el deber; el caller no lo elige.
+- **Condición RLS** — `auth.has_platform_role('allfit_admin') AND auth.has_platform_duty(<operación>) AND auth.aal()>=2`, todo resuelto **dentro de la transacción** contra las tablas. Nunca desde WorkOS AuthKit, cabecera, payload o caché. El código de operación determina el deber; el caller no lo elige.
 - **Grants mínimos** — tablas base sin DML directo; `allfit_api` sólo `EXECUTE` sobre funciones cerradas. **Sin `DELETE` para ningún rol runtime.**
 - **Índice para la policy** — rol `(person_id,status)` y único parcial vigente; deber unique parcial `(person_id,duty_code)` más `(person_id,status,valid_to)` y `(duty_code,status,valid_to)`.
 - **`T-ROLE-1` (negativa)** — Nadie se asigna su propio rol: lo impide un `CHECK`, no el código.

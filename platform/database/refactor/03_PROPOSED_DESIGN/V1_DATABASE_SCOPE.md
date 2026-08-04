@@ -60,15 +60,15 @@ flowchart LR
 | --- | --- |
 | Allfit Space | Producto personal; permite registro directo, perfil, agenda, entrenamiento autónomo e historial propio |
 | Allfit OS | Producto profesional; invita, gestiona organizaciones, relaciones, planificación y datos autorizados |
-| Autenticación | Amazon Cognito es la única fuente de autenticación |
-| Identidad de dominio | La persona/Fitness ID es independiente del `sub` de Cognito |
+| Autenticación | WorkOS AuthKit es la única fuente de autenticación |
+| Identidad de dominio | La persona/Fitness ID es independiente del `sub` de WorkOS AuthKit |
 | Persistencia | Un PostgreSQL administrado por Supabase compartido por ambiente |
 | Acceso | Space y OS usan una API propia; ningún cliente accede directamente a PostgreSQL/PostgREST |
 | Autorización | Backend, privilegios mínimos y RLS con contexto transaccional |
-| Independencia | Funcional y operativa; Cognito, API autoritativa y PostgreSQL continúan como dependencias físicas compartidas |
+| Independencia | Funcional y operativa; WorkOS AuthKit, API autoritativa y PostgreSQL continúan como dependencias físicas compartidas |
 | Migraciones | Un solo repositorio y pipeline son autoridad del esquema |
 
-Una caída total de Cognito o PostgreSQL puede afectar ambos productos. V1 no promete tolerancia física separada. Los fallos locales deben contenerse mediante límites de recursos, timeouts, colas, idempotencia, circuit breakers y observabilidad por producto/dominio.
+Una caída total de WorkOS AuthKit o PostgreSQL puede afectar ambos productos. V1 no promete tolerancia física separada. Los fallos locales deben contenerse mediante límites de recursos, timeouts, colas, idempotencia, circuit breakers y observabilidad por producto/dominio.
 
 ## 4. Actores incluidos
 
@@ -85,11 +85,11 @@ Una caída total de Cognito o PostgreSQL puede afectar ambos productos. V1 no pr
 | Seguridad/privacidad `A12` | Aprobar/rechazar solicitudes ajenas y auditar sus ejercicios | Solicitar en ese flujo, ejercer ventanas o asumir un rol del gimnasio |
 | Organización | Conservar activos propios y operar relaciones/servicios | Ownership sobre el historial completo de la persona |
 | Allfit/plataforma | Custodiar identidad de dominio, autorización, auditoría y operaciones técnicas | Reutilización secundaria de datos sin finalidad y autorización propias |
-| Cognito | Autenticar y verificar control de contacto | Rol de persona, cliente, profesional o miembro organizacional |
+| WorkOS AuthKit | Autenticar y verificar el email de acceso | Rol de persona, cliente, profesional o miembro organizacional; control de celular |
 
 V1 solo admite personas de **18 años o más**. No existen actores representantes, guardianes o dependientes.
 
-Para `A10`, `A11` y `A12`, `allfit_admin` es sólo el rol base de entrada. La autoridad de cada operación proviene de un deber temporal en `support.platform_duty_assignments`, comprobado con AAL2 dentro de la transacción. Ningún deber nace de Cognito, de una organización o del cliente.
+Para `A10`, `A11` y `A12`, `allfit_admin` es sólo el rol base de entrada. La autoridad de cada operación proviene de un deber temporal en `support.platform_duty_assignments`, comprobado con AAL2 dentro de la transacción. Ningún deber nace de WorkOS AuthKit, de una organización o del cliente.
 
 ## 5. Flujos de identidad y onboarding incluidos
 
@@ -97,7 +97,7 @@ Para `A10`, `A11` y `A12`, `allfit_admin` es sólo el rol base de entrada. La au
 
 La persona puede:
 
-1. iniciar SignUp/login personalmente en Cognito;
+1. iniciar personalmente el registro o autenticación mediante AuthKit;
 2. verificar su email o celular;
 3. acreditar elegibilidad adulta;
 4. aceptar términos y completar onboarding;
@@ -126,7 +126,7 @@ La elegibilidad se resuelve antes de crear/activar la persona, recopilar datos f
 - V1 usa edad mínima global de 18 años.
 - Una declaración versionada de mayoría de edad puede satisfacer el control V1 sin guardar fecha de nacimiento completa solo para esa finalidad.
 - `unknown`, fallo o ausencia de evidencia nunca equivalen a elegible.
-- Una cuenta Cognito temporal no elegible no obtiene acceso de dominio y converge a deshabilitación/eliminación.
+- Un usuario WorkOS temporal no elegible no obtiene acceso de dominio y converge a deshabilitación/eliminación.
 - Descubrir posteriormente que la persona es menor restringe la cuenta, revoca accesos e inicia disposición.
 
 ## 6. Organización y operación profesional incluidas
@@ -526,7 +526,7 @@ La baseline debe demostrar como mínimo:
 ### Identidad e integridad
 
 - Existe una sola persona/Fitness ID por sujeto, independientemente de producto u organización.
-- Cognito autentica, pero no modela roles de negocio.
+- WorkOS AuthKit autentica, pero sus Organizations, roles y permissions no son autoridad de negocio para Allfit.
 - Registro directo e invitación posterior convergen al mismo `person_id`.
 - Constraints/FKs impiden referencias cruzadas inválidas.
 
@@ -703,7 +703,7 @@ plan gratuito**, sin tocar una línea de código ni desplegar nada.
 | ADR | Regla incorporada al alcance |
 | --- | --- |
 | ADR-001 | Registro directo en Space e invitación opcional desde OS |
-| ADR-002 | Cognito autentica; Supabase se usa solo como PostgreSQL |
+| ADR-002 | WorkOS AuthKit autentica; Supabase se usa solo como PostgreSQL |
 | ADR-003 | Núcleo multidisciplina y separación planificación/ejecución |
 | ADR-004 | Toda operación profesional ocurre dentro de organización |
 | ADR-005 | Fin de relación corta operación/escritura, congela la ventana histórica en `T` y limita datos futuros |
