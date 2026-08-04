@@ -1,0 +1,7 @@
+{
+  "name": "allfitone-docs",
+  "private": true,
+  "scripts": {
+    "check": "node scripts/check-links.mjs"
+  }
+}

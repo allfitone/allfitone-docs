@@ -1,0 +1,1862 @@
+# Diccionario de datos V1
+
+**Versión de revisión:** 5
+**Fecha:** 3 de agosto de 2026
+**Fase:** 4 — Modelo lógico y diccionario de datos
+**Estado:** 115 fichas tras ADR-028; resto de P0 pendiente
+**Deriva de:** [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md), [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md), [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
+
+## 1. Propósito
+
+La ficha obligatoria de cada una de las **115 tablas físicas** de V1. ADR-028 añade a las 111 previas `platform_duty_assignments` y los tres expedientes break-glass. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
+
+Cada ficha responde los quince campos exigidos por [`DATABASE_REFACTOR_PHASES.md` §Fase 4](../04_EXECUTION/DATABASE_REFACTOR_PHASES.md). El diccionario, el ERD lógico y el SQL de Fase 5 deben coincidir; cualquier divergencia es un defecto que se corrige aquí antes de escribir la migración.
+
+## 2. Convenciones que no se repiten en cada ficha
+
+Para no repetir lo que el [estándar](./POSTGRES_MODELING_STANDARD.md) ya fija, estas reglas se aplican a **todas** las tablas salvo que la ficha diga lo contrario:
+
+- **PK:** `id uuid` con default UUIDv7; las fichas offline que igualan `id = Command-Id` lo reciben del dispositivo. `access_events` y `disposition_events` usan PK compuesta con la columna de partición.
+- **Nullability:** toda columna es `NOT NULL` salvo que la ficha escriba explícitamente `(nullable)`; payload y `*_schema_version` opcionales aparecen o faltan juntos.
+- **`created_at timestamptz not null default now()`** en todas.
+- **`updated_at timestamptz`** por trigger en tablas mutables; **ausente** en append-only.
+- **Autoría:** cuando una fila la escribe un actor humano lleva `created_by_kind actor_kind` y el `created_by_person_id` o `created_by_membership_id` que aplique.
+- **Contexto RLS:** toda tabla de dominio tiene `FORCE ROW LEVEL SECURITY`; las condiciones exactas están en [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md) y aquí se resume la policy.
+- **`allfit_owner`** posee los objetos; **`allfit_api`** es el rol de runtime; los workers y soporte tienen los suyos.
+- **Clasificación del dato** usa las categorías: `operational` (no personal), `identity_pii`, `training`, `body`, `health`, `nutrition`, `audit`.
+- **Integridad cruzada:** las claves portadoras, FKs compuestas y triggers `IX-01..35` de [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md) son obligatorios aunque una ficha resuma el mecanismo.
+- **Trazabilidad RLS:** toda expresión “vía”, “hereda” o “relación visible” se expande en [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md) a joins, columnas, proyección, índice y pruebas exactos.
+- **Objetos y JSONB:** los nombres físicos, enums compartidos, contratos JSONB y particiones se rigen por [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md); no se difieren a la migración.
+- **Idempotencia:** scope, receipts, PKs offline, expiración, disposición y concurrencia se rigen por [`V1_IDEMPOTENCY_CONTRACT.md`](./V1_IDEMPOTENCY_CONTRACT.md).
+- **Notación de índices:** “por `x`” significa B-tree exacto `(x)`; “compuesto anterior” usa exactamente las columnas y orden de `Consultas`; parciales reproducen literalmente su predicado. El catálogo físico determina el nombre.
+
+### 2.1 Formato de ficha
+
+Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas (nombre · tipo · nota), FKs con borrado, uniques y checks, actores lectura/escritura, RLS (resumen), patrones de consulta, índices, retención y eventos. Las columnas de auditoría estándar (§2) se omiten de la lista salvo cuando tienen una particularidad.
+
+## 3. Índice
+
+| Schema | Tablas | Sección |
+| --- | --- | --- |
+| `identity` | 13 | §4 |
+| `organizations` | 10 | §5 |
+| `relationships` | 6 | §6 |
+| `privacy` | 16 | §7 |
+| `catalog` | 12 | §8 |
+| `planning` | 16 | §9 |
+| `execution` | 14 | §10 |
+| `nutrition` | 8 | §10A |
+| `system` | 3 | §11 |
+| `payments` | 12 | §13 |
+| `support` | 5 | §12 |
+
+---
+
+## 4. Schema `identity`
+
+### 4.1 `identity.people`
+
+- **Propósito:** raíz canónica del Fitness ID; el sujeto humano al que todo lo demás refiere.
+- **Dominio / fuente de verdad:** Identidad. Es la fuente de verdad de la identidad de dominio.
+- **Clasificación:** `identity_pii`.
+- **Columnas:** `id` · `given_name text` · `family_name text` · `display_name text` (derivada, para presentación) · `contact_email citext` (nullable hasta verificar) · `contact_email_verified_at timestamptz` (nullable) · `contact_phone text` (E.164, nullable) · `contact_phone_verified_at timestamptz` (nullable) · `status text` (`active`, `closed`) · `activated_at timestamptz`.
+- **FKs y borrado:** ninguna saliente. Es la raíz; no referencia a otros dominios.
+- **Uniques y checks:** `CHECK (status in ('active','closed'))`; `UNIQUE (contact_email) WHERE contact_email IS NOT NULL`; `UNIQUE (contact_phone) WHERE contact_phone IS NOT NULL`; `CHECK ((contact_email_verified_at IS NULL) OR (contact_email IS NOT NULL))` y equivalente para teléfono. **El correo de contacto y el correo de ingreso son el mismo dato**: cambiarlo exige actualizar Cognito y volver a verificar, en el flujo de `OP-IDN-021`. Los uniques son parciales y **nunca** se exponen: una consulta por contacto no existe en ninguna superficie, para preservar que una invitación no revele si el contacto ya tiene cuenta.
+- **Actores:** lee la propia persona; escribe solo `activate_person` (INSERT) y el worker de privacidad (anonimización/cierre). Ningún profesional lee esta tabla directamente: usa `identity.v_client_identity`.
+- **RLS:** `auth.is_self(id)` para lectura y update; INSERT bloqueado salvo función de activación.
+- **Consultas:** por `id`; join desde casi todos los dominios.
+- **Índices:** PK. `status` no se indexa (baja cardinalidad).
+- **Retención:** el cierre elimina PII —nombre, apellido, correo y teléfono— y deja tombstone técnico sin PII (`OP-SYS-008`); nunca `deleted_at`. El contacto es dato personal bajo la Ley 1581: clasificación `identity_pii`, misma política de disposición que el resto de la identidad.
+- **Eventos:** `identity.person_activated.v1`, `identity.contact_changed.v1`, `identity.contact_verified.v1`.
+
+### 4.2 `identity.access_accounts`
+
+- **Propósito:** vínculo entre una cuenta externa de Cognito y una persona de dominio.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `identity_pii`.
+- **Columnas:** `id` · `provider text` (`cognito`) · `issuer text` · `subject text` (el `sub`) · `person_id uuid` (nullable hasta activar) · `linked_at timestamptz`.
+- **FKs y borrado:** `person_id → identity.people(id) ON DELETE RESTRICT`.
+- **Uniques y checks:** `UNIQUE (provider, issuer, subject)`.
+- **Actores:** lee la propia cuenta/persona; escribe la función de activación. **Ninguna organización lee esta tabla:** el `sub` no sale de Identidad.
+- **RLS:** fila = `app.actor_account_id`, o `person_id = auth.person()`.
+- **Consultas:** por `(provider, issuer, subject)` en cada request; por `person_id`.
+- **Índices:** único `(provider, issuer, subject)`; `person_id`.
+- **Retención:** se anonimiza/elimina con el cierre de la persona.
+- **Eventos:** ninguno propio.
+
+### 4.3 `identity.onboarding_attempts`
+
+- **Propósito:** flujo previo a activar una persona; puede terminar sin crearla.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `identity_pii`.
+- **Columnas:** `id` · `account_id uuid` · `person_id uuid` (nullable) · `status identity.onboarding_status` · `invitation_token_hash text` (nullable) · `terms_accepted_at timestamptz` · `expires_at timestamptz`.
+- **FKs y borrado:** `account_id → access_accounts(id) RESTRICT`; `person_id → people(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE parcial (account_id) WHERE status='open'` (un intento abierto por cuenta).
+- **Actores:** la propia cuenta lee/escribe; worker de privacidad dispone.
+- **RLS:** `account_id = app.actor_account_id`.
+- **Consultas:** por `account_id` y estado abierto.
+- **Índices:** parcial de intento abierto por cuenta.
+- **Retención:** intentos no activados se purgan; los datos de elegibilidad se minimizan.
+- **Eventos:** `identity.onboarding_attempt_started.v1`.
+
+### 4.4 `identity.eligibility_evidence`
+
+- **Propósito:** aplicación versionada de la política de mayoría de edad, congelada en la evidencia.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `identity_pii` (puede incluir fecha de nacimiento o su equivalente).
+- **Columnas:** `id` · `onboarding_attempt_id uuid` · `result identity.eligibility_result` · `policy_version integer` · `policy_snapshot_schema_version smallint` (`1`) · `policy_snapshot jsonb` · `evaluated_at timestamptz`.
+- **FKs y borrado:** `onboarding_attempt_id → onboarding_attempts(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `CHECK (result in ('pass','fail','review_required','unknown'))`.
+- **Actores:** la propia cuenta; append-only. **Ninguna organización.**
+- **RLS:** hereda del intento (`account_id`).
+- **Consultas:** por `onboarding_attempt_id`; última evidencia `pass`.
+- **Índices:** `(onboarding_attempt_id, evaluated_at desc)`.
+- **Retención:** se minimiza tras la activación: no se conserva la fecha de nacimiento completa solo para esta finalidad.
+- **Eventos:** `identity.eligibility_evaluated.v1`.
+
+### 4.5 `identity.profile_attributes`
+
+- **Propósito:** catálogo cerrado de los atributos de perfil fitness declarables en V1.
+- **Dominio / fuente de verdad:** Identidad (catálogo de referencia).
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `code text` · `name text` · `data_classification_code text` · `value_kind text` (numérico, texto, enum) · `unit_dimension text` (nullable).
+- **FKs y borrado:** `data_classification_code → privacy.data_classifications(code) RESTRICT`.
+- **Uniques y checks:** `UNIQUE code`.
+- **Actores:** lectura autenticada; escritura plataforma.
+- **RLS:** lectura abierta a autenticados.
+- **Consultas:** por `code`.
+- **Índices:** único `code`.
+- **Retención:** permanente (catálogo).
+- **Eventos:** ninguno.
+
+### 4.6 `identity.fitness_profile_claims`
+
+- **Propósito:** afirmación tipada de un atributo de perfil, con procedencia; varias coexisten.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** hereda del atributo (`training`, `body` o `health`).
+- **Columnas:** `id uuid` (**Command-Id UUIDv7 del dispositivo para `OP-IDN-004`**) · `person_id uuid` · `attribute_code text` · `value_numeric numeric` (nullable) · `value_text text` (nullable) · `unit_code text` (nullable) · `provenance identity.provenance` · `captured_by_kind identity.actor_kind` · `captured_by_assignment_id uuid` (nullable) · `valid_from timestamptz` · `valid_to timestamptz` (nullable) · `superseded_by_id uuid` (nullable).
+- **FKs y borrado:** `person_id → people(id) RESTRICT`; `attribute_code → profile_attributes(code) RESTRICT`; `unit_code → catalog.units(code) RESTRICT`; FK compuesta opcional `(captured_by_assignment_id, person_id) → relationships.relationship_professional_assignments(id, person_id) RESTRICT` (`IX-04`).
+- **Uniques y checks:** `CHECK (value_numeric is not null or value_text is not null)`. Sin unique de "una por atributo": coexisten por procedencia. `UPDATE` revocado (append-only + `revision_events`).
+- **Actores:** la persona (declara, procedencia `person_declared`); el profesional con `contribute` (observación); worker de privacidad dispone.
+- **RLS:** `auth.is_self(person_id)` **OR** `auth.can_access(person_id,'relationship_training','read')`; proyección `identity.v_client_profile` aplica field-set.
+- **Consultas:** `(person_id, attribute_code, valid_from desc)`.
+- **Índices:** `(person_id, attribute_code, valid_from desc)`.
+- **Retención:** por categoría de disposición; anonimización rompe el enlace a `person_id`.
+- **Eventos:** `identity.profile_claim_declared.v1`, `identity.profile_claim_revised.v1`.
+
+### 4.7 `identity.body_progress_records`
+
+- **Propósito:** medición, composición o foto corporal elegida por la persona.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `body`.
+- **Columnas:** `id uuid` (**Command-Id UUIDv7 del dispositivo para `OP-IDN-006`**) · `person_id uuid` · `metric_code text` · `value_numeric numeric` · `unit_code text` · `original_value numeric` (nullable) · `original_unit_code text` (nullable) · `measured_on date` · `media_ref text` (nullable, sin EXIF) · `has_media boolean`.
+- **FKs y borrado:** `person_id → people(id) RESTRICT`; `unit_code → catalog.units(code) RESTRICT`.
+- **Uniques y checks:** `CHECK (has_media = (media_ref is not null))`.
+- **Actores:** la persona (lee, escribe, borra); el profesional con `body_progress` **read**; worker de privacidad.
+- **RLS:** `auth.is_self(person_id)` **OR** `auth.can_access(person_id,'body_progress','read')`. `relationship_training` **no** alcanza; OS usa `identity.v_client_body_progress`.
+- **Consultas:** `(person_id, measured_on desc)`.
+- **Índices:** `(person_id, measured_on desc)`.
+- **Retención:** categoría `body`; borrado propio abre `disposition_case` unitario; imágenes con borrado propagado.
+- **Eventos:** `identity.body_progress_recorded.v1`.
+
+### 4.8 `identity.health_context_claims`
+
+- **Propósito:** dolor, limitación o recuperación declarados; salud fitness minimizada.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `health` (la más restrictiva).
+- **Columnas:** `id uuid` (**Command-Id UUIDv7 del dispositivo para `OP-IDN-008`**) · `person_id uuid` · `context_type text` (`pain`, `limitation`, `recovery`) · `description text` · `body_area text` (nullable) · `provenance identity.provenance` · `valid_from timestamptz` · `valid_to timestamptz` (nullable).
+- **FKs y borrado:** `person_id → people(id) RESTRICT`.
+- **Uniques y checks:** `CHECK (context_type in ('pain','limitation','recovery'))`.
+- **Actores:** la persona; el profesional con `health_context`; worker de privacidad.
+- **RLS:** `auth.is_self(person_id)` **OR** `auth.can_access(person_id,'health_context','read')`; OS usa `identity.v_client_health_context`.
+- **Consultas:** `(person_id, valid_from desc)`.
+- **Índices:** `(person_id, valid_from desc)`.
+- **Retención:** categoría `health`; disposición por su política.
+- **Eventos:** `identity.health_context_declared.v1`.
+
+### 4.9 `identity.profile_verifications`
+
+- **Propósito:** verificación de **una** afirmación concreta; no marca otras ni el perfil completo.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** hereda del atributo verificado.
+- **Columnas:** `id` · `claim_id uuid` · `verifier_person_id uuid` · `policy_code text` · `method text` (`official_registry_lookup`, `issuer_confirmation`) · `credential_type_code text` (incluye `nutrition_professional`) · `source_authority text` · `source_jurisdiction text` · `source_reference text` · `source_status text` · `source_checked_at timestamptz` · `source_valid_to timestamptz` (nullable) · `evidence_fingerprint bytea` · `result text` (`verified`, `rejected`, `unverifiable`, `revoked`) · `decided_at timestamptz` · `valid_from timestamptz` (nullable) · `valid_to timestamptz` (nullable) · `supersedes_verification_id uuid` (nullable) · `revoked_at timestamptz` (nullable).
+- **FKs y borrado:** `claim_id → fitness_profile_claims(id) RESTRICT`; `verifier_person_id → people(id) RESTRICT`; `supersedes_verification_id → profile_verifications(id) RESTRICT`.
+- **Uniques y checks:** `valid_to` obligatorio cuando `result='verified'`; nunca supera `decided_at + interval '12 months'` ni `source_valid_to` cuando la fuente publica vencimiento; `source_checked_at <= decided_at`; una función cerrada valida credencial profesional, fuente/método, AAL2, deber vigente y conflictos antes de insertar. Append-only.
+- **Actores:** solo `A11/verify_professional_credentials` escribe; la persona y el profesional autorizado leen el estado según scope, nunca evidencia adicional.
+- **RLS:** hereda el scope del atributo del claim.
+- **Consultas:** por `claim_id`.
+- **Índices:** `claim_id`.
+- **Retención:** con la afirmación verificada.
+- **Eventos:** `identity.claim_verified.v1`, `identity.claim_verification_revoked.v1`.
+- **Gobernanza:** ADR-026 y `T-VG-01..06`; solo credenciales profesionales y evidencia minimizada.
+
+### 4.10 `identity.professional_profiles`
+
+- **Propósito:** presentación profesional; pertenece a la persona y sobrevive al cambio de organización.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `identity_pii` (no fitness).
+- **Columnas:** `id` · `person_id uuid` · `headline text` · `bio text` · `credentials_schema_version smallint` (`1`, nullable junto a payload) · `credentials jsonb` (nullable).
+- **FKs y borrado:** `person_id → people(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE person_id`.
+- **Actores:** la persona (dueña); miembros de la misma organización leen.
+- **RLS:** `auth.is_self(person_id)` **OR** membresía vigente compartida en `auth.org()`.
+- **Consultas:** por `person_id`; por miembros de organización.
+- **Índices:** único `person_id`.
+- **Retención:** con la persona.
+- **Eventos:** `identity.professional_profile_updated.v1`.
+
+### 4.11 `identity.invitations`
+
+- **Propósito:** sobre temporal de entrega y seguridad; no crea persona provisional.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `identity_pii` (contacto del invitado).
+- **Columnas:** `id` · `organization_id uuid` · `issued_by_membership_id uuid` · `channel text` (`email`, `sms`) · `contact text` · `token_hash text` · `responsible_party_snapshot_schema_version smallint` (`1`) · `responsible_party_snapshot jsonb` · `status identity.invitation_status` · `expires_at timestamptz`.
+- **FKs y borrado:** `(issued_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`. **Sin** FK a persona destino (`IX-24`).
+- **Uniques y checks:** `UNIQUE token_hash`.
+- **Actores:** la organización (crea, revoca); el invitado por token; worker de expiración.
+- **RLS:** token exacto vigente para el invitado; `organization_id = auth.org()` con capacidad de invitar.
+- **Consultas:** por `token_hash`; por `(organization_id, status)`.
+- **Índices:** único `token_hash`; `(organization_id, status)`.
+- **Retención:** conserva evidencia; se purga tras plazo largo.
+- **Eventos:** `organization.staff_invited.v1` / `relationship.client_invited.v1`, `identity.invitation_revoked.v1`, `identity.invitation_expired.v1`.
+
+### 4.12 `identity.invitation_intents`
+
+- **Propósito:** propuesta tipada decidida de forma independiente; materializa ≤1 destino.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `invitation_id uuid` · `kind identity.intent_kind` · `status identity.intent_status` · `proposed_role_code text` (nullable) · `program_version_id uuid` (nullable) · `decided_at timestamptz` (nullable) · `materialized_target_id uuid` (nullable).
+- **FKs y borrado:** `invitation_id → invitations(id) ON DELETE CASCADE`; `program_version_id → planning.program_versions(id) RESTRICT`.
+- **Uniques y checks:** `CHECK` según `kind` (una intención de programa exige `program_version_id`).
+- **Actores:** la persona decide; la organización crea.
+- **RLS:** hereda de la invitación.
+- **Consultas:** por `invitation_id`.
+- **Índices:** `invitation_id`.
+- **Retención:** con la invitación.
+- **Eventos:** `identity.invitation_intent_decided.v1`.
+
+---
+
+## 5. Schema `organizations`
+
+### 4.13 `identity.notification_preferences`
+
+- **Propósito:** qué canales acepta la persona para cada categoría de notificación. Es el dato contra el cual `OP-SYS-002` evalúa su filtro obligatorio de "preferencia vigente para ese canal", que hoy no tiene dónde consultarse.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `person_id uuid` · `category text` (`relationship`, `assignment`, `consent`, `correction`, `nutrition`, `security`) · `channel text` (`email`, `sms`, `push`) · `enabled boolean` · `updated_at timestamptz`.
+- **FKs y borrado:** `person_id → identity.people(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `UNIQUE (person_id, category, channel)`; `CHECK` sobre los catálogos cerrados de categoría y canal. Las notificaciones de la categoría `security` **no se pueden desactivar**: `CHECK (category <> 'security' OR enabled)`.
+- **Actores:** solo la persona. Ninguna organización lee ni escribe esta tabla.
+- **RLS:** `person_id = auth.person()` y nada más.
+- **Consultas:** `(person_id, category, channel)`.
+- **Índices:** el unique sirve la consulta.
+- **Retención:** con la persona.
+- **Eventos:** ninguno propio.
+
+---
+
+### 5.1 `organizations.organizations`
+
+- **Propósito:** frontera estable de operación, autoría y permisos; conserva su `id` al crecer a equipo.
+- **Dominio / fuente de verdad:** Organizaciones.
+- **Clasificación:** `operational` (con datos de la parte responsable).
+- **Columnas:** `id` · `type_code text` · `legal_name text` (nullable) · `display_name text` · `status text` (`active`, `closed`) · `responsible_party_schema_version smallint` (`1`) · `responsible_party jsonb`.
+- **FKs y borrado:** `type_code → organization_types(code) RESTRICT`.
+- **Uniques y checks:** `CHECK (status in ('active','closed'))`.
+- **Actores:** miembros leen; admin/owner escriben.
+- **RLS:** `auth.has_membership(id)`.
+- **Consultas:** por `id`; por membresía del actor.
+- **Índices:** PK.
+- **Retención:** el cierre termina relaciones y abre disposición; conserva activos propios.
+- **Eventos:** `organization.created.v1`, `organization.updated.v1`, `organization.closed.v1`.
+
+### 5.2 `organizations.organization_types`
+
+- **Propósito:** clasificación gobernada de la actividad principal (práctica, gimnasio, estudio…).
+- **Dominio / fuente de verdad:** Organizaciones (catálogo).
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `code text` · `name text`.
+- **FKs y borrado:** ninguna.
+- **Uniques y checks:** `UNIQUE code`.
+- **Actores:** lectura autenticada; escritura plataforma.
+- **RLS:** lectura abierta.
+- **Consultas:** por `code`.
+- **Índices:** único `code`.
+- **Retención:** permanente.
+- **Eventos:** ninguno.
+
+### 5.3 `organizations.organization_sites`
+
+- **Propósito:** sede física básica; informativa, no reservable ni delimitadora de permisos.
+- **Dominio / fuente de verdad:** Organizaciones.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `organization_id uuid` · `name text` · `address text` (nullable) · `status text` (`active`, `inactive`).
+- **FKs y borrado:** `organization_id → organizations(id) ON DELETE CASCADE`.
+- **Uniques y checks:** —.
+- **Actores:** admin/owner escriben; miembros leen.
+- **RLS:** `auth.has_membership(organization_id)`.
+- **Consultas:** por `organization_id`.
+- **Índices:** `organization_id`.
+- **Retención:** con la organización.
+- **Eventos:** `organization.site_created.v1`, `organization.site_updated.v1`.
+
+### 5.4 `organizations.organization_memberships`
+
+- **Propósito:** vínculo bilateral persona–organización; **no** concede acceso al Fitness ID.
+- **Dominio / fuente de verdad:** Organizaciones.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `organization_id uuid` · `person_id uuid` · `status organizations.membership_status` · `joined_at timestamptz` · `ended_at timestamptz` (nullable).
+- **FKs y borrado:** `organization_id → organizations(id) RESTRICT`; `person_id → identity.people(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE parcial (organization_id, person_id) WHERE status <> 'terminated'`; claves portadoras `UNIQUE (id,organization_id)` y `UNIQUE (id,organization_id,person_id)`.
+- **Actores:** admin/owner gestionan; la persona renuncia; staff y coach leen el directorio.
+- **RLS:** `organization_id = auth.org()` con membresía vigente, **OR** `person_id = auth.person()`.
+- **Consultas:** `(organization_id, status)`, `(person_id, status)`.
+- **Índices:** ambos compuestos anteriores.
+- **Retención:** conserva historial; no se borra.
+- **Eventos:** `organization.membership_created.v1`, `organization.membership_terminated.v1`, `organization.membership_resigned.v1`.
+
+### 5.5 `organizations.organization_roles`
+
+- **Propósito:** catálogo cerrado de roles V1: `owner`, `admin`, `coach`, `staff`.
+- **Dominio / fuente de verdad:** Organizaciones (catálogo).
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `code text` · `name text`.
+- **FKs y borrado:** ninguna.
+- **Uniques y checks:** `UNIQUE code`.
+- **Actores:** lectura autenticada; sin escritura en runtime.
+- **RLS:** lectura abierta.
+- **Consultas:** por `code`.
+- **Índices:** único `code`.
+- **Retención:** permanente.
+- **Eventos:** ninguno.
+
+### 5.6 `organizations.organization_capabilities`
+
+- **Propósito:** catálogo de acciones organizacionales concretas que un rol habilita.
+- **Dominio / fuente de verdad:** Organizaciones (catálogo).
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `code text` (incluye `guide_nutrition`) · `name text`.
+- **FKs y borrado:** ninguna.
+- **Uniques y checks:** `UNIQUE code`.
+- **Actores:** lectura autenticada.
+- **RLS:** lectura abierta.
+- **Consultas:** por `code`.
+- **Índices:** único `code`.
+- **Retención:** permanente.
+- **Eventos:** ninguno.
+
+### 5.7 `organizations.role_capabilities`
+
+- **Propósito:** asociación gobernada rol → capacidad.
+- **Dominio / fuente de verdad:** Organizaciones (catálogo).
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `role_code text` · `capability_code text`.
+- **FKs y borrado:** `role_code → organization_roles(code) RESTRICT`; `capability_code → organization_capabilities(code) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (role_code, capability_code)`.
+- **Actores:** lectura autenticada.
+- **RLS:** lectura abierta.
+- **Consultas:** por `role_code`.
+- **Índices:** único compuesto.
+- **Retención:** permanente.
+- **Eventos:** ninguno.
+
+### 5.8 `organizations.membership_roles`
+
+- **Propósito:** asignación efectiva de un rol a una membresía, con vigencia e historial.
+- **Dominio / fuente de verdad:** Organizaciones.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `membership_id uuid` · `role_code text` · `valid_from timestamptz` · `valid_to timestamptz` (nullable).
+- **FKs y borrado:** `membership_id → organization_memberships(id) ON DELETE CASCADE`; `role_code → organization_roles(code) RESTRICT`.
+- **Uniques y checks:** `UNIQUE parcial (membership_id, role_code) WHERE valid_to is null`. Trigger de protección del último `owner`.
+- **Actores:** admin/owner; solo owner otorga owner.
+- **RLS:** vía la membresía (`organization_id = auth.org()` con capacidad).
+- **Consultas:** `(membership_id, valid_to)`.
+- **Índices:** `(membership_id, role_code, valid_from, valid_to)`.
+- **Retención:** conserva historial.
+- **Eventos:** `organization.role_granted.v1`, `organization.role_revoked.v1`.
+
+### 5.9 `organizations.organization_events`
+
+- **Propósito:** historia append-only de altas, cambios, cierre.
+- **Dominio / fuente de verdad:** Organizaciones.
+- **Clasificación:** `audit`.
+- **Columnas:** `id` · `organization_id uuid` · `event_type text` · `snapshot_schema_version smallint` (`1`) · `before jsonb` (nullable) · `after jsonb` (nullable) · `actor_membership_id uuid` (nullable).
+- **FKs y borrado:** `organization_id → organizations(id) ON DELETE CASCADE`; FK compuesta opcional `(actor_membership_id, organization_id) → organization_memberships(id, organization_id) RESTRICT` (`IX-25`).
+- **Uniques y checks:** append-only: `UPDATE`/`DELETE` revocados.
+- **Actores:** `allfit_api` inserta; admin/owner leen.
+- **RLS:** hereda de la organización.
+- **Consultas:** `(organization_id, created_at desc)`.
+- **Índices:** `(organization_id, created_at desc)`.
+- **Retención:** auditoría.
+- **Eventos:** ninguno propio.
+
+### 5.10 `organizations.membership_events`
+
+- **Propósito:** historia append-only de la membresía y sus roles.
+- **Dominio / fuente de verdad:** Organizaciones.
+- **Clasificación:** `audit`.
+- **Columnas:** `id` · `membership_id uuid` · `event_type text` · `snapshot_schema_version smallint` (`1`) · `before jsonb` (nullable) · `after jsonb` (nullable).
+- **FKs y borrado:** `membership_id → organization_memberships(id) ON DELETE CASCADE`.
+- **Uniques y checks:** append-only.
+- **Actores:** `allfit_api` inserta; admin/owner y la propia persona leen.
+- **RLS:** hereda de la membresía.
+- **Consultas:** `(membership_id, created_at desc)`.
+- **Índices:** `(membership_id, created_at desc)`.
+- **Retención:** auditoría.
+- **Eventos:** ninguno propio.
+
+---
+
+## 6. Schema `relationships`
+
+### 6.1 `relationships.service_relationships`
+
+- **Propósito:** vínculo aceptado de servicio persona–organización; no concede datos por sí solo.
+- **Dominio / fuente de verdad:** Relaciones.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `person_id uuid` · `organization_id uuid` · `status relationships.relationship_status` · `previous_relationship_id uuid` (nullable) · `started_at timestamptz` · `ended_at timestamptz` (nullable) · `ended_reason text` (nullable) · `ended_by_kind identity.actor_kind` (nullable).
+- **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `organization_id → organizations.organizations(id) RESTRICT`; FK autocontenida opcional `(previous_relationship_id, person_id, organization_id) → service_relationships(id, person_id, organization_id) RESTRICT` (`IX-01`).
+- **Uniques y checks:** `UNIQUE parcial (person_id, organization_id) WHERE status='active'`; claves portadoras `UNIQUE (id, person_id)`, `UNIQUE (id, organization_id)` y `UNIQUE (id, person_id, organization_id)`. `CHECK (ended_at is null or ended_at >= started_at)`.
+- **Actores:** la persona (termina); admin/owner (crean vía aceptación, terminan); coach asignado lee.
+- **RLS:** `person_id = auth.person()` **OR** (`organization_id = auth.org()` **AND** (capacidad de clientes **OR** asignación efectiva)).
+- **Consultas:** `(person_id, status)`, `(organization_id, status)`.
+- **Índices:** ambos compuestos + parcial de activa.
+- **Retención:** conserva historial; el motivo lo ve solo quien lo declaró.
+- **Eventos:** `relationship.terminated.v1`.
+
+### 6.2 `relationships.responsible_party_snapshots`
+
+- **Propósito:** parte responsable, organización presentada y propósito conocidos al aceptar.
+- **Dominio / fuente de verdad:** Relaciones.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `relationship_id uuid` · `party_kind text` (`natural`, `legal`) · `party_name text` · `presented_purpose text` · `presented_at timestamptz`.
+- **FKs y borrado:** `relationship_id → service_relationships(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `UNIQUE relationship_id`; `CHECK (party_kind in ('natural','legal'))`.
+- **Actores:** la persona y la organización de la relación leen; append-only.
+- **RLS:** hereda de la relación.
+- **Consultas:** por `relationship_id`.
+- **Índices:** único `relationship_id`.
+- **Retención:** con la relación (evidencia bilateral).
+- **Eventos:** ninguno propio.
+
+### 6.3 `relationships.relationship_professional_assignments`
+
+- **Propósito:** profesional autorizado dentro de una relación: titular o suplente.
+- **Dominio / fuente de verdad:** Relaciones.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `relationship_id uuid` · `person_id uuid` · `organization_id uuid` · `membership_id uuid` · `kind relationships.assignment_kind` · `status relationships.assignment_status` · `valid_from timestamptz` · `valid_to timestamptz` (nullable) · `ends_on date` (nullable; **NOT NULL para suplencia** por CHECK) · `accepted_by_person_at timestamptz` (nullable).
+- **FKs y borrado:** `(relationship_id, person_id, organization_id) → service_relationships(id, person_id, organization_id) RESTRICT`; `(membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT` (`IX-02`).
+- **Uniques y checks:** claves portadoras `UNIQUE (id,person_id)` y `UNIQUE (id,relationship_id,person_id,organization_id,membership_id)`; `UNIQUE parcial (relationship_id) WHERE kind='holder' AND status='active'` (un titular efectivo). `CHECK (kind='holder' OR ends_on is not null)` (suplencia con fin obligatorio). `CHECK (kind='holder' OR accepted_by_person_at is not null OR status='proposed')` (suplencia exige aceptación para activarse). Constraint trigger diferible `relationships.enforce_assignment_eligibility_ct` verifica membresía vigente y rol `coach`, también ante terminación de membresía o rol (`IX-03`).
+- **Actores:** admin/owner asignan titular; titular/admin proponen suplencia; la persona acepta suplencia.
+- **RLS:** vía la relación; el `INSERT` exige membresía vigente en la misma organización con rol `coach`.
+- **Consultas:** `(relationship_id, status, valid_from, valid_to)`, `(person_id, status)`, `(organization_id, status)`.
+- **Índices:** los tres compuestos anteriores + parcial de titular efectivo.
+- **Retención:** conserva historial de reasignaciones.
+- **Eventos:** `relationship.professional_assigned.v1`, `relationship.professional_reassigned.v1`, `relationship.substitution_proposed.v1`, `relationship.substitution_decided.v1`, `relationship.substitution_ended.v1`, `relationship.substitution_expired.v1`.
+
+### 6.4 `relationships.professional_assignment_events`
+
+- **Propósito:** historia append-only de asignaciones y suplencias.
+- **Dominio / fuente de verdad:** Relaciones.
+- **Clasificación:** `audit`.
+- **Columnas:** `id` · `assignment_id uuid` · `event_type text` · `snapshot_schema_version smallint` (`1`) · `before jsonb` (nullable) · `after jsonb` (nullable).
+- **FKs y borrado:** `assignment_id → relationship_professional_assignments(id) ON DELETE CASCADE`.
+- **Uniques y checks:** append-only.
+- **Actores:** `allfit_api` inserta; la relación lee.
+- **RLS:** hereda de la asignación.
+- **Consultas:** `(assignment_id, created_at desc)`.
+- **Índices:** `(assignment_id, created_at desc)`.
+- **Retención:** auditoría.
+- **Eventos:** ninguno propio.
+
+### 6.5 `relationships.relationship_events`
+
+- **Propósito:** historia append-only de la relación: alta, cambios de titular, consentimientos, terminación.
+- **Dominio / fuente de verdad:** Relaciones.
+- **Clasificación:** `audit`.
+- **Columnas:** `id` · `relationship_id uuid` · `event_type text` · `visible_to text` (`both`, `person`, `organization`) · `detail_schema_version smallint` (`1`, nullable junto a payload) · `detail jsonb` (nullable).
+- **FKs y borrado:** `relationship_id → service_relationships(id) ON DELETE CASCADE`.
+- **Uniques y checks:** append-only; `CHECK (visible_to in ('both','person','organization'))`.
+- **Actores:** `allfit_api` inserta; la persona y la organización leen según `visible_to`.
+- **RLS:** hereda de la relación, más filtro por `visible_to` (el motivo de terminación se ve solo por quien lo declaró).
+- **Consultas:** `(relationship_id, created_at desc)`.
+- **Índices:** `(relationship_id, created_at desc)`.
+- **Retención:** auditoría.
+- **Eventos:** ninguno propio.
+
+---
+
+## 7. Schema `privacy`
+
+### 6.6 `relationships.relationship_termination_requests`
+
+- **Propósito:** solicitud de un coach titular para que la organización termine una relación que él no puede terminar por sí mismo. No cambia el estado de la relación ni corta ningún acceso.
+- **Dominio / fuente de verdad:** Relaciones.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `relationship_id uuid` · `organization_id uuid` · `requested_by_membership_id uuid` · `status relationships.termination_request_status` (`pending`, `withdrawn`, `resolved`, `superseded`) · `reason text` (nullable) · `resolution text` (nullable) · `resolved_by_membership_id uuid` (nullable) · `created_at` · `resolved_at timestamptz` (nullable).
+- **FKs y borrado:** `(relationship_id, organization_id) → service_relationships(id, organization_id) ON DELETE CASCADE`; `(requested_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`; `(resolved_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (relationship_id) WHERE status = 'pending'` — **la regla de no duplicado de `OP-REL-009` vive aquí, no en el código**; `CHECK ((status = 'pending') = (resolved_at IS NULL))`; `CHECK (status <> 'resolved' OR resolved_by_membership_id IS NOT NULL)`; `CHECK (length(reason) <= 2000)`.
+- **Actores:** `allfit_api` inserta por cuenta de `A3` titular; `A4`/`A5` resuelven; `A3` puede retirar la suya.
+- **RLS:** `auth.has_membership(organization_id)` **y** (`requested_by_membership_id = auth.membership()` **o** `auth.has_capability(organization_id,'manage_relationships')`). La persona atendida **no** ve estas solicitudes: son deliberación interna de la organización.
+- **Consultas:** `(organization_id, status, created_at desc)`; `(relationship_id) WHERE status = 'pending'`.
+- **Índices:** `(organization_id, status, created_at desc)`; el unique parcial sirve la búsqueda de pendiente.
+- **Retención:** operativa; se dispone con la relación.
+- **Eventos:** `relationship.termination_requested.v1`.
+
+---
+
+### 7.1 `privacy.data_classifications`
+
+- **Propósito:** catálogo de niveles de sensibilidad usados por reglas de scope, atributos y disposición.
+- **Dominio / fuente de verdad:** Privacidad (catálogo).
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `code text` (`operational`, `training`, `body`, `health`, `nutrition`, `identity_pii`, `audit`) · `name text` · `sensitivity_rank integer`.
+- **FKs y borrado:** ninguna.
+- **Uniques y checks:** `UNIQUE code`.
+- **Actores:** lectura autenticada; escritura plataforma.
+- **RLS:** lectura abierta.
+- **Consultas:** por `code`; por `sensitivity_rank` (para heredar la más restrictiva).
+- **Índices:** único `code`.
+- **Retención:** permanente.
+- **Eventos:** ninguno.
+
+### 7.2 `privacy.scope_definitions`
+
+- **Propósito:** versión publicada e inmutable de un scope V1.
+- **Dominio / fuente de verdad:** Privacidad.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `scope_code text` (`relationship_training`, `prior_training_history`, `body_progress`, `health_context`, `nutrition_intake`, `nutrition_guidance`, `nutrition_media`) · `version_number integer` · `status catalog.publication_status` · `published_at timestamptz`.
+- **FKs y borrado:** ninguna.
+- **Uniques y checks:** `UNIQUE (scope_code, version_number)`; clave portadora `UNIQUE (id, scope_code)`. `UPDATE`/`DELETE` revocados en runtime.
+- **Actores:** lectura autenticada; escritura plataforma.
+- **RLS:** `status='published'` para lectura.
+- **Consultas:** por `(scope_code, version_number)`; versión vigente.
+- **Índices:** único `(scope_code, version_number)`.
+- **Retención:** permanente (referenciada por grants históricos).
+- **Eventos:** `privacy.scope_definition_published.v1`.
+
+### 7.3 `privacy.scope_resource_rules`
+
+- **Propósito:** enumera recursos, campos, exclusiones y acciones máximas de una versión de scope.
+- **Dominio / fuente de verdad:** Privacidad.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `scope_definition_id uuid` · `resource text` · `field text` · `data_classification_code text` · `max_action privacy.access_level` · `is_excluded boolean` · `historical_readable boolean NOT NULL default false`.
+- **FKs y borrado:** `scope_definition_id → scope_definitions(id) ON DELETE CASCADE`; `data_classification_code → data_classifications(code) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (scope_definition_id, resource, field)`. `CHECK` que todo campo tiene clasificación. `historical_readable` solo puede ser `true` cuando `is_excluded=false` y la acción máxima incluye lectura.
+- **Actores:** lectura autenticada; escritura plataforma.
+- **RLS:** lectura abierta de versiones publicadas.
+- **Consultas:** por `scope_definition_id`.
+- **Índices:** único compuesto.
+- **Retención:** con la versión.
+- **Eventos:** ninguno propio.
+
+### 7.4 `privacy.consent_events`
+
+- **Propósito:** decisión de consentimiento con el snapshot exacto presentado; append-only.
+- **Dominio / fuente de verdad:** Privacidad.
+- **Clasificación:** `audit`.
+- **Columnas:** `id` · `person_id uuid` · `relationship_id uuid` · `organization_id uuid` · `scope_definition_id uuid` · `scope_code text` · `decision privacy.consent_decision` · `presented_snapshot_schema_version smallint` (`1`) · `presented_snapshot jsonb` · `decided_at timestamptz`.
+- **FKs y borrado:** `(relationship_id, person_id, organization_id) → relationships.service_relationships(id, person_id, organization_id) RESTRICT`; `(scope_definition_id, scope_code) → scope_definitions(id, scope_code) RESTRICT` (`IX-05`).
+- **Uniques y checks:** clave portadora `UNIQUE (id, person_id, relationship_id, organization_id, scope_definition_id, scope_code)`; append-only.
+- **Actores:** la persona decide; la organización ve estado.
+- **RLS:** `person_id = auth.person()` **OR** (`relationship` de `auth.org()`).
+- **Consultas:** `(person_id, decided_at desc)`, `(relationship_id, scope_code, decided_at desc)`, `(organization_id, decided_at desc)`.
+- **Índices:** los tres compuestos anteriores.
+- **Retención:** evidencia; auditoría.
+- **Eventos:** `privacy.grant_created.v1`, `privacy.grant_rejected.v1`, `privacy.grant_revoked.v1`.
+
+### 7.5 `privacy.grant_requests`
+
+- **Propósito:** solicitud de un scope por la organización, pendiente de decisión de la persona.
+- **Dominio / fuente de verdad:** Privacidad.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `relationship_id uuid` · `organization_id uuid` · `scope_definition_id uuid` · `scope_code text` · `requested_level privacy.access_level` · `purpose text` · `status text` (`pending`, `withdrawn`, `granted`, `rejected`) · `requested_by_membership_id uuid`.
+- **FKs y borrado:** `(relationship_id, organization_id) → relationships.service_relationships(id, organization_id) RESTRICT`; `(requested_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`; `(scope_definition_id, scope_code) → scope_definitions(id, scope_code) RESTRICT` (`IX-06`).
+- **Uniques y checks:** `UNIQUE parcial (relationship_id, scope_code) WHERE status='pending'`.
+- **Actores:** la organización solicita/retira; la persona decide.
+- **RLS:** `person_id` de la relación = `auth.person()`, **OR** organización de la relación.
+- **Consultas:** `(relationship_id, status)`, `(organization_id, status)`.
+- **Índices:** ambos compuestos + único parcial pendiente `(relationship_id, scope_code) WHERE status='pending'`.
+- **Retención:** conserva evidencia de lo solicitado.
+- **Eventos:** `privacy.grant_requested.v1`, `privacy.grant_request_withdrawn.v1`.
+
+### 7.6 `privacy.data_grants`
+
+- **Propósito:** convierte una relación en acceso; congela versión exacta de scope, nivel y propósito.
+- **Dominio / fuente de verdad:** Privacidad.
+- **Clasificación:** `operational` (metadato de autorización).
+- **Columnas:** `id` · `person_id uuid` · `relationship_id uuid` · `organization_id uuid` · `scope_definition_id uuid` · `scope_code text` · `consent_event_id uuid` · `access_level privacy.access_level` · `purpose text` · `status privacy.grant_status` · `granted_at timestamptz` · `frozen_at timestamptz` (nullable) · `revoked_at timestamptz` (nullable) · `last_reviewed_at timestamptz` (nullable).
+- **FKs y borrado:** `(relationship_id, person_id, organization_id) → relationships.service_relationships(id, person_id, organization_id) RESTRICT`; `(scope_definition_id, scope_code) → scope_definitions(id, scope_code) RESTRICT`; `(consent_event_id, person_id, relationship_id, organization_id, scope_definition_id, scope_code) → consent_events(id, person_id, relationship_id, organization_id, scope_definition_id, scope_code) RESTRICT` (`IX-07`). `DELETE` revocado.
+- **Uniques y checks:** `UNIQUE parcial (relationship_id, scope_code) WHERE status IN ('active','frozen')` — como máximo un grant no revocado de cada scope, aunque existan versiones distintas. `CHECK` de estado: `active` exige ambos cortes `NULL`; `frozen` exige `frozen_at NOT NULL` y `revoked_at NULL`; `revoked` exige `revoked_at NOT NULL` y puede conservar `frozen_at`. Trigger `privacy.enforce_data_grant_transition_tg` prohíbe `frozen/revoked → active`, `revoked → frozen` y modificar un corte ya fijado.
+- **Actores:** la persona concede/revoca; el profesional asignado y admin/owner leen el estado mientras la relación está activa. `privacy.grant_consent` inserta; `privacy.revoke_grant` actualiza `status, revoked_at`; `relationships.terminate_relationship` actualiza `status, frozen_at`. La lectura histórica solo se ejerce mediante un `historical_access_case` válido y `auth.can_read_frozen`.
+- **RLS:** `person_id = auth.person()` **OR** organización de la relación.
+- **Estados y su efecto en la lectura:**
+
+  | `status` | Qué habilita | Cuándo |
+  | --- | --- | --- |
+  | `active` | Lectura **en vivo** de los datos del scope | Relación activa |
+  | `frozen` | Lectura **solo de filas con instante ≤ `frozen_at`**; ningún dato posterior | Relación terminada, cuenta de la persona viva |
+  | `revoked` | Ningún acceso | La persona revocó el consentimiento explícitamente |
+
+  La distinción es importante: **terminar una relación produce `frozen`** (el gimnasio conserva su histórico); **revocar el consentimiento produce `revoked`** (acceso cortado del todo). Son caminos distintos con resultados distintos. Si la persona elimina su cuenta, la anonimización actúa sobre los datos y alcanza también lo que ve un grant `frozen`.
+- **Consultas:** `(relationship_id, scope_code, status)` — **el índice más crítico del sistema**; `(person_id, status)`. Toda proyección bajo un grant `frozen` añade el filtro por `frozen_at`.
+- **Índices:** único parcial `(relationship_id, scope_code) WHERE status IN ('active','frozen')`; `(person_id, status)`; `(organization_id, status)`; parcial `(relationship_id, scope_code, frozen_at) WHERE status='frozen'`.
+- **Retención:** conserva; congelar y revocar cierran sin borrar.
+- **Eventos:** `privacy.grant_created.v1`, `privacy.grant_frozen.v1`, `privacy.grant_revoked.v1`, `privacy.grant_review_due.v1`.
+
+### 7.7 `privacy.session_visibility_denials`
+
+- **Propósito:** oculta una sesión autónoma para una relación; prevalece sobre el grant.
+- **Dominio / fuente de verdad:** Privacidad.
+- **Clasificación:** `operational` (preferencia sensible).
+- **Columnas:** `id` · `person_id uuid` · `executed_session_id uuid` · `relationship_id uuid` · `status text` (`active`, `reverted`) · `denied_at timestamptz` · `restored_at timestamptz` (nullable) · `frozen_denied_at timestamptz` (nullable).
+- **FKs y borrado:** `(executed_session_id, person_id) → execution.executed_sessions(id, person_id) RESTRICT`; `(relationship_id, person_id) → relationships.service_relationships(id, person_id) RESTRICT` (`IX-08`).
+- **Uniques y checks:** `UNIQUE (executed_session_id, relationship_id)`. `frozen_denied_at`, una vez establecido, es inmutable: después de `T` una restauración no amplía la ventana histórica. **`IX-36`**: constraint trigger que rechaza la fila si la sesión se produjo dentro de esa misma relación (`executed_sessions.context_relationship_id = relationship_id`); la regla es de base de datos, no de la aplicación.
+- **Actores:** **solo la persona**. Ninguna organización la lee.
+- **RLS:** `person_id = auth.person()` y nada más.
+- **Consultas:** `(executed_session_id, relationship_id)`, `(relationship_id, status)`.
+- **Índices:** único de par + `(relationship_id, status)`.
+- **Retención:** con la persona.
+- **Eventos:** `privacy.session_visibility_denied.v1`, `privacy.session_visibility_restored.v1`.
+
+### 7.8 `privacy.historical_access_cases`
+
+- **Propósito:** autorización temporal, explícita y de solo lectura para ejercer un grant `frozen` sobre una relación terminada.
+- **Dominio / fuente de verdad:** Privacidad.
+- **Clasificación:** `restricted` (metadato de autorización y justificación).
+- **Columnas:** `id uuid` · `organization_id uuid` · `relationship_id uuid` · `authorized_membership_id uuid` · `opened_by_membership_id uuid` · `capability_code text` (`read_frozen_relationship_history`) · `purpose privacy.historical_access_purpose` · `case_reference text` · `justification text` · `status privacy.historical_case_status` · `opened_at timestamptz` · `expires_at timestamptz` · `closed_at timestamptz` (nullable).
+- **FKs y borrado:** `(relationship_id, organization_id) → relationships.service_relationships(id, organization_id) RESTRICT`; `(authorized_membership_id, organization_id)` y `(opened_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`; `capability_code → organizations.organization_capabilities(code) RESTRICT` (`IX-09`).
+- **Uniques y checks:** `expires_at > opened_at`; `expires_at <= opened_at + interval '24 hours'`; capacidad fija. Constraint trigger diferible `privacy.enforce_historical_case_eligibility_ct` verifica relación terminada, exclusión de `staff`, membresía autorizada activa y rol `owner`/`admin` o antiguo titular; cambios de membresía, rol o asignación deben cerrar el caso en la misma transacción (`IX-10`). Un índice parcial impide más de un caso abierto por `(relationship_id, authorized_membership_id, purpose)`.
+- **Actores:** `owner`/`admin` con `manage_historical_access` abren/cierran; ejerce únicamente la membresía autorizada con MFA.
+- **RLS:** gestión por organización con capacidad; la fila solo es ejercible por `authorized_membership_id = auth.membership()` y `status='open'` y `expires_at > statement_timestamp()`.
+- **Consultas:** `(organization_id, relationship_id, status)`, `(authorized_membership_id, status, expires_at)`, `case_reference`.
+- **Índices:** compuestos anteriores + parcial de casos abiertos.
+- **Retención:** 24 meses después de cerrar/expirar, alineada con `access_events`; una política posterior puede exigir más por disputa u obligación.
+- **Eventos:** `privacy.historical_access_case_opened.v1`, `privacy.historical_access_case_closed.v1`, `privacy.historical_access_case_expired.v1`.
+
+### 7.9 `privacy.access_events`
+
+- **Propósito:** registro de toda lectura de datos de una persona bajo grant; el actor humano es obligatorio.
+- **Dominio / fuente de verdad:** Privacidad.
+- **Clasificación:** `audit`.
+- **Columnas:** `id uuid` · `occurred_at timestamptz` (**clave de partición derivada del UUIDv7**) · `subject_person_id uuid` · `actor_person_id uuid` · `actor_membership_id uuid` (nullable) · `relationship_id uuid` (nullable) · `data_grant_id uuid` (nullable) · `historical_access_case_id uuid` (nullable) · `scope_code text` (nullable) · `scope_version integer` (nullable) · `purpose text` · `access_mode privacy.access_mode` · `resource text` · `request_id uuid` · `result text` (`allowed`, `denied`).
+- **FKs y borrado:** `subject_person_id` y `actor_person_id` con FK `RESTRICT` a `identity.people`; las referencias de alto volumen a relación, grant y caso se validan en la entrada cerrada, no con FK dura sobre cada partición.
+- **Uniques y checks:** PK `(id,occurred_at)`; rango mensual; `access_events_id_partition_time_chk` exige UUIDv7 y `occurred_at=extensions.uuid_v7_timestamp(id)`, lo que hace global la unicidad local. Actor humano obligatorio; frozen permitido exige caso/relación/grant. `privacy.log_access_event` es la única entrada y `privacy.enforce_access_event_context_tg` valida `IX-23`.
+- **Actores:** la persona consulta las suyas mediante `privacy.v_my_access_events`; `A12` audita metadatos break-glass mediante `support.list_break_glass_audit_events`; `A10` consulta sus ejercicios en `support.break_glass_events`, no esta tabla. `privacy.log_access_event` inserta en la misma transacción de la lectura.
+- **RLS:** en la tabla base, `SELECT` solo cuando `subject_person_id = auth.person()`; `INSERT` directo revocado. Ninguna organización, `A10` o `A12` recibe `SELECT` directo.
+- **Consultas:** `(subject_person_id, occurred_at desc)`.
+- **Índices:** `(subject_person_id, occurred_at desc)` por partición.
+- **Retención:** **24 meses**; la purga es `DROP` de partición.
+- **Eventos:** ninguno propio (es el registro, no un hecho de negocio).
+
+### 7.10 `privacy.retention_policies`
+
+- **Propósito:** política de retención versionada por categoría, finalidad, trigger y jurisdicción.
+- **Dominio / fuente de verdad:** Privacidad.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `data_classification_code text` · `jurisdiction text` (`CO`, con techo GDPR) · `version_number integer` · `default_action privacy.disposition_action` · `retention_period interval` · `trigger text` · `published_at timestamptz`.
+- **FKs y borrado:** `data_classification_code → data_classifications(code) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (data_classification_code, jurisdiction, version_number)`.
+- **Actores:** lectura autenticada; escritura plataforma.
+- **RLS:** lectura abierta.
+- **Consultas:** por `(data_classification_code, jurisdiction)` vigente.
+- **Índices:** único compuesto.
+- **Retención:** permanente (gobierna a las demás).
+- **Eventos:** ninguno.
+
+### 7.11 `privacy.erasure_requests`
+
+- **Propósito:** solicitud de supresión de la persona; abre un caso de disposición.
+- **Dominio / fuente de verdad:** Privacidad.
+- **Clasificación:** `audit`.
+- **Columnas:** `id` · `person_id uuid` · `scope text` (`account`, categorías concretas) · `status text` (`open`, `resolved`) · `requested_at timestamptz` · `resolved_at timestamptz` (nullable).
+- **FKs y borrado:** `person_id → identity.people(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE parcial (person_id, scope) WHERE status='open'`; clave portadora `UNIQUE (id, person_id)`.
+- **Actores:** la persona; worker de privacidad resuelve.
+- **RLS:** `person_id = auth.person()`.
+- **Consultas:** `(person_id, status)`.
+- **Índices:** compuesto + parcial abierto.
+- **Retención:** evidencia del ejercicio del derecho.
+- **Eventos:** `privacy.erasure_requested.v1`, `privacy.erasure_resolved.v1`.
+
+### 7.12 `privacy.disposition_cases`
+
+- **Propósito:** agrupa la resolución de una disposición por sujeto y origen.
+- **Dominio / fuente de verdad:** Privacidad.
+- **Clasificación:** `audit`.
+- **Columnas:** `id` · `subject_person_id uuid` · `erasure_request_id uuid` (nullable) · `origin text` (`request`, `retention`, `closure`, `disconnection`, `expiry`) · `status text` (`open`, `closed`) · `opened_at timestamptz` · `closed_at timestamptz` (nullable).
+- **FKs y borrado:** `subject_person_id → identity.people(id) RESTRICT`; FK compuesta opcional `(erasure_request_id, subject_person_id) → erasure_requests(id, person_id) RESTRICT` (`IX-26`).
+- **Uniques y checks:** clave portadora `UNIQUE (id, subject_person_id)`.
+- **Actores:** worker de privacidad; la persona ve estado; soporte ve metadatos.
+- **RLS:** `subject_person_id = auth.person()` para la persona; worker por rol.
+- **Consultas:** `(subject_person_id, status)`.
+- **Índices:** `(subject_person_id, status)`.
+- **Retención:** auditoría.
+- **Eventos:** `privacy.disposition_case_opened.v1`.
+
+### 7.13 `privacy.disposition_items`
+
+- **Propósito:** resuelve por categoría y target si eliminar, anonimizar o retener; target polimórfico tipado.
+- **Dominio / fuente de verdad:** Privacidad.
+- **Clasificación:** `audit`.
+- **Columnas:** `id` · `disposition_case_id uuid` · `subject_person_id uuid` · `data_classification_code text` · `retention_policy_id uuid` · `action privacy.disposition_action` · `status privacy.disposition_status` · `due_at timestamptz` · **targets nullable por tipo:** `target_execution_id`, `target_body_progress_id`, `target_health_context_id`, `target_profile_claim_id`, `target_access_account_id`, `target_nutrition_meal_id`, `target_nutrition_goal_set_id` (uno no nulo).
+- **FKs y borrado:** `(disposition_case_id, subject_person_id) → disposition_cases(id, subject_person_id) ON DELETE CASCADE`; `retention_policy_id → retention_policies(id) RESTRICT`; cada `target_*` → su tabla `ON DELETE RESTRICT`.
+- **Uniques y checks:** `CHECK (num_nonnulls(target_execution_id, target_body_progress_id, target_health_context_id, target_profile_claim_id, target_access_account_id, target_nutrition_meal_id, target_nutrition_goal_set_id) = 1)`; constraint trigger diferible `privacy.enforce_disposition_target_subject_ct` exige que el target pertenezca a `subject_person_id` (`IX-26`). Disponer una comida elimina su objeto saneado e hijos; disponer el goal set alcanza versiones, targets y decisiones, incluidos los visibles por `frozen`.
+- **Actores:** worker de privacidad.
+- **RLS:** vía el caso.
+- **Consultas:** `(status, due_at)` para el barrido del worker.
+- **Índices:** `(status, due_at)`; sobre cada `target_*`.
+- **Retención:** auditoría de la disposición.
+- **Eventos:** ninguno propio (los produce el evento de ejecución).
+
+### 7.14 `privacy.disposition_events`
+
+- **Propósito:** ejecución append-only e idempotente de una disposición.
+- **Dominio / fuente de verdad:** Privacidad.
+- **Clasificación:** `audit`.
+- **Columnas:** `id uuid` · `executed_at timestamptz` (clave de partición derivada del UUIDv7) · `disposition_item_id uuid` · `action privacy.disposition_action` · `result text` · `actor text` (worker/job).
+- **FKs y borrado:** `disposition_item_id → disposition_items(id) RESTRICT`; el particionamiento no elimina esta FK (`IX-26`).
+- **Uniques y checks:** PK `(id,executed_at)`; rango mensual; `disposition_events_id_partition_time_chk` exige UUIDv7 y `executed_at=extensions.uuid_v7_timestamp(id)`. Append-only, entrada exclusiva `privacy.log_disposition_event`; el caller no aporta ID ni tiempo.
+- **Actores:** worker de privacidad inserta; soporte lee metadatos.
+- **RLS:** restringida a rol de privacidad y soporte.
+- **Consultas:** `(disposition_item_id, executed_at)`.
+- **Índices:** `(disposition_item_id, executed_at)` por partición.
+- **Retención:** auditoría prolongada.
+- **Eventos:** `privacy.disposition_executed.v1`, `privacy.disposition_reapplied.v1`.
+
+### 7.15 `privacy.legal_holds`
+
+- **Propósito:** suspende la disposición de ítems concretos; alcance, motivo y vigencia obligatorios.
+- **Dominio / fuente de verdad:** Privacidad.
+- **Clasificación:** `audit`.
+- **Columnas:** `id` · `scope_description text` · `reason text` · `valid_from timestamptz` · `valid_to timestamptz` · `status text` (`active`, `released`) · `created_by text` · `released_at timestamptz` (nullable).
+- **FKs y borrado:** ninguna saliente.
+- **Uniques y checks:** `NOT NULL` en alcance, motivo y `valid_to`. No existe hold sin fin.
+- **Actores:** soporte (`A10`).
+- **RLS:** rol de soporte gestiona; la persona ve el hecho vía el ítem.
+- **Consultas:** `(status, valid_to)`.
+- **Índices:** `(status, valid_to)`.
+- **Retención:** auditoría.
+- **Eventos:** `privacy.legal_hold_applied.v1`, `privacy.legal_hold_released.v1`.
+
+### 7.16 `privacy.hold_applications`
+
+- **Propósito:** aplica un hold a un `disposition_item` concreto.
+- **Dominio / fuente de verdad:** Privacidad.
+- **Clasificación:** `audit`.
+- **Columnas:** `id` · `legal_hold_id uuid` · `disposition_item_id uuid` · `status text` (`active`, `released`) · `applied_at timestamptz`.
+- **FKs y borrado:** `legal_hold_id → legal_holds(id) RESTRICT`; `disposition_item_id → disposition_items(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE parcial (disposition_item_id) WHERE status='active'` (un hold vigente por ítem).
+- **Actores:** soporte.
+- **RLS:** rol de soporte; la persona ve el hecho.
+- **Consultas:** `(disposition_item_id, status)`, `(legal_hold_id, status)`.
+- **Índices:** ambos compuestos.
+- **Retención:** auditoría.
+- **Eventos:** ninguno propio.
+
+---
+
+## 8. Schema `catalog`
+
+Salvo indicación, todas las tablas de catálogo tienen **clasificación `operational`**, **RLS de lectura autenticada** para contenido `global` publicado (el contenido `organization`/`person` se restringe a su owner) y **retención permanente** salvo archivado.
+
+### 8.1 `catalog.disciplines`
+
+- **Propósito:** familia global de actividad con código estable.
+- **Dominio / fuente de verdad:** Catálogo. Es la fuente de verdad de las disciplinas globales publicadas por la plataforma.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `code text` · `name text` · `status catalog.publication_status`.
+- **FKs y borrado:** ninguna saliente; es una raíz de catálogo y las referencias entrantes usan `ON DELETE RESTRICT`.
+- **Uniques y checks:** `UNIQUE code`.
+- **Actores:** lectura autenticada; escritura curaduría.
+- **RLS:** lectura autenticada solo para filas `status='published'`; escritura exclusiva de la plataforma por la función de publicación.
+- **Consultas / índices:** por `code`; único `code`; `(status)` para la policy de publicación.
+- **Retención:** permanente; una disciplina referenciada se depreca o archiva, no se elimina.
+- **Eventos:** ninguno.
+
+### 8.2 `catalog.activity_types`
+
+- **Propósito:** clase concreta de actividad; determina contratos y estructuras compatibles.
+- **Dominio / fuente de verdad:** Catálogo. Es la fuente de verdad de los tipos de actividad globales o privados de una organización.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `discipline_code text` · `code text` · `name text` · `content_scope catalog.content_scope` · `owner_organization_id uuid` (nullable) · `status catalog.publication_status`.
+- **FKs y borrado:** `discipline_code → disciplines(code) RESTRICT`; `owner_organization_id → organizations.organizations(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (code)` para globales; `CHECK (content_scope='global') = (owner_organization_id is null)`.
+- **Actores:** personas autenticadas leen tipos globales publicados; miembros autorizados leen contenido de su organización; solo plataforma o owner organizacional autorizado escriben según `content_scope`.
+- **RLS:** `global` publicado abierto; privado solo a su organización.
+- **Consultas / índices:** `(content_scope, owner_organization_id, status)`; `(content_scope, discipline_code, status)`.
+- **Retención:** permanente para globales; el contenido organizacional se archiva y sigue la disposición de su organización cuando no está referenciado.
+- **Eventos:** ninguno propio.
+
+### 8.3 `catalog.activity_type_aliases`
+
+- **Propósito:** nombre alternativo o traducción; no crea otro tipo.
+- **Dominio / fuente de verdad:** Catálogo. La fuente de verdad continúa siendo el `activity_type` padre.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `activity_type_id uuid` · `locale text` · `name text`.
+- **FKs y borrado:** `activity_type_id → activity_types(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `UNIQUE (activity_type_id, locale)`.
+- **Actores:** los mismos actores autorizados sobre el tipo de actividad padre.
+- **RLS:** hereda visibilidad y escritura del padre mediante `activity_type_id → activity_types(id)`.
+- **Consultas / índices:** por `activity_type_id`.
+- **Retención:** se elimina con el tipo de actividad padre.
+- **Eventos:** ninguno.
+
+### 8.4 `catalog.movements`
+
+- **Propósito:** acción o técnica reutilizable y opcional; global, personal u organizacional.
+- **Dominio / fuente de verdad:** Catálogo. Es la fuente de verdad de la identidad y ownership de cada movimiento.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `discipline_code text` · `name text` · `normalized_name text` · `content_scope catalog.content_scope` · `owner_organization_id uuid` (nullable) · `owner_person_id uuid` (nullable) · `successor_movement_id uuid` (nullable) · `status catalog.publication_status`.
+- **FKs y borrado:** `discipline_code → disciplines(code) RESTRICT`; `owner_organization_id → organizations.organizations(id) RESTRICT`; `owner_person_id → identity.people(id) RESTRICT`; `successor_movement_id → movements(id) RESTRICT`.
+- **Uniques y checks:** `CHECK` de un solo owner según `content_scope`; `UNIQUE parcial (owner_organization_id, normalized_name) WHERE content_scope='organization'`.
+- **Actores:** lectura autenticada de globales publicados; owner personal u organización con membresía vigente leen/escriben su contenido; la plataforma publica globales.
+- **RLS:** `global` abierto; `organization` solo a su organización con membresía; `person` solo a su dueño.
+- **Consultas / índices:** `(content_scope, owner_organization_id, status)`; `(content_scope, discipline_code, status)`; índice sobre `normalized_name`.
+- **Retención:** archivado, no borrado, si está referenciado.
+- **Eventos:** `catalog.private_movement_created.v1`, `catalog.private_movement_updated.v1`, `catalog.private_movement_archived.v1`.
+
+### 8.5 `catalog.movement_aliases`
+
+- **Propósito:** nombre alternativo o traducción de un movimiento.
+- **Dominio / fuente de verdad:** Catálogo. La fuente de verdad continúa siendo el movimiento padre.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `movement_id uuid` · `locale text` · `name text`.
+- **FKs y borrado:** `movement_id → movements(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `UNIQUE (movement_id, locale, name)`.
+- **Actores:** los mismos actores autorizados sobre el movimiento padre.
+- **RLS:** hereda visibilidad y escritura del padre mediante `movement_id → movements(id)`.
+- **Consultas / índices:** por `movement_id`.
+- **Retención:** se elimina con el movimiento padre.
+- **Eventos:** ninguno.
+
+### 8.6 `catalog.movement_variants`
+
+- **Propósito:** relación curatorial base↔variante; conserva procedencia sin sobrescribir.
+- **Dominio / fuente de verdad:** Catálogo. Es la fuente de verdad de las relaciones curatoriales entre movimientos.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `base_movement_id uuid` · `variant_movement_id uuid` · `relation text`.
+- **FKs y borrado:** ambos `→ movements(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (base_movement_id, variant_movement_id)`; `CHECK (base_movement_id <> variant_movement_id)`.
+- **Actores:** lectura para quien pueda leer ambos movimientos; escritura de plataforma o del owner autorizado de ambos movimientos privados.
+- **RLS:** exige visibilidad sobre `base_movement_id` y `variant_movement_id`; no amplía la visibilidad de ninguno.
+- **Consultas / índices:** por `base_movement_id`.
+- **Retención:** permanece mientras cualquiera de los movimientos esté referenciado; se elimina solo al retirar ambos sin referencias.
+- **Eventos:** ninguno.
+
+### 8.7 `catalog.equipment`
+
+- **Propósito:** recurso físico compatible o requerido; no inventario ni reservas.
+- **Dominio / fuente de verdad:** Catálogo. Es la fuente de verdad del equipamiento reutilizable global o de una organización.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `code text` (nullable para privado) · `name text` · `content_scope catalog.content_scope` · `owner_organization_id uuid` (nullable).
+- **FKs y borrado:** `owner_organization_id → organizations.organizations(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE code` para globales.
+- **Actores:** lectura autenticada de globales; miembros autorizados leen contenido de su organización; plataforma u owner organizacional autorizado escriben según `content_scope`.
+- **RLS:** `global` publicado abierto; `organization` solo para membresías vigentes de `owner_organization_id`.
+- **Consultas / índices:** `(content_scope, owner_organization_id)`; nombre normalizado.
+- **Retención:** permanente para globales; el contenido organizacional se archiva y sigue la disposición de su organización cuando no está referenciado.
+- **Eventos:** ninguno.
+
+### 8.8 `catalog.movement_equipment`
+
+- **Propósito:** compatibilidad N:M movimiento↔equipamiento.
+- **Dominio / fuente de verdad:** Catálogo. Es la fuente de verdad de la compatibilidad entre un movimiento y su equipamiento.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `movement_id uuid` · `equipment_id uuid` · `requirement text` (`required`, `optional`).
+- **FKs y borrado:** `movement_id → movements(id) ON DELETE CASCADE`; `equipment_id → equipment(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (movement_id, equipment_id)`.
+- **Actores:** los actores autorizados para administrar el movimiento; lectura solo si movimiento y equipamiento son visibles.
+- **RLS:** hereda del movimiento mediante `movement_id`; además exige visibilidad del `equipment_id` asociado.
+- **Consultas / índices:** por `movement_id`.
+- **Retención:** se elimina con el movimiento padre; una referencia histórica publicada conserva el movimiento y, por tanto, la asociación.
+- **Eventos:** ninguno.
+
+### 8.9 `catalog.units`
+
+- **Propósito:** código y conversión dentro de una dimensión; unidad canónica por dimensión.
+- **Dominio / fuente de verdad:** Catálogo. Es la fuente de verdad de unidades y factores de conversión V1.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `code text` · `dimension text` (peso, distancia, tiempo…) · `is_canonical boolean` · `to_canonical_factor numeric`.
+- **FKs y borrado:** ninguna saliente; las referencias entrantes usan `ON DELETE RESTRICT`.
+- **Uniques y checks:** `UNIQUE code`; `UNIQUE parcial (dimension) WHERE is_canonical`.
+- **Actores:** lectura autenticada; escritura exclusiva de curaduría de plataforma.
+- **RLS:** lectura autenticada; sin escritura de runtime salvo función de curaduría.
+- **Consultas / índices:** por `code`; por `dimension`.
+- **Retención:** permanente; una unidad referenciada no se elimina.
+- **Eventos:** ninguno.
+
+### 8.10 `catalog.result_contracts`
+
+- **Propósito:** contrato publicado/versionado de envelope, mínimos y detalle por nivel de completitud.
+- **Dominio / fuente de verdad:** Catálogo. Es la fuente de verdad de los contratos versionados de resultados.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `contract_code text` · `version_number integer` · `activity_family text` · `contract_schema_version smallint` (`1`) · `envelope jsonb` · `minimums jsonb` · `status catalog.publication_status` · `published_at timestamptz`.
+- **FKs y borrado:** ninguna saliente; asociaciones y ejecuciones lo referencian con `ON DELETE RESTRICT`.
+- **Uniques y checks:** `UNIQUE (contract_code, version_number)`; inmutable. Los JSONB `envelope`/`minimums` describen la regla del contrato, no datos de negocio consultables por campo.
+- **Actores:** lectura autenticada; escritura curaduría.
+- **RLS:** lectura autenticada de contratos publicados; publicación exclusiva de plataforma y sin `UPDATE`/`DELETE` de versiones publicadas.
+- **Consultas / índices:** por `(contract_code, version_number)`.
+- **Retención:** permanente (ejecuciones lo congelan).
+- **Eventos:** `catalog.result_contract_published.v1`.
+
+### 8.11 `catalog.activity_type_result_contracts`
+
+- **Propósito:** asociación vigente/default entre actividad y contrato; congela compatibilidad.
+- **Dominio / fuente de verdad:** Catálogo. Es la fuente de verdad de la compatibilidad versionada entre tipo de actividad y contrato.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `activity_type_id uuid` · `result_contract_id uuid` · `is_default boolean` · `valid_from timestamptz` · `valid_to timestamptz` (nullable).
+- **FKs y borrado:** `activity_type_id → activity_types(id) RESTRICT`; `result_contract_id → result_contracts(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE parcial (activity_type_id) WHERE is_default AND valid_to is null`.
+- **Actores:** lectura para quien pueda leer el tipo de actividad; escritura exclusiva de curaduría de plataforma.
+- **RLS:** hereda la visibilidad de `activity_types`; solo permite asociar contratos publicados y escritura de plataforma.
+- **Consultas / índices:** por `activity_type_id`.
+- **Retención:** historial permanente de vigencias; una asociación deja de ser efectiva con `valid_to`, no se sobrescribe.
+- **Eventos:** ninguno propio.
+
+### 8.12 `catalog.contract_fixtures`
+
+- **Propósito:** caso válido o inválido de la suite contractual; `sensor_enriched` usa fixtures, no conectores.
+- **Dominio / fuente de verdad:** Catálogo. Es la fuente de verdad de los fixtures que demuestran cada contrato publicado.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `result_contract_id uuid` · `kind text` (`valid`, `invalid`) · `payload_schema_version smallint` (`1`) · `payload jsonb` · `expected text`.
+- **FKs y borrado:** `result_contract_id → result_contracts(id) ON DELETE CASCADE`.
+- **Uniques y checks:** al publicar un contrato debe existir ≥1 `valid` y ≥1 `invalid` (validado en `OP-CAT-006`).
+- **Actores:** lectura y escritura de curaduría, CI y validadores internos; sin acceso desde Space u OS.
+- **RLS:** sin acceso de runtime de producto; únicamente plataforma/CI mediante rol dedicado y contrato publicado.
+- **Consultas / índices:** por `result_contract_id`.
+- **Retención:** se elimina con el contrato no publicado; fixtures de contratos publicados se conservan permanentemente para reproducibilidad.
+- **Eventos:** ninguno.
+
+---
+
+## 9. Schema `planning`
+
+### 9.1 `planning.session_templates`
+
+- **Propósito:** identidad estable de una plantilla de sesión; borradores y versiones no se mezclan.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad de la identidad y ownership estable de cada plantilla.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `owner_organization_id uuid` (nullable) · `owner_person_id uuid` (nullable) · `discipline_code text` · `status catalog.publication_status`.
+- **FKs y borrado:** owners → sus tablas `RESTRICT`; `discipline_code → catalog.disciplines(code) RESTRICT`.
+- **Uniques y checks:** `CHECK (num_nonnulls(owner_organization_id, owner_person_id) = 1)`.
+- **Actores:** owner del contexto; sin acceso entre organizaciones.
+- **RLS:** owner org con membresía **OR** owner person.
+- **Consultas / índices:** `(owner_organization_id, status)`, `(owner_person_id, status)`.
+- **Retención:** con el owner.
+- **Eventos:** `planning.session_template_created.v1`.
+
+### 9.2 `planning.session_template_drafts`
+
+- **Propósito:** contenido editable de una plantilla; nunca referenciable por un programa.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del único borrador editable de la plantilla padre.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `template_id uuid` · `content_schema_version smallint` (`1`) · `content jsonb` · `updated_at timestamptz`.
+- **FKs y borrado:** `template_id → session_templates(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `UNIQUE template_id` (un borrador vivo por plantilla).
+- **Actores:** owner personal u organizacional de la plantilla; ninguna persona asignada puede editar el borrador.
+- **RLS:** vía la plantilla.
+- **Consultas / índices:** por `template_id`.
+- **Retención:** se reemplaza de forma controlada mientras es borrador y se elimina con la plantilla; publicar crea una versión inmutable separada.
+- **Eventos:** `planning.session_template_draft_updated.v1`.
+
+### 9.3 `planning.session_template_versions`
+
+- **Propósito:** versión publicada, completa e inmutable de una plantilla.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad histórica de cada versión publicada de una plantilla.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `template_id uuid` · `version_number integer` · `discipline_code text` · `activity_type_id uuid` · `derived_from_version_id uuid` (nullable) · `status catalog.publication_status` · `published_at timestamptz`.
+- **FKs y borrado:** `template_id → session_templates(id) RESTRICT`; `activity_type_id → catalog.activity_types(id) RESTRICT`; `derived_from_version_id → session_template_versions(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (template_id, version_number)`; sin `UPDATE`/`DELETE` en runtime.
+- **Actores:** el owner publica; owner y personas con asignaciones que la referencian leen; ningún runtime actualiza una versión publicada.
+- **RLS:** owner del contexto, **OR** persona con asignación que la referencia.
+- **Consultas / índices:** `(template_id, version_number)`.
+- **Retención:** permanente si referenciada.
+- **Eventos:** `planning.session_template_version_published.v1`, `planning.session_template_version_deprecated.v1`.
+
+### 9.4 `planning.planned_steps`
+
+- **Propósito:** paso planificado de una versión de plantilla; movimiento opcional.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del orden y contenido estructural de los pasos de una versión.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `template_version_id uuid` · `position integer` · `movement_id uuid` (nullable) · `activity_type_id uuid` (nullable, más específico para híbrido) · `notes text` (nullable).
+- **FKs y borrado:** `template_version_id → session_template_versions(id) ON DELETE CASCADE`; `movement_id → catalog.movements(id) RESTRICT`; `activity_type_id → catalog.activity_types(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (template_version_id, position)`.
+- **Actores:** los mismos actores con lectura de la versión; escritura solo durante la publicación atómica de la versión.
+- **RLS:** vía la versión.
+- **Consultas / índices:** por `template_version_id`.
+- **Retención:** con la versión publicada; inmutable una vez publicada.
+- **Eventos:** ninguno propio.
+
+### 9.5 `planning.strength_targets`
+
+- **Propósito:** prescripción tipada de fuerza para un paso planificado.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del target de fuerza del paso.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `planned_step_id uuid` · `target_sets integer` · `target_reps integer` (nullable) · `target_load_value numeric` (nullable) · `target_load_unit_code text` (nullable) · `target_rpe numeric` (nullable).
+- **FKs y borrado:** `planned_step_id → planned_steps(id) ON DELETE CASCADE`; `target_load_unit_code → catalog.units(code) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (planned_step_id)`; `target_sets > 0`; `target_reps > 0` si existe; load y unidad aparecen juntos y load es `>=0`; RPE entre 0 y 10. `planning.enforce_target_family_ct` exige familia `strength` (`IX-22`).
+- **Actores:** los mismos de la versión de plantilla.
+- **RLS:** `EXISTS` por `planned_step_id → session_template_versions → session_templates`.
+- **Consultas / índices:** único `(planned_step_id)`.
+- **Retención:** con la versión publicada; inmutable tras publicación.
+- **Eventos:** ninguno propio.
+
+### 9.6 `planning.endurance_targets`
+
+- **Propósito:** prescripción tipada de distancia, duración o ritmo objetivo.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del target de endurance del paso.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `planned_step_id uuid` · `target_distance_value numeric` (nullable) · `target_distance_unit_code text` (nullable) · `target_duration_seconds numeric` (nullable) · `target_pace_seconds_per_unit numeric` (nullable) · `target_pace_unit_code text` (nullable).
+- **FKs y borrado:** `planned_step_id → planned_steps(id) ON DELETE CASCADE`; ambas unidades `→ catalog.units(code) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (planned_step_id)`; al menos distancia o duración; cantidades `>0`; cada valor con unidad aparece en pareja. `planning.enforce_target_family_ct` exige familia `endurance` (`IX-22`).
+- **Actores:** los mismos de la versión de plantilla.
+- **RLS:** `EXISTS` por paso, versión y plantilla owner.
+- **Consultas / índices:** único `(planned_step_id)`.
+- **Retención:** con la versión publicada; inmutable tras publicación.
+- **Eventos:** ninguno propio.
+
+### 9.7 `planning.interval_targets`
+
+- **Propósito:** prescripción tipada de rondas de trabajo/descanso.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del target de intervalos del paso.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `planned_step_id uuid` · `rounds integer` · `work_duration_seconds numeric` · `rest_duration_seconds numeric` (nullable) · `target_rpe numeric` (nullable).
+- **FKs y borrado:** `planned_step_id → planned_steps(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `UNIQUE (planned_step_id)`; `rounds > 0`; trabajo `>0`; descanso `>=0` si existe; RPE entre 0 y 10. `planning.enforce_target_family_ct` exige familia `interval` (`IX-22`).
+- **Actores:** los mismos de la versión de plantilla.
+- **RLS:** `EXISTS` por paso, versión y plantilla owner.
+- **Consultas / índices:** único `(planned_step_id)`.
+- **Retención:** con la versión publicada; inmutable tras publicación.
+- **Eventos:** ninguno propio.
+
+### 9.8 `planning.mobility_targets`
+
+- **Propósito:** prescripción tipada de una posición de movilidad, por sostén o repeticiones.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del target de movilidad del paso.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `planned_step_id uuid` · `sequence_position integer` · `hold_duration_seconds numeric` (nullable) · `target_repetitions integer` (nullable) · `side text` (`left`, `right`, `bilateral`, `not_applicable`).
+- **FKs y borrado:** `planned_step_id → planned_steps(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `UNIQUE (planned_step_id)`; `sequence_position > 0`; al menos duración o repeticiones; ambas positivas si existen; side en catálogo cerrado. `planning.enforce_target_family_ct` exige familia `mobility` (`IX-22`).
+- **Actores:** los mismos de la versión de plantilla.
+- **RLS:** `EXISTS` por paso, versión y plantilla owner.
+- **Consultas / índices:** único `(planned_step_id)`.
+- **Retención:** con la versión publicada; inmutable tras publicación.
+- **Eventos:** ninguno propio.
+
+### 9.9 `planning.programs`
+
+- **Propósito:** identidad estable de un programa.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad de la identidad y ownership estable de cada programa.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `owner_organization_id uuid` (nullable) · `owner_person_id uuid` (nullable) · `status catalog.publication_status`.
+- **FKs y borrado:** owners → sus tablas `RESTRICT`.
+- **Uniques y checks:** `CHECK (num_nonnulls(owner_organization_id, owner_person_id) = 1)`.
+- **Actores:** owner personal u organización con membresía/capacidad vigente; sin acceso de otras organizaciones.
+- **RLS:** owner del contexto.
+- **Consultas / índices:** `(owner_organization_id, status)`, `(owner_person_id, status)`.
+- **Retención:** se archiva cuando deja de usarse; se conserva mientras una versión o asignación lo referencie.
+- **Eventos:** `planning.program_created.v1`.
+
+### 9.10 `planning.program_drafts`
+
+- **Propósito:** composición editable de un programa.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del único borrador editable del programa padre.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `program_id uuid` · `content_schema_version smallint` (`1`) · `content jsonb`.
+- **FKs y borrado:** `program_id → programs(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `UNIQUE program_id`.
+- **Actores:** owner personal u organizacional del programa; ninguna persona asignada puede editar el borrador.
+- **RLS:** vía el programa.
+- **Consultas / índices:** por `program_id`.
+- **Retención:** se reemplaza de forma controlada mientras es borrador y se elimina con el programa; publicar crea una versión inmutable separada.
+- **Eventos:** `planning.program_draft_updated.v1`.
+
+### 9.11 `planning.program_versions`
+
+- **Propósito:** versión publicada e inmutable de un programa.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad histórica de cada versión publicada del programa.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `program_id uuid` · `version_number integer` · `status catalog.publication_status` · `published_at timestamptz`.
+- **FKs y borrado:** `program_id → programs(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (program_id, version_number)`; inmutable.
+- **Actores:** el owner publica; owner y personas con asignaciones que la referencian leen; ningún runtime actualiza una versión publicada.
+- **RLS:** owner, **OR** persona asignada.
+- **Consultas / índices:** `(program_id, version_number)`.
+- **Retención:** permanente mientras esté referenciada por una asignación o forme parte del historial publicado.
+- **Eventos:** `planning.program_version_published.v1`, `planning.program_version_deprecated.v1`.
+
+### 9.12 `planning.program_version_sessions`
+
+- **Propósito:** composición: cada posición referencia una **versión exacta** de plantilla.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad de la composición inmutable de una versión de programa.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `program_version_id uuid` · `template_version_id uuid` · `position integer` · `week integer` · `day integer`.
+- **FKs y borrado:** `program_version_id → program_versions(id) ON DELETE CASCADE`; `template_version_id → session_template_versions(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (program_version_id, position)`. Nunca resuelve "la última".
+- **Actores:** los mismos actores con lectura de la versión de programa; escritura solo durante su publicación atómica.
+- **RLS:** vía la versión de programa.
+- **Consultas / índices:** por `program_version_id`.
+- **Retención:** con la versión de programa; inmutable después de publicar.
+- **Eventos:** ninguno propio.
+
+### 9.13 `planning.program_assignments`
+
+- **Propósito:** asignación de una versión a una persona; pertenece al historial personal.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del snapshot asignado, su origen y su ciclo de continuidad personal.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `person_id uuid` · `program_version_id uuid` · `origin_relationship_id uuid` (nullable) · `lifecycle planning.assignment_lifecycle` · `starts_on date` · `timezone text` · `assigned_at timestamptz`.
+- **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `program_version_id → program_versions(id) RESTRICT`; FK compuesta opcional `(origin_relationship_id, person_id) → relationships.service_relationships(id, person_id) RESTRICT` (`IX-11`).
+- **Uniques y checks:** clave portadora `UNIQUE (id, person_id)`.
+- **Actores:** la persona (autoasigna, decide continuidad); el coach con `contribute` (asigna, cancela).
+- **RLS:** `person_id = auth.person()` **OR** (`origin_relationship_id` visible **AND** grant `relationship_training`).
+- **Consultas / índices:** `(person_id, lifecycle)`, `(origin_relationship_id, lifecycle)`.
+- **Retención:** historial personal; se conserva al desacoplar.
+- **Eventos:** `planning.assignment_created.v1`, `planning.assignment_detached.v1`, `planning.assignment_cancelled.v1`, `planning.assignment_continued.v1`, `planning.assignment_ended.v1`.
+
+### 9.14 `planning.assignment_management_periods`
+
+- **Propósito:** separa la gestión efectiva de la procedencia; un solo periodo vigente por asignación.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad de quién administró una asignación y durante qué intervalo.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `assignment_id uuid` · `person_id uuid` · `relationship_id uuid` · `started_at timestamptz` · `ended_at timestamptz` (nullable).
+- **FKs y borrado:** `(assignment_id, person_id) → program_assignments(id, person_id) ON DELETE CASCADE`; `(relationship_id, person_id) → relationships.service_relationships(id, person_id) RESTRICT` (`IX-12`).
+- **Uniques y checks:** `UNIQUE parcial (assignment_id) WHERE ended_at is null`.
+- **Actores:** persona y profesionales de la relación leen según autorización; solo comandos de asignación, reasignación y terminación abren o cierran periodos.
+- **RLS:** vía la asignación.
+- **Consultas / índices:** `(assignment_id, ended_at)`.
+- **Retención:** con la asignación como historial de gestión; un periodo cerrado no se elimina ni se reactiva.
+- **Eventos:** ninguno propio.
+
+### 9.15 `planning.prescription_revisions`
+
+- **Propósito:** adaptación personal de la prescripción sin editar plantilla ni programa publicados.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad de cada revisión personal aplicada sobre el snapshot asignado.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `assignment_id uuid` · `person_id uuid` · `planned_step_ref uuid` · `override_kind text` (`target_sets`, `target_reps`, `target_load`, `target_rpe`, `target_distance`, `target_duration`, `target_pace`, `rounds`, `work_duration`, `rest_duration`, `hold_duration`, `target_repetitions`, `side`, `notes`) · `value_numeric numeric` (nullable) · `value_integer integer` (nullable) · `value_text text` (nullable) · `value_boolean boolean` (nullable) · `unit_code text` (nullable) · `created_by_assignment_id uuid`.
+- **FKs y borrado:** `(assignment_id, person_id) → program_assignments(id, person_id) ON DELETE CASCADE`; `(created_by_assignment_id, person_id) → relationships.relationship_professional_assignments(id, person_id) RESTRICT`; `planned_step_ref → planned_steps(id) RESTRICT`; `unit_code → catalog.units(code) RESTRICT` (`IX-13`).
+- **Uniques y checks:** exactamente una columna `value_*` no nula; unidad solo con `value_numeric`. Constraint trigger `planning.enforce_prescription_override_ct` comprueba que el paso pertenece al snapshot asignado y que field, tipo y unidad corresponden a la tabla target efectiva.
+- **Actores:** la persona sobre su asignación y el profesional con periodo de gestión, asignación efectiva y nivel `contribute`; append-only.
+- **RLS:** vía la asignación + periodo de gestión vigente para escribir.
+- **Consultas / índices:** por `assignment_id`.
+- **Retención:** con la asignación; conserva autoría y valor histórico aun después de terminar la gestión profesional.
+- **Eventos:** `planning.prescription_revised.v1`.
+
+### 9.16 `planning.planned_sessions`
+
+- **Propósito:** sesión del calendario materializada al asignar; en la zona horaria de la persona.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del calendario materializado de una asignación.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `assignment_id uuid` · `person_id uuid` · `template_version_id uuid` · `scheduled_at timestamptz` · `timezone text` · `status text` (`scheduled`, `paused`, `cancelled`, `completed`).
+- **FKs y borrado:** `(assignment_id, person_id) → program_assignments(id, person_id) ON DELETE CASCADE`; `template_version_id → session_template_versions(id) RESTRICT` (`IX-15`).
+- **Uniques y checks:** clave portadora `UNIQUE (id, person_id)`.
+- **Actores:** la persona (agenda); el coach reprograma la parte administrada.
+- **RLS:** vía la asignación.
+- **Consultas / índices:** `(assignment_id, scheduled_at)`.
+- **Retención:** con la asignación.
+- **Eventos:** `planning.session_rescheduled.v1`.
+
+Nota de conteo: `planning` tiene 16 tablas y 16 fichas; §9.5–9.8 son cuatro tablas físicas independientes.
+
+---
+
+## 10. Schema `execution`
+
+### 10.1 `execution.executed_sessions`
+
+- **Propósito:** hecho real de una sesión; pertenece a la persona; congela contrato y versión.
+- **Dominio / fuente de verdad:** Ejecución. Es la fuente de verdad del hecho ejecutado, su estado, contrato congelado y procedencia.
+- **Clasificación:** `training` (con campos de otras categorías heredando la suya).
+- **Columnas:** `id uuid` (**Command-Id UUIDv7 del dispositivo para crear la ejecución**) · `person_id uuid` · `activity_type_id uuid` · `result_contract_id uuid` · `contract_version integer` · `context_relationship_id uuid` (nullable) · `context_organization_id uuid` (nullable) · `is_autonomous boolean` · `started_at timestamptz` · `ended_at timestamptz` (nullable) · `timezone text` · `execution_status execution.execution_status` · `validation_status execution.validation_status` · `revision_number bigint` (`0`, incrementa bajo lock) · `requested_level catalog.completeness_level` · `achieved_level catalog.completeness_level` (nullable) · `capture_source text` · `capture_provenance identity.provenance` · `annulled_at timestamptz` (nullable) · `annulment_reason text` (nullable).
+- **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `activity_type_id → catalog.activity_types(id) RESTRICT`; `result_contract_id → catalog.result_contracts(id) RESTRICT`; FK compuesta de contexto `MATCH SIMPLE (context_relationship_id, person_id, context_organization_id) → relationships.service_relationships(id, person_id, organization_id) RESTRICT` (`IX-14`).
+- **Uniques y checks:** clave portadora `UNIQUE (id, person_id)`; `revision_number >= 0`; `CHECK (ended_at is null or ended_at >= started_at)`; `CHECK` que exige ambos IDs de contexto cuando `is_autonomous=false` y ambos `NULL` cuando `is_autonomous=true`; sin `UPDATE` de resultados por terceros (privilegios).
+- **Actores:** la persona (crea, corrige, invalida); el profesional lee proyectado.
+- **RLS:** `auth.is_self(person_id)` **OR** (relación con `relationship_training` para lo producido en ella; `prior_training_history` para lo autónomo, con evaluación de `session_denied`). Proyección `execution.v_client_executions`.
+- **Consultas / índices:** `(person_id, started_at desc)`, `(context_relationship_id, started_at desc)`.
+- **Retención:** categoría `training`; disposición por política; cierre anonimiza `person_id`.
+- **Eventos:** `execution.attempt_started.v1`, `execution.session_started.v1`, `execution.finalized.v1`, `execution.revised.v1`, `execution.annulled.v1`.
+
+### 10.2 `execution.planned_session_executions`
+
+- **Propósito:** vínculo entre una sesión planificada y una ejecución; numeración de intentos y primaria.
+- **Dominio / fuente de verdad:** Ejecución. Es la fuente de verdad de los intentos históricos y de cuál ejecución válida es primaria para una sesión planificada.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `planned_session_id uuid` · `executed_session_id uuid` · `person_id uuid` · `attempt_number integer` · `is_primary boolean`.
+- **FKs y borrado:** `(planned_session_id, person_id) → planning.planned_sessions(id, person_id) RESTRICT`; `(executed_session_id, person_id) → executed_sessions(id, person_id) ON DELETE CASCADE` (`IX-16`).
+- **Uniques y checks:** `UNIQUE (planned_session_id, attempt_number)`; `UNIQUE parcial (planned_session_id) WHERE is_primary`; constraint trigger diferible `execution.enforce_primary_execution_ct` exige ejecución completada y válida para `is_primary=true` (`IX-17`).
+- **Actores:** la persona inicia, reanuda o abandona intentos y decide cambios explícitos de primaria; el sistema resuelve la primaria inicial al finalizar.
+- **RLS:** vía la ejecución/planificación (misma persona).
+- **Consultas / índices:** `(planned_session_id, attempt_number)`.
+- **Retención:** con la ejecución y la sesión planificada; los intentos históricos y el cambio de primaria no se borran.
+- **Eventos:** `execution.primary_resolved.v1`, `execution.primary_changed.v1`.
+
+### 10.3 `execution.session_segments`
+
+- **Propósito:** divide una sesión; una híbrida exige ≥2 familias distintas.
+- **Dominio / fuente de verdad:** Ejecución. Es la fuente de verdad de la composición real y ordenada de segmentos de una sesión.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `executed_session_id uuid` · `position integer` · `activity_type_id uuid` (nullable) · `planned_step_id uuid` (nullable).
+- **FKs y borrado:** `executed_session_id → executed_sessions(id) ON DELETE CASCADE`; `activity_type_id → catalog.activity_types(id) RESTRICT`; `planned_step_id → planning.planned_steps(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (executed_session_id, position)`; clave portadora `UNIQUE (id, executed_session_id)`. **`IX-37`**: constraint trigger que, al cerrar una ejecución híbrida, exige al menos dos segmentos de familias distintas.
+- **Actores:** la persona captura segmentos propios; profesionales solo leen la proyección autorizada de la ejecución.
+- **RLS:** vía la sesión.
+- **Consultas / índices:** por `executed_session_id`.
+- **Retención:** con la ejecución; se elimina o anonimiza según la política de la categoría `training`.
+- **Eventos:** ninguno propio.
+
+### 10.4 `execution.strength_sets`
+
+- **Propósito:** esfuerzo/serie de fuerza con orden, movimiento y cantidad lograda.
+- **Dominio / fuente de verdad:** Ejecución. Es la fuente de verdad de los resultados observados de fuerza de una ejecución.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `executed_session_id uuid` · `session_segment_id uuid` (nullable) · `movement_id uuid` (nullable) · `planned_step_id uuid` (nullable) · `set_order integer` · `achieved_reps integer` (nullable) · `load_value numeric` (nullable) · `load_unit_code text` (nullable) · `original_load_value numeric` (nullable) · `original_load_unit_code text` (nullable) · `rpe numeric` (nullable).
+- **FKs y borrado:** `executed_session_id → executed_sessions(id) ON DELETE CASCADE`; FK compuesta opcional `(session_segment_id, executed_session_id) → session_segments(id, executed_session_id) RESTRICT`; `movement_id → catalog.movements(id) RESTRICT`; unidades → `catalog.units(code) RESTRICT` (`IX-18`).
+- **Uniques y checks:** `UNIQUE (executed_session_id, set_order)`; `NULL` ≠ 0.
+- **Actores:** la persona captura y revisa sus resultados; profesionales solo leen la proyección autorizada y nunca sobrescriben el set.
+- **RLS:** vía la sesión.
+- **Consultas / índices:** por `executed_session_id`.
+- **Retención:** con la ejecución; conserva revisiones y se dispone bajo la categoría `training`.
+- **Eventos:** ninguno propio.
+
+### 10.5 `execution.endurance_laps`
+
+- **Propósito:** vuelta o tramo de endurance con distancia y duración capturadas.
+- **Dominio / fuente de verdad:** Ejecución. Es la fuente de verdad de vueltas y tramos observados de endurance.
+- **Clasificación:** `training`; `avg_heart_rate_bpm` queda fuera de los siete scopes V1.
+- **Columnas:** `id` · `executed_session_id uuid` · `session_segment_id uuid` (nullable) · `lap_number integer` · `distance_value numeric` · `distance_unit_code text` · `duration_seconds numeric` · `elevation_gain_value numeric` (nullable) · `elevation_gain_unit_code text` (nullable) · `avg_heart_rate_bpm integer` (nullable).
+- **FKs y borrado:** `executed_session_id → executed_sessions(id) ON DELETE CASCADE`; FK `MATCH SIMPLE (session_segment_id,executed_session_id) → session_segments(id,executed_session_id) RESTRICT`; unidades `→ catalog.units(code) RESTRICT` (`IX-18`).
+- **Uniques y checks:** `UNIQUE (executed_session_id,lap_number)`; número, distancia y duración positivos; elevación no negativa y emparejada con unidad; frecuencia cardiaca positiva si existe; `NULL` no se transforma en cero.
+- **Actores:** la persona escribe; profesional solo lee la proyección autorizada sin frecuencia cardiaca.
+- **RLS:** `EXISTS executed_sessions(id=executed_session_id)` bajo la policy de la sesión.
+- **Consultas / índices:** único `(executed_session_id,lap_number)`.
+- **Retención:** con la ejecución.
+- **Eventos:** ninguno propio.
+
+### 10.6 `execution.interval_results`
+
+- **Propósito:** resultado de una ronda de trabajo/descanso.
+- **Dominio / fuente de verdad:** Ejecución. Es la fuente de verdad de los resultados observados por intervalo.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `executed_session_id uuid` · `session_segment_id uuid` (nullable) · `interval_number integer` · `work_duration_seconds numeric` · `rest_duration_seconds numeric` (nullable) · `achieved_repetitions integer` (nullable) · `distance_value numeric` (nullable) · `distance_unit_code text` (nullable) · `completed boolean`.
+- **FKs y borrado:** ejecución y segmento como §10.5; `distance_unit_code → catalog.units(code) RESTRICT` (`IX-18`).
+- **Uniques y checks:** `UNIQUE (executed_session_id,interval_number)`; número y trabajo positivos; descanso no negativo; repeticiones positivas si existen; distancia/unidad aparecen juntas y distancia es positiva.
+- **Actores:** la persona escribe; profesional lee según grant.
+- **RLS:** hereda de la ejecución mediante `EXISTS`.
+- **Consultas / índices:** único `(executed_session_id,interval_number)`.
+- **Retención:** con la ejecución.
+- **Eventos:** ninguno propio.
+
+### 10.7 `execution.round_results`
+
+- **Propósito:** resultado de una ronda híbrida con una familia y al menos una medida tipada.
+- **Dominio / fuente de verdad:** Ejecución. Es la fuente de verdad de las rondas observadas en sesiones híbridas.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `executed_session_id uuid` · `session_segment_id uuid` (nullable) · `round_number integer` · `activity_family text` (`strength`, `endurance`, `interval`, `mobility`) · `completed_repetitions integer` (nullable) · `duration_seconds numeric` (nullable) · `distance_value numeric` (nullable) · `distance_unit_code text` (nullable) · `load_value numeric` (nullable) · `load_unit_code text` (nullable).
+- **FKs y borrado:** ejecución y segmento como §10.5; unidades `→ catalog.units(code) RESTRICT` (`IX-18`).
+- **Uniques y checks:** `UNIQUE (executed_session_id,round_number)`; ronda positiva; al menos una medida no nula; cantidades positivas salvo load, que puede ser cero; distancia/load y sus unidades aparecen en pareja.
+- **Actores:** la persona escribe; profesional lee según grant.
+- **RLS:** hereda de la ejecución mediante `EXISTS`.
+- **Consultas / índices:** único `(executed_session_id,round_number)`.
+- **Retención:** con la ejecución.
+- **Eventos:** ninguno propio.
+
+### 10.8 `execution.mobility_results`
+
+- **Propósito:** resultado de una posición o movimiento de movilidad.
+- **Dominio / fuente de verdad:** Ejecución. Es la fuente de verdad de los resultados observados de movilidad.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `executed_session_id uuid` · `session_segment_id uuid` (nullable) · `sequence_position integer` · `movement_id uuid` (nullable) · `side text` (`left`, `right`, `bilateral`, `not_applicable`) · `hold_duration_seconds numeric` (nullable) · `completed_repetitions integer` (nullable).
+- **FKs y borrado:** ejecución y segmento como §10.5; `movement_id → catalog.movements(id) RESTRICT` (`IX-18`).
+- **Uniques y checks:** `UNIQUE (executed_session_id,sequence_position)`; posición positiva; al menos duración o repeticiones; ambas positivas si existen.
+- **Actores:** la persona escribe; profesional lee según grant.
+- **RLS:** hereda de la ejecución mediante `EXISTS`.
+- **Consultas / índices:** único `(executed_session_id,sequence_position)`.
+- **Retención:** con la ejecución.
+- **Eventos:** ninguno propio.
+
+### 10.9 `execution.metric_samples`
+
+- **Propósito:** muestra temporal de fixture controlado; fuera de los siete scopes V1; inmutable.
+- **Dominio / fuente de verdad:** Ejecución. Es la fuente de verdad de muestras controladas asociadas a una ejecución V1, sin habilitar conectores productivos.
+- **Clasificación:** `training` (pero **nunca** visible a organizaciones en V1).
+- **Columnas:** `id` · `executed_session_id uuid` · `session_segment_id uuid` (nullable) · `metric_code text` · `value numeric` · `unit_code text` · `quality text` · `sampled_at timestamptz` · `source text`.
+- **FKs y borrado:** `executed_session_id → executed_sessions(id) ON DELETE CASCADE`; FK compuesta opcional `(session_segment_id, executed_session_id) → session_segments(id, executed_session_id) RESTRICT`; `unit_code → catalog.units(code) RESTRICT` (`IX-18`).
+- **Uniques y checks:** sin `UPDATE`/`DELETE` (raw inmutable).
+- **Actores:** la persona y el importador controlado escriben sobre sesiones propias; solo la persona puede leer; ningún profesional u organización accede en V1.
+- **RLS:** `auth.is_self(person_id)` vía la sesión, y nada más. Ningún grant lo expone.
+- **Consultas / índices:** `(executed_session_id, sampled_at)`.
+- **Retención:** con la sesión; excluible del análisis sin alterar payload.
+- **Eventos:** ninguno propio.
+
+### 10.10 `execution.professional_observations`
+
+- **Propósito:** observación profesional; coexiste con lo declarado, no lo edita.
+- **Dominio / fuente de verdad:** Ejecución. Es la fuente de verdad de la observación y autoría profesional asociadas a una ejecución.
+- **Clasificación:** hereda del contenido observado.
+- **Columnas:** `id` · `executed_session_id uuid` · `person_id uuid` · `author_assignment_id uuid` · `content text` · `provenance identity.provenance` · `data_classification_code text`.
+- **FKs y borrado:** `(executed_session_id, person_id) → executed_sessions(id, person_id) RESTRICT`; `(author_assignment_id, person_id) → relationships.relationship_professional_assignments(id, person_id) RESTRICT`; `data_classification_code → privacy.data_classifications(code) RESTRICT` (`IX-19`).
+- **Uniques y checks:** —.
+- **Actores:** el profesional con `contribute` (crea, revisa la propia); la persona la ve.
+- **RLS:** `INSERT` exige `can_access(person_id, scope, 'contribute')`; `UPDATE` solo autor vía revisión.
+- **Consultas / índices:** `(person_id, executed_session_id)`, `author_assignment_id`.
+- **Retención:** con la sesión / categoría.
+- **Eventos:** `execution.observation_created.v1`, `execution.observation_revised.v1`.
+
+### 10.11 `execution.correction_proposals`
+
+- **Propósito:** propuesta de corrección sobre un dato declarado por la persona; target polimórfico tipado.
+- **Dominio / fuente de verdad:** Ejecución. Es la fuente de verdad de la propuesta, su target, autor y decisión personal.
+- **Clasificación:** hereda del target.
+- **Columnas:** `id` · `person_id uuid` · `proposer_assignment_id uuid` · `target_field text` · `proposed_numeric numeric` (nullable) · `proposed_integer integer` (nullable) · `proposed_text text` (nullable) · `proposed_boolean boolean` (nullable) · `proposed_unit_code text` (nullable) · `reason text` · `status execution.proposal_status` · `expires_at timestamptz` · **targets nullable por tipo:** `target_claim_id`, `target_strength_set_id`, `target_execution_id` (uno no nulo).
+- **FKs y borrado:** `(proposer_assignment_id, person_id) → relationships.relationship_professional_assignments(id, person_id) RESTRICT`; cada `target_*` a su tabla `RESTRICT`; `proposed_unit_code → catalog.units(code) RESTRICT`.
+- **Uniques y checks:** exactamente un target y exactamente una columna `proposed_*` no nulos; unidad solo con `proposed_numeric`. Constraint trigger diferible `execution.enforce_correction_subject_ct` resuelve target/sujeto y valida que `target_field`, tipo y unidad sean editables para esa tabla (`IX-20`).
+- **Actores:** el profesional con `contribute` propone; la persona decide.
+- **RLS:** `person_id = auth.person()` **OR** proponente con asignación efectiva.
+- **Consultas / índices:** `(person_id, status, expires_at)`, `(proposer_assignment_id, status)`.
+- **Retención:** conserva; vencidas y canceladas se marcan, no se borran.
+- **Eventos:** `execution.correction_proposed.v1`, `execution.correction_decided.v1`, `execution.correction_expired.v1`.
+
+### 10.12 `execution.revision_events`
+
+- **Propósito:** historia append-only de correcciones; conserva before/after, actor, motivo; target tipado.
+- **Dominio / fuente de verdad:** Ejecución. Es la fuente de verdad auditable de cada revisión material aplicada a un dato ejecutado.
+- **Clasificación:** `audit`.
+- **Columnas:** `id uuid` (**Command-Id UUIDv7 del dispositivo para revisiones offline**) · `subject_person_id uuid` · `executed_session_id uuid` (nullable) · `snapshot_schema_version smallint` (`1`) · `before jsonb` · `after jsonb` · `actor_kind identity.actor_kind` · `actor_ref uuid` (nullable) · `reason text` · **targets nullable por tipo** con `CHECK` de uno no nulo.
+- **FKs y borrado:** FK compuesta opcional `(executed_session_id, subject_person_id) → executed_sessions(id, person_id) RESTRICT`; targets a sus tablas `RESTRICT`.
+- **Uniques y checks:** append-only; `CHECK num_nonnulls(target_*) = 1`; constraint trigger diferible `execution.enforce_revision_target_ct` exige que target, `subject_person_id` y ejecución correspondan (`IX-21`).
+- **Actores:** `allfit_api` inserta; la persona y el profesional autorizado leen según target.
+- **RLS:** hereda del target.
+- **Consultas / índices:** por `executed_session_id`; por target.
+- **Retención:** auditoría con el dato.
+- **Eventos:** ninguno propio.
+
+### 10.13 `execution.result_validation_events`
+
+- **Propósito:** resultado de validar una ejecución contra su contrato congelado; append-only.
+- **Dominio / fuente de verdad:** Ejecución. Es la fuente de verdad de cada validación contractual y del nivel de completitud alcanzado.
+- **Clasificación:** `audit`.
+- **Columnas:** `id` · `executed_session_id uuid` · `result_contract_id uuid` · `contract_version integer` · `requested_level catalog.completeness_level` · `achieved_level catalog.completeness_level` (nullable) · `errors_schema_version smallint` (`1`, nullable junto a payload) · `errors jsonb` (nullable) · `validated_at timestamptz`.
+- **FKs y borrado:** `executed_session_id → executed_sessions(id) ON DELETE CASCADE`; `result_contract_id → catalog.result_contracts(id) RESTRICT`.
+- **Uniques y checks:** append-only.
+- **Actores:** solo `execution.finalize_execution` inserta; la persona lee y el profesional autorizado ve el estado proyectado, no errores fuera de su field-set.
+- **RLS:** vía la sesión.
+- **Consultas / índices:** `(executed_session_id, validated_at desc)`.
+- **Retención:** con la ejecución y su contrato congelado; los eventos se conservan para explicar la validación histórica.
+- **Eventos:** producido dentro de `execution.finalized.v1`.
+
+### 10.14 `execution.derived_results`
+
+- **Propósito:** valor derivado con algoritmo, versión, inputs y clasificación heredada; solo lo escribe el worker.
+- **Dominio / fuente de verdad:** Ejecución. Es la fuente de verdad de derivados reproducibles, sin sustituir los inputs observados.
+- **Clasificación:** hereda la **más restrictiva** de sus inputs.
+- **Columnas:** `id` · `person_id uuid` · `metric_code text` · `period text` · `value numeric` · `unit_code text` (nullable) · `algorithm text` · `algorithm_version integer` · `inputs_schema_version smallint` (`1`) · `inputs jsonb` · `data_classification_code text` · `valid boolean` · `computed_at timestamptz`.
+- **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `unit_code → catalog.units(code) RESTRICT`; `data_classification_code → privacy.data_classifications(code) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (person_id, metric_code, period, algorithm_version)`.
+- **Actores:** **solo el worker de mantenimiento** escribe; la persona lee; el profesional lee si accede a todos los inputs.
+- **RLS:** `auth.is_self(person_id)` **OR** acceso a **todas** las clasificaciones heredadas.
+- **Consultas / índices:** `(person_id, metric_code, period)`.
+- **Retención:** con sus inputs; invalidado no se sirve.
+- **Eventos:** `execution.derived_recomputed.v1`.
+
+---
+
+## 10A. Schema `nutrition`
+
+### 10A.1 `nutrition.nutrient_definitions`
+
+- **Propósito:** catálogo cerrado y publicado de nutrientes admitidos por Nutrición V1.
+- **Dominio / fuente de verdad:** Nutrición.
+- **Clasificación:** `operational`.
+- **Columnas:** `id uuid` · `code text` (`energy`, `protein`, `carbohydrates`, `fat`, `fiber`, `water`) · `name text` · `canonical_unit_code text` (`kcal`, `g`, `ml`) · `status catalog.publication_status` · `published_at timestamptz`.
+- **FKs y borrado:** `canonical_unit_code → catalog.units(code) RESTRICT`.
+- **Uniques y checks:** `UNIQUE(code)`; combinación código/unidad cerrada por seed/constraint; versiones publicadas sin `UPDATE/DELETE` runtime.
+- **Actores:** lectura autenticada; publicación exclusiva de plataforma.
+- **RLS:** runtime lee solo `status='published'`.
+- **Consultas:** por `code`, catálogo publicado.
+- **Índices:** único `(code)`; `(status,code)`.
+- **Retención:** permanente; referenciado por historial.
+- **Eventos:** ninguno; ampliar códigos exige nueva versión de `nutrition_intake`.
+
+### 10A.2 `nutrition.meals`
+
+- **Propósito:** comida manual personal y raíz transaccional de ítems, nutrientes y una foto opcional.
+- **Dominio / fuente de verdad:** Nutrición.
+- **Clasificación:** `nutrition`.
+- **Columnas:** `id uuid` (**Command-Id UUIDv7 para `OP-NUT-001`**) · `person_id uuid` · `occurred_at timestamptz` · `timezone text` · `local_date date` · `meal_type nutrition.meal_type` · `note text` (nullable) · `revision_number integer` (`0`) · `media_ref text` (nullable, solo objeto saneado) · `has_media boolean` · `created_at timestamptz` · `updated_at timestamptz`.
+- **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; clave portadora `UNIQUE(id,person_id)`.
+- **Uniques y checks:** `revision_number>=0`; `CHECK (has_media=(media_ref IS NOT NULL))`; `local_date` corresponde a `occurred_at` bajo `timezone` mediante función de entrada; máximo una foto.
+- **Actores:** solo la persona crea/revisa/borra por funciones; profesional nunca recibe DML.
+- **RLS:** base `auth.is_self(person_id)`; OS solo por vistas `nutrition.v_client_*`.
+- **Consultas:** `(person_id,occurred_at DESC,id DESC)`; por `local_date`.
+- **Índices:** `(person_id,occurred_at DESC,id DESC)`; `(person_id,local_date)`.
+- **Retención:** mientras cuenta activa o hasta borrado personal; disposición elimina hijos, media, vistas/derivados; hold suspende.
+- **Eventos:** `nutrition.meal_recorded.v1`, `nutrition.meal_revised.v1`, `nutrition.meal_deleted.v1`.
+
+### 10A.3 `nutrition.meal_items`
+
+- **Propósito:** componente manual y ordenado de una comida.
+- **Dominio / fuente de verdad:** Nutrición.
+- **Clasificación:** `nutrition`.
+- **Columnas:** `id uuid` · `meal_id uuid` · `person_id uuid` · `position integer` · `name text` · `quantity_numeric numeric` (nullable) · `quantity_unit_code text` (nullable) · `created_at timestamptz`.
+- **FKs y borrado:** `(meal_id,person_id) → meals(id,person_id) ON DELETE CASCADE`; `quantity_unit_code → catalog.units(code) RESTRICT`; claves portadoras `UNIQUE(id,meal_id,person_id)` y `UNIQUE(id,person_id)` (`IX-28`).
+- **Uniques y checks:** `UNIQUE(meal_id,position)`; `position>0`; cantidad/unidad aparecen juntas y cantidad `>0`.
+- **Actores:** solo funciones de revisión de la persona.
+- **RLS:** hereda del meal mediante `EXISTS`; sin lectura profesional directa.
+- **Consultas:** por `meal_id` ordenado por posición.
+- **Índices:** único `(meal_id,position)`.
+- **Retención:** con la comida.
+- **Eventos:** ninguno propio.
+
+### 10A.4 `nutrition.meal_nutrient_values`
+
+- **Propósito:** valor canónico no negativo de un nutriente para un ítem.
+- **Dominio / fuente de verdad:** Nutrición.
+- **Clasificación:** `nutrition`.
+- **Columnas:** `id uuid` · `meal_item_id uuid` · `meal_id uuid` · `person_id uuid` · `nutrient_definition_id uuid` · `value_numeric numeric` · `unit_code text` · `created_at timestamptz`.
+- **FKs y borrado:** `(meal_item_id,meal_id,person_id) → meal_items(id,meal_id,person_id) ON DELETE CASCADE`; `(meal_id,person_id) → meals(id,person_id) ON DELETE CASCADE`; `nutrient_definition_id → nutrient_definitions(id) RESTRICT`; `unit_code → catalog.units(code) RESTRICT` (`IX-28`).
+- **Uniques y checks:** `UNIQUE(meal_item_id,nutrient_definition_id)`; `value_numeric>=0`; unidad igual a la canónica mediante `nutrition.enforce_nutrient_unit_ct` (`IX-29`).
+- **Actores:** solo funciones de comida.
+- **RLS:** hereda desde item→meal; sin lectura profesional directa.
+- **Consultas:** por ítem/nutriente; agregación por meal/persona mediante joins autorizados.
+- **Índices:** único compuesto; `(nutrient_definition_id)`.
+- **Retención:** con la comida.
+- **Eventos:** ninguno propio.
+
+### 10A.5 `nutrition.goal_sets`
+
+- **Propósito:** única línea longitudinal de objetivos nutricionales de una persona.
+- **Dominio / fuente de verdad:** Nutrición.
+- **Clasificación:** `nutrition`.
+- **Columnas:** `id uuid` · `person_id uuid` · `created_at timestamptz` · `updated_at timestamptz`.
+- **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; clave portadora `UNIQUE(id,person_id)`.
+- **Uniques y checks:** `UNIQUE(person_id)`.
+- **Actores:** la persona controla; se crea idempotentemente al publicar/proponer la primera versión.
+- **RLS:** `auth.is_self(person_id)`; profesional solo por vistas/funciones.
+- **Consultas:** por `person_id`.
+- **Índices:** único `(person_id)`.
+- **Retención:** con la persona; no se archiva por relación.
+- **Eventos:** ninguno propio.
+
+### 10A.6 `nutrition.goal_versions`
+
+- **Propósito:** snapshot inmutable de targets de origen personal o propuesta profesional.
+- **Dominio / fuente de verdad:** Nutrición.
+- **Clasificación:** `nutrition`.
+- **Columnas:** `id uuid` (**Command-Id en `OP-NUT-007/012`**) · `goal_set_id uuid` · `person_id uuid` · `version_number integer` · `origin nutrition.goal_origin` · `status nutrition.goal_status` · `rationale text` (nullable solo para `self`; obligatorio para `professional`) · `author_person_id uuid` · `author_membership_id uuid` (nullable) · `author_assignment_id uuid` (nullable) · `origin_relationship_id uuid` (nullable) · `origin_organization_id uuid` (nullable) · `credential_verification_id uuid` (nullable) · `created_at timestamptz` · `activated_at timestamptz` (nullable) · `cancelled_at timestamptz` (nullable).
+- **FKs y borrado:** `(goal_set_id,person_id) → goal_sets(id,person_id) RESTRICT`; `author_person_id → identity.people(id) RESTRICT`; para origen profesional: `(origin_relationship_id,person_id,origin_organization_id) → relationships.service_relationships(id,person_id,organization_id) RESTRICT`, `(author_membership_id,origin_organization_id,author_person_id) → organizations.organization_memberships(id,organization_id,person_id) RESTRICT` y `(author_assignment_id,origin_relationship_id,person_id,origin_organization_id,author_membership_id) → relationships.relationship_professional_assignments(id,relationship_id,person_id,organization_id,membership_id) RESTRICT`; `credential_verification_id → identity.profile_verifications(id) RESTRICT`; clave portadora `UNIQUE(id,person_id)` (`IX-30`).
+- **Uniques y checks:** `UNIQUE(goal_set_id,version_number)`; activo único por set; pendiente profesional único por `(goal_set_id,origin_relationship_id)`; shape `self` sin contexto profesional y `professional` con contexto completo más `NULLIF(btrim(rationale),'') IS NOT NULL` y longitud máxima 2000; contenido inmutable, transición solo por funciones.
+- **Actores:** persona publica self y decide; profesional elegible propone; ningún actor actualiza contenido.
+- **RLS:** self por goal set; live/frozen profesional solo por proyecciones.
+- **Consultas:** `(goal_set_id,created_at DESC,id DESC)`; `(origin_relationship_id,created_at DESC,id DESC)`; status parcial.
+- **Índices:** únicos anteriores + `(person_id,status)` + `(goal_set_id,created_at DESC,id DESC)` + `(origin_relationship_id,created_at DESC,id DESC)`.
+- **Retención:** mientras cuenta activa o hasta borrado; frozen consulta el mismo dato, sin snapshot.
+- **Eventos:** `nutrition.goal_version_proposed.v1`, `nutrition.goal_version_activated.v1`, `nutrition.goal_proposals_cancelled.v1`.
+
+### 10A.7 `nutrition.goal_targets`
+
+- **Propósito:** target tipado por nutriente dentro de una versión inmutable.
+- **Dominio / fuente de verdad:** Nutrición.
+- **Clasificación:** `nutrition`.
+- **Columnas:** `id uuid` · `goal_version_id uuid` · `nutrient_definition_id uuid` · `mode nutrition.goal_target_mode` · `minimum_value numeric` (nullable) · `maximum_value numeric` (nullable) · `exact_value numeric` (nullable) · `unit_code text` · `created_at timestamptz`.
+- **FKs y borrado:** `goal_version_id → goal_versions(id) ON DELETE CASCADE`; `nutrient_definition_id → nutrient_definitions(id) RESTRICT`; `unit_code → catalog.units(code) RESTRICT`.
+- **Uniques y checks:** `UNIQUE(goal_version_id,nutrient_definition_id)`; exactamente los campos requeridos por modo; valores no negativos; rango `minimum<=maximum`; unidad canónica (`IX-34`).
+- **Actores:** solo funciones de publicación/propuesta.
+- **RLS:** hereda de versión→set.
+- **Consultas:** por versión/nutriente.
+- **Índices:** único compuesto.
+- **Retención:** con la versión.
+- **Eventos:** ninguno propio.
+
+### 10A.8 `nutrition.goal_decisions`
+
+- **Propósito:** aceptación o rechazo personal append-only de una propuesta profesional.
+- **Dominio / fuente de verdad:** Nutrición.
+- **Clasificación:** `nutrition`.
+- **Columnas:** `id uuid` (**Command-Id para `OP-NUT-008`**) · `goal_version_id uuid` · `person_id uuid` · `decision nutrition.goal_decision` · `decided_at timestamptz`.
+- **FKs y borrado:** `(goal_version_id,person_id) → goal_versions(id,person_id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE(goal_version_id)`; solo versión `professional/proposed` propia mediante `nutrition.enforce_goal_decision_ct` (`IX-35`); append-only.
+- **Actores:** solo la persona del goal set inserta mediante función cerrada.
+- **RLS:** self; profesional solo ve la decisión por la proyección guidance autorizada.
+- **Consultas:** por versión y `(person_id,decided_at DESC)`.
+- **Índices:** único `(goal_version_id)`; `(person_id,decided_at DESC)`.
+- **Retención:** con la versión; borrado personal alcanza live/frozen.
+- **Eventos:** `nutrition.goal_version_accepted.v1`, `nutrition.goal_version_rejected.v1`.
+
+---
+
+## 11. Schema `system`
+
+### 11.1 `system.outbox_events`
+
+- **Propósito:** eventos de dominio escritos transaccionalmente; transportan identificadores, no contenido sensible.
+- **Dominio / fuente de verdad:** Sistema. Es la fuente de verdad del sobre transaccional y del estado de despacho de cada evento de dominio.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `type text` · `aggregate_kind text` · `aggregate_id uuid` · `subject_person_id uuid` (nullable) · `organization_id uuid` (nullable) · `correlation_id uuid` · `payload_schema_version smallint` (`1`) · `payload jsonb` · `dispatched_at timestamptz` (nullable).
+- **FKs y borrado:** sin FK dura por excepción explícita: `aggregate_id` es un identificador opaco de sobre, no una relación navegable ni fuente de autorización; el evento debe sobrevivir al agregado. `INSERT` directo revocado; solo `system.enqueue_domain_event(...)` después de validar el contrato tipado.
+- **Uniques y checks:** el `payload` nunca contiene datos sensibles (invariante documentada).
+- **Actores:** `allfit_api` inserta; `allfit_worker_outbox` despacha.
+- **RLS:** restringida a roles de sistema.
+- **Consultas / índices:** `(dispatched_at, aggregate_id)` parcial sobre no despachados; orden por agregado.
+- **Retención:** se purga tras despacho confirmado + margen.
+- **Eventos:** es el mecanismo de eventos, no produce uno propio.
+
+### 11.2 `system.idempotency_keys`
+
+- **Propósito:** registra replay HTTP y la identidad durable de todo comando; el TTL de respuesta nunca habilita otra ejecución.
+- **Dominio / fuente de verdad:** Sistema. Es la fuente de verdad del replay HTTP y de la identidad durable de cada comando.
+- **Clasificación:** `operational`.
+- **Columnas:** `id uuid` · `principal_fingerprint bytea` · `client_id text` · `surface system.command_surface` · `operation_code text` · `key uuid` · `command_id uuid` · `request_hash bytea` · `status system.idempotency_status` · `http_status smallint` (nullable mientras procesa) · `outcome_code text` (nullable mientras procesa) · `response_schema_version smallint` (`1`, nullable mientras procesa) · `response jsonb` (nullable mientras procesa o tras expirar) · `aggregate_type text` (nullable) · `aggregate_id uuid` (nullable) · `effect_disposed_at timestamptz` (nullable) · `completed_at timestamptz` (nullable mientras procesa) · `response_expires_at timestamptz` (nullable mientras procesa) · `purge_after timestamptz` (nullable) · `created_at timestamptz`.
+- **FKs y borrado:** ninguna.
+- **Uniques y checks:** uniques exactos de transporte `(principal_fingerprint,client_id,surface,operation_code,key)` y comando `(principal_fingerprint,surface,operation_code,command_id)`; hashes de 32 bytes; key/command UUIDv4/v7 para HTTP o UUIDv5 determinístico para `system`; aggregate tipo/ID emparejados; ventana de respuesta de 24 h. `system.enforce_idempotency_terminal_ct` impide confirmar `processing`; `system.expire_idempotency_response` es la única entrada que limpia response+versión tras expirar.
+- **Actores:** `allfit_api` crea/terminaliza en la transacción; `allfit_idempotency_worker` expira response y purga cuando `purge_after` lo permite.
+- **RLS:** restringida a API y worker dedicado; ningún runtime consulta receipts ajenos.
+- **Consultas / índices:** los dos uniques; `(response_expires_at,purge_after)`; parcial `(aggregate_type,aggregate_id) WHERE aggregate_id IS NOT NULL`.
+- **Retención:** response 24 h; tombstone mínimo durable mientras el actor o agregado sean invocables. Disposición marca el efecto y un retry devuelve `410`, sin recrearlo. Contrato completo en [`V1_IDEMPOTENCY_CONTRACT.md`](./V1_IDEMPOTENCY_CONTRACT.md).
+- **Eventos:** ninguno.
+
+### 11.3 `system.job_runs`
+
+- **Propósito:** registro de ejecución de workers; garantiza idempotencia de jobs por ciclo.
+- **Dominio / fuente de verdad:** Sistema. Es la fuente de verdad del estado y la idempotencia de cada ejecución de worker por ciclo.
+- **Clasificación:** `audit`.
+- **Columnas:** `id` · `job_name text` · `cycle_key text` · `status text` · `started_at timestamptz` · `finished_at timestamptz` (nullable) · `detail_schema_version smallint` (`1`, nullable junto a payload) · `detail jsonb` (nullable).
+- **FKs y borrado:** ninguna.
+- **Uniques y checks:** `UNIQUE (job_name, cycle_key)` (un run por ciclo).
+- **Actores:** workers.
+- **RLS:** restringida a roles de sistema y soporte (metadatos).
+- **Consultas / índices:** `(job_name, started_at desc)`; único `(job_name, cycle_key)`.
+- **Retención:** auditoría operativa.
+- **Eventos:** ninguno.
+
+---
+
+## 12. Schema `support`
+
+### 12.1 `support.platform_role_assignments`
+
+- **Propósito:** quién del equipo de Allfit puede iniciar sesión en Backoffice. Es un control necesario, pero **no concede ninguna operación ni categoría de datos** sin deber vigente.
+- **Dominio / fuente de verdad:** Soporte.
+- **Clasificación:** `restricted`.
+- **Columnas:** `id` · `person_id uuid` · `platform_role text` (`allfit_admin`) · `status text` (`active`, `revoked`) · `granted_by_person_id uuid` · `granted_at timestamptz` · `revoked_by_person_id uuid` (nullable) · `revoked_at timestamptz` (nullable).
+- **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `granted_by_person_id → identity.people(id) RESTRICT`; `revoked_by_person_id → identity.people(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (person_id, platform_role) WHERE status = 'active'`; `CHECK (platform_role in ('allfit_admin'))` — catálogo cerrado que crece solo cuando exista alguien a quien asignarle el rol nuevo; `CHECK ((status = 'revoked') = (revoked_at IS NOT NULL))`; **`CHECK (granted_by_person_id <> person_id)`** — nadie se asigna su propio rol. **Nunca puede quedar cero `allfit_admin` activos**, garantizado por trigger.
+- **Actores:** `A12/manage_platform_access` asigna o revoca a otra persona; `A12/manage_platform_access` o `audit_platform_access` consulta. El bootstrap inicial usa exclusivamente una ceremonia `allfit_migrator`, con dos personas existentes y asignaciones cruzadas en una transacción. Ninguna organización ni persona externa.
+- **RLS:** exige rol base y deber de administración/auditoría vigentes, resueltos **en la transacción**; jamás desde grupo, cabecera o caché. El rol base nunca satisface por sí solo una policy de negocio. No existe función runtime de bootstrap; `allfit_migrator` se habilita sólo durante la ceremonia y conserva el mismo check de otorgante distinto.
+- **Consultas / índices:** `(person_id, status)`, `(platform_role, status)`.
+- **Retención:** **append-only sobre el historial**: retirar un rol cierra la fila, no la borra. `allfit_api` no tiene `DELETE` sobre esta tabla y **ningún rol lo tiene en runtime**. Sin eso, quien tuviera el rol podría borrar la evidencia de habérselo dado.
+- **Eventos:** `support.platform_role_granted.v1`, `support.platform_role_revoked.v1`.
+
+### 12.2 `support.platform_duty_assignments`
+
+- **Propósito:** autoridad temporal y auditable para ejecutar una función concreta de Backoffice; determina el modo `A10`, `A11` o `A12` de la operación.
+- **Dominio / fuente de verdad:** Soporte.
+- **Clasificación:** `restricted`.
+- **Columnas:** `id` · `person_id uuid` · `duty_code text` · `actor_mode text` (`A10`, `A11`, `A12`) · `status text` (`scheduled`, `active`, `suspended`, `expired`, `revoked`) · `valid_from timestamptz` · `valid_to timestamptz` · `required_aal smallint default 2` · `granted_by_person_id uuid` · `recertified_by_person_id uuid` (nullable) · `recertified_at timestamptz` (nullable) · `suspended_by_person_id uuid` (nullable) · `suspended_at timestamptz` (nullable) · `revoked_by_person_id uuid` (nullable) · `revoked_at timestamptz` (nullable) · `reason_code text`.
+- **FKs y borrado:** todas las referencias de persona → `identity.people(id) RESTRICT`; `person_id` debe tener `platform_role_assignments` activo al entrar en vigencia, validado por trigger diferido.
+- **Uniques y checks:** unique parcial `(person_id,duty_code) WHERE status IN ('scheduled','active','suspended')`; catálogo cerrado de ADR-028 y `actor_mode` derivado del código; `valid_to > valid_from` y `valid_to <= valid_from + interval '90 days'`; `required_aal = 2`; otorgante/recertificador/suspensor/revocador distintos de `person_id`; forma temporal exacta por estado.
+- **Actores:** sólo `A12/manage_platform_access` administra a otra persona; `A12/manage_platform_access` o `audit_platform_access` consulta.
+- **RLS:** tabla base sin acceso directo de cliente; funciones `support.assign_platform_duty`, `suspend_platform_duty` y `revoke_platform_duty` revalidan rol, deber, AAL2 y actor en la transacción. `auth.has_platform_duty` es `SECURITY DEFINER`, `STABLE`, fail-closed y no acepta el código desde contexto no confiable.
+- **Consultas:** autoridad exacta por `(person_id,duty_code,status,valid_from,valid_to)` e inventario interno por estado/vencimiento.
+- **Índices:** unique parcial anterior; `(person_id,status,valid_to)`; `(duty_code,status,valid_to)`; `(status,valid_to)`.
+- **Retención:** historial append-only lógico; no hay `DELETE` en runtime. Usa la clase `platform_security_authority`; la purga queda bloqueada hasta cerrar `DB-P5-015`.
+- **Eventos:** `support.platform_duty_granted.v1`, `support.platform_duty_suspended.v1`, `support.platform_duty_revoked.v1`, `support.platform_duty_expired.v1`, `support.platform_duty_recertified.v1`.
+
+### 12.3 `support.break_glass_requests`
+
+- **Propósito:** expediente inmutable que solicita y, si completa quorum, delimita una ventana excepcional para una persona, propósito, caso y categorías exactos.
+- **Dominio / fuente de verdad:** Soporte.
+- **Clasificación:** `highly_sensitive`.
+- **Columnas:** `id` · `requester_person_id uuid` · `requester_duty_assignment_id uuid` · `subject_person_id uuid` · `policy_code text default 'break_glass.v1'` · `categories text[]` · `purpose text` · `case_reference text` · `sensitivity_tier text` (`standard`, `restricted`) · `required_approvals smallint` · `requested_duration_minutes smallint` · `requested_at timestamptz` · `request_expires_at timestamptz` · `status text` (`requested`, `approved`, `rejected`, `closed`, `expired`) · `window_starts_at timestamptz` (nullable) · `window_ends_at timestamptz` (nullable) · `closed_at timestamptz` (nullable) · `reviewed_at timestamptz` (nullable) · `reviewed_by_person_id uuid` (nullable) · `reviewed_by_duty_assignment_id uuid` (nullable) · `review_outcome text` (nullable).
+- **FKs y borrado:** requester/subject/reviewer → `identity.people(id) RESTRICT`; duty FKs → `platform_duty_assignments(id) RESTRICT`; unique portadora `(id,requester_person_id,subject_person_id,requester_duty_assignment_id)` para eventos; sin cascadas.
+- **Uniques y checks:** requester ≠ subject; `request_expires_at = requested_at + interval '30 minutes'`; categorías no vacías, sin duplicados y del catálogo aprobable; tier/quorum/duración calculados (estándar 1/30, restringido 2/15); propósito cerrado y `case_reference` opaca/no vacía; forma exacta de ventana, cierre y revisión por estado; sujeto, alcance y propósito inmutables.
+- **Actores:** `A10/request_break_glass` crea y cierra sólo la propia; `A12` con deber compatible decide o revisa sin ejercer; la persona no consulta el expediente.
+- **RLS:** sin DML directo; `support.request_break_glass`, `decide_break_glass`, `close_break_glass` y `review_break_glass` revalidan rol base, deber exacto, AAL2, conflicto, quorum y timestamp. La falta de autoridad o de auditoría falla cerrada.
+- **Consultas:** bandeja por estado/prioridad, solicitudes propias y vencimientos; nunca se usa como permiso sin revalidar aprobaciones y deber.
+- **Índices:** `(requester_person_id,status,request_expires_at)`; `(subject_person_id,requested_at desc)`; `(status,request_expires_at)`; `(status,window_ends_at)`; `(reviewed_at) WHERE status IN ('closed','expired')`.
+- **Retención:** clase `platform_security_access`; expediente e historia no se borran en runtime y su purga queda bloqueada por `DB-P5-015`.
+- **Eventos:** `support.break_glass_requested.v1`, `support.break_glass_window_opened.v1`, `support.break_glass_closed.v1`, `support.break_glass_expired.v1`, `support.break_glass_reviewed.v1`.
+
+### 12.4 `support.break_glass_approvals`
+
+- **Propósito:** decisión append-only de cada aprobador que aporta quorum o rechaza una solicitud.
+- **Dominio / fuente de verdad:** Soporte.
+- **Clasificación:** `highly_sensitive`.
+- **Columnas:** `id` · `request_id uuid` · `approver_person_id uuid` · `approver_duty_assignment_id uuid` · `decision text` (`approved`, `rejected`) · `reason_code text` · `decided_at timestamptz`.
+- **FKs y borrado:** `request_id → break_glass_requests(id) RESTRICT`; approver → `identity.people(id) RESTRICT`; deber → `platform_duty_assignments(id) RESTRICT`; sin cascadas.
+- **Uniques y checks:** `UNIQUE(request_id,approver_person_id)`; aprobador distinto de solicitante/sujeto y de todo aprobador previo, comprobado por trigger; decisión y columnas inmutables; un rechazo es terminal y una aprobación parcial no cambia la ventana.
+- **Actores:** sólo `A12/approve_break_glass` ajeno y sin conflicto inserta mediante función; auditor y A10 no insertan.
+- **RLS:** tabla base sin DML directo; lectura sólo por proyección de expediente para A12 autorizado. `support.decide_break_glass` serializa la solicitud y abre ventana únicamente al completar quorum.
+- **Consultas:** quorum por solicitud y cola de solicitudes pendientes.
+- **Índices:** unique anterior; `(request_id,decision)`; `(approver_person_id,decided_at desc)`.
+- **Retención:** misma clase y plazo que la solicitud; sin `UPDATE`/`DELETE` runtime; purga bloqueada por `DB-P5-015`.
+- **Eventos:** incluidos en la transición de `break_glass_requests`.
+
+### 12.5 `support.break_glass_events`
+
+- **Propósito:** evidencia append-only de cada intento permitido o denegado de ejercer/cerrar una ventana, ligada a la auditoría visible de la persona.
+- **Dominio / fuente de verdad:** Soporte; `privacy.access_events` conserva el reflejo visible.
+- **Clasificación:** `highly_sensitive`.
+- **Columnas:** `id` · `request_id uuid` · `requester_person_id uuid` · `requester_duty_assignment_id uuid` · `subject_person_id uuid` · `category text` · `result text` (`allowed`, `denied`) · `resource_type text` · `resource_id uuid` (nullable) · `operation_code text` · `reason_code text` · `occurred_at timestamptz` · `access_event_id uuid` · `access_event_occurred_at timestamptz`.
+- **FKs y borrado:** FK compuesta `(request_id,requester_person_id,subject_person_id,requester_duty_assignment_id) → break_glass_requests(id,requester_person_id,subject_person_id,requester_duty_assignment_id) RESTRICT`; deber → `platform_duty_assignments(id) RESTRICT`; FK `(access_event_id,access_event_occurred_at) → privacy.access_events(id,occurred_at) RESTRICT`.
+- **Uniques y checks:** `UNIQUE(access_event_id,access_event_occurred_at)`; categoría dentro del alcance de la solicitud; `occurred_at = access_event_occurred_at`; resultado/razón y recurso con forma exacta; append-only.
+- **Actores:** sólo el `A10` solicitante exacto genera el evento mediante la función de lectura; `A12/audit_break_glass` consulta metadatos; la persona ve el `access_event`, no esta tabla.
+- **RLS:** sin `INSERT` directo. La función de ejercicio revalida rol, deber, AAL2, solicitud, quorum, ventana, categoría y recurso, escribe ambos eventos y devuelve contenido sólo si `result='allowed'` y ambos inserts confirman.
+- **Consultas:** por solicitud, actor, sujeto, resultado y tiempo para revisión/incident response.
+- **Índices:** `(request_id,occurred_at)`; `(requester_person_id,occurred_at desc)`; `(subject_person_id,occurred_at desc)`; `(result,occurred_at desc)`.
+- **Retención:** misma clase y plazo que solicitud/aprobaciones; sin `UPDATE`/`DELETE` runtime; purga bloqueada por `DB-P5-015`.
+- **Eventos:** ninguno adicional; la fila y `privacy.access_events` son la evidencia.
+
+---
+
+## 13. Schema `payments`
+
+Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estado del pago; no lo procesa.** Ninguna tabla de este schema contiene datos de tarjeta, saldos, giros ni conciliación.
+
+### 13.1 `payments.gateway_connections`
+
+- **Propósito:** vincula una organización con su propia cuenta de pasarela. Es lo que hace que la plata vaya directo al gimnasio sin pasar por Allfit.
+- **Dominio / fuente de verdad:** Pagos.
+- **Clasificación:** `restricted`.
+- **Columnas:** `id` · `organization_id uuid` · `provider text` (`mercado_pago`, `wompi`) · `external_account_ref text` · `credential_secret_ref text` (**referencia a un secreto externo, nunca el secreto**) · `status text` (`active`, `revoked`) · `connected_at timestamptz` · `revoked_at timestamptz` (nullable).
+- **FKs y borrado:** `organization_id → organizations.organizations(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (organization_id) WHERE status = 'active'`; `CHECK (provider in ('mercado_pago','wompi'))`.
+- **Actores:** solo `owner`. Ni `admin`, ni `coach`, ni `staff`.
+- **RLS:** `auth.has_membership(organization_id)` **y** `auth.has_capability(organization_id,'manage_billing')`. Ninguna persona atendida lee esta tabla.
+- **Consultas / índices:** por `organization_id`.
+- **Retención:** con la organización; revocar no borra el historial de cobros.
+- **Eventos:** `payments.gateway_connected.v1`, `payments.gateway_revoked.v1`.
+
+---
+
+### 13.2 `payments.organization_plans`
+
+- **Propósito:** identidad estable del plan comercial que una organización ofrece. No contiene precio: el precio vive en la versión.
+- **Dominio / fuente de verdad:** Pagos.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `organization_id uuid` · `name text` · `status catalog.publication_status` · `created_at timestamptz`.
+- **FKs y borrado:** `organization_id → organizations.organizations(id) RESTRICT`; clave portadora `UNIQUE (id, organization_id)`.
+- **Uniques y checks:** `UNIQUE (organization_id, lower(name))`.
+- **Actores:** `admin` y `owner` escriben; el resto de la organización lee.
+- **RLS:** `auth.has_membership(organization_id)`; la escritura exige `manage_billing`.
+- **Consultas / índices:** `(organization_id, status)`.
+- **Retención:** con la organización.
+- **Eventos:** `payments.plan_created.v1`.
+
+---
+
+### 13.3 `payments.plan_versions`
+
+- **Propósito:** versión publicada e **inmutable** de un plan: precio, moneda y periodo. Una suscripción congela una de estas y nunca cambia bajo los pies de la persona.
+- **Dominio / fuente de verdad:** Pagos.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `plan_id uuid` · `organization_id uuid` · `version_number integer` · `amount_minor bigint` · `currency_code text` (ISO 4217) · `billing_period text` (`month`, `year`) · `status catalog.publication_status` · `published_at timestamptz` · `deprecated_at timestamptz` (nullable).
+- **FKs y borrado:** `(plan_id, organization_id) → organization_plans(id, organization_id) RESTRICT`; clave portadora `UNIQUE (id, organization_id)`.
+- **Uniques y checks:** `UNIQUE (plan_id, version_number)`; `CHECK (billing_period in ('month','year'))`; `CHECK (amount_minor > 0)`. Sin `UPDATE` en runtime salvo la marca de deprecación: una versión publicada no se edita jamás.
+- **Actores:** `admin` y `owner` publican; nadie edita.
+- **RLS:** vía el plan; una organización nunca ve versiones de otra.
+- **Consultas / índices:** `(plan_id, status)`.
+- **Retención:** se conserva mientras exista una suscripción que la referencie.
+- **Eventos:** `payments.plan_version_published.v1`, `payments.plan_version_deprecated.v1`.
+
+---
+
+### 13.4 `payments.plan_subscriptions`
+
+- **Propósito:** el vínculo de pago entre una persona y una organización. Es una entidad **distinta de la relación de servicio** y tiene su propio ciclo de vida.
+- **Dominio / fuente de verdad:** Pagos.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `person_id uuid` · `organization_id uuid` · `plan_version_id uuid` · `status payments.subscription_status` (`active`, `suspended`, `ended`) · `external_subscription_ref text` (nullable) · `current_period_end date` (nullable) · `started_at timestamptz` · `suspended_at timestamptz` (nullable) · `ended_at timestamptz` (nullable) · `ended_by_kind identity.actor_kind` (nullable) · `ended_by_membership_id uuid` (nullable).
+- **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `(plan_version_id, organization_id) → plan_versions(id, organization_id) RESTRICT` (`IX-38`); `(ended_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`; clave portadora `UNIQUE (id, person_id, organization_id)`.
+- **Uniques y checks:** `UNIQUE (person_id, organization_id) WHERE status <> 'ended'`; `CHECK ((status = 'suspended') = (suspended_at IS NOT NULL))`; `CHECK ((status = 'ended') = (ended_at IS NOT NULL))`; **`CHECK (status <> 'ended' OR ended_by_kind IS NOT NULL)`** — nada termina sin un actor humano, y el worker de pagos no puede escribir `ended` porque no tiene actor humano que declarar.
+- **Actores:** la persona se suscribe y cancela; `admin`/`owner` suspenden, reactivan y terminan; el worker de pagos solo transiciona entre `active` y `suspended`.
+- **RLS:** `person_id = auth.person()` **OR** (`organization_id = auth.org()` **AND** `auth.has_capability(organization_id,'manage_billing')`). Un `coach` **no** lee esta tabla: el estado de pago de su cliente no es asunto suyo.
+- **Consultas / índices:** `(person_id, status)`, `(organization_id, status)`.
+- **Retención:** con la persona; la anonimización rompe el vínculo y conserva el agregado de la organización.
+- **Eventos:** `payments.subscription_started.v1`, `payments.subscription_suspended.v1`, `payments.subscription_reactivated.v1`, `payments.subscription_ended.v1`.
+
+---
+
+### 13.5 `payments.payment_records`
+
+- **Propósito:** historial de cobros **reportados por la pasarela**. Allfit no cobra: registra lo que el proveedor informa.
+- **Dominio / fuente de verdad:** Pagos.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `subscription_id uuid` · `person_id uuid` · `organization_id uuid` · `amount_minor bigint` · `currency_code text` · `result text` (`succeeded`, `failed`) · `failure_code text` (nullable) · `external_payment_ref text` · `occurred_at timestamptz` · `recorded_at timestamptz`.
+- **FKs y borrado:** `(subscription_id, person_id, organization_id) → plan_subscriptions(id, person_id, organization_id) RESTRICT` (`IX-39`).
+- **Uniques y checks:** `UNIQUE (organization_id, external_payment_ref)` — **el webhook de la pasarela queda idempotente por construcción**; append-only; `CHECK (result in ('succeeded','failed'))`.
+- **Actores:** solo el worker de pagos inserta. La persona lee los suyos; `admin`/`owner` los de su organización.
+- **RLS:** igual que la suscripción.
+- **Consultas / índices:** `(subscription_id, occurred_at desc)`; el unique sirve la deduplicación.
+- **Retención:** operativa. **No contiene datos de tarjeta**, solo la referencia opaca del proveedor.
+- **Eventos:** `payments.payment_recorded.v1`.
+
+---
+
+### 13.6 `payments.subscription_events`
+
+- **Propósito:** historia append-only de la suscripción: alta, suspensión, reactivación y terminación, con su actor.
+- **Dominio / fuente de verdad:** Pagos.
+- **Clasificación:** `audit`.
+- **Columnas:** `id` · `subscription_id uuid` · `event_type text` · `actor_kind identity.actor_kind` · `actor_person_id uuid` (nullable) · `actor_membership_id uuid` (nullable) · `detail_schema_version smallint` (nullable) · `detail jsonb` (nullable) · `occurred_at timestamptz`.
+- **FKs y borrado:** `subscription_id → plan_subscriptions(id) ON DELETE CASCADE`.
+- **Uniques y checks:** append-only.
+- **Actores:** escribe el backend; leen la persona y la administración de la organización.
+- **RLS:** vía la suscripción.
+- **Consultas / índices:** `(subscription_id, occurred_at desc)`.
+- **Retención:** auditoría.
+- **Eventos:** ninguno propio.
+
+---
+
+### 13.7 `payments.platform_plans`
+
+- **Propósito:** identidad estable de un plan que **Allfit** le vende a una persona. El precio vive en la versión.
+- **Dominio / fuente de verdad:** Pagos.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `code text` · `name text` · `plan_kind text` (`free`, `paid`) · `status catalog.publication_status` · `created_at timestamptz`.
+- **FKs y borrado:** ninguna saliente. Es contenido global de plataforma.
+- **Uniques y checks:** `UNIQUE (code)`; `CHECK (plan_kind in ('free','paid'))`; **`UNIQUE (plan_kind) WHERE plan_kind = 'free' AND status = 'published'`** — existe exactamente un plan gratuito publicado. **El plan gratuito es un plan como cualquier otro**: sus límites son datos, no código, y cambiarlos no exige desplegar nada.
+- **Actores:** solo `A11`. Ninguna organización crea planes de plataforma.
+- **RLS:** `SELECT` para cualquier cuenta autenticada sobre `status = 'published'`; `INSERT` solo con deber de plataforma.
+- **Consultas / índices:** por `code`.
+- **Retención:** contenido global; no se elimina mientras exista una suscripción que lo referencie.
+- **Eventos:** `payments.platform_plan_published.v1`.
+
+---
+
+### 13.8 `payments.platform_plan_versions`
+
+- **Propósito:** versión publicada e inmutable del plan de Allfit, con su precio y periodo, y el conjunto de funciones que habilita.
+- **Dominio / fuente de verdad:** Pagos.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `platform_plan_id uuid` · `version_number integer` · `amount_minor bigint` · `currency_code text` · `billing_period text` (`month`, `year`) · `status catalog.publication_status` · `published_at timestamptz` · `deprecated_at timestamptz` (nullable).
+- **FKs y borrado:** `platform_plan_id → platform_plans(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (platform_plan_id, version_number)`; `CHECK (billing_period in ('month','year'))`; `CHECK (amount_minor >= 0)`; `billing_period` es nullable cuando el plan es gratuito. **`IX-41`** exige que una versión de plan `paid` tenga monto mayor que cero y que una de plan `free` tenga monto cero. Sin `UPDATE` en runtime salvo deprecación.
+- **Actores:** solo `A11`.
+- **RLS:** `SELECT` de versiones publicadas para cualquier autenticado.
+- **Consultas / índices:** `(platform_plan_id, status)`.
+- **Retención:** mientras exista una suscripción que la congele.
+- **Eventos:** `payments.platform_plan_version_published.v1`.
+
+---
+
+### 13.9 `payments.platform_features`
+
+- **Propósito:** catálogo cerrado de las funciones que un plan puede limitar. Existe para que el límite sea **dato y no código**.
+- **Dominio / fuente de verdad:** Pagos.
+- **Clasificación:** `operational`.
+- **Columnas:** `code text` (PK) · `name text` · `unit text` (nullable; por ejemplo `weeks`, `items`) · `created_at timestamptz`.
+- **FKs y borrado:** ninguna.
+- **Uniques y checks:** `CHECK (code = lower(code))`. **Ninguna función de privacidad, consentimiento, portabilidad o supresión puede existir en este catálogo**, y hay una prueba negativa que lo verifica.
+- **Actores:** solo `A11`.
+- **RLS:** legible por cualquier autenticado.
+- **Consultas / índices:** PK.
+- **Retención:** contenido global.
+- **Eventos:** ninguno propio.
+
+---
+
+### 13.10 `payments.platform_plan_features`
+
+- **Propósito:** el límite de cada función para una versión exacta de plan, **incluido el plan gratuito**. `NULL` significa sin límite; `enabled = false` significa que la función no está disponible en ese plan. Aquí es donde se decide, por ejemplo, si el plan gratuito registra comidas ilimitadas, solo una, o ninguna — y cambiarlo es publicar otra versión, no tocar código.
+- **Dominio / fuente de verdad:** Pagos.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `platform_plan_version_id uuid` · `feature_code text` · `limit_value integer` (nullable = ilimitado) · `enabled boolean`.
+- **FKs y borrado:** `platform_plan_version_id → platform_plan_versions(id) ON DELETE CASCADE`; `feature_code → platform_features(code) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (platform_plan_version_id, feature_code)`; `CHECK (limit_value IS NULL OR limit_value >= 0)`.
+- **Actores:** solo `A11`, dentro de la publicación de la versión.
+- **RLS:** vía la versión.
+- **Consultas / índices:** `(platform_plan_version_id, feature_code)`.
+- **Retención:** con la versión.
+- **Eventos:** ninguno propio.
+
+---
+
+### 13.11 `payments.platform_subscriptions`
+
+- **Propósito:** la suscripción de una persona **a Allfit**. Aquí Allfit sí es el vendedor y recibe el dinero: no es intermediación, es ingreso propio.
+- **Dominio / fuente de verdad:** Pagos.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `person_id uuid` · `platform_plan_version_id uuid` · `status payments.subscription_status` · `external_subscription_ref text` (nullable) · `current_period_end date` (nullable) · `started_at timestamptz` · `suspended_at timestamptz` (nullable) · `ended_at timestamptz` (nullable) · `ended_by_kind identity.actor_kind` (nullable).
+- **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `platform_plan_version_id → platform_plan_versions(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (person_id) WHERE status <> 'ended'`; los mismos checks de estado y actor humano que `plan_subscriptions`. **El worker de pagos no puede escribir `ended`.**
+- **Actores:** la persona se suscribe y cancela; el worker transiciona `active` ↔ `suspended`. **Ninguna organización lee esta tabla.**
+- **RLS:** `person_id = auth.person()` y nada más. Ni `admin`, ni `owner`, ni `coach`.
+- **Consultas / índices:** `(person_id, status)`.
+- **Retención:** con la persona.
+- **Eventos:** `payments.platform_subscription_started.v1`, `.suspended.v1`, `.reactivated.v1`, `.ended.v1`.
+
+---
+
+### 13.12 `payments.organization_premium_entitlements`
+
+- **Propósito:** registra que una organización otorga Premium a sus clientes activos. **No modela ningún cobro**: el acuerdo con Allfit se factura por fuera de la plataforma.
+- **Dominio / fuente de verdad:** Pagos.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `organization_id uuid` · `status text` (`active`, `revoked`) · `agreement_ref text` (referencia del acuerdo comercial externo) · `granted_at timestamptz` · `revoked_at timestamptz` (nullable).
+- **FKs y borrado:** `organization_id → organizations.organizations(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (organization_id) WHERE status = 'active'`; `CHECK (status in ('active','revoked'))`.
+- **Actores:** solo `A11`. **Una organización no se habilita a sí misma.**
+- **RLS:** `INSERT`/`UPDATE` solo con deber de plataforma; `SELECT` para la organización sobre su propia fila y para la persona a través de la resolución del derecho.
+- **Consultas / índices:** `(organization_id, status)`.
+- **Retención:** con la organización.
+- **Eventos:** `payments.organization_premium_granted.v1`, `payments.organization_premium_revoked.v1`.
+
+---
+
+## 14. Cobertura y verificación
+
+### 14.1 Conteo por schema
+
+| Schema | Tablas fichadas |
+| --- | --- |
+| `identity` | 13 |
+| `organizations` | 10 |
+| `relationships` | 6 |
+| `privacy` | 16 |
+| `catalog` | 12 |
+| `planning` | 16 |
+| `execution` | 14 |
+| `nutrition` | 8 |
+| `payments` | 12 |
+| `system` | 3 |
+| `support` | 5 |
+| **Total** | **115** |
+
+### 14.2 Invariantes transversales confirmadas por el diccionario
+
+- **Ninguna referencia polimórfica usa uuid libre:** `disposition_items`, `correction_proposals` y `revision_events` usan FK nullable por tipo + `CHECK num_nonnulls = 1`.
+- **Ninguna versión publicada es mutable:** `scope_definitions`, `session_template_versions`, `program_versions`, `result_contracts` revocan `UPDATE`/`DELETE` en runtime.
+- **`NULL` nunca es cero:** los resultados tipados lo declaran explícitamente.
+- **Cantidades físicas con unidad canónica:** todo `*_value` lleva su `*_unit_code`.
+- **Auditoría con actor humano obligatorio:** `access_events` tiene `CHECK (actor_person_id is not null)`.
+- **Un solo owner:** `session_templates`, `programs`, `movements` con `CHECK num_nonnulls(owner_*) = 1`.
+- **Unicidad de estado:** titular efectivo, periodo de gestión, primaria y relación activa con `UNIQUE` parciales.
+- **Particionamiento de auditoría:** `access_events` y `disposition_events` por rango mensual.
+
+### 14.3 Ninguna tabla de capacidades diferidas
+
+No existe tabla, columna ni JSON de booking, commerce, marketplace, integrations, intelligence, nutrición clínica/terapéutica ni menores. Nutrición V1 se limita a registro manual y guía profesional no clínica; `metric_samples` existe solo para fixtures de `sensor_enriched` y no habilita conectores.
+
+## 15. Detalles de implementación que no cambian el modelo
+
+P0-07 cerró objetos/JSONB/particiones y P0-08 cerró receipts, PKs offline y revisión optimista en sus catálogos normativos. Fase 5 solo puede decidir:
+
+- el cuerpo compatible de `extensions.uuid_generate_v7()`, `uuid_is_v7()` y `uuid_v7_timestamp()` según la versión real de PostgreSQL, conservando sus firmas y pruebas;
+- el cuerpo compatible de las funciones idempotentes cerradas, conservando firmas, transacción, checks y errores;
+- valores concretos de seeds para los catálogos ya definidos;
+- herramienta de generación de tipos TypeScript;
+- organización interna de archivos SQL, sin cambiar orden, nombres ni semántica.
+
+## 16. Estado de salida
+
+Entregable principal de detalle de la Fase 4, complementado por el catálogo de objetos físicos. Se considera completo cuando la revisión confirme que:
+
+1. las 115 tablas tienen ficha completa en sus quince campos;
+2. el diccionario, el ERD lógico y las cardinalidades coinciden;
+3. cada tabla tiene responsabilidad clara, integridad y justificación en operaciones reales;
+4. ninguna tabla podría no existir sin romper una operación de la matriz;
+5. ninguna tabla pertenece a una capacidad diferida.
+
+Con este documento y `V1_PHYSICAL_OBJECT_CATALOG.md`, la especificación física de Fase 4 queda recertificada. La Fase 5 debe traducirla a migraciones sin reabrir sus decisiones.
