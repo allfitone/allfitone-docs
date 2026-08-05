@@ -671,7 +671,7 @@ La visión de producto debe respetar las decisiones técnicas ya acordadas.
 - Space y Studio acceden exclusivamente mediante una API propia.
 - Ningún cliente usa PostgreSQL o PostgREST directamente.
 - Backend, privilegios mínimos y RLS transaccional forman defensa en profundidad.
-- Un único repositorio y pipeline son autoridad de migraciones.
+- `allfitone/packages/db` y un único pipeline son autoridad de migraciones.
 
 ### Dominios de la baseline
 

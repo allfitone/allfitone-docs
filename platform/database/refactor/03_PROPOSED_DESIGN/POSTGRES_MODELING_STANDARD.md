@@ -1,7 +1,7 @@
 # Estándar de modelado en PostgreSQL — V1
 
-**Versión de revisión:** 2
-**Fecha:** 28 de julio de 2026
+**Versión de revisión:** 3
+**Fecha:** 5 de agosto de 2026
 **Fase:** 4 — Modelo lógico y diccionario de datos
 **Estado:** aprobado
 **Deriva de:** [`DATABASE_REFACTOR_PHASES.md` §Fase 4](../04_EXECUTION/DATABASE_REFACTOR_PHASES.md), [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md), [`V1_IDEMPOTENCY_CONTRACT.md`](./V1_IDEMPOTENCY_CONTRACT.md), [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_CONCEPTUAL_ERD.md`](./V1_CONCEPTUAL_ERD.md), [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md)
@@ -286,7 +286,7 @@ El contrato completo —helpers UUIDv7, nombres de checks, funciones de entrada 
 
 ## 18. Migraciones
 
-- Una sola historia de migraciones, propiedad de `allfitone-studio`, aplicada por un solo pipeline.
+- Una sola historia de migraciones, propiedad de `allfitone/packages/db`, aplicada por un solo pipeline.
 - Orden por dependencias: extensiones y enums → catálogos → tablas padre → dependientes → uniques/checks/FKs → índices → grants → RLS y policies → vistas y funciones → seeds.
 - Cada migración es reproducible desde cero: `supabase db reset` reconstruye el esquema sin pasos manuales.
 - Los nombres de archivo siguen el patrón de timestamp del tooling de Supabase.

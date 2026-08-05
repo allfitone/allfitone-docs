@@ -1,14 +1,14 @@
 # Contratos de API de Space, Studio y Backoffice — V1
 
-**Versión de revisión:** 4
-**Fecha:** 3 de agosto de 2026
+**Versión de revisión:** 5
+**Fecha:** 5 de agosto de 2026
 **Fase:** 3 — Definir operaciones, seguridad y contratos
-**Estado:** superficie Backoffice recertificada por ADR-028; contratos detallados restantes sujetos a los P0
+**Estado:** superficie Backoffice recertificada por ADR-028 y distribución de DTOs por ADR-029; contratos detallados restantes sujetos a los P0
 **Deriva de:** [`V1_OPERATIONS_MATRIX.md`](./V1_OPERATIONS_MATRIX.md), [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_OPENAPI_CONTRACT.md`](./V1_OPENAPI_CONTRACT.md) y [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
 
 ## 1. Propósito
 
-Define qué expone la API a cada producto: superficies, convenciones, endpoints, el **field-set y la versión de scope** que cada proyección exige, las funciones SQL internas para comandos con varias escrituras atómicas, las vistas de contrato, los eventos del outbox y cómo se distribuyen los DTOs entre repositorios.
+Define qué expone la API a cada producto: superficies, convenciones, endpoints, el **field-set y la versión de scope** que cada proyección exige, las funciones SQL internas para comandos con varias escrituras atómicas, las vistas de contrato, los eventos del outbox y cómo se distribuyen los DTOs dentro del monorepo.
 
 No define esquemas de columnas. La serialización ejecutable de la primera rebanada vertical está fijada antes del código en [`openapi/allfit-v1.openapi.yaml`](./openapi/allfit-v1.openapi.yaml); este documento conserva el contexto funcional del contrato.
 
@@ -748,19 +748,22 @@ El catálogo completo está en [`V1_OPERATIONS_MATRIX.md` §8](./V1_OPERATIONS_M
 ## 12. DTOs compartidos
 
 ```text
-allfitone-studio/                     ← propietario de supabase/ y de la API
-├── supabase/                     migraciones, seeds, tests
-├── apps/api/                     Bun + TypeScript
-└── packages/contracts/           OpenAPI → tipos generados → paquete privado
-                                        │
-                                        ▼
-allfitone-space/                  ← consume @allfit/contracts versionado
+allfitone/
+├── apps/
+│   ├── api/                    consume contratos y expone las cuatro superficies
+│   ├── studio-web/             consume @allfitone/contracts
+│   ├── backoffice-web/         consume @allfitone/contracts
+│   └── space/                  consume @allfitone/contracts
+└── packages/
+    ├── contracts/              OpenAPI sincronizado → DTOs generados
+    └── db/                     migraciones, seeds, pruebas y tipos internos
 ```
 
 - Los tipos se generan **desde** los documentos OpenAPI, no a mano.
 - Los tipos crudos del esquema de base de datos **no salen** del backend. Space y Studio conocen DTOs, no columnas.
-- El paquete se versiona con semver. Un cambio incompatible de una superficie sube major y coexiste con el anterior mientras dure la deprecación.
-- El CI del backend falla si el OpenAPI generado difiere del publicado: el contrato no puede desviarse del código en silencio.
+- `@allfitone/contracts` se resuelve como workspace privado y cambia en el mismo commit que sus consumidores. No necesita publicación intermedia para coordinar aplicaciones del monorepo.
+- La compatibilidad pública se versiona por superficie (`/space/v1`, `/studio/v1`, `/catalog/v1`, `/backoffice/v1`), no mediante la versión npm interna del paquete. Una versión incompatible coexiste con la anterior durante su deprecación.
+- El CI falla si el OpenAPI consumible en `packages/contracts` difiere del contrato normativo de `allfitone-docs` o si los DTOs generados tienen drift: el contrato no puede desviarse del código en silencio.
 
 La ampliación nutricional añade DTOs cerrados `NutritionMeal`, `NutritionMealItem`, `NutrientValue`, `NutritionDailySummary`, `NutritionGoalVersion`, `NutritionGoalAuthor`, `NutritionGoalTarget` y `NutritionGoalDecision`. `NutritionGoalAuthor` es obligatorio y publica solo `kind`/`person_id`, con `kind == origin`; los DTOs nunca exponen nombres, nombres de tabla, `media_ref`, contexto RLS o evidencia privada de verificación.
 

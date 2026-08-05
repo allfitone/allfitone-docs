@@ -1,8 +1,8 @@
 # Alcance de base de datos V1 — Allfit One
 
-**Estado:** aprobado; acceso Backoffice recertificado por ADR-028<br>
+**Estado:** aprobado; acceso Backoffice recertificado por ADR-028 y topología por ADR-029<br>
 **Fecha de consolidación:** 20 de julio de 2026<br>
-**Recertificación:** 3 de agosto de 2026<br>
+**Recertificaciones:** 3 de agosto de 2026 · Backoffice; 5 de agosto de 2026 · monorepo<br>
 **Fase:** entregable de Fase 1 — lenguaje y alcance<br>
 **Fuentes normativas internas:** `ALLFIT_ARCHITECTURE_DECISIONS.md`, `ALLFIT_DOMAIN_GLOSSARY.md` y `DATABASE_REFACTOR_PHASES.md`.
 
@@ -66,7 +66,8 @@ flowchart LR
 | Acceso | Space y Studio usan una API propia; ningún cliente accede directamente a PostgreSQL/PostgREST |
 | Autorización | Backend, privilegios mínimos y RLS con contexto transaccional |
 | Independencia | Funcional y operativa; WorkOS AuthKit, API autoritativa y PostgreSQL continúan como dependencias físicas compartidas |
-| Migraciones | Un solo repositorio y pipeline son autoridad del esquema |
+| Implementación | Un monorepo `allfitone` con cinco deployables independientes y paquetes compartidos |
+| Migraciones | `allfitone/packages/db` y un solo pipeline son autoridad del esquema |
 
 Una caída total de WorkOS AuthKit o PostgreSQL puede afectar ambos productos. V1 no promete tolerancia física separada. Los fallos locales deben contenerse mediante límites de recursos, timeouts, colas, idempotencia, circuit breakers y observabilidad por producto/dominio.
 

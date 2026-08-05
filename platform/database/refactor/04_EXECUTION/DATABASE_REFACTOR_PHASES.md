@@ -1,6 +1,6 @@
 # Fases para diseñar la nueva BD de Allfit One
 
-**Fecha:** 3 de agosto de 2026<br>
+**Fecha:** 5 de agosto de 2026<br>
 **Modalidad:** implementación incremental por rebanadas de HU asistida por IA.<br>
 **Contexto:** diseño greenfield sobre Supabase/PostgreSQL, sin clientes ni datos productivos que obliguen a conservar el esquema actual.
 
@@ -66,12 +66,12 @@ La IA propone; el equipo resuelve las reglas del negocio.
 
 ### Objetivo
 
-Evitar que varias personas o repositorios produzcan modelos incompatibles.
+Evitar que varias personas, aplicaciones o paquetes produzcan modelos incompatibles.
 
 ### Decisiones
 
 - Nombrar un responsable final del modelo de datos.
-- Confirmar un único repositorio propietario de `supabase/`.
+- Ratificar `allfitone/packages/db` como único propietario de la configuración Supabase y la historia de migraciones.
 - Confirmar un único pipeline autorizado para desplegar migraciones.
 - Establecer que la BD remota no se modifica manualmente.
 - Confirmar que la base actual es evidencia, no la plantilla obligatoria.
@@ -350,7 +350,7 @@ Definir qué necesita cada aplicación:
 - funciones SQL internas para comandos que necesiten varias escrituras atómicas;
 - vistas internas para consultas estables del backend;
 - eventos/outbox para procesos asíncronos;
-- DTOs/OpenAPI compartidos entre repositorios; los tipos crudos de BD permanecen en el backend.
+- DTOs/OpenAPI compartidos mediante `packages/contracts`; los tipos crudos de BD permanecen en el backend.
 - field-set y versión de scope requeridos por cada endpoint/proyección.
 
 Definir además el contrato de degradación por producto y dependencia:
@@ -520,13 +520,16 @@ Un P0 de otra épica no bloquea esta entrada. El checklist global de readiness s
 ### Estructura
 
 ```text
-supabase/
-├── config.toml
+allfitone/packages/db/
+├── supabase/
+│   └── config.toml
 ├── schemas/          # si se adopta esquema declarativo
 ├── migrations/
 ├── seed.sql
-└── tests/
-    └── database/
+├── tests/
+│   └── database/
+└── types/
+    └── database.types.ts
 ```
 
 ### Secuencia acumulativa
@@ -559,7 +562,7 @@ La lista siguiente describe el resultado acumulado de Fase 5. Cada rebanada ejec
 24. Ejecutar `T-SCHEMA-01..06` contra inventario, objetos, JSONB y particiones.
 25. Ejecutar `T-IDEM-01..10` y `T-NUT-IDEM-01..06`.
 26. Ejecutar `T-VG-01..06`, `T-BGG-01..12`, `T-NUT-INT-01..08` y `T-NUT-RLS-01..24`.
-27. Generar tipos para los dos repositorios y comprobar que no difieren del OpenAPI.
+27. Generar DTOs en `packages/contracts` y tipos internos en `packages/db/types`; comprobar que los primeros no difieren del OpenAPI normativo.
 
 ### Datos de prueba mínimos
 
@@ -643,13 +646,13 @@ La lista siguiente describe el resultado acumulado de Fase 5. Cada rebanada ejec
 
 ### Entregables
 
-Los siguientes son destinos previstos dentro de `allfitone-studio`; se convertirán en enlaces cuando existan los artefactos:
+Los siguientes son destinos previstos dentro del monorepo `allfitone`; se convertirán en enlaces cuando existan los artefactos:
 
-- cadena inicial de migraciones: `supabase/migrations/`;
-- seed de base de datos: `supabase/seed.sql`;
-- vistas y RPC: `supabase/schemas/`;
-- tipos generados: `supabase/types/database.types.ts`;
-- reconstrucción local: `supabase/`.
+- cadena inicial de migraciones: `packages/db/migrations/`;
+- seed de base de datos: `packages/db/seed.sql`;
+- vistas y RPC: `packages/db/schemas/`;
+- tipos generados: `packages/db/types/database.types.ts`;
+- reconstrucción local: `packages/db/supabase/`.
 
 ### Criterio de salida
 
@@ -798,10 +801,10 @@ Probar que el diseño funciona desde los productos involucrados en cada rebanada
 
 ### Entregables
 
-Los siguientes son destinos previstos dentro de `allfitone-studio`:
+Los siguientes son destinos previstos dentro del monorepo `allfitone`:
 
-- pruebas SQL/pgTAP: `supabase/tests/database/`;
-- pruebas de integración de la API Space/Studio: `tests/integration/space_studio/`;
+- pruebas SQL/pgTAP: `packages/db/tests/database/`;
+- pruebas de integración de la API Space/Studio: `apps/api/tests/integration/space_studio/`;
 - `05_VALIDATION/V1_SECURITY_AND_INTEGRITY_REPORT.md`.
 - `05_VALIDATION/V1_APPROVED_BASELINE.md`.
 - `05_VALIDATION/NEXT_DOMAIN_BACKLOG.md`.

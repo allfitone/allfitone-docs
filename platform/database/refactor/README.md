@@ -1,7 +1,7 @@
 # Allfit Database Refactor
 
-**Versión de revisión:** 4<br>
-**Fecha:** 3 de agosto de 2026<br>
+**Versión de revisión:** 5<br>
+**Fecha:** 5 de agosto de 2026<br>
 **Productos:** Allfit One — Studio, Space y Backoffice
 
 ## Objetivo
@@ -141,7 +141,7 @@ Dimensión actual: **9 dominios conceptuales, 11 schemas físicos, 115 tablas, 7
 - Lo planificado y lo ejecutado se almacenan separadamente.
 - Programas publicados y asignaciones preservan versiones inmutables.
 - RLS de PostgreSQL se mantiene como defensa en profundidad mediante contexto transaccional.
-- Un único repositorio/pipeline será propietario de las migraciones.
+- `allfitone/packages/db` y un único pipeline serán autoridad de las migraciones.
 - El perfil profesional pertenece a la persona y puede existir independientemente de una organización.
 - Los datos materiales del perfil distinguen `person_declared`, `professional_observation`, `device_observed`, `system_inferred` y `authority_verified`.
 - Procedencia, actor capturador, método y verificación son dimensiones separadas; varias afirmaciones pueden coexistir sin sobrescribirse.
@@ -191,7 +191,7 @@ Dimensión actual: **9 dominios conceptuales, 11 schemas físicos, 115 tablas, 7
 - Los fallos locales se contienen con límites de recursos, colas y circuit breakers; autorización, consentimiento, capacidad y dinero fallan cerrados.
 - Una separación futura se decide por SLO, regulación, escala o incidentes demostrados y se ejecuta por dominio, no duplicando bases por producto.
 - La API propia se construye en Bun + TypeScript y expone cuatro superficies REST con OpenAPI: `/space/v1`, `/studio/v1`, `/catalog/v1` y `/backoffice/v1`, cada una con versionado independiente.
-- `allfitone-studio` es el repositorio propietario de `supabase/`, de las migraciones y de la API; Allfit Space es un repositorio cliente que consume DTOs generados.
+- `allfitone` es el monorepo de implementación: `packages/db` posee las migraciones, `apps/api` expone las cuatro superficies y `packages/contracts` distribuye DTOs a los clientes del mismo workspace.
 - En Studio, la organización viaja explícita en la ruta bajo `/organizations/{orgId}`; nunca se resuelve desde el token ni desde una preferencia guardada.
 - Allfit Space es una aplicación móvil Expo: registro de ejecución, edición de perfil y captura nutricional estructurada admiten borrador local. La foto nutricional se adjunta después al recuperar conexión; `Command-Id` se genera al crear la intención y cada operación HTTP usa su propia `Idempotency-Key`.
 - El catálogo de roles organizacionales es cerrado: `owner`, `admin`, `coach` y `staff`, sin roles personalizados ni alcance por sede.
@@ -257,7 +257,7 @@ Decisión final:
 
 ## Dependencias de repositorios
 
-Los documentos dentro de `01_CURRENT_STATE` enlazan evidencia histórica de Factory Fitness mediante el commit inmutable `d9f1fda7`. Los entregables de implementación apuntan al repositorio propietario `allfitone-studio`; la documentación y los contratos permanecen en `allfitone-docs`.
+Los documentos dentro de `01_CURRENT_STATE` enlazan evidencia histórica de Factory Fitness mediante el commit inmutable `d9f1fda7`; sus rutas describen ese snapshot y no la topología vigente. Los entregables de implementación se materializan en el monorepo `allfitone`, mientras esta documentación y el contrato normativo permanecen en `allfitone-docs`. La topología está fijada por [ADR-029](02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md#adr-029-monorepo-de-implementación-con-deployables-independientes).
 
 ## Regla de mantenimiento
 

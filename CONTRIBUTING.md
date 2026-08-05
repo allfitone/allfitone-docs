@@ -1,13 +1,13 @@
 # Contribuir a Allfit One Documentation
 
-Este repositorio mantiene las fuentes normativas transversales del ecosistema y la definición detallada de sus productos. Los repositorios de implementación mantienen su documentación local según la [frontera documental](README.md#frontera-documental).
+Este repositorio mantiene las fuentes normativas transversales del ecosistema y la definición detallada de sus productos. El monorepo de plataforma y los demás repositorios de código mantienen su documentación local según la [frontera documental](README.md#frontera-documental).
 
 ## Dónde debe vivir un documento
 
 Un documento pertenece a `allfitone-docs` cuando cumple al menos una de estas condiciones:
 
 - define alcance, reglas o historias de un producto;
-- afecta a más de un producto o repositorio;
+- afecta a más de un producto, aplicación, paquete o repositorio;
 - establece un contrato compartido de API, datos, identidad, seguridad o integración;
 - registra una decisión o iniciativa técnica transversal;
 - sirve como fuente de trazabilidad entre producto y plataforma.

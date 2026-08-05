@@ -3,9 +3,10 @@
 **Versión de revisión:** 14<br>
 **Fecha:** 28 de julio de 2026<br>
 **Revisión del repositorio:** correcciones P1/P2 de ADR-027 y drift contractual tardío propagadas; baseline recertificada<br>
-**Estado:** **GO CONDICIONADO — reabierto por DT-017**<br>
+**Estado:** **GO CONDICIONADO — reabierto por DT-017 y ADR-029**<br>
 **Nota del 30 de julio de 2026:** el dominio de pagos (DT-017) incorporó un schema nuevo, seis tablas, dieciséis operaciones y tres invariantes. Esta revisión **debe volver a correrse** sobre la baseline resultante antes de dar el GO por firme. El inventario pasó de 99 a 107 tablas y de 150 a 171 operaciones.<br>
 **Nota del 3 de agosto de 2026:** las menciones a Cognito conservan la dependencia evaluada históricamente el 28 de julio. ADR-002 las supersede con WorkOS AuthKit y `DB-P5-019` exige recertificar autenticación antes de implementar.<br>
+**Nota del 5 de agosto de 2026:** ADR-029 consolidó API, worker y clientes en el monorepo `allfitone`. Las rutas de artefactos quedaron propagadas, pero los escenarios de CI, fronteras y despliegue del ADR deben ejecutarse antes de convertir este estado en GO firme.<br>
 **Progreso P0:** 8 de 8 bloqueos resueltos; 0 activos<br>
 **Progreso P1:** P1-01, P1-02 y los tres hallazgos P1 de Nutrición resueltos; P1-03..07 pendientes según sus hitos<br>
 **Alcance:** consistencia y preparación de las Fases 1 a 4 antes de traducir el diseño a migraciones, seeds, RLS, funciones y contratos ejecutables.
@@ -58,7 +59,7 @@ Los tres P1 y los tres P2 de Nutrición están corregidos y recertificados conju
 
 ### Declaración GO/NO-GO actualizada
 
-> **GO: la baseline documental/OpenAPI está internamente consistente y se puede iniciar la Fase 5. Este GO autoriza traducir el diseño aprobado a migraciones, funciones, RLS y pruebas; no equivale a aprobar la Fase 5.**
+> **GO histórico de la revisión 14:** la baseline documental/OpenAPI revisada el 28 de julio autorizaba iniciar la Fase 5. DT-017 y ADR-029 reabrieron después el gate; el estado vigente es GO condicionado hasta repetir la revisión sobre la baseline actual.
 
 La implementación comenzará por la rebanada vertical acordada y preservará los nombres, columnas, estados, policies y contratos aprobados.
 
@@ -635,7 +636,7 @@ Registrar:
 
 ### P2-03 — Enlaces a entregables futuros
 
-Existen enlaces a `supabase/`, pruebas, tipos y `05_VALIDATION` que todavía no existen. Algunos son placeholders legítimos del plan, pero deben distinguirse de enlaces rotos mediante una marca explícita como “entregable futuro”.
+Existen referencias futuras a `allfitone/packages/db`, pruebas, tipos y `05_VALIDATION` que todavía no existen. Algunos son placeholders legítimos del plan, pero deben distinguirse de enlaces rotos mediante una marca explícita como “entregable futuro”.
 
 ### P2-04 — Tamaño y duplicación documental
 
@@ -835,7 +836,7 @@ Solo después se amplían las restantes operaciones.
 
 ## 14. Criterio GO para comenzar migraciones de dominio
 
-La Fase 5 queda en **GO**. Los criterios de entrada están satisfechos:
+Para la baseline revisada el 28 de julio, la Fase 5 quedó en **GO** y satisfizo los criterios siguientes. El gate vigente permanece condicionado por las notas posteriores de DT-017 y ADR-029:
 
 - [x] ADR-005 contiene una sola dirección vigente.
 - [x] La edad mínima está ratificada en 18 años o más.
@@ -916,7 +917,7 @@ Comenzar Fase 5 no equivale a aprobarla. Su cierre requiere además:
 
 ## 17. Resultado esperado de la revisión conjunta
 
-La revisión conjunta conserva la aprobación explícita de las Fases 1 a 4 y emite `GO` tras cerrar los P2. Los elementos técnicos que produce son:
+La revisión conjunta del 28 de julio conservó la aprobación explícita de las Fases 1 a 4 y emitió `GO` tras cerrar los P2. Ese resultado es evidencia histórica; el estado vigente permanece condicionado hasta recertificar DT-017 y ADR-029. Los elementos técnicos que produjo son:
 
 1. una respuesta explícita para cada `D-*`;
 2. una auditoría P0 sin pendientes;

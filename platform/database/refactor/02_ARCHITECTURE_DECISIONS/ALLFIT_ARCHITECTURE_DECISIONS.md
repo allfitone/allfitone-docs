@@ -1,8 +1,8 @@
 # ADR — Decisiones de arquitectura de Allfit
 
 **Estado general:** mixto; cada ADR conserva su estado y la ejecución avanza con gates por rebanada<br>
-**Fecha de consolidación:** 3 de agosto de 2026<br>
-**Alcance:** identidad, invitaciones, autenticación, acceso a PostgreSQL, operación profesional, consentimiento, terminación de relaciones, retención y disposición de datos, entrenamiento multidisciplina y Nutrición no clínica.
+**Fecha de consolidación:** 5 de agosto de 2026<br>
+**Alcance:** identidad, invitaciones, autenticación, acceso a PostgreSQL, operación profesional, consentimiento, terminación de relaciones, retención y disposición de datos, entrenamiento multidisciplina, Nutrición no clínica y topología de repositorios.
 
 ## Índice de decisiones
 
@@ -36,6 +36,7 @@
 | ADR-026 | Gobernanza cerrada de verificadores y acceso break-glass |
 | ADR-027 | Nutrición personal y guía profesional no clínica en V1 |
 | ADR-028 | Backoffice con rol base, deberes temporales y separación break-glass |
+| ADR-029 | Monorepo de implementación con deployables independientes |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -220,11 +221,12 @@ AuthKit verifica email como identidad primaria. La ruta de invitación por celul
 ## ADR-002 — WorkOS AuthKit para autenticación y Supabase únicamente como PostgreSQL
 
 **Estado:** aceptada para V1<br>
-**Fecha:** 3 de agosto de 2026
+**Fecha:** 3 de agosto de 2026<br>
+**Supersedida parcialmente por:** ADR-029 sustituye únicamente la separación física de los repositorios de producto; conserva Applications, deployables, identidad y superficies independientes
 
 ### Contexto
 
-Allfit Studio y Allfit Space compartirán identidad y datos, pero vivirán en repositorios y aplicaciones independientes. Se decidió no utilizar Supabase Auth ni acceso directo desde los clientes a la Data API de Supabase.
+Allfit Studio y Allfit Space compartirán identidad y datos. En el momento de esta decisión se proyectaron repositorios y aplicaciones independientes; ADR-029 consolidó después el código en un monorepo sin cambiar la independencia de las aplicaciones ni de sus despliegues. Se decidió no utilizar Supabase Auth ni acceso directo desde los clientes a la Data API de Supabase.
 
 ### Decisión
 
@@ -3511,3 +3513,91 @@ Las HU de Backoffice declaraban un único `allfit_admin` con acceso ordinario a 
 9. Una falla al escribir auditoría impide devolver contenido.
 10. Los roles runtime no pueden seleccionar tablas sensibles ni modificar/borrar historial de rol, deber, aprobación o evento.
 11. Una instalación vacía no ofrece endpoint de autoaprovisionamiento: el bootstrap exige dos personas existentes, autoridad `allfit_migrator`, asignaciones cruzadas y evidencia; el mismo intento con un rol runtime falla.
+
+---
+
+## ADR-029 — Monorepo de implementación con deployables independientes
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 5 de agosto de 2026<br>
+**Supersede:** las referencias vigentes que asignaban API, migraciones o clientes a `allfitone-studio`, `allfitone-space` o `allfitone-backoffice` como repositorios de implementación separados<br>
+**Ratifica:** ADR-002 en identidad, autenticación, superficies y aislamiento por Application; no cambia sus decisiones de seguridad
+
+### Contexto
+
+La API, el worker y los clientes participan en los mismos flujos verticales: Studio asigna, Space ejecuta y Studio consulta el resultado autorizado. Mantenerlos en repositorios de código separados obligaría a coordinar manualmente contratos, DTOs, cambios de dominio y migraciones que deben evolucionar de forma atómica.
+
+La independencia de un producto o deployable no exige un repositorio propio. Son ejes distintos: el repositorio define dónde se versiona el código y el deployable define qué se construye, configura, escala y publica de manera independiente.
+
+### Decisión
+
+1. `allfitone` es el único monorepo de implementación para la plataforma V1.
+2. El monorepo produce cinco deployables independientes:
+   - `apps/api`: API Hono con las superficies `/space/v1`, `/studio/v1`, `/catalog/v1` y `/backoffice/v1`;
+   - `apps/worker`: consumidores de outbox y trabajos programados;
+   - `apps/studio-web`: cliente web de Allfit Studio;
+   - `apps/backoffice-web`: cliente web de Allfit Backoffice;
+   - `apps/space`: aplicación Expo de Allfit Space.
+3. El código reutilizable vive en `packages/`. La baseline incluye `auth-provider`, `queue`, `contracts` y `db`; una aplicación nunca importa código interno de otra aplicación.
+4. `packages/db` es el único propietario de la configuración local de Supabase, la historia de migraciones, los schemas declarativos si se adoptan, los seeds, las pruebas de base de datos y los tipos generados. Un solo pipeline aplica migraciones.
+5. `packages/contracts` contiene el OpenAPI consumible y los DTOs generados por API y clientes. La definición normativa permanece en `allfitone-docs`; el CI debe detectar cualquier diferencia entre la copia consumible y el contrato normativo.
+6. Cada deployable conserva configuración, secretos, pipeline, artefacto, observabilidad, límites de recursos y estrategia de rollback propios. Turborepo selecciona las tareas afectadas; compartir repositorio no obliga a desplegar todo junto.
+7. `allfitone-docs` continúa como repositorio normativo separado. `allfitone-design-system` continúa como biblioteca publicada y `allfitone-landing-page` como sitio de marketing; ninguno se incorpora al monorepo de la plataforma en V1.
+8. Una separación futura ocurre por dominio y solo ante evidencia medida de SLO, regulación, escala o incidentes. No se separa por producto duplicando API, identidad, contratos, grants o base de datos.
+
+### Topología normativa
+
+```text
+allfitone/
+├── apps/
+│   ├── api/
+│   ├── worker/
+│   ├── studio-web/
+│   ├── backoffice-web/
+│   └── space/
+└── packages/
+    ├── auth-provider/
+    ├── queue/
+    ├── contracts/
+    └── db/
+
+allfitone-docs/          documentación normativa
+allfitone-design-system/ biblioteca UI publicada
+allfitone-landing-page/  sitio público de marketing
+```
+
+### Invariantes
+
+1. Solo `packages/db` produce y despliega la historia de migraciones.
+2. Solo `apps/api` accede a PostgreSQL durante requests; los clientes nunca usan PostgreSQL, PostgREST ni credenciales Supabase directamente.
+3. Ninguna aplicación importa otra aplicación. La lógica compartida se extrae a un paquete con interfaz explícita.
+4. Los tipos crudos de base de datos no salen del backend; los clientes consumen DTOs de `packages/contracts`.
+5. Una modificación incompatible del contrato se versiona por superficie aunque todos los consumidores vivan en el mismo repositorio.
+6. Un cambio en un deployable no despliega otros deployables no afectados.
+7. La topología del repositorio no concede acceso entre superficies, no comparte secretos y no altera la validación de `client_id`.
+
+### Consecuencias
+
+#### Positivas
+
+- API, clientes, worker, contratos y migraciones pueden evolucionar en una sola revisión y un solo commit.
+- Las herramientas del monorepo pueden comprobar dependencias, tipos y alcance afectado de extremo a extremo.
+- Se elimina la publicación intermedia de DTOs privados para sincronizar clientes del mismo producto.
+- La propiedad de la base de datos y del contrato ejecutable queda físicamente inequívoca.
+
+#### Costos
+
+- El CI necesita filtrado por grafo y caché para no ejecutar ni desplegar todo ante cada cambio.
+- Las fronteras entre aplicaciones y dominios deben imponerse con reglas automatizadas, no con la separación accidental de repositorios.
+- Los permisos del repositorio cubren más código y requieren protección de ramas y ownership por paths cuando el equipo crezca.
+- `allfitone-docs` y `packages/contracts` siguen en repositorios distintos, por lo que la sincronización del contrato necesita un gate explícito.
+
+### Escenarios de prueba obligatorios
+
+1. Un cambio exclusivo de `apps/space` no construye ni despliega Studio, Backoffice, API o worker.
+2. Un cambio de `packages/contracts` ejecuta validación y build de todos sus consumidores afectados.
+3. Un cambio de `packages/db` ejecuta pruebas de base de datos y de los deployables backend afectados, pero solo el pipeline autorizado puede aplicar migraciones.
+4. Una importación desde una aplicación hacia otra falla en lint o en la verificación de fronteras.
+5. Una diferencia entre el OpenAPI normativo y `packages/contracts` falla en CI.
+6. Un token emitido para una Application sigue siendo rechazado en otra superficie aunque ambas vivan en el mismo repositorio.
+7. Un fallo o rollback de un deployable no obliga a publicar una versión nueva de los otros cuatro.
