@@ -6,7 +6,7 @@
 **Estado:** **GO CONDICIONADO — reabierto por DT-017 y ADR-029**<br>
 **Nota del 30 de julio de 2026:** el dominio de pagos (DT-017) incorporó un schema nuevo, seis tablas, dieciséis operaciones y tres invariantes. Esta revisión **debe volver a correrse** sobre la baseline resultante antes de dar el GO por firme. El inventario pasó de 99 a 107 tablas y de 150 a 171 operaciones.<br>
 **Nota del 3 de agosto de 2026:** las menciones a Cognito conservan la dependencia evaluada históricamente el 28 de julio. ADR-002 las supersede con WorkOS AuthKit y `DB-P5-019` exige recertificar autenticación antes de implementar.<br>
-**Nota del 5 de agosto de 2026:** ADR-029 consolidó API, worker y clientes en el monorepo `allfitone`. Las rutas de artefactos quedaron propagadas, pero los escenarios de CI, fronteras y despliegue del ADR deben ejecutarse antes de convertir este estado en GO firme.<br>
+**Nota del 5 de agosto de 2026:** ADR-029 consolidó API, worker y clientes en el monorepo `allfitone`. La fuente canónica OpenAPI se trasladó a `packages/contracts/openapi` y esta documentación dejó de duplicar el YAML. Los escenarios de CI, fronteras y despliegue del ADR deben ejecutarse antes de convertir este estado en GO firme.<br>
 **Progreso P0:** 8 de 8 bloqueos resueltos; 0 activos<br>
 **Progreso P1:** P1-01, P1-02 y los tres hallazgos P1 de Nutrición resueltos; P1-03..07 pendientes según sus hitos<br>
 **Alcance:** consistencia y preparación de las Fases 1 a 4 antes de traducir el diseño a migraciones, seeds, RLS, funciones y contratos ejecutables.
@@ -78,7 +78,7 @@ La revisión utiliza como fuentes:
 9. [`V1_RLS_MATRIX.md`](../03_PROPOSED_DESIGN/V1_RLS_MATRIX.md).
 10. [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](../03_PROPOSED_DESIGN/V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md).
 11. [`V1_SPACE_STUDIO_API_CONTRACTS.md`](../03_PROPOSED_DESIGN/V1_SPACE_STUDIO_API_CONTRACTS.md).
-12. [`V1_OPENAPI_CONTRACT.md`](../03_PROPOSED_DESIGN/V1_OPENAPI_CONTRACT.md) y [`allfit-v1.openapi.yaml`](../03_PROPOSED_DESIGN/openapi/allfit-v1.openapi.yaml).
+12. [`V1_OPENAPI_CONTRACT.md`](../03_PROPOSED_DESIGN/V1_OPENAPI_CONTRACT.md) y [`allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml).
 13. [`V1_DEGRADATION_AND_RECOVERY_MATRIX.md`](../03_PROPOSED_DESIGN/V1_DEGRADATION_AND_RECOVERY_MATRIX.md).
 14. [`V1_IDEMPOTENCY_CONTRACT.md`](../03_PROPOSED_DESIGN/V1_IDEMPOTENCY_CONTRACT.md).
 15. [`POSTGRES_MODELING_STANDARD.md`](../03_PROPOSED_DESIGN/POSTGRES_MODELING_STANDARD.md).
@@ -479,7 +479,7 @@ El cierre exige y confirma:
 
 ### P1-01 — Resuelto: contrato HTTP implementable para la primera rebanada
 
-[`V1_OPENAPI_CONTRACT.md`](../03_PROPOSED_DESIGN/V1_OPENAPI_CONTRACT.md) y [`allfit-v1.openapi.yaml`](../03_PROPOSED_DESIGN/openapi/allfit-v1.openapi.yaml) cierran:
+[`V1_OPENAPI_CONTRACT.md`](../03_PROPOSED_DESIGN/V1_OPENAPI_CONTRACT.md) y [`allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml) cierran:
 
 - 21 operaciones HTTP distribuidas en 18 paths: las ocho originales y `OP-NUT-001..013`;
 - mapeo unívoco mediante `x-allfit-operation`, sin `operationId` duplicados;
@@ -903,7 +903,7 @@ Comenzar Fase 5 no equivale a aprobarla. Su cierre requiere además:
 | `V1_RLS_MATRIX.md` | 186 casos, incluidos 24 `T-NUT-RLS-*`, scopes/media/frozen alineados |
 | `V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md` | `PR-24..27`, asociaciones exactas `OP-NUT`→prueba y `T-NUT-PHY-01..04` incorporados |
 | `V1_SPACE_STUDIO_API_CONTRACTS.md` | Primera rebanada alineada con OpenAPI, 21 operaciones, `If-Match`, ejemplos y gate contract-first |
-| `V1_OPENAPI_CONTRACT.md` + `openapi/allfit-v1.openapi.yaml` | Fuente canónica de 18 paths/21 operaciones, DTOs, autoría mínima, ejemplos, caché, URL firmada Space, proxy Studio y pruebas API |
+| `V1_OPENAPI_CONTRACT.md` + `allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml` | Contexto normativo y fuente ejecutable canónica de 18 paths/21 operaciones, DTOs, autoría mínima, ejemplos, caché, URL firmada Space, proxy Studio y pruebas API |
 | `V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md` | Fuente normativa de catálogo, categorías nutricionales, evidencia, conflictos, deberes, quorum, expiración, revisión y abuso |
 | `V1_DEGRADATION_AND_RECOVERY_MATRIX.md` | Alertas/suspensión/revisión break-glass alineadas; todavía aprobar objetivos y aclarar encolar versus entregar notificaciones |
 | `V1_IDEMPOTENCY_CONTRACT.md` | Scope, receipt, retención, concurrencia, disposición y `T-NUT-IDEM-01..06` incorporados |

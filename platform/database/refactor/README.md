@@ -74,8 +74,6 @@ refactor/
 │   ├── V1_SPACE_STUDIO_API_CONTRACTS.md
 │   ├── V1_OPENAPI_CONTRACT.md
 │   ├── V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md
-│   ├── openapi/
-│   │   └── allfit-v1.openapi.yaml
 │   ├── V1_DEGRADATION_AND_RECOVERY_MATRIX.md
 │   ├── V1_IDEMPOTENCY_CONTRACT.md
 │   ├── POSTGRES_MODELING_STANDARD.md
@@ -191,7 +189,7 @@ Dimensión actual: **9 dominios conceptuales, 11 schemas físicos, 115 tablas, 7
 - Los fallos locales se contienen con límites de recursos, colas y circuit breakers; autorización, consentimiento, capacidad y dinero fallan cerrados.
 - Una separación futura se decide por SLO, regulación, escala o incidentes demostrados y se ejecuta por dominio, no duplicando bases por producto.
 - La API propia se construye en Bun + TypeScript y expone cuatro superficies REST con OpenAPI: `/space/v1`, `/studio/v1`, `/catalog/v1` y `/backoffice/v1`, cada una con versionado independiente.
-- `allfitone` es el monorepo de implementación: `packages/db` posee las migraciones, `apps/api` expone las cuatro superficies y `packages/contracts` distribuye DTOs a los clientes del mismo workspace.
+- `allfitone` es el monorepo de implementación: `packages/db` posee las migraciones, `apps/api` expone las cuatro superficies y `packages/contracts` posee el OpenAPI canónico y distribuye sus DTOs a los clientes del mismo workspace.
 - En Studio, la organización viaja explícita en la ruta bajo `/organizations/{orgId}`; nunca se resuelve desde el token ni desde una preferencia guardada.
 - Allfit Space es una aplicación móvil Expo: registro de ejecución, edición de perfil y captura nutricional estructurada admiten borrador local. La foto nutricional se adjunta después al recuperar conexión; `Command-Id` se genera al crear la intención y cada operación HTTP usa su propia `Idempotency-Key`.
 - El catálogo de roles organizacionales es cerrado: `owner`, `admin`, `coach` y `staff`, sin roles personalizados ni alcance por sede.
@@ -257,7 +255,7 @@ Decisión final:
 
 ## Dependencias de repositorios
 
-Los documentos dentro de `01_CURRENT_STATE` enlazan evidencia histórica de Factory Fitness mediante el commit inmutable `d9f1fda7`; sus rutas describen ese snapshot y no la topología vigente. Los entregables de implementación se materializan en el monorepo `allfitone`, mientras esta documentación y el contrato normativo permanecen en `allfitone-docs`. La topología está fijada por [ADR-029](02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md#adr-029-monorepo-de-implementación-con-deployables-independientes).
+Los documentos dentro de `01_CURRENT_STATE` enlazan evidencia histórica de Factory Fitness mediante el commit inmutable `d9f1fda7`; sus rutas describen ese snapshot y no la topología vigente. Los entregables de implementación y la fuente OpenAPI ejecutable se materializan en el monorepo `allfitone`; esta documentación conserva producto, arquitectura, requisitos y trazabilidad contractual sin duplicar el YAML. La topología está fijada por [ADR-029](02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md#adr-029-monorepo-de-implementación-con-deployables-independientes).
 
 ## Regla de mantenimiento
 

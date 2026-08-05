@@ -8,7 +8,7 @@ Un documento pertenece a `allfitone-docs` cuando cumple al menos una de estas co
 
 - define alcance, reglas o historias de un producto;
 - afecta a más de un producto, aplicación, paquete o repositorio;
-- establece un contrato compartido de API, datos, identidad, seguridad o integración;
+- establece los requisitos, la semántica o la trazabilidad de un contrato compartido de API, datos, identidad, seguridad o integración;
 - registra una decisión o iniciativa técnica transversal;
 - sirve como fuente de trazabilidad entre producto y plataforma.
 
@@ -21,6 +21,8 @@ Un documento pertenece al repositorio de implementación cuando describe:
 - uso específico de una librería, aplicación o componente.
 
 Cuando un documento consume una fuente normativa de este repositorio debe enlazarla, no copiarla. Si una decisión deja de ser local y comienza a afectar a varios productos, su definición normativa se traslada aquí y el repositorio de implementación conserva únicamente el enlace y sus consecuencias locales.
+
+Los artefactos ejecutables pertenecen al código que los consume. En particular, la fuente canónica OpenAPI vive en `allfitone/packages/contracts/openapi`; este repositorio documenta requisitos y trazabilidad, enlaza la especificación y no conserva una copia del YAML.
 
 ## Organización
 
@@ -58,7 +60,7 @@ npm ci
 npm run check
 ```
 
-El comando valida Markdown, rutas y anchors internos, y la estructura del contrato OpenAPI. Las advertencias del contrato se revisan durante la HU que modifica la superficie afectada; los errores impiden integrar el cambio.
+El comando valida Markdown, rutas y anchors internos. La estructura del contrato OpenAPI se valida en `allfitone` durante la HU que modifica la superficie afectada; los errores impiden integrar el cambio.
 
 ## Revisión
 

@@ -2,13 +2,11 @@
   "name": "allfitone-docs",
   "private": true,
   "scripts": {
-    "check": "npm run check:markdown && npm run check:links && npm run check:openapi",
+    "check": "npm run check:markdown && npm run check:links",
     "check:links": "node scripts/check-links.mjs",
-    "check:markdown": "markdownlint-cli2 \"**/*.md\" \"#node_modules\"",
-    "check:openapi": "redocly lint platform/database/refactor/03_PROPOSED_DESIGN/openapi/allfit-v1.openapi.yaml"
+    "check:markdown": "markdownlint-cli2 \"**/*.md\" \"#node_modules\""
   },
   "devDependencies": {
-    "@redocly/cli": "2.43.3",
     "markdownlint-cli2": "0.23.2"
   }
 }

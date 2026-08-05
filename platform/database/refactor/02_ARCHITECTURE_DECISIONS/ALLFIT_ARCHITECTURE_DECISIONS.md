@@ -3540,9 +3540,9 @@ La independencia de un producto o deployable no exige un repositorio propio. Son
    - `apps/space`: aplicación Expo de Allfit Space.
 3. El código reutilizable vive en `packages/`. La baseline incluye `auth-provider`, `queue`, `contracts` y `db`; una aplicación nunca importa código interno de otra aplicación.
 4. `packages/db` es el único propietario de la configuración local de Supabase, la historia de migraciones, los schemas declarativos si se adoptan, los seeds, las pruebas de base de datos y los tipos generados. Un solo pipeline aplica migraciones.
-5. `packages/contracts` contiene el OpenAPI consumible y los DTOs generados por API y clientes. La definición normativa permanece en `allfitone-docs`; el CI debe detectar cualquier diferencia entre la copia consumible y el contrato normativo.
+5. `packages/contracts/openapi` contiene la fuente canónica del OpenAPI ejecutable y `packages/contracts/generated` sus DTOs generados para API y clientes. `allfitone-docs` conserva los requisitos, el contexto arquitectónico y la trazabilidad contractual, y enlaza la especificación sin mantener otra copia del YAML.
 6. Cada deployable conserva configuración, secretos, pipeline, artefacto, observabilidad, límites de recursos y estrategia de rollback propios. Turborepo selecciona las tareas afectadas; compartir repositorio no obliga a desplegar todo junto.
-7. `allfitone-docs` continúa como repositorio normativo separado. `allfitone-design-system` continúa como biblioteca publicada y `allfitone-landing-page` como sitio de marketing; ninguno se incorpora al monorepo de la plataforma en V1.
+7. `allfitone-docs` continúa como repositorio normativo de producto y arquitectura. `allfitone-design-system` continúa como biblioteca publicada y `allfitone-landing-page` como sitio de marketing; ninguno se incorpora al monorepo de la plataforma en V1.
 8. Una separación futura ocurre por dominio y solo ante evidencia medida de SLO, regulación, escala o incidentes. No se separa por producto duplicando API, identidad, contratos, grants o base de datos.
 
 ### Topología normativa
@@ -3590,7 +3590,7 @@ allfitone-landing-page/  sitio público de marketing
 - El CI necesita filtrado por grafo y caché para no ejecutar ni desplegar todo ante cada cambio.
 - Las fronteras entre aplicaciones y dominios deben imponerse con reglas automatizadas, no con la separación accidental de repositorios.
 - Los permisos del repositorio cubren más código y requieren protección de ramas y ownership por paths cuando el equipo crezca.
-- `allfitone-docs` y `packages/contracts` siguen en repositorios distintos, por lo que la sincronización del contrato necesita un gate explícito.
+- La narrativa contractual y el OpenAPI ejecutable viven en repositorios distintos; sus enlaces y trazabilidad deben revisarse sin introducir una segunda copia del YAML.
 
 ### Escenarios de prueba obligatorios
 
@@ -3598,6 +3598,6 @@ allfitone-landing-page/  sitio público de marketing
 2. Un cambio de `packages/contracts` ejecuta validación y build de todos sus consumidores afectados.
 3. Un cambio de `packages/db` ejecuta pruebas de base de datos y de los deployables backend afectados, pero solo el pipeline autorizado puede aplicar migraciones.
 4. Una importación desde una aplicación hacia otra falla en lint o en la verificación de fronteras.
-5. Una diferencia entre el OpenAPI normativo y `packages/contracts` falla en CI.
+5. Un OpenAPI inválido o una diferencia entre la especificación canónica y los DTOs generados falla en CI.
 6. Un token emitido para una Application sigue siendo rechazado en otra superficie aunque ambas vivan en el mismo repositorio.
 7. Un fallo o rollback de un deployable no obliga a publicar una versión nueva de los otros cuatro.

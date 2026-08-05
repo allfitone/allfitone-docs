@@ -376,7 +376,7 @@ Definir además el contrato de degradación por producto y dependencia:
 - [`V1_RLS_MATRIX.md`](../03_PROPOSED_DESIGN/V1_RLS_MATRIX.md).
 - [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](../03_PROPOSED_DESIGN/V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md).
 - [`V1_SPACE_STUDIO_API_CONTRACTS.md`](../03_PROPOSED_DESIGN/V1_SPACE_STUDIO_API_CONTRACTS.md).
-- [`V1_OPENAPI_CONTRACT.md`](../03_PROPOSED_DESIGN/V1_OPENAPI_CONTRACT.md) y [`allfit-v1.openapi.yaml`](../03_PROPOSED_DESIGN/openapi/allfit-v1.openapi.yaml) para la primera rebanada vertical.
+- [`V1_OPENAPI_CONTRACT.md`](../03_PROPOSED_DESIGN/V1_OPENAPI_CONTRACT.md) y [`allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml) para la primera rebanada vertical.
 - [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](../03_PROPOSED_DESIGN/V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md).
 - [`V1_DEGRADATION_AND_RECOVERY_MATRIX.md`](../03_PROPOSED_DESIGN/V1_DEGRADATION_AND_RECOVERY_MATRIX.md).
 
@@ -562,7 +562,7 @@ La lista siguiente describe el resultado acumulado de Fase 5. Cada rebanada ejec
 24. Ejecutar `T-SCHEMA-01..06` contra inventario, objetos, JSONB y particiones.
 25. Ejecutar `T-IDEM-01..10` y `T-NUT-IDEM-01..06`.
 26. Ejecutar `T-VG-01..06`, `T-BGG-01..12`, `T-NUT-INT-01..08` y `T-NUT-RLS-01..24`.
-27. Generar DTOs en `packages/contracts` y tipos internos en `packages/db/types`; comprobar que los primeros no difieren del OpenAPI normativo.
+27. Generar DTOs en `packages/contracts` y tipos internos en `packages/db/types`; comprobar que los primeros no difieren del OpenAPI canónico en `packages/contracts/openapi`.
 
 ### Datos de prueba mínimos
 
