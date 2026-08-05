@@ -25,7 +25,8 @@ La estructura admite nuevos productos mediante un directorio adicional en `produ
 ## Topología de repositorios
 
 - [`dinnartec/allfitone`](https://github.com/dinnartec/allfitone) es el monorepo de implementación de la plataforma. Contiene API, worker, Studio, Space, Backoffice y los paquetes compartidos de autenticación, cola, contratos y base de datos.
-- `allfitone-docs` es la fuente normativa de producto, arquitectura y contratos transversales.
+- `allfitone-docs` es la fuente normativa de producto, arquitectura, requisitos y trazabilidad contractual transversal.
+- El OpenAPI ejecutable pertenece a [`allfitone/packages/contracts/openapi`](https://github.com/dinnartec/allfitone/tree/main/packages/contracts/openapi), junto al código que lo consume y valida.
 - `allfitone-design-system` permanece como biblioteca UI publicada y `allfitone-landing-page` como sitio público de marketing.
 
 La decisión completa, incluidos los límites entre aplicaciones y deployables, está en [ADR-029](platform/database/refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md#adr-029-monorepo-de-implementación-con-deployables-independientes).
@@ -36,11 +37,12 @@ La decisión completa, incluidos los límites entre aplicaciones y deployables, 
 | --- | --- |
 | Definición, alcance e historias de cada producto | README y navegación de cada aplicación o paquete |
 | Arquitectura y decisiones que afectan a más de un producto | Instalación, desarrollo, pruebas y despliegue |
-| Contratos compartidos de API, datos, identidad y seguridad | Arquitectura y decisiones internas de la implementación |
+| Requisitos, semántica y trazabilidad de contratos compartidos | OpenAPI ejecutable, DTOs y decisiones internas de implementación |
 | Iniciativas técnicas transversales y su trazabilidad | Changelog, contribución, operación y mantenimiento local |
 
 - El monorepo `allfitone`, `allfitone-design-system` y `allfitone-landing-page` mantienen la documentación local que necesitan.
 - Una fuente de verdad no se copia entre repositorios: se conserva en su propietario y los demás documentos la enlazan.
+- La especificación OpenAPI se edita y valida en `allfitone`; este repositorio conserva su contexto funcional y la enlaza, pero no mantiene otra copia del YAML.
 - Si una decisión inicialmente local pasa a afectar a varios productos, su definición normativa se traslada a este repositorio y la documentación local conserva el enlace y el detalle de implementación.
 
 ## Validación
@@ -50,6 +52,6 @@ npm ci
 npm run check
 ```
 
-La validación comprueba la estructura básica de Markdown, los enlaces y anchors internos, y el contrato OpenAPI 3.1.
+La validación comprueba la estructura básica de Markdown y los enlaces y anchors internos. El OpenAPI 3.1 se valida en el CI de `allfitone`, donde vive su fuente canónica.
 
 Las reglas para decidir dónde vive cada documento y cómo mantener sus fuentes de verdad están en [CONTRIBUTING.md](CONTRIBUTING.md).

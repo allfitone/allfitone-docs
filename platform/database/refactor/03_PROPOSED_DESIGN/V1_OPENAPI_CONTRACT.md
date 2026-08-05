@@ -1,15 +1,15 @@
 # Contrato OpenAPI de la primera rebanada vertical V1
 
-**Versión de revisión:** 5<br>
-**Fecha:** 28 de julio de 2026<br>
+**Versión de revisión:** 6<br>
+**Fecha:** 5 de agosto de 2026<br>
 **Fase:** 3 — Contrato ejecutable previo a Fase 5<br>
 **Estado:** aprobado y recertificado con los P1/P2 de Nutrición cerrados<br>
-**Fuente canónica:** [`openapi/allfit-v1.openapi.yaml`](./openapi/allfit-v1.openapi.yaml)<br>
+**Fuente canónica:** [`allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml)<br>
 **Deriva de:** [`V1_OPERATIONS_MATRIX.md`](./V1_OPERATIONS_MATRIX.md), [`V1_SPACE_STUDIO_API_CONTRACTS.md`](./V1_SPACE_STUDIO_API_CONTRACTS.md), [`V1_IDEMPOTENCY_CONTRACT.md`](./V1_IDEMPOTENCY_CONTRACT.md) y [`V1_DEGRADATION_AND_RECOVERY_MATRIX.md`](./V1_DEGRADATION_AND_RECOVERY_MATRIX.md)
 
 ## 1. Decisión
 
-La primera rebanada vertical ya tiene un contrato OpenAPI 3.1 canónico, cerrado y validable antes de implementar sus handlers. El archivo YAML, no el código, fija:
+La primera rebanada vertical ya tiene un contrato OpenAPI 3.1 canónico, cerrado y validable antes de implementar sus handlers. ADR-029 ubica su fuente ejecutable junto al código consumidor en el monorepo `allfitone`; este documento conserva el contexto y la trazabilidad. El archivo YAML fija:
 
 - rutas, métodos y parámetros;
 - DTOs exactos con objetos cerrados mediante `additionalProperties: false`;
