@@ -1,9 +1,9 @@
 # Contrato OpenAPI de la primera rebanada vertical V1
 
-**Versión de revisión:** 6<br>
-**Fecha:** 5 de agosto de 2026<br>
+**Versión de revisión:** 7<br>
+**Fecha:** 6 de agosto de 2026<br>
 **Fase:** 3 — Contrato ejecutable previo a Fase 5<br>
-**Estado:** aprobado y recertificado con los P1/P2 de Nutrición cerrados<br>
+**Estado:** aprobado; contrato, tipos generados y gate de rutas sincronizados<br>
 **Fuente canónica:** [`allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml)<br>
 **Deriva de:** [`V1_OPERATIONS_MATRIX.md`](./V1_OPERATIONS_MATRIX.md), [`V1_SPACE_STUDIO_API_CONTRACTS.md`](./V1_SPACE_STUDIO_API_CONTRACTS.md), [`V1_IDEMPOTENCY_CONTRACT.md`](./V1_IDEMPOTENCY_CONTRACT.md) y [`V1_DEGRADATION_AND_RECOVERY_MATRIX.md`](./V1_DEGRADATION_AND_RECOVERY_MATRIX.md)
 
@@ -20,7 +20,7 @@ La primera rebanada vertical ya tiene un contrato OpenAPI 3.1 canónico, cerrado
 - relación exacta con la operación `OP-*`;
 - política separada de URLs firmadas Space y proxy autenticado Studio.
 
-Los P1/P2 contractuales de Nutrición quedan resueltos en esta revisión: el contrato separa requests self/profesional, protege medios Studio mediante proxy autenticado y publica autoría mínima consistente. La baseline completa queda recertificada para iniciar Fase 5. Los endpoints que no están en el YAML siguen sin autorización para implementarse.
+Los P1/P2 contractuales de Nutrición quedan resueltos en esta revisión: el contrato separa requests self/profesional, protege medios Studio mediante proxy autenticado y publica autoría mínima consistente. La baseline completa queda recertificada para iniciar Fase 5. Una ruta de producto estable que no está en el YAML sigue sin autorización para implementarse. Solo una ruta operacional o provisional puede existir fuera de `paths`, siempre que figure en la lista auditable `x-allfit-contract-gate.exclusions`; esas exclusiones no constituyen contratos para clientes.
 
 ## 2. Alcance implementable
 
@@ -98,6 +98,19 @@ Studio nunca recibe esa URL. `AuthorizedNutritionMeal.photo` contiene `Authentic
 
 ## 4. Gate contract-first
 
+Toda ruta registrada por Hono debe pertenecer a una de dos categorías mutuamente excluyentes:
+
+1. operación estable de producto definida en `paths`, con `operationId` y `x-allfit-operation`;
+2. excepción operacional o provisional declarada en `x-allfit-contract-gate.exclusions` y todavía presente en la implementación.
+
+El manifiesto generado desde OpenAPI contiene ambas listas. CI enumera `createApp().routes`, rechaza una ruta implementada que no aparezca en ninguna y también rechaza una exclusión obsoleta cuya ruta ya no exista. La lista vigente contiene:
+
+| Método y ruta | Clase | Ciclo de vida | Motivo |
+| --- | --- | --- | --- |
+| `GET /health` | Operacional | Permanente | Liveness pertenece al despliegue, no al contrato de producto. |
+| `GET /studio/v1/auth/start` | Provisional | Hasta cerrar sesiones Studio | Walking skeleton del flujo hospedado; todavía no es contrato para clientes. |
+| `GET /studio/v1/auth/callback` | Provisional | Hasta cerrar sesiones Studio | La respuesta actual es diagnóstica y debe sustituirse por el contrato real de sesión. |
+
 Una operación solo puede implementarse cuando:
 
 1. existe en el YAML con `operationId` único;
@@ -114,14 +127,14 @@ El YAML inicial reúne Space y Studio para validar el flujo de extremo a extremo
 | Prueba | Demuestra |
 | --- | --- |
 | `T-API-01` | El archivo parsea como OpenAPI 3.1.0 y todas las referencias locales resuelven. |
-| `T-API-02` | Cada `operationId` es único y cada operación declara un único `x-allfit-operation` válido. |
+| `T-API-02` | Cada `operationId` es único, cada operación declara un `x-allfit-operation` válido y toda ruta Hono está cubierta por OpenAPI o por una exclusión vigente; ninguna exclusión queda obsoleta. |
 | `T-API-03` | Las veintiuna operaciones de la rebanada están presentes; no falta ningún paso ejecutable. |
 | `T-API-04` | Requests, responses y ejemplos validan contra esquemas cerrados. |
 | `T-API-05` | Todo comando exige `Idempotency-Key` y `Command-Id`; resultados/finalización exigen `If-Match`. |
 | `T-API-06` | Cada operación y respuesta declara su política de caché; los errores nunca son cacheables. |
 | `T-API-07` | La proyección Studio aplica field-set y no distingue datos redactados de datos no capturados. |
 | `T-API-08` | Toda URL firmada es HTTPS, dura como máximo 300 segundos y no filtra su query a logs. |
-| `T-API-09` | Los DTOs generados no difieren del OpenAPI publicado. |
+| `T-API-09` | Los tipos TypeScript y el manifiesto de operaciones/exclusiones se regeneran de forma determinista y no difieren del OpenAPI publicado. |
 
 ### 5.1 Verificaciones nutricionales
 
@@ -148,4 +161,4 @@ Estas verificaciones deben entrar en CI antes del primer handler. La validación
 
 ## 6. Resultado
 
-Los tres P1 y los tres P2 de Nutrición dejan de ser bloqueos contractuales: frozen usa una columna física real, la propuesta profesional exige `rationale`, Studio tiene revocación efectiva por petición para medios, `NutritionGoalVersion` publica autoría mínima y la trazabilidad operación→prueba es exacta. La recertificación integral conserva 18 paths/21 operaciones y habilita `GO` para iniciar Fase 5.
+Los tres P1 y los tres P2 de Nutrición dejan de ser bloqueos contractuales: frozen usa una columna física real, la propuesta profesional exige `rationale`, Studio tiene revocación efectiva por petición para medios, `NutritionGoalVersion` publica autoría mínima y la trazabilidad operación→prueba es exacta. La recertificación integral conserva 18 paths/21 operaciones, añade tres exclusiones auditables sin ampliar el contrato estable y habilita `GO` para iniciar Fase 5.

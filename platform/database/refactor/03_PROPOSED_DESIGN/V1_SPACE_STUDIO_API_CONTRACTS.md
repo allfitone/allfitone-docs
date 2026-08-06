@@ -1,9 +1,9 @@
 # Contratos de API de Space, Studio y Backoffice — V1
 
-**Versión de revisión:** 6
-**Fecha:** 5 de agosto de 2026
+**Versión de revisión:** 7
+**Fecha:** 6 de agosto de 2026
 **Fase:** 3 — Definir operaciones, seguridad y contratos
-**Estado:** superficie Backoffice recertificada por ADR-028 y fuente OpenAPI y distribución de DTOs consolidadas en el monorepo por ADR-029; contratos detallados restantes sujetos a los P0
+**Estado:** superficie Backoffice recertificada por ADR-028; fuente OpenAPI, tipos generados y gate de rutas consolidados en el monorepo por ADR-029; contratos detallados restantes sujetos a los P0
 **Deriva de:** [`V1_OPERATIONS_MATRIX.md`](./V1_OPERATIONS_MATRIX.md), [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_OPENAPI_CONTRACT.md`](./V1_OPENAPI_CONTRACT.md) y [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
 
 ## 1. Propósito
@@ -190,7 +190,9 @@ Tres reglas que no se negocian:
 
 [`allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml) es la fuente canónica de rutas, DTOs, ejemplos y caché para las veintiuna operaciones HTTP de la primera rebanada vertical ampliada. [`V1_OPENAPI_CONTRACT.md`](./V1_OPENAPI_CONTRACT.md) registra su alcance y las pruebas `T-API-01..09` + `T-NUT-API-01..14`.
 
-Un endpoint listado más adelante pero ausente del YAML todavía es **diseño**, no una superficie implementable. Debe incorporarse contract-first con su `x-allfit-operation` antes de crear el handler.
+Un endpoint estable de producto listado más adelante pero ausente del YAML todavía es **diseño**, no una superficie implementable. Debe incorporarse contract-first con su `x-allfit-operation` antes de crear el handler.
+
+Las únicas rutas que pueden existir fuera de `paths` son excepciones operacionales o provisionales declaradas en `x-allfit-contract-gate.exclusions`. No son contratos para Space, Studio ni Backoffice. El gate compara esa lista y las operaciones estables con `createApp().routes`: falla tanto por una ruta no declarada como por una exclusión cuya implementación desapareció. Las exclusiones vigentes son `GET /health`, de carácter operacional permanente, y el bootstrap provisional `GET /studio/v1/auth/start` + `GET /studio/v1/auth/callback`, que debe retirarse de exclusiones al definir el contrato real de sesión Studio.
 
 ## 4. Contrato de Space
 
@@ -760,10 +762,11 @@ allfitone/
 ```
 
 - Los tipos se generan **desde** los documentos OpenAPI, no a mano.
+- `@allfitone/contracts` exporta `AllfitV1Paths`, `AllfitV1Operations` y `AllfitV1Schemas`; el manifiesto generado de operaciones/exclusiones existe para el gate y no es un SDK.
 - Los tipos crudos del esquema de base de datos **no salen** del backend. Space y Studio conocen DTOs, no columnas.
 - `@allfitone/contracts` se resuelve como workspace privado y cambia en el mismo commit que sus consumidores. No necesita publicación intermedia para coordinar aplicaciones del monorepo.
 - La compatibilidad pública se versiona por superficie (`/space/v1`, `/studio/v1`, `/catalog/v1`, `/backoffice/v1`), no mediante la versión npm interna del paquete. Una versión incompatible coexiste con la anterior durante su deprecación.
-- El CI de `allfitone` valida el OpenAPI canónico con Redocly. Los DTOs deben generarse desde esa fuente y su gate de drift forma parte de los escenarios obligatorios de ADR-029: el contrato no puede desviarse del código en silencio.
+- El CI de `allfitone` valida el OpenAPI canónico con Redocly, regenera tipos y manifiesto, exige un diff limpio y coteja las rutas Hono con operaciones y exclusiones. El contrato no puede desviarse del código en silencio.
 
 La ampliación nutricional añade DTOs cerrados `NutritionMeal`, `NutritionMealItem`, `NutrientValue`, `NutritionDailySummary`, `NutritionGoalVersion`, `NutritionGoalAuthor`, `NutritionGoalTarget` y `NutritionGoalDecision`. `NutritionGoalAuthor` es obligatorio y publica solo `kind`/`person_id`, con `kind == origin`; los DTOs nunca exponen nombres, nombres de tabla, `media_ref`, contexto RLS o evidencia privada de verificación.
 
@@ -782,7 +785,8 @@ Cada endpoint declara qué hace cuando una dependencia falla. La tabla completa 
 
 | Decisión | Destino |
 | --- | --- |
-| OpenAPI y DTOs de endpoints fuera de las veintiuna operaciones de la primera rebanada | Contract-first, antes de implementar cada endpoint |
+| OpenAPI y DTOs de endpoints estables fuera de las veintiuna operaciones de la primera rebanada | Contract-first, antes de implementar cada endpoint |
+| Contrato de sesión de Space Auth | Pendiente hasta cerrar create session, refresh y sign out; no se autoriza un bootstrap provisional sin declararlo como exclusión |
 | Enumeración definitiva de `SCOPE_RESOURCE_RULE` por versión | Fase 4 |
 | Valores concretos de rate limit por WorkOS Application y dominio | `V1_DEGRADATION_AND_RECOVERY_MATRIX.md` |
 | Formato de `id`: opaco con prefijo o UUID desnudo | Fase 4, con la estrategia de identificadores |

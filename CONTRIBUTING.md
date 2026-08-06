@@ -24,6 +24,8 @@ Cuando un documento consume una fuente normativa de este repositorio debe enlaza
 
 Los artefactos ejecutables pertenecen al código que los consume. En particular, la fuente canónica OpenAPI vive en `allfitone/packages/contracts/openapi`; este repositorio documenta requisitos y trazabilidad, enlaza la especificación y no conserva una copia del YAML.
 
+Las rutas estables de producto se definen en `paths`. Las rutas operacionales o provisionales que todavía no constituyen contrato para clientes deben figurar en `x-allfit-contract-gate.exclusions`; la justificación normativa se documenta aquí, pero la lista ejecutable se mantiene únicamente junto al OpenAPI.
+
 ## Organización
 
 - `products/<slug>/`: definición, alcance e historias de cada producto.
