@@ -18,7 +18,7 @@ La revisión parte de:
 - los entregables vigentes de Fases 1 a 4;
 - el estado declarado en [PHASE_5_READINESS_REVIEW.md](./PHASE_5_READINESS_REVIEW.md).
 
-Este documento autoriza iniciar Fase 5 únicamente mediante rebanadas verticales que hayan cerrado su propio gate. No autoriza generar de una vez las 115 tablas documentadas, crear placeholders ni implementar una HU mientras alguno de los P0 que consume siga abierto.
+Este documento autoriza iniciar Fase 5 únicamente mediante rebanadas verticales que hayan cerrado su propio gate. No autoriza generar de una vez las 116 tablas documentadas, crear placeholders ni implementar una HU mientras alguno de los P0 que consume siga abierto.
 
 ## 2. Veredicto
 
@@ -755,7 +755,7 @@ Cada ruta declara columnas, joins, helper, proyección, índice y prueba exactos
 
 ## 17. Contratos HTTP y de jobs
 
-El OpenAPI canónico actual contiene 21 operaciones y no cubre identidad, organizaciones, pagos o Backoffice. Antes del primer handler de cada nueva rebanada:
+El OpenAPI canónico actual contiene 25 operaciones e incorpora la sesión de identidad Studio; aún no cubre el resto de Identidad, Organizaciones, Pagos o Backoffice. Antes del primer handler de cada nueva rebanada:
 
 - añadir su `x-allfit-operation`;
 - cerrar request, response, errores, headers e idempotencia;

@@ -193,7 +193,7 @@ Toda sesión conserva la zona horaria de la persona en el momento del hecho. La 
 
 | Dominio | Comandos | Consultas | Total |
 | --- | --- | --- | --- |
-| Identidad | 14 | 10 | 24 |
+| Identidad | 17 | 11 | 28 |
 | Organizaciones | 13 | 5 | 18 |
 | Relaciones | 9 | 5 | 14 |
 | Privacidad | 13 | 7 | 20 |
@@ -204,7 +204,7 @@ Toda sesión conserva la zona horaria de la persona en el momento del hecho. La 
 | Pagos | 16 | 7 | 23 |
 | Sistema | 10 | 0 | 10 |
 | Soporte | 6 | 5 | 11 |
-| **Total** | **121** | **63** | **184** |
+| **Total** | **124** | **64** | **188** |
 
 Algunas fichas cubren dos identificadores cuando la operación es simétrica —crear y editar un borrador, listar y consultar el detalle—. En esos casos el encabezado nombra ambos y el contenido aplica a los dos.
 
@@ -212,7 +212,7 @@ Algunas fichas cubren dos identificadores cuando la operación es simétrica —
 
 ### 7.1 Identidad
 
-Este dominio es dueño de `PERSON`, `ACCESS_ACCOUNT`, `ONBOARDING_ATTEMPT`, `ELIGIBILITY_EVIDENCE`, `FITNESS_PROFILE_CLAIM`, `BODY_PROGRESS_RECORD`, `HEALTH_CONTEXT_CLAIM`, `PROFILE_VERIFICATION`, `PROFESSIONAL_PROFILE`, `INVITATION` e `INVITATION_INTENT`.
+Este dominio es dueño de `PERSON`, `ACCESS_ACCOUNT`, `ACCESS_SESSION`, `ONBOARDING_ATTEMPT`, `ELIGIBILITY_EVIDENCE`, `FITNESS_PROFILE_CLAIM`, `BODY_PROGRESS_RECORD`, `HEALTH_CONTEXT_CLAIM`, `PROFILE_VERIFICATION`, `PROFESSIONAL_PROFILE`, `INVITATION` e `INVITATION_INTENT`.
 
 Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Ninguna operación crea una `PERSON` sin control personal del sujeto, elegibilidad adulta resuelta y onboarding completo.
 
@@ -242,6 +242,10 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-022` | Verificar un contacto | Comando | `A2` |
 | `OP-IDN-023` | Consultar mis preferencias de notificación | Consulta | `A2` |
 | `OP-IDN-024` | Actualizar mis preferencias de notificación | Comando | `A2` |
+| `OP-IDN-025` | Iniciar autenticación alojada de Studio | Comando | `A0` |
+| `OP-IDN-026` | Completar callback y crear sesión Studio | Comando | `A0` → `A1`, `A2` |
+| `OP-IDN-027` | Consultar la sesión actual de Studio | Consulta | `A1`, `A2` |
+| `OP-IDN-028` | Cerrar la sesión actual de Studio | Comando | `A1`, `A2` |
 
 ---
 
@@ -636,6 +640,74 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Es el dato que hace evaluable el filtro obligatorio de `OP-SYS-002`. Las notificaciones de seguridad **no se pueden desactivar**. Ninguna organización lee ni escribe estas preferencias. Desactivar un canal no cancela la operación de negocio que lo hubiera usado, **salvo** en `OP-REL-003`, donde la notificación es parte de la transacción |
 | **Falla cerrada** | Categoría o canal fuera del catálogo: rechazo |
+
+#### `OP-IDN-025` — Iniciar autenticación alojada de Studio
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando técnico sin escritura de dominio |
+| **Superficie** | `GET /studio/v1/auth/start` |
+| **Actor** | `A0` |
+| **Filtros obligatorios** | Origen y callback configurados para Studio; `state` criptográficamente aleatorio |
+| **Transacción** | Ninguna. Crea una cookie temporal `HttpOnly`, `SameSite=Lax`, limitada a `/studio/v1/auth`, y redirige al flujo alojado de WorkOS AuthKit |
+| **Idempotencia** | No aplica; cada inicio genera un `state` nuevo |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Exige conexión; dos inicios son flujos independientes y solo el `state` presentado puede completarse |
+| **Información sensible** | El `state` no es identidad ni autorización y nunca se registra |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | No crea `PERSON`, `ACCESS_ACCOUNT` ni sesión de producto |
+| **Falla cerrada** | Configuración incompleta o proveedor no disponible: no redirige a un destino alternativo |
+
+#### `OP-IDN-026` — Completar callback y crear sesión Studio
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `GET /studio/v1/auth/callback` |
+| **Actor** | `A0` que pasa a `A1` o `A2` después de verificar WorkOS |
+| **Filtros obligatorios** | `state` presente, vigente y coincidente; token firmado para Studio; `sub` del intercambio igual al JWT; `sid` presente |
+| **Transacción** | Resolver o crear una sola `ACCESS_ACCOUNT` por `(provider, issuer, subject)` y crear/reemplazar `ACCESS_SESSION` por `(surface, sid)`; la llamada a WorkOS ocurre fuera de PostgreSQL |
+| **Idempotencia** | La unicidad converge; un callback ya consumido se rechaza por `state` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Exige conexión. La base serializa la cuenta y reemplaza atómicamente la sesión del mismo `sid` |
+| **Información sensible** | Cookie opaca de 256 bits; solo su SHA-256 se persiste. Access y refresh tokens se cifran con AES-256-GCM y AAD ligada a cuenta, superficie y `sid` |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Una autenticación válida puede crear `ACCESS_ACCOUNT`, pero nunca `PERSON`. Redirige `303` a Studio sin tokens, códigos ni identificadores en la URL |
+| **Falla cerrada** | Cualquier mismatch de `state`, `sub`, `sid`, issuer o superficie impide crear la sesión |
+
+#### `OP-IDN-027` — Consultar la sesión actual de Studio
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /studio/v1/session` |
+| **Actor** | `A1`, `A2` mediante cookie opaca `HttpOnly` |
+| **Filtros obligatorios** | Hash de cookie, superficie `studio`, sesión no revocada y token verificable; persona activa cuando existe vínculo |
+| **Transacción** | Cargar por función cerrada. El contexto `app.actor_*` se fija localmente en la transacción para resolver cuenta/persona por RLS |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | `private, no-store`. Refresh fuera de transacción y persistencia compare-and-swap; el perdedor recarga la versión ganadora |
+| **Información sensible** | Responde solo `authenticated: true` y `registration_status`; nunca IDs ni tokens |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Sin `person_id`: `registration_incomplete`. Persona activa: `complete`. Persona cerrada: revoca y responde `account-closed` |
+| **Falla cerrada** | Error terminal revoca; fallo transitorio conserva una sesión aún vigente y responde indisponibilidad si ya venció |
+
+#### `OP-IDN-028` — Cerrar la sesión actual de Studio
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /studio/v1/auth/logout` |
+| **Actor** | `A1`, `A2`; idempotente si la cookie o sesión ya no existen |
+| **Filtros obligatorios** | `Origin` exactamente igual al origen de `STUDIO_WEB_URL` |
+| **Transacción** | Cargar el `sid`, revocar la sesión local y borrar la cookie; luego redirigir `303` al logout alojado de WorkOS con retorno a Studio |
+| **Idempotencia** | Repetirlo no reabre ni recrea la sesión |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Requiere conexión para terminar también la sesión alojada; la revocación local converge |
+| **Información sensible** | El `sid` nunca se devuelve al navegador ni aparece en la URL de retorno de Studio |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Cookie host-only, `Path=/studio/v1`, sin `Max-Age`; su borrado usa el mismo path |
+| **Falla cerrada** | Origen distinto: `403 forbidden` sin tocar la sesión |
 
 ### 7.2 Organizaciones
 

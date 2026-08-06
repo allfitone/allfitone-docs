@@ -1,7 +1,7 @@
 # ERD lógico V1 — modelo físico de PostgreSQL
 
-**Versión de revisión:** 4
-**Fecha:** 3 de agosto de 2026
+**Versión de revisión:** 5
+**Fecha:** 6 de agosto de 2026
 **Fase:** 4 — Modelo lógico y diccionario de datos
 **Estado:** Backoffice opción B recertificada; resto de P0 pendiente
 **Deriva de:** [`V1_CONCEPTUAL_ERD.md`](./V1_CONCEPTUAL_ERD.md), [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md), [`V1_IDEMPOTENCY_CONTRACT.md`](./V1_IDEMPOTENCY_CONTRACT.md), [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md), [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
@@ -14,7 +14,7 @@ Cada tabla aplica las convenciones de [`POSTGRES_MODELING_STANDARD.md`](./POSTGR
 
 ## 2. Del concepto a la tabla
 
-El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **115 tablas de dominio** en once schemas. ADR-028 añade cuatro tablas de soporte a las 111 previas: deberes de plataforma y los tres expedientes físicos de break-glass. Enums, vistas, funciones y particiones hijas no cuentan como tablas adicionales.
+El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **116 tablas de dominio** en once schemas. A las 115 tablas recertificadas tras ADR-028 se suma `identity.access_sessions`, almacenamiento técnico requerido por la sesión opaca de Studio. Enums, vistas, funciones y particiones hijas no cuentan como tablas adicionales.
 
 | Entidad conceptual | Tablas físicas | Por qué se expande |
 | --- | --- | --- |
@@ -51,6 +51,7 @@ Estados de máquina y clasificaciones cerradas y estables. Se declaran una vez y
 | Tipo | Schema | Valores V1 |
 | --- | --- | --- |
 | `actor_kind` | `identity` | `anonymous`, `account`, `person`, `professional`, `worker`, `support` |
+| `access_session_surface` | `identity` | `studio` |
 | `provenance` | `identity` | `person_declared`, `professional_observation`, `device_observed`, `system_inferred`, `authority_verified` |
 | `onboarding_status` | `identity` | `open`, `activated`, `expired`, `abandoned` |
 | `eligibility_result` | `identity` | `pass`, `fail`, `review_required`, `unknown` |
@@ -90,6 +91,7 @@ Estados de máquina y clasificaciones cerradas y estables. Se declaran una vez y
 ```mermaid
 erDiagram
     people ||--o{ access_accounts : "person_id"
+    access_accounts ||--o{ access_sessions : "access_account_id"
     people ||--o{ onboarding_attempts : "person_id (nullable)"
     access_accounts ||--o{ onboarding_attempts : "account_id"
     onboarding_attempts ||--|{ eligibility_evidence : "onboarding_attempt_id"
@@ -108,6 +110,7 @@ erDiagram
 | --- | --- | --- |
 | `people` | `id` | Raíz del Fitness ID. Creada solo por `activate_person` |
 | `access_accounts` | `id` | `UNIQUE (provider, issuer, subject)`; `person_id` nullable hasta activar |
+| `access_sessions` | `id` | hash SHA-256 de cookie; tokens cifrados; `UNIQUE (surface, provider_session_id)`; rotación compare-and-swap |
 | `onboarding_attempts` | `id` | `account_id` NOT NULL; `person_id` nullable; `status onboarding_status` |
 | `eligibility_evidence` | `id` | `onboarding_attempt_id`; `result eligibility_result`; snapshot de la política aplicada |
 | `profile_attributes` | `id` | `UNIQUE code`; catálogo cerrado de atributos de perfil V1 |
@@ -421,6 +424,7 @@ La regla estructural: `identity.people` y las raíces de autenticación no depen
 | Relación física | Cardinalidad | Invariante que la impone |
 | --- | --- | --- |
 | `people` → `access_accounts` | `1 : 0..N` | `UNIQUE (provider,issuer,subject)`; una cuenta a una persona |
+| `access_accounts` → `access_sessions` | `1 : 0..N` | cookie opaca por sesión; `UNIQUE (surface, provider_session_id)` |
 | `onboarding_attempts` → `people` | `1 : 0..1` | intento no elegible no crea persona |
 | `service_relationships` activa por par | `≤ 1` | `UNIQUE parcial WHERE status='active'` |
 | `relationship_professional_assignments` titular efectivo | `≤ 1` | `UNIQUE parcial` de titular vigente |

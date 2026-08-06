@@ -37,9 +37,9 @@ El actor, predicado y superficie de lectura histórica quedaron resueltos el 23 
 Fase 2 quedó recertificada el 28 de julio de 2026 con Nutrición como noveno dominio conceptual, además de `staff`, titular/suplente, Soporte y separación de deberes `A10/A12`.
 La integridad cross-table quedó recertificada mediante ADR-024/027 y una matriz de 35 invariantes con mecanismo y prueba negativa exactos.
 El drift físico de RLS quedó cerrado mediante 27 rutas operación→policy→índice→prueba, contratos separados para grants `active`/`frozen`, siete pruebas físicas `T-PHY-*` y cuatro `T-NUT-PHY-*`.
-El inventario y diccionario físico quedaron recertificados en 99 tablas con ficha individual, contratos JSONB, nombres determinísticos y particionamiento verificable.
+El inventario y diccionario físico contienen 116 tablas con ficha individual; `identity.access_sessions` materializa únicamente la sesión técnica de Studio.
 La idempotencia durable quedó cerrada el 26 de julio de 2026 separando replay HTTP de 24 h y `Command-Id`, con scope calculado, tombstone mínimo, concurrencia transaccional y diez pruebas `T-IDEM-*`.
-El contrato HTTP corregido contiene OpenAPI 3.1 con 18 paths, 21 operaciones, DTOs cerrados, ejemplos, caché, URL firmada Space, proxy autenticado Studio, nueve verificaciones `T-API-*` y catorce `T-NUT-API-*`.
+El contrato HTTP contiene OpenAPI 3.1 con 22 paths, 25 operaciones, DTOs cerrados, cookie opaca Studio, ejemplos, caché, URL firmada Space, proxy autenticado Studio, once verificaciones `T-API-*` y catorce `T-NUT-API-*`.
 La gobernanza de verificación y break-glass quedó recertificada con `nutrition_guidance` estándar, `nutrition_intake` restringida y `nutrition_media` prohibida, además de catálogo mínimo, evidencia permitida, conflictos, deberes de 90 días, quorum por sensibilidad, revisión independiente y respuesta ante abuso.
 
 ### Reevaluación consolidada
@@ -48,11 +48,11 @@ La gobernanza de verificación y break-glass quedó recertificada con `nutrition
 | --- | --- | --- |
 | Aprobación de diseño | Fases 1, 2, 3 y 4 aprobadas | Cumple |
 | Bloqueos críticos | 8 de 8 P0 resueltos; 0 activos | Cumple |
-| Inventario físico | 99 tablas en ERD, diccionario y catálogo, sin diferencias | Cumple |
-| Fichas físicas | 99 de 99 completas | Cumple |
+| Inventario físico | 116 tablas en ERD, diccionario y catálogo, sin diferencias | Cumple |
+| Fichas físicas | 116 de 116 completas | Cumple |
 | Seguridad RLS | 186 pruebas funcionales/RLS: 73 positivas y 113 negativas | Cumple |
 | Trazabilidad física | 27 rutas `PR-*`; cada `OP-NUT-001..013` aparece una vez con pruebas semánticamente correspondientes | Cumple |
-| Primera rebanada | 18 paths/21 operaciones en OpenAPI y gate contract-first | Cumple |
+| Primera rebanada | 22 paths/25 operaciones en OpenAPI y gate contract-first | Cumple |
 | Autoría pública nutricional | `NutritionGoalAuthor` obligatorio y cerrado publica solo `kind` y `person_id`; coincide con `origin` y permanece estable en live/frozen | Cumple |
 | Break-glass nutricional | Guidance estándar, intake restringida, mezcla con intake restringida y media prohibida/no persistible | Cumple |
 
@@ -103,19 +103,19 @@ La revisión utiliza como fuentes:
 | Elemento | Magnitud |
 | --- | ---: |
 | Dominios conceptuales principales | 9 |
-| Schemas físicos propuestos | 10 |
-| ADR consolidados | 27 |
+| Schemas físicos propuestos | 11 |
+| ADR consolidados | 29 |
 | Escenarios transversales de Fase 2 | 18 |
-| Operaciones V1 inventariadas | 150 |
-| Tablas físicas declaradas | 99 |
-| Fichas físicas individuales | 99 |
+| Operaciones V1 inventariadas | 188 |
+| Tablas físicas declaradas | 116 |
+| Fichas físicas individuales | 116 |
 | Contratos JSONB registrados | 20 |
 | Pruebas RLS documentadas | 186 |
 | Rutas físicas de autorización | 27 |
 | Pruebas de idempotencia durable | 10 generales + 6 nutricionales |
 | Superficies HTTP | 3 |
 | Scopes V1 | 7 |
-| OpenAPI de primera rebanada | 18 paths / 21 operaciones |
+| OpenAPI de primera rebanada | 22 paths / 25 operaciones |
 
 Estas cifras no demuestran por sí solas sobrearquitectura. Sí demuestran que un error normativo se propaga sobre una superficie amplia. Por ello, la consistencia previa al DDL tiene un valor especialmente alto.
 
@@ -472,7 +472,7 @@ El cierre exige y confirma:
 - tres scopes nutricionales independientes, para un total de siete;
 - `OP-NUT-001..013`, para un inventario de 150 operaciones;
 - `PR-24..27`, `IX-28..35` y las cinco familias de pruebas nutricionales;
-- OpenAPI canónico con 18 paths y 21 operaciones;
+- OpenAPI canónico con 22 paths y 25 operaciones, incluidas cuatro operaciones de sesión Studio;
 - ausencia de nutrición como dominio diferido;
 - ausencia de migración, ETL, compatibilidad o datos de Factory Fitness.
 
@@ -482,7 +482,7 @@ El cierre exige y confirma:
 
 [`V1_OPENAPI_CONTRACT.md`](../03_PROPOSED_DESIGN/V1_OPENAPI_CONTRACT.md) y [`allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml) cierran:
 
-- 21 operaciones HTTP distribuidas en 18 paths: las ocho originales y `OP-NUT-001..013`;
+- 25 operaciones HTTP distribuidas en 22 paths: las ocho originales, `OP-NUT-001..013` y `OP-IDN-025..028`;
 - mapeo unívoco mediante `x-allfit-operation`, sin `operationId` duplicados;
 - requests, responses y DTOs campo por campo con objetos cerrados;
 - ejemplos completos;
@@ -490,7 +490,7 @@ El cierre exige y confirma:
 - caché concreta por operación;
 - URLs firmadas HTTPS Space con vigencia máxima de 300 segundos y proxy Studio autenticado, sin redirect y revocable en cada petición;
 - DTOs separados para meta self y profesional, con `rationale` obligatorio en OP-NUT-012;
-- verificaciones `T-API-01..09` y `T-NUT-API-01..14`.
+- verificaciones `T-API-01..11` y `T-NUT-API-01..14`.
 
 El gate permanece contract-first: cualquier endpoint fuera de esa primera rebanada continúa sin autorización de implementación hasta entrar al OpenAPI con su `x-allfit-operation`. El código no es la fuente inicial del contrato.
 
@@ -689,9 +689,9 @@ Una regla derivada debe enlazar a la fuente, no volver a presentarse como decisi
 | `D-007` | Aprobadores de break-glass | **A10 solicita/ejerce; uno o dos A12 distintos aprueban según sensibilidad; otro A12 revisa; expiración y abuso cerrados por ADR-026** | 26 de julio de 2026 |
 | `D-011` | Mecanismo por invariante cruzada | **35 invariantes: FK compuesta por defecto; constraint trigger diferible para estado/target/familia; entrada cerrada para auditoría particionada** | 28 de julio de 2026 |
 | `D-013` | Contrato físico de RLS | **27 rutas `PR-*`, grants live/frozen separados, proyecciones cerradas, índices obligatorios, `T-PHY-01..07` y `T-NUT-PHY-01..04`** | 28 de julio de 2026 |
-| `D-014` | Inventario y contratos físicos | **99 fichas; tipos compartidos; nombres determinísticos; 20 JSONB versionados; UUIDv7/particiones y `T-SCHEMA-01..06`** | 28 de julio de 2026 |
+| `D-014` | Inventario y contratos físicos | **116 fichas; tipos compartidos; nombres determinísticos; 20 JSONB versionados; UUIDv7/particiones y `T-SCHEMA-01..06`** | 6 de agosto de 2026 |
 | `D-010` | Alcance de idempotencia durable | **ADR-025: replay HTTP 24 h + `Command-Id` durable; scope de servidor, terminalidad transaccional, disposición y `T-IDEM-01..10`** | 26 de julio de 2026 |
-| `D-012` | Esquema exacto de DTOs/OpenAPI | **OpenAPI 3.1 canónico para 18 paths/21 operaciones; DTOs self/profesional separados, autoría mínima, caché, URL firmada Space, proxy Studio y `T-API-01..09` + `T-NUT-API-01..14`** | 28 de julio de 2026 |
+| `D-012` | Esquema exacto de DTOs/OpenAPI | **OpenAPI 3.1 canónico para 22 paths/25 operaciones; sesión opaca Studio, DTOs self/profesional separados, autoría mínima, caché, URL firmada Space, proxy Studio y `T-API-01..11` + `T-NUT-API-01..14`** | 6 de agosto de 2026 |
 | `D-015` | Nutrición en V1 | **ADR-027: registro manual y guía profesional no clínica; ocho tablas, tres scopes, autoridad verificada, frozen minimizado y cero legado Factory Fitness** | 28 de julio de 2026 |
 | `D-006` | Verificadores autorizados | **Solo credenciales profesionales; A11 con deber separado/AAL2, registro oficial o emisor, conflicto cerrado, vigencia y `T-VG-01..06`** | 26 de julio de 2026 |
 
@@ -754,7 +754,7 @@ P0-08 separó key HTTP y command ID, cerró scope, concurrencia, retención y di
 
 ### Paso 8 — Contrato ejecutable de la rebanada completado
 
-P1-01/ADR-027 fijaron 21 operaciones HTTP, DTOs, ejemplos, autoría mínima, caché, concurrencia, URL firmada Space y proxy autenticado Studio en OpenAPI 3.1. Antes del primer handler, CI debe materializar `T-API-01..09`, `T-NUT-API-01..14` y la generación de tipos sin drift.
+P1-01/ADR-027 fijaron la base contractual y la rebanada de sesión Studio la amplió a 25 operaciones HTTP, DTOs, ejemplos, autoría mínima, caché, concurrencia, URL firmada Space y proxy autenticado Studio en OpenAPI 3.1. CI materializa `T-API-01..11`, `T-NUT-API-01..14` y la generación de tipos sin drift.
 
 ### Paso 9 — Implementar una rebanada vertical
 
@@ -859,7 +859,7 @@ Para la baseline revisada el 28 de julio, la Fase 5 quedó en **GO** y satisfizo
 - [x] Las propuestas se ordenan por columnas físicas `(created_at DESC,id DESC)`.
 - [x] Una respuesta profesional no admite `rationale` ausente, nulo, vacío ni mayor de 2000 caracteres.
 - [x] `OP-NUT-013` conserva `404` indistinguible tras revocación; el `403 scope-required` general no se aplica al proxy de foto.
-- [x] ERD, diccionario y catálogo coinciden en 99 tablas; OpenAPI coincide en 18 paths/21 operaciones.
+- [x] ERD, diccionario y catálogo coinciden en 116 tablas; OpenAPI coincide en 22 paths/25 operaciones.
 - [x] No existe artefacto de migración, compatibilidad o datos de Factory Fitness.
 
 ## 15. Criterio de cierre de Fase 5
@@ -873,7 +873,7 @@ Comenzar Fase 5 no equivale a aprobarla. Su cierre requiere además:
 - [ ] Las siete pruebas físicas `T-PHY-*` y cuatro `T-NUT-PHY-*` pasan contra catálogo, privilegios, concurrencia, índices y planes.
 - [ ] Las seis pruebas `T-SCHEMA-*` pasan contra inventario, objetos, JSONB y particiones.
 - [ ] Las diez pruebas `T-IDEM-*` y seis `T-NUT-IDEM-*` pasan contra concurrencia, offline, foto diferida, doble decisión, expiración, crash y disposición.
-- [ ] Las nueve pruebas `T-API-*` y catorce `T-NUT-API-*` pasan contra contrato, ejemplos, headers, caché, redacción, agregados, autoría, URL firmada Space, proxy Studio y generación de DTOs.
+- [ ] Las once pruebas `T-API-*` y catorce `T-NUT-API-*` pasan contra contrato, sesión Studio, ejemplos, headers, caché, redacción, agregados, autoría, URL firmada Space, proxy Studio y generación de DTOs.
 - [ ] Las 27 `T-INT-*` y ocho `T-NUT-INT-*` pasan incluso con `BYPASSRLS`.
 - [ ] Las 186 pruebas RLS, incluidas 24 `T-NUT-RLS-*`, pasan sin filtraciones por filas, totales, paginación, agregados o medios.
 - [ ] Las seis `T-VG-*` y doce `T-BGG-*` pasan contra evidencia, conflictos, deberes, quorum, expiración, revisión y abuso.
@@ -894,23 +894,23 @@ Comenzar Fase 5 no equivale a aprobarla. Su cierre requiere además:
 
 | Documento | Acción |
 | --- | --- |
-| `README.md` | ADR-027 y dimensiones 9/10/99/7/150/18/21 reflejadas; readiness en GO tras cerrar P2 |
+| `README.md` | Dimensiones vigentes 9/11/116/7/188/22/25 reflejadas |
 | `ALLFIT_ARCHITECTURE_DECISIONS.md` | ADR-027 incorpora Nutrición; ADR-026 conserva gobernanza de verificación/break-glass; todavía formalizar rol legal |
 | `ALLFIT_DOMAIN_GLOSSARY.md` | Comida, objetivo nutricional, guía y foto definidos; terminación, caso histórico y edad alineados |
 | `V1_DATABASE_SCOPE.md` | Nutrición no clínica incluida y legado Factory Fitness excluido |
 | `DOMAIN_OWNERSHIP_MAP.md` | Nueve dominios y escenarios nutricionales recertificados |
 | `V1_CONCEPTUAL_ERD.md` | Ocho entidades nutricionales y sus interacciones recertificadas |
-| `V1_OPERATIONS_MATRIX.md` | 150 operaciones, incluidas `OP-NUT-001..013`, alineadas con autoridad y ciclo de vida |
+| `V1_OPERATIONS_MATRIX.md` | 188 operaciones, incluidas `OP-NUT-001..013` y `OP-IDN-025..028`, alineadas con autoridad y ciclo de vida |
 | `V1_RLS_MATRIX.md` | 186 casos, incluidos 24 `T-NUT-RLS-*`, scopes/media/frozen alineados |
 | `V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md` | `PR-24..27`, asociaciones exactas `OP-NUT`→prueba y `T-NUT-PHY-01..04` incorporados |
-| `V1_SPACE_STUDIO_API_CONTRACTS.md` | Primera rebanada alineada con OpenAPI, 21 operaciones, `If-Match`, ejemplos y gate contract-first |
-| `V1_OPENAPI_CONTRACT.md` + `allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml` | Contexto normativo y fuente ejecutable canónica de 18 paths/21 operaciones, DTOs, autoría mínima, ejemplos, caché, URL firmada Space, proxy Studio y pruebas API |
+| `V1_SPACE_STUDIO_API_CONTRACTS.md` | Primera rebanada alineada con OpenAPI, 25 operaciones, `If-Match`, sesión Studio, ejemplos y gate contract-first |
+| `V1_OPENAPI_CONTRACT.md` + `allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml` | Contexto normativo y fuente ejecutable canónica de 22 paths/25 operaciones, sesión Studio, DTOs, autoría mínima, ejemplos, caché, URL firmada Space, proxy Studio y pruebas API |
 | `V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md` | Fuente normativa de catálogo, categorías nutricionales, evidencia, conflictos, deberes, quorum, expiración, revisión y abuso |
 | `V1_DEGRADATION_AND_RECOVERY_MATRIX.md` | Alertas/suspensión/revisión break-glass alineadas; todavía aprobar objetivos y aclarar encolar versus entregar notificaciones |
 | `V1_IDEMPOTENCY_CONTRACT.md` | Scope, receipt, retención, concurrencia, disposición y `T-NUT-IDEM-01..06` incorporados |
 | `POSTGRES_MODELING_STANDARD.md` | Diez schemas, FKs, claves portadoras, triggers diferibles, greenfield e identidad durable definidos |
-| `V1_LOGICAL_ERD.md` | Conteo 99, schema `nutrition`, tipos e idempotencia recertificados |
-| `V1_DATA_DICTIONARY.md` | 99 fichas, incluidas ocho nutricionales |
+| `V1_LOGICAL_ERD.md` | Conteo 116, schema `nutrition`, sesión técnica, tipos e idempotencia recertificados |
+| `V1_DATA_DICTIONARY.md` | 116 fichas, incluida `identity.access_sessions` |
 | `V1_PHYSICAL_OBJECT_CATALOG.md` | Nueva fuente normativa de inventario, objetos, JSONB, particiones y `T-SCHEMA-*` |
 | `V1_CROSS_TABLE_INTEGRITY_MATRIX.md` | `IX-01..35`, incluidos ocho invariantes nutricionales, recertificados |
 | `DATABASE_REFACTOR_PHASES.md` | Orden DDL, fixtures, flujo nutricional y suites `T-NUT-*` incorporados |

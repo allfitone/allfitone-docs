@@ -1,14 +1,14 @@
 # Diccionario de datos V1
 
-**Versión de revisión:** 5
-**Fecha:** 3 de agosto de 2026
+**Versión de revisión:** 6
+**Fecha:** 6 de agosto de 2026
 **Fase:** 4 — Modelo lógico y diccionario de datos
-**Estado:** 115 fichas tras ADR-028; resto de P0 pendiente
+**Estado:** 116 fichas; sesión técnica de Studio materializada
 **Deriva de:** [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md), [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md), [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
 
 ## 1. Propósito
 
-La ficha obligatoria de cada una de las **115 tablas físicas** de V1. ADR-028 añade a las 111 previas `platform_duty_assignments` y los tres expedientes break-glass. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
+La ficha obligatoria de cada una de las **116 tablas físicas** de V1. A las 115 recertificadas tras ADR-028 se suma `identity.access_sessions`, consumida por la sesión opaca de Studio. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
 
 Cada ficha responde los quince campos exigidos por [`DATABASE_REFACTOR_PHASES.md` §Fase 4](../04_EXECUTION/DATABASE_REFACTOR_PHASES.md). El diccionario, el ERD lógico y el SQL de Fase 5 deben coincidir; cualquier divergencia es un defecto que se corrige aquí antes de escribir la migración.
 
@@ -38,7 +38,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 | Schema | Tablas | Sección |
 | --- | --- | --- |
-| `identity` | 13 | §4 |
+| `identity` | 14 | §4 |
 | `organizations` | 10 | §5 |
 | `relationships` | 6 | §6 |
 | `privacy` | 16 | §7 |
@@ -83,6 +83,21 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** único `(provider, issuer, subject)`; `person_id`.
 - **Retención:** se anonimiza/elimina con el cierre de la persona.
 - **Eventos:** ninguno propio.
+
+### 4.2.1 `identity.access_sessions`
+
+- **Propósito:** almacenamiento técnico de sesiones opacas de navegador; no representa una persona ni concede acceso de dominio por sí solo.
+- **Dominio / fuente de verdad:** Identidad para persistencia local; WorkOS continúa gobernando la duración máxima de la sesión alojada.
+- **Clasificación:** `identity_pii` y secreto operativo.
+- **Columnas:** `id uuid` UUIDv7 · `access_account_id uuid` · `provider_session_id text` (`sid`) · `surface identity.access_session_surface` (`studio`) · `token_hash bytea` (SHA-256, 32 bytes) · `token_ciphertext text` (access y refresh tokens cifrados) · `access_token_expires_at timestamptz` · `token_version integer` · `revoked_at timestamptz` (nullable).
+- **FKs y borrado:** `access_account_id → identity.access_accounts(id) ON DELETE RESTRICT`.
+- **Uniques y checks:** `UNIQUE (surface, provider_session_id)`; `UNIQUE token_hash`; hash de 32 bytes; versión positiva; ciphertext versionado. La cookie sin hash y los tokens en texto plano están prohibidos.
+- **Actores:** ninguna lectura o escritura directa desde runtime. Solo funciones `SECURITY DEFINER` estrechas concedidas a `allfit_api` crean, cargan, rotan por compare-and-swap y revocan.
+- **RLS:** habilitada y forzada, sin policies de acceso directo para runtime.
+- **Consultas:** por `token_hash + surface`; reemplazo por `surface + provider_session_id`; sesiones activas por cuenta.
+- **Índices:** uniques anteriores; `(access_account_id)`; parcial `(access_account_id, surface) WHERE revoked_at IS NULL`.
+- **Retención:** hasta revocación y purga operativa; cambiar `SESSION_ENCRYPTION_KEY` invalida los ciphertext existentes y fuerza reautenticación.
+- **Eventos:** ninguno de dominio.
 
 ### 4.3 `identity.onboarding_attempts`
 
@@ -1811,7 +1826,7 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 
 | Schema | Tablas fichadas |
 | --- | --- |
-| `identity` | 13 |
+| `identity` | 14 |
 | `organizations` | 10 |
 | `relationships` | 6 |
 | `privacy` | 16 |
@@ -1822,7 +1837,7 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 | `payments` | 12 |
 | `system` | 3 |
 | `support` | 5 |
-| **Total** | **115** |
+| **Total** | **116** |
 
 ### 14.2 Invariantes transversales confirmadas por el diccionario
 
@@ -1853,7 +1868,7 @@ P0-07 cerró objetos/JSONB/particiones y P0-08 cerró receipts, PKs offline y re
 
 Entregable principal de detalle de la Fase 4, complementado por el catálogo de objetos físicos. Se considera completo cuando la revisión confirme que:
 
-1. las 115 tablas tienen ficha completa en sus quince campos;
+1. las 116 tablas tienen ficha completa en sus quince campos;
 2. el diccionario, el ERD lógico y las cardinalidades coinciden;
 3. cada tabla tiene responsabilidad clara, integridad y justificación en operaciones reales;
 4. ninguna tabla podría no existir sin romper una operación de la matriz;

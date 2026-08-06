@@ -262,6 +262,22 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **`T-ACCOUNT-1` (positiva)** — Una cuenta recién autenticada lee su propia fila sin persona vinculada.
 - **`T-ACCOUNT-2` (negativa)** — Ninguna organización, en ningún rol, lee `ACCESS_ACCOUNT` de nadie. El `sub` de WorkOS AuthKit no es visible fuera de Identidad.
 
+#### `ACCESS_SESSION`
+
+| Actor | SELECT | INSERT | UPDATE | DELETE |
+| --- | --- | --- | --- | --- |
+| `A0`–`A12`, incluido `allfit_api` directo | — | — | — | — |
+
+- **Condición RLS** — `FORCE ROW LEVEL SECURITY` y ninguna policy de runtime. El acceso existe solo mediante funciones `SECURITY DEFINER` con `search_path = pg_catalog`, parámetros tipados y `EXECUTE` revocado a `PUBLIC`.
+- **Contexto requerido** — La carga exige hash SHA-256 y superficie exacta. La resolución posterior de cuenta/persona fija `app.actor_kind`, `app.actor_account_id` y `app.actor_person_id` con `set_config(..., true)` dentro de la transacción.
+- **Grants mínimos** — `allfit_api` no recibe privilegios de tabla; solo `EXECUTE` sobre resolver/crear cuenta, crear/reemplazar, cargar, rotar compare-and-swap y revocar sesión.
+- **Índice para la policy** — No aplica a RLS directa; los lookups cerrados usan los uniques de `token_hash` y `(surface, provider_session_id)`.
+- **`T-SESSION-1` (positiva)** — Las funciones concedidas crean y cargan la sesión correcta por hash y superficie sin exponer la cookie original.
+- **`T-SESSION-2` (negativa)** — `allfit_api` no puede seleccionar la tabla ni leer ciphertext directamente.
+- **`T-SESSION-3` (negativa)** — `PUBLIC` no ejecuta ninguna función de sesión.
+- **`T-SESSION-4` (concurrencia)** — Solo la versión esperada rota el refresh token; el compare-and-swap perdedor no sobrescribe la versión ganadora.
+- **`T-SESSION-5` (revocación)** — Una sesión revocada deja de cargar inmediatamente.
+
 #### `ONBOARDING_ATTEMPT` · `ELIGIBILITY_EVIDENCE`
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |

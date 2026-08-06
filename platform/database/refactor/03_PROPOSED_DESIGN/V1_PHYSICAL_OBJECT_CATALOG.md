@@ -2,7 +2,7 @@
 
 **Fecha:** 3 de agosto de 2026
 **Fase:** 4 — cierre de especificación física
-**Estado:** inventario de 115 tablas recertificado por ADR-028; resto de P0 pendiente
+**Estado:** inventario de 116 tablas; sesión técnica de Studio materializada
 **Deriva de:** [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`V1_DATA_DICTIONARY.md`](./V1_DATA_DICTIONARY.md)
 
 ## 1. Propósito
@@ -15,13 +15,13 @@ Este catálogo cierra las decisiones que no pueden dejarse a quien escriba la pr
 - forma, versión y validación de cada JSONB;
 - identidad global y mantenimiento de tablas particionadas.
 
-No sustituye las fichas de las 115 tablas. Fija las reglas mecánicas que todas consumen.
+No sustituye las fichas de las 116 tablas. Fija las reglas mecánicas que todas consumen.
 
 ## 2. Inventario recertificado
 
 | Schema | Tablas |
 | --- | ---: |
-| `identity` | 13 |
+| `identity` | 14 |
 | `organizations` | 10 |
 | `relationships` | 6 |
 | `privacy` | 16 |
@@ -32,9 +32,9 @@ No sustituye las fichas de las 115 tablas. Fija las reglas mecánicas que todas 
 | `payments` | 12 |
 | `system` | 3 |
 | `support` | 5 |
-| **Total** | **115** |
+| **Total** | **116** |
 
-El conteo se obtiene de 115 headings individuales `### n.n schema.table` en el diccionario. Incluye cuatro targets, cinco resultados tipados, ocho tablas nutricionales y las cinco tablas de soporte de ADR-028 como tablas independientes. Excluye:
+El conteo se obtiene de 116 fichas de tabla en el diccionario, incluida `identity.access_sessions` como almacenamiento técnico de sesión. Incluye cuatro targets, cinco resultados tipados, ocho tablas nutricionales y las cinco tablas de soporte de ADR-028 como tablas independientes. Excluye:
 
 - enums;
 - vistas y funciones;
@@ -52,6 +52,7 @@ Un enum existe una sola vez en el schema indicado. Una columna de otro schema us
 | Tipo canónico | Consumidores externos al schema |
 | --- | --- |
 | `identity.actor_kind` | todos los dominios que registran actor |
+| `identity.access_session_surface` | `identity.access_sessions` |
 | `identity.provenance` | ejecución y perfil |
 | `privacy.access_level` | relaciones, planificación y ejecución |
 | `catalog.content_scope` | catálogo |
@@ -183,7 +184,7 @@ La migración inicial crea el mes actual más tres meses futuros. Una escritura 
 
 | ID | Demostración |
 | --- | --- |
-| `T-SCHEMA-01` | ERD, diccionario e inventario reportan exactamente 115 tablas y el diccionario contiene 115 fichas únicas. |
+| `T-SCHEMA-01` | ERD, diccionario e inventario reportan exactamente 116 tablas y el diccionario contiene 116 fichas únicas. |
 | `T-SCHEMA-02` | Cada tabla/columna/FK/check/índice de las fichas se compara con `pg_catalog`; falta o nombre distinto falla CI. |
 | `T-SCHEMA-03` | Cada tabla con RLS tiene exactamente las policies esperadas por comando y ninguna policy extra permisiva. |
 | `T-SCHEMA-04` | Cada JSONB acepta fixtures V1 válidos y rechaza versión, claves, tipos y campos adicionales inválidos. |

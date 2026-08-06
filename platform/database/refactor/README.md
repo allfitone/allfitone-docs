@@ -104,19 +104,19 @@ refactor/
 | Matriz de seguridad y RLS V1 | Fijar condición de fila, grants, proyecciones, índices y pruebas por recurso | Backoffice opción B propagada, resto de P0 pendiente |
 | Matriz de trazabilidad física de RLS V1 | Compilar cada ruta de autorización a columnas, joins, funciones, índices y pruebas exactos | 28 rutas físicas; resto de P0 pendiente |
 | Contratos de API de Space, Studio y Backoffice | Definir superficies, endpoints, field-sets por scope, funciones internas y eventos | Superficie Backoffice fijada; detalle de capacidades `NEW-*` pendiente |
-| Contrato OpenAPI de la primera rebanada V1 | Fijar 18 paths, 21 operaciones, DTOs, ejemplos, caché y gate contract-first | Aprobado y recertificado — P1/P2 de Nutrición cerrados |
+| Contrato OpenAPI de la primera rebanada V1 | Fijar 22 paths, 25 operaciones, DTOs, ejemplos, caché y gate contract-first | Aprobado; sesión Studio y Nutrición contractuales |
 | Gobernanza de verificadores y break-glass V1 | Fijar catálogo, evidencia, conflictos, quorum, expiración, revisión y abuso | Recertificada con ADR-028 y separación de deberes |
 | Matriz de degradación y recuperación | Fijar aislamiento, fallo cerrado, límites, observabilidad y SLO/RTO/RPO | Aprobado — Fase 3 |
 | Contrato de idempotencia durable V1 | Separar replay HTTP, identidad durable, concurrencia, expiración y disposición | Aprobado — resolución de P0-08 |
 | Estándar de modelado PostgreSQL | Fijar convenciones físicas: nombres, schemas, IDs, tipos, constraints, índices | Aprobado — Fase 4 |
-| ERD lógico V1 | Traducir nueve dominios conceptuales a 115 tablas físicas en once schemas | Recertificado para ADR-028; resto de P0 pendiente |
-| Diccionario de datos V1 | Ficha de quince campos por cada una de las 115 tablas | 115 fichas únicas verificadas; resto de P0 pendiente |
+| ERD lógico V1 | Traducir nueve dominios conceptuales a 116 tablas físicas en once schemas | Sesión técnica Studio incorporada |
+| Diccionario de datos V1 | Ficha de quince campos por cada una de las 116 tablas | 116 fichas únicas verificadas |
 | Catálogo de objetos físicos y contratos JSONB V1 | Fijar inventario, enums compartidos, nombres, documentos JSONB y particiones | Aprobado — resolución de P0-07 |
 | Matriz de integridad cruzada V1 | Fijar claves portadoras, FKs compuestas, triggers guardianes y pruebas negativas | Aprobada — resolución de P0-05 |
 | Revisión de preparación para Fase 5 | Consolidar bloqueos, contradicciones y criterios GO/NO-GO antes del DDL | Histórica; su GO fue supersedido por la revisión P0 |
 | Modificaciones por rebanada en Fase 5 | Fuente de verdad para cerrar cada P0 antes del DDL que lo consume | **GO condicionado por rebanada**; no se autoriza generar la baseline completa por adelantado |
 
-Dimensión actual: **9 dominios conceptuales, 11 schemas físicos, 115 tablas, 7 scopes, 184 operaciones inventariadas, 28 rutas físicas RLS y una primera rebanada OpenAPI de 18 paths/21 operaciones**.
+Dimensión actual: **9 dominios conceptuales, 11 schemas físicos, 116 tablas, 7 scopes, 188 operaciones inventariadas, 28 rutas físicas RLS y una primera rebanada OpenAPI de 22 paths/25 operaciones**.
 
 ## Decisiones acordadas
 
@@ -210,7 +210,7 @@ Dimensión actual: **9 dominios conceptuales, 11 schemas físicos, 115 tablas, 7
 
 **Fase 3 — aprobación histórica del 28 de julio de 2026.** La incorporación del catálogo completo de HU y ADR-028 amplió el inventario a 184 operaciones y 28 rutas físicas. Las brechas se cierran just-in-time antes de la primera rebanada que las consuma.
 
-**Fase 4 — aprobación histórica del 28 de julio de 2026.** El modelo vigente contiene 115 tablas y cinco objetos físicos de Soporte tras ADR-028; esa dimensión ya está sincronizada entre ERD, catálogo y diccionario, pero no autoriza aún el DDL.
+**Fase 4 — aprobación histórica del 28 de julio de 2026.** El modelo entonces vigente contenía 115 tablas y cinco objetos físicos de Soporte tras ADR-028. La dimensión actual es 116 por `identity.access_sessions` y está sincronizada entre ERD, catálogo y diccionario.
 
 El readiness vigente queda en **GO condicionado por rebanada** según [modificaciones de BD por rebanada](./04_EXECUTION/PRE_PHASE_5_DATABASE_MODIFICATIONS.md). Cada HU debe cerrar sus propios P0 antes de migrar; no se exige resolver Premium, pagos u otra épica para implementar una rebanada independiente. `DB-P5-002` ya está resuelto en diseño con la opción B.
 

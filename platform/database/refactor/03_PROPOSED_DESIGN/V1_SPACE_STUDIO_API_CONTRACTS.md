@@ -188,7 +188,7 @@ Tres reglas que no se negocian:
 
 ### 3.7 Autoridad OpenAPI y gate de implementación
 
-[`allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml) es la fuente canónica de rutas, DTOs, ejemplos y caché para las veintiuna operaciones HTTP de la primera rebanada vertical ampliada. [`V1_OPENAPI_CONTRACT.md`](./V1_OPENAPI_CONTRACT.md) registra su alcance y las pruebas `T-API-01..09` + `T-NUT-API-01..14`.
+[`allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml) es la fuente canónica de rutas, DTOs, ejemplos y caché para las veinticinco operaciones HTTP de la primera rebanada vertical ampliada. [`V1_OPENAPI_CONTRACT.md`](./V1_OPENAPI_CONTRACT.md) registra su alcance y las pruebas `T-API-01..11` + `T-NUT-API-01..14`.
 
 Un endpoint estable de producto listado más adelante pero ausente del YAML todavía es **diseño**, no una superficie implementable. Debe incorporarse contract-first con su `x-allfit-operation` antes de crear el handler.
 
@@ -785,7 +785,7 @@ Cada endpoint declara qué hace cuando una dependencia falla. La tabla completa 
 
 | Decisión | Destino |
 | --- | --- |
-| OpenAPI y DTOs de endpoints estables fuera de las veintiuna operaciones de la primera rebanada | Contract-first, antes de implementar cada endpoint |
+| OpenAPI y DTOs de endpoints estables fuera de las veinticinco operaciones de la primera rebanada | Contract-first, antes de implementar cada endpoint |
 | Contrato de sesión de Space Auth | Pendiente hasta cerrar create session, refresh y sign out; no se autoriza un bootstrap provisional sin declararlo como exclusión |
 | Enumeración definitiva de `SCOPE_RESOURCE_RULE` por versión | Fase 4 |
 | Valores concretos de rate limit por WorkOS Application y dominio | `V1_DEGRADATION_AND_RECOVERY_MATRIX.md` |
@@ -804,6 +804,6 @@ Tercero de los cuatro entregables de la Fase 3. Se considera completo cuando la 
 4. ninguna respuesta permite distinguir un campo redactado de uno no capturado;
 5. los siete pasos originales y el flujo nutricional están cubiertos de extremo a extremo;
 6. ningún cliente accede a PostgreSQL, PostgREST ni a una clave de Supabase;
-7. las veintiuna operaciones HTTP validan contra el OpenAPI canónico, `T-API-01..09` y `T-NUT-API-01..14`.
+7. las veinticinco operaciones HTTP validan contra el OpenAPI canónico, `T-API-01..11` y `T-NUT-API-01..14`.
 
 **Siguiente entregable:** [`V1_DEGRADATION_AND_RECOVERY_MATRIX.md`](./V1_DEGRADATION_AND_RECOVERY_MATRIX.md).

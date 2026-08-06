@@ -1,6 +1,6 @@
 # Contrato OpenAPI de la primera rebanada vertical V1
 
-**Versión de revisión:** 7<br>
+**Versión de revisión:** 8<br>
 **Fecha:** 6 de agosto de 2026<br>
 **Fase:** 3 — Contrato ejecutable previo a Fase 5<br>
 **Estado:** aprobado; contrato, tipos generados y gate de rutas sincronizados<br>
@@ -24,10 +24,14 @@ Los P1/P2 contractuales de Nutrición quedan resueltos en esta revisión: el con
 
 ## 2. Alcance implementable
 
-La primera rebanada ampliada se materializa en veintiuna operaciones HTTP: ocho del flujo original y trece del dominio Nutrición.
+La primera rebanada ampliada se materializa en veinticinco operaciones HTTP sobre veintidós rutas: ocho del flujo original, trece del dominio Nutrición y cuatro de identidad/sesión Studio.
 
 | Paso | Método y ruta | Operación | Request | Response | Caché |
 | --- | --- | --- | --- | --- | --- |
+| Iniciar autenticación Studio | `GET /studio/v1/auth/start` | `OP-IDN-025` | sin body | `302` hacia WorkOS + cookie temporal de `state` | `no-store` |
+| Completar autenticación Studio | `GET /studio/v1/auth/callback` | `OP-IDN-026` | query `code`, `state` | `303` a Studio + cookie opaca | `no-store` |
+| Consultar sesión Studio | `GET /studio/v1/session` | `OP-IDN-027` | `cookieAuth` | `StudioSession` | `private, no-store` |
+| Cerrar sesión Studio | `POST /studio/v1/auth/logout` | `OP-IDN-028` | `Origin` exacto + cookie opcional | `303` hacia logout alojado | `no-store` |
 | Publicar versión | `POST /studio/v1/organizations/{organizationId}/programs/{programId}/versions` | `OP-PLN-008` | `ProgramVersionCreate` | `ProgramVersion` | `no-store` |
 | Asignar versión | `POST /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments` | `OP-PLN-010` | `ProgramAssignmentCreate` | `ProgramAssignment` | `no-store` |
 | Consultar agenda | `GET /space/v1/agenda` | `OP-PLN-016` | query `from`, `to`, `limit`, `cursor` | `AgendaPage` | `private, max-age=0, must-revalidate` + `ETag` |
@@ -53,13 +57,25 @@ La lectura Studio posterior a la revocación reutiliza las operaciones GET corre
 
 ### 3.1 Identidad e idempotencia
 
-Todo comando exige:
+Todo comando de dominio durable exige:
 
 - `Idempotency-Key`: UUIDv4 nuevo por operación HTTP y reutilizado solo en sus reintentos;
 - `Command-Id`: UUIDv7 durable creado con la intención de usuario;
 - `Idempotent-Replay: true` cuando el servidor devuelve el resultado mínimo persistido de un replay.
 
 En `OP-EXE-001`, `Command-Id` también se convierte en `executed_session.id`. Guardar resultados y finalizar emplean `Command-Id` e `Idempotency-Key` propios.
+
+Las operaciones técnicas `OP-IDN-025`, `OP-IDN-026` y `OP-IDN-028` no crean una intención durable del usuario y no usan esos headers. Su replay queda cerrado por `state`, unicidad de sesión, revocación e idempotencia de logout.
+
+### 3.1.1 Sesión opaca de Studio
+
+- `cookieAuth` usa `allfit_studio_session`, una cookie host-only de sesión, `HttpOnly`, `SameSite=Lax`, `Path=/studio/v1` y `Secure` en producción; no lleva `Max-Age`.
+- La cookie contiene 256 bits aleatorios Base64URL. PostgreSQL guarda solo SHA-256; access y refresh tokens se cifran con AES-256-GCM y nonce aleatorio.
+- El callback compara `state`, verifica issuer/superficie/`sub`/`sid`, crea o resuelve `ACCESS_ACCOUNT` y nunca crea `PERSON`.
+- `StudioSession` expone únicamente `authenticated: true` y `registration_status: complete | registration_incomplete`.
+- `registration-incomplete` y `account-closed` forman parte del catálogo cerrado de errores. Una persona cerrada causa revocación local.
+- El refresh ocurre fuera de la transacción PostgreSQL; el token rotado se persiste por compare-and-swap. Un fallo transitorio no destruye una sesión todavía vigente.
+- Logout exige `Origin` exacto, revoca localmente, borra la cookie y usa la URL alojada de WorkOS por `sid` con retorno a Studio.
 
 ### 3.2 Concurrencia
 
@@ -108,8 +124,8 @@ El manifiesto generado desde OpenAPI contiene ambas listas. CI enumera `createAp
 | Método y ruta | Clase | Ciclo de vida | Motivo |
 | --- | --- | --- | --- |
 | `GET /health` | Operacional | Permanente | Liveness pertenece al despliegue, no al contrato de producto. |
-| `GET /studio/v1/auth/start` | Provisional | Hasta cerrar sesiones Studio | Walking skeleton del flujo hospedado; todavía no es contrato para clientes. |
-| `GET /studio/v1/auth/callback` | Provisional | Hasta cerrar sesiones Studio | La respuesta actual es diagnóstica y debe sustituirse por el contrato real de sesión. |
+
+Las rutas `auth/start` y `auth/callback` dejaron de ser provisionales: junto con `session` y `auth/logout` constituyen el contrato estable de sesión Studio. `/health` es la única exclusión vigente. Space Auth continúa fuera de esta rebanada hasta cerrar su propio contrato de sesión.
 
 Una operación solo puede implementarse cuando:
 
@@ -128,13 +144,15 @@ El YAML inicial reúne Space y Studio para validar el flujo de extremo a extremo
 | --- | --- |
 | `T-API-01` | El archivo parsea como OpenAPI 3.1.0 y todas las referencias locales resuelven. |
 | `T-API-02` | Cada `operationId` es único, cada operación declara un `x-allfit-operation` válido y toda ruta Hono está cubierta por OpenAPI o por una exclusión vigente; ninguna exclusión queda obsoleta. |
-| `T-API-03` | Las veintiuna operaciones de la rebanada están presentes; no falta ningún paso ejecutable. |
+| `T-API-03` | Las veinticinco operaciones y veintidós rutas estables de la rebanada están presentes; no falta ningún paso ejecutable. |
 | `T-API-04` | Requests, responses y ejemplos validan contra esquemas cerrados. |
 | `T-API-05` | Todo comando exige `Idempotency-Key` y `Command-Id`; resultados/finalización exigen `If-Match`. |
 | `T-API-06` | Cada operación y respuesta declara su política de caché; los errores nunca son cacheables. |
 | `T-API-07` | La proyección Studio aplica field-set y no distingue datos redactados de datos no capturados. |
 | `T-API-08` | Toda URL firmada es HTTPS, dura como máximo 300 segundos y no filtra su query a logs. |
 | `T-API-09` | Los tipos TypeScript y el manifiesto de operaciones/exclusiones se regeneran de forma determinista y no difieren del OpenAPI publicado. |
+| `T-API-10` | El flujo Studio valida `state`, issuer, superficie, `sub` y `sid`; la cookie no es persistente y ninguna respuesta expone credenciales o identificadores internos. |
+| `T-API-11` | Refresh persiste el token rotado mediante compare-and-swap; logout exige origen exacto, revoca localmente y redirige al flujo alojado. |
 
 ### 5.1 Verificaciones nutricionales
 
@@ -161,4 +179,4 @@ Estas verificaciones deben entrar en CI antes del primer handler. La validación
 
 ## 6. Resultado
 
-Los tres P1 y los tres P2 de Nutrición dejan de ser bloqueos contractuales: frozen usa una columna física real, la propuesta profesional exige `rationale`, Studio tiene revocación efectiva por petición para medios, `NutritionGoalVersion` publica autoría mínima y la trazabilidad operación→prueba es exacta. La recertificación integral conserva 18 paths/21 operaciones, añade tres exclusiones auditables sin ampliar el contrato estable y habilita `GO` para iniciar Fase 5.
+Los tres P1 y los tres P2 de Nutrición dejan de ser bloqueos contractuales: frozen usa una columna física real, la propuesta profesional exige `rationale`, Studio tiene revocación efectiva por petición para medios, `NutritionGoalVersion` publica autoría mínima y la trazabilidad operación→prueba es exacta. La sesión opaca de Studio amplía la recertificación a 22 paths/25 operaciones; `/health` queda como única exclusión auditable y Space Auth permanece pendiente de su contrato propio.

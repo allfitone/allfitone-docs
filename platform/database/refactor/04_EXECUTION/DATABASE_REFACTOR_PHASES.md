@@ -536,7 +536,7 @@ allfitone/packages/db/
 
 La lista siguiente describe el resultado acumulado de Fase 5. Cada rebanada ejecuta sólo los pasos que necesita y deja la base reconstruible antes de continuar:
 
-1. Validar las 18 rutas y 21 operaciones de `allfit-v1.openapi.yaml` con `T-API-01..09` y `T-NUT-API-01..14`; generar sus DTOs antes del primer handler.
+1. Validar las 22 rutas y 25 operaciones de `allfit-v1.openapi.yaml` con `T-API-01..11` y `T-NUT-API-01..14`; generar sus DTOs antes del primer handler.
 2. Crear de forma aditiva los schemas y extensiones necesarios para la rebanada.
 3. Crear tipos/catálogos compartidos.
 4. Crear definiciones versionadas de scope y sus field-sets revisables.
