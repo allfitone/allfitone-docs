@@ -7,6 +7,7 @@
 **Nota del 30 de julio de 2026:** el dominio de pagos (DT-017) incorporó un schema nuevo, seis tablas, dieciséis operaciones y tres invariantes. Esta revisión **debe volver a correrse** sobre la baseline resultante antes de dar el GO por firme. El inventario pasó de 99 a 107 tablas y de 150 a 171 operaciones.<br>
 **Nota del 3 de agosto de 2026:** las menciones a Cognito conservan la dependencia evaluada históricamente el 28 de julio. ADR-002 las supersede con WorkOS AuthKit y `DB-P5-019` exige recertificar autenticación antes de implementar.<br>
 **Nota del 5 de agosto de 2026:** ADR-029 consolidó API, worker y clientes en el monorepo `allfitone`. La fuente canónica OpenAPI se trasladó a `packages/contracts/openapi` y esta documentación dejó de duplicar el YAML. Los escenarios de CI, fronteras y despliegue del ADR deben ejecutarse antes de convertir este estado en GO firme.<br>
+**Nota del 6 de agosto de 2026:** `allfitone/packages/db` ya fija la Supabase CLI e inicializa la estructura oficial bajo `packages/db/supabase`, con PostgreSQL local reconstruible y servicios no utilizados desactivados. Las migraciones de dominio, tipos generados y pruebas SQL continúan como entregables futuros.<br>
 **Progreso P0:** 8 de 8 bloqueos resueltos; 0 activos<br>
 **Progreso P1:** P1-01, P1-02 y los tres hallazgos P1 de Nutrición resueltos; P1-03..07 pendientes según sus hitos<br>
 **Alcance:** consistencia y preparación de las Fases 1 a 4 antes de traducir el diseño a migraciones, seeds, RLS, funciones y contratos ejecutables.
@@ -636,7 +637,7 @@ Registrar:
 
 ### P2-03 — Enlaces a entregables futuros
 
-Existen referencias futuras a `allfitone/packages/db`, pruebas, tipos y `05_VALIDATION` que todavía no existen. Algunos son placeholders legítimos del plan, pero deben distinguirse de enlaces rotos mediante una marca explícita como “entregable futuro”.
+`allfitone/packages/db` y su configuración local ya existen. Continúan como entregables futuros las migraciones de dominio, los tipos generados, las pruebas SQL ejecutables y `05_VALIDATION`; deben distinguirse de enlaces rotos mediante una marca explícita como “entregable futuro”.
 
 ### P2-04 — Tamaño y duplicación documental
 

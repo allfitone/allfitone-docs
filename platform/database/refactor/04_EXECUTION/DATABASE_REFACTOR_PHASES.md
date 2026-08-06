@@ -1,6 +1,6 @@
 # Fases para diseñar la nueva BD de Allfit One
 
-**Fecha:** 5 de agosto de 2026<br>
+**Fecha:** 6 de agosto de 2026<br>
 **Modalidad:** implementación incremental por rebanadas de HU asistida por IA.<br>
 **Contexto:** diseño greenfield sobre Supabase/PostgreSQL, sin clientes ni datos productivos que obliguen a conservar el esquema actual.
 
@@ -522,12 +522,12 @@ Un P0 de otra épica no bloquea esta entrada. El checklist global de readiness s
 ```text
 allfitone/packages/db/
 ├── supabase/
-│   └── config.toml
-├── schemas/          # si se adopta esquema declarativo
-├── migrations/
-├── seed.sql
-├── tests/
-│   └── database/
+│   ├── config.toml
+│   ├── migrations/
+│   ├── seed.sql
+│   ├── tests/
+│   │   └── database/
+│   └── schemas/          # sólo si se adopta esquema declarativo
 └── types/
     └── database.types.ts
 ```
@@ -648,11 +648,11 @@ La lista siguiente describe el resultado acumulado de Fase 5. Cada rebanada ejec
 
 Los siguientes son destinos previstos dentro del monorepo `allfitone`; se convertirán en enlaces cuando existan los artefactos:
 
-- cadena inicial de migraciones: `packages/db/migrations/`;
-- seed de base de datos: `packages/db/seed.sql`;
-- vistas y RPC: `packages/db/schemas/`;
+- cadena inicial de migraciones: `packages/db/supabase/migrations/`;
+- seed de base de datos: `packages/db/supabase/seed.sql`;
+- vistas y RPC declarativas, si se adopta ese flujo: `packages/db/supabase/schemas/`; de lo contrario se crean mediante migraciones;
 - tipos generados: `packages/db/types/database.types.ts`;
-- reconstrucción local: `packages/db/supabase/`.
+- configuración y reconstrucción local: `packages/db/supabase/config.toml`.
 
 ### Criterio de salida
 
@@ -803,7 +803,7 @@ Probar que el diseño funciona desde los productos involucrados en cada rebanada
 
 Los siguientes son destinos previstos dentro del monorepo `allfitone`:
 
-- pruebas SQL/pgTAP: `packages/db/tests/database/`;
+- pruebas SQL/pgTAP: `packages/db/supabase/tests/database/`;
 - pruebas de integración de la API Space/Studio: `apps/api/tests/integration/space_studio/`;
 - `05_VALIDATION/V1_SECURITY_AND_INTEGRITY_REPORT.md`.
 - `05_VALIDATION/V1_APPROVED_BASELINE.md`.

@@ -1,7 +1,7 @@
 # Modificaciones de base de datos requeridas por rebanada en Fase 5
 
-**Versión:** 3<br>
-**Fecha:** 5 de agosto de 2026<br>
+**Versión:** 4<br>
+**Fecha:** 6 de agosto de 2026<br>
 **Estado:** registro activo de decisiones just-in-time por HU<br>
 **Aplica a:** Allfit Space, Allfit Studio y Allfit Backoffice<br>
 **Gate afectado:** entrada de cada rebanada vertical a implementación en Supabase
@@ -37,7 +37,7 @@ La inspección reproducible del estado actual arroja:
 | IDs/rangos de prueba explícitos en la matriz RLS | 186 | 211 tras añadir `T-DUTY-01..08` y `T-ROLE-6` |
 | Rutas físicas `PR-*` | 27 | 28, ninguna para pagos |
 | Operaciones en el OpenAPI canónico | 21 | 21, ninguna de identidad, organizaciones, pagos o Backoffice |
-| Objetos `allfitone/packages/db` | esperados en Fase 5 | todavía no existen |
+| Objetos `allfitone/packages/db` | esperados en Fase 5 | CLI fijada e infraestructura local inicializada bajo `packages/db/supabase`; aún no existen migraciones de dominio, tablas Allfit, tipos generados ni pruebas SQL ejecutables |
 
 El número final de tablas no debe fijarse antes de implementar las rebanadas que las justifican. El inventario instalado será consecuencia acumulativa de HU aprobadas, no una meta que obligue a crear tablas todavía innecesarias.
 
