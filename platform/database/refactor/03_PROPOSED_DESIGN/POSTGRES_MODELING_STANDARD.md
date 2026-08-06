@@ -53,6 +53,8 @@ Diez schemas, uno por dominio físico de V1 más los operativos. La frontera fí
 
 Las extensiones viven en un schema `extensions` dedicado, nunca en `public`. `public` queda vacío de objetos de dominio.
 
+Las funciones privadas que leen el contexto transaccional y componen predicados de autorización viven en el schema técnico `access_control`. No es un dominio adicional, no se expone mediante la Data API y no almacena identidades. El schema `auth` administrado por Supabase permanece intacto y fuera del modelo de autorización de Allfit; WorkOS AuthKit continúa siendo la única fuente de autenticación.
+
 ## 4. Identificadores
 
 ### 4.1 Regla general

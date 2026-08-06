@@ -113,7 +113,7 @@ Reglas:
 | `OP-PLN-021` versión publicada asignada | Inmutable | Nunca |
 | `OP-PLN-016` agenda | Precarga de ventana en el dispositivo | Al reprogramar, cancelar o desacoplar |
 
-Ninguna caché participa en una decisión de autorización. Se cachea **contenido inmutable**, no permisos. Un `historical_access_case`, su vigencia y el resultado de `auth.can_read_frozen` nunca se cachean como autorización reutilizable.
+Ninguna caché participa en una decisión de autorización. Se cachea **contenido inmutable**, no permisos. Un `historical_access_case`, su vigencia y el resultado de `access_control.can_read_frozen` nunca se cachean como autorización reutilizable.
 
 ### 5.4 Degradan con aviso explícito
 
@@ -197,8 +197,8 @@ Toda métrica y todo log llevan: `surface` (space \| studio \| catalog), `domain
 | Disponibilidad por superficie | % de peticiones no `5xx`, por `surface` | Distingue si el daño es de un producto o común |
 | Latencia de lectura | p50/p95/p99 por `operation` | La fórmula de acceso es el coste dominante |
 | Latencia de comando | p95/p99 por `operation` | `finalize_execution` y `terminate_relationship` son las críticas |
-| Coste de la fórmula | Tiempo de evaluación de `auth.can_access` | Detecta un índice perdido antes de que se note |
-| Coste de lectura histórica | Tiempo de evaluación de `auth.can_read_frozen`, por propósito y resultado | Detecta degradación o sondeo de la superficie restringida |
+| Coste de la fórmula | Tiempo de evaluación de `access_control.can_access` | Detecta un índice perdido antes de que se note |
+| Coste de lectura histórica | Tiempo de evaluación de `access_control.can_read_frozen`, por propósito y resultado | Detecta degradación o sondeo de la superficie restringida |
 | Profundidad y antigüedad de cola | Por cola | Detecta degradación asíncrona |
 | Ítems de disposición vencidos | Conteo absoluto | **Debe ser cero** |
 | Fallos de escritura de `ACCESS_EVENT` | Conteo | Cada uno es una lectura que debió fallar |
