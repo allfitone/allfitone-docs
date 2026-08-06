@@ -397,7 +397,7 @@ Modificar `organizations.organization_events`:
 - `suspended` corta escrituras y operación de la organización, pero no termina relaciones ni revoca grants.
 - `active` después de suspensión recupera autoridad sin nuevas aceptaciones.
 - `closed` es irreversible y ejecuta el flujo completo de terminación/disposición aprobado.
-- Todo helper `auth.has_membership` o `auth.has_capability` usado para escritura debe comprobar el estado operativo de la organización.
+- Todo helper `access_control.has_membership` o `access_control.has_capability` usado para escritura debe comprobar el estado operativo de la organización.
 
 ## 10. Suspensión de pago y pausa reversible
 
@@ -437,8 +437,8 @@ La alternativa de no crear tabla solo es válida si una vista/predicado puede re
 
 ### 10.3 Cambios de autorización y proyección
 
-- `auth.can_access(...,'read')` no consulta el bloqueo de pago.
-- `auth.can_access(...,'contribute')` o un helper especializado deniega cuando existe bloqueo efectivo.
+- `access_control.can_access(...,'read')` no consulta el bloqueo de pago.
+- `access_control.can_access(...,'contribute')` o un helper especializado deniega cuando existe bloqueo efectivo.
 - La agenda expone `effective_status='paused'` y la causa permitida sin reescribir el estado intrínseco de la sesión.
 - Una asignación conserva `lifecycle='active'`; no pasa a `detached_pending_choice`.
 - Reactivar cierra únicamente el bloqueo de la suscripción correspondiente.

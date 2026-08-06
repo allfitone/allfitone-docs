@@ -340,6 +340,8 @@ Decodificar un JWT sin verificar firma y claims no autentica a nadie.
 
 No se utilizarán `auth.uid()` ni roles `anon`/`authenticated`. El backend verifica WorkOS AuthKit, resuelve la persona y establece contexto local dentro de la misma transacción:
 
+Los helpers propios de autorización y RLS se alojan en el schema técnico privado `access_control`; no se crean objetos Allfit en el schema `auth` administrado por Supabase.
+
 ```sql
 begin;
 
@@ -890,7 +892,7 @@ La persona necesita continuidad de su historial y la organización necesita pres
 
 1. Terminar una relación cambia todos sus grants `active` a `frozen` con el mismo `frozen_at = T`.
 2. Después de `T` fallan todas las escrituras, contribuciones y consultas operativas de la relación terminada.
-3. `auth.can_read_frozen` devuelve solo el conjunto autorizado con instante `<= T`.
+3. `access_control.can_read_frozen` devuelve solo el conjunto autorizado con instante `<= T`.
 4. Una fila posterior a `T`, incluso bajo el mismo scope, nunca aparece en detalle, conteos, derivados o cachés de la organización anterior.
 5. Un grant `revoked` no permite lectura histórica.
 6. La persona continúa viendo su historial, resultados y versión asignada.
@@ -3077,7 +3079,7 @@ También exige `case_reference`, justificación no vacía y autenticación refor
 
 #### 4. Predicado separado
 
-`auth.can_read_frozen(relationship_id, scope_code, resource, field, occurred_at)` es distinto de `auth.can_access`. El actor siempre sale del contexto transaccional, nunca de un parámetro.
+`access_control.can_read_frozen(relationship_id, scope_code, resource, field, occurred_at)` es distinto de `access_control.can_access`. El actor siempre sale del contexto transaccional, nunca de un parámetro.
 
 Devuelve verdadero únicamente cuando:
 
@@ -3152,7 +3154,7 @@ Un derivado sobrevive únicamente si estaba materializado en `T`, su regla está
 3. `staff` nunca ejerce un caso histórico.
 4. Un caso autoriza una membresía, organización, relación y propósito exactos durante máximo 24 horas.
 5. `manage_historical_access` no concede lectura.
-6. `auth.can_access` nunca acepta grants `frozen`; `auth.can_read_frozen` nunca acepta grants `active` o `revoked`.
+6. `access_control.can_access` nunca acepta grants `frozen`; `access_control.can_read_frozen` nunca acepta grants `active` o `revoked`.
 7. No existe escritura, exportación masiva ni dato posterior a `T` bajo la superficie histórica.
 8. Una denegación o revocación posterior solo reduce acceso; ninguna acción posterior a `T` amplía la ventana.
 9. Toda lectura histórica produce `ACCESS_EVENT` o falla.

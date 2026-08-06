@@ -548,7 +548,7 @@ La lista siguiente describe el resultado acumulado de Fase 5. Cada rebanada ejec
 10. Crear índices de FKs, acceso y RLS.
 11. Configurar grants mínimos.
 12. Habilitar RLS y crear policies.
-13. Implementar `auth.grant_of`, `auth.frozen_grant_of`, `auth.can_access`, `auth.can_read_frozen`, `auth.has_verified_credential` y `auth.can_guide_nutrition` con sus contratos físicos exactos.
+13. Implementar `access_control.grant_of`, `access_control.frozen_grant_of`, `access_control.can_access`, `access_control.can_read_frozen`, `access_control.has_verified_credential` y `access_control.can_guide_nutrition` con sus contratos físicos exactos.
 14. Crear vistas/proyecciones y RPCs de contrato, incluidas las superficies separadas live, frozen, historial personal, nutrición y soporte.
 15. Materializar deberes temporales, verificación de credenciales, quorum/expiración break-glass, revisión independiente y suspensión por abuso según ADR-026.
 16. Crear `finalize_execution` y validación transaccional por contrato.
@@ -717,7 +717,7 @@ Probar que el diseño funciona desde los productos involucrados en cada rebanada
 - una relación nueva no hereda gestión, grants, notas privadas ni acceso a la asignación desacoplada;
 - terminar una relación no elimina el Fitness ID ni mantiene a la persona en endpoints/listados operativos; la lectura histórica usa una superficie separada;
 - datos creados después de la terminación no son visibles para la organización anterior;
-- toda lectura `frozen` exige `historical_access_case` vigente, actor elegible con membresía activa, MFA, propósito cerrado, `auth.can_read_frozen` y `ACCESS_EVENT` obligatorio según ADR-023;
+- toda lectura `frozen` exige `historical_access_case` vigente, actor elegible con membresía activa, MFA, propósito cerrado, `access_control.can_read_frozen` y `ACCESS_EVENT` obligatorio según ADR-023;
 - break-glass exige AAL2, deber temporal, propósito/caso, un A12 para `nutrition_guidance` estándar o dos distintos para `nutrition_intake` restringida, rechaza `nutrition_media`, exige A10 solicitante exacto y otro A12 revisor; cada lectura/denegación revalida categoría y genera `break_glass_event` y `ACCESS_EVENT` antes del contenido;
 - el vencimiento de retención elimina o anonimiza salvo hold documentado;
 - una solicitud de supresión resuelve cada categoría mediante su política versionada;

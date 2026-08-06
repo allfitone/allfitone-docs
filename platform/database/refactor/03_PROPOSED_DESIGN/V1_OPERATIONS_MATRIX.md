@@ -627,7 +627,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Tipo** | Consulta · Comando |
 | **Superficie** | `GET /space/v1/me/notification-preferences` · `PUT /space/v1/me/notification-preferences` |
 | **Actor** | `A2` |
-| **Filtros obligatorios** | `person_id = auth.person()` |
+| **Filtros obligatorios** | `person_id = access_control.person()` |
 | **Transacción** | Consulta: ninguna. Comando: reemplazo atómico del conjunto de preferencias |
 | **Idempotencia** | `Idempotency-Key`. `PUT` con el mismo contenido no genera cambio |
 | **Paginación y orden** | No aplica: el catálogo de categorías y canales es cerrado y pequeño |
@@ -1113,7 +1113,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Offline / concurrencia** | Falla cerrada. Ninguna demora técnica mueve `T` ni amplía acceso: una lectura en curso iniciada antes de `T` no se extiende después |
 | **Información sensible** | Corta el acceso **en vivo**; la organización conserva la lectura histórica ≤ `T` |
 | **Evento de dominio** | `relationship.terminated.v1`, `privacy.grant_frozen.v1` por grant, `planning.assignment_detached.v1` por asignación |
-| **Reglas** | El efecto es inmediato: no hay preaviso para la persona. La organización **conserva su vista congelada del histórico compartido hasta `T`**, más su contenido propio; los datos creados después de `T` nunca son visibles para ella. Congelar **no** es revocar: un estado `revoked` corta el acceso del todo, cierra los casos históricos abiertos e invalida derivados. La lectura solo ocurre por la superficie restringida de ADR-023, con `historical_access_case`, actor elegible, MFA, propósito y `auth.can_read_frozen`; nunca por pertenencia administrativa ni endpoints operativos. Si la persona elimina su cuenta, la anonimización alcanza también lo que ve un grant congelado. El Fitness ID no se toca. El motivo es **opcional** |
+| **Reglas** | El efecto es inmediato: no hay preaviso para la persona. La organización **conserva su vista congelada del histórico compartido hasta `T`**, más su contenido propio; los datos creados después de `T` nunca son visibles para ella. Congelar **no** es revocar: un estado `revoked` corta el acceso del todo, cierra los casos históricos abiertos e invalida derivados. La lectura solo ocurre por la superficie restringida de ADR-023, con `historical_access_case`, actor elegible, MFA, propósito y `access_control.can_read_frozen`; nunca por pertenencia administrativa ni endpoints operativos. Si la persona elimina su cuenta, la anonimización alcanza también lo que ve un grant congelado. El Fitness ID no se toca. El motivo es **opcional** |
 | **Falla cerrada** | Si cualquier paso falla, se revierte todo: no existe una terminación a medias |
 
 #### `OP-REL-008` — Terminar la relación (organización)
@@ -1602,7 +1602,7 @@ Reglas que gobiernan todo el dominio:
 | **Tipo** | Consulta |
 | **Superficie** | `GET /studio/v1/organizations/{orgId}/historical-relationships/{relationshipId}` y recursos subordinados |
 | **Actor** | `A3`, `A4` o `A5` cuya membresía coincide exactamente con el caso |
-| **Filtros obligatorios** | Header `X-Historical-Access-Case`; MFA; `auth.can_read_frozen`; relación terminada; grant `frozen`; propósito/caso coincidentes; fila `<= frozen_at`; campo `historical_readable`; retención vigente; denegación histórica ausente |
+| **Filtros obligatorios** | Header `X-Historical-Access-Case`; MFA; `access_control.can_read_frozen`; relación terminada; grant `frozen`; propósito/caso coincidentes; fila `<= frozen_at`; campo `historical_readable`; retención vigente; denegación histórica ausente |
 | **Transacción** | Una sola transacción sin escrituras de dominio que registra un `ACCESS_EVENT` por recurso/grant consultado, incluido resultado denegado y el contexto que haya podido resolverse. Si la auditoría falla, no devuelve datos |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | Cursor; sin `total` inseguro; conteos y derivados se calculan después de denegaciones |
@@ -2726,7 +2726,7 @@ Reglas que gobiernan todo el dominio:
 | **Tipo** | Consulta |
 | **Superficie** | `GET /space/v1/subscriptions` · `GET /space/v1/subscriptions/{id}/payments` |
 | **Actor** | `A2` |
-| **Filtros obligatorios** | `person_id = auth.person()` |
+| **Filtros obligatorios** | `person_id = access_control.person()` |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | Cursor. Orden: fecha del cobro descendente |
@@ -2828,7 +2828,7 @@ Reglas que gobiernan todo el dominio:
 | **Tipo** | Consulta |
 | **Superficie** | `GET /space/v1/entitlements` |
 | **Actor** | `A2` |
-| **Filtros obligatorios** | `person_id = auth.person()` |
+| **Filtros obligatorios** | `person_id = access_control.person()` |
 | **Transacción** | Ninguna. Resuelve el derecho **en la consulta**, nunca desde una bandera almacenada |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | No aplica |
@@ -3316,7 +3316,7 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Tipo** | Comando |
 | **Superficie** | `POST /space/v1/nutrition/meals` |
 | **Actor** | `A2`, sujeto autenticado |
-| **Filtros obligatorios** | `person_id = auth.person()`; nutrientes en catálogo V1; valores no negativos; unidades compatibles |
+| **Filtros obligatorios** | `person_id = access_control.person()`; nutrientes en catálogo V1; valores no negativos; unidades compatibles |
 | **Transacción** | `nutrition.record_meal`: crear comida, ítems, nutrientes, receipt y outbox; `Command-Id = meals.id` |
 | **Idempotencia** | `Command-Id` durable + `Idempotency-Key`; el mismo contenido converge a una comida |
 | **Paginación y orden** | No aplica |
@@ -3333,7 +3333,7 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Tipo** | Consulta |
 | **Superficie** | `GET /space/v1/nutrition/meals` |
 | **Actor** | `A2` |
-| **Filtros obligatorios** | `person_id = auth.person()` |
+| **Filtros obligatorios** | `person_id = access_control.person()` |
 | **Transacción** | Solo lectura por `nutrition.v_my_meals` |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | Cursor opaco; `(occurred_at DESC,id DESC)` después de filtrar |
@@ -3401,7 +3401,7 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Tipo** | Consulta |
 | **Superficie** | `GET /space/v1/nutrition/goals` |
 | **Actor** | `A2` |
-| **Filtros obligatorios** | `goal_set.person_id = auth.person()` |
+| **Filtros obligatorios** | `goal_set.person_id = access_control.person()` |
 | **Transacción** | Solo lectura de activa, pendientes y decisiones |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | Propuestas por `(created_at DESC,id DESC)` |
@@ -3425,7 +3425,7 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Offline / concurrencia** | Admite intención local; serializa sobre el goal set |
 | **Información sensible** | `nutrition` |
 | **Evento de dominio** | `nutrition.goal_version_activated.v1` |
-| **Reglas** | Solo una activa; no altera propuestas pendientes; la respuesta usa `author.kind=self` y `author.person_id=auth.person()` |
+| **Reglas** | Solo una activa; no altera propuestas pendientes; la respuesta usa `author.kind=self` y `author.person_id=access_control.person()` |
 | **Falla cerrada** | Conflicto/target inválido revierte versión y transición |
 
 #### `OP-NUT-008` — Aceptar o rechazar una propuesta

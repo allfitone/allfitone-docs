@@ -1143,7 +1143,7 @@ Los plazos concretos y textos de consentimiento requieren validación jurídica 
 20. Cambiar organización, parte responsable, finalidad, scope ampliado o nivel aceptado exige nueva decisión.
 21. Revocar bloquea acceso inmediatamente sin borrar evidencia ni el dato personal.
 22. Terminar una relación congela todos sus grants activos, bloquea operación/escritura y datos futuros, y preserva solo la lectura histórica `<= T`.
-23. Ningún rol ejerce por sí solo un grant `frozen`: la lectura exige caso vigente, membresía exacta elegible, MFA, propósito cerrado y `auth.can_read_frozen`.
+23. Ningún rol ejerce por sí solo un grant `frozen`: la lectura exige caso vigente, membresía exacta elegible, MFA, propósito cerrado y `access_control.can_read_frozen`.
 24. Owner/admin administran casos mediante `manage_historical_access`, pero esa capacidad no concede lectura sin ser la membresía autorizada del caso.
 25. Cada intento de lectura `frozen`, permitido o denegado, registra `ACCESS_EVENT`; si la auditoría falla, la lectura falla.
 26. Las denegaciones son monótonas después de `T` y una revocación explícita transforma `frozen → revoked`, cierra casos e invalida derivados.
@@ -4339,7 +4339,7 @@ La mitigación técnica exacta de timing, cardinalidad, cursores, invalidación 
 | Volver a compartir S | Deben seguir vigentes | Nueva transición, historia anterior se conserva | Permanece intacta |
 | Revocar `prior_training_history` de B | Grant deja de ser efectivo | Puede conservarse durante finalidad/evidencia | Permanece personal |
 | Reasignar coach dentro de B | Mismos grants si dimensiones no cambian | Continúa aplicando | Sin cambio |
-| Terminar relación B | Grants B pasan a `frozen` en `T` | Una denegación vigente en `T` o posterior reduce `auth.can_read_frozen`; restaurar después de `T` no amplía la ventana | Sin cambio |
+| Terminar relación B | Grants B pasan a `frozen` en `T` | Una denegación vigente en `T` o posterior reduce `access_control.can_read_frozen`; restaurar después de `T` no amplía la ventana | Sin cambio |
 | Terminar relación A | Grants A pasan a `frozen` en `T` | No afecta decisión de B | Sin cambio |
 | Suprimir válidamente S | Se invalidan proyecciones afectadas | Pierde target y sigue disposición de evidencia | Ejecución elimina según política aplicable |
 | Vencer retención de evidencia | Se conserva/elimina mínimo según política | Se elimina o retiene restringida sin revelar S | Sigue su ciclo personal |
@@ -4463,7 +4463,7 @@ El corte produce o coordina idempotentemente:
 8. cálculo de retención/disposición por categoría;
 9. auditoría de resultados y fallos de coordinación.
 
-El profesional anterior deja de cumplir simultáneamente relación y asignación efectivas. Que su membresía organizacional permanezca activa no restablece acceso en vivo ni escritura. Solo puede intentar lectura histórica si era el titular de esa relación al llegar `T`, su membresía sigue activa, un owner/admin lo autoriza en un `historical_access_case` vigente y satisface MFA y `auth.can_read_frozen`.
+El profesional anterior deja de cumplir simultáneamente relación y asignación efectivas. Que su membresía organizacional permanezca activa no restablece acceso en vivo ni escritura. Solo puede intentar lectura histórica si era el titular de esa relación al llegar `T`, su membresía sigue activa, un owner/admin lo autoriza en un `historical_access_case` vigente y satisface MFA y `access_control.can_read_frozen`.
 
 #### Paso 3 — Efecto sobre grants y privacidad
 
@@ -4506,7 +4506,7 @@ No crea una copia de la asignación ni selecciona otra versión. Conserva:
 - sesiones planificadas e intentos históricos;
 - eventos de gestión y desacoplamiento.
 
-El origen histórico no implica gestión actual. La organización anterior permanece atribuida donde corresponda y no puede editar ni reprogramar después de `T`; cualquier consulta histórica de la asignación queda limitada a la ventana `frozen`, el field-set histórico y `auth.can_read_frozen`.
+El origen histórico no implica gestión actual. La organización anterior permanece atribuida donde corresponda y no puede editar ni reprogramar después de `T`; cualquier consulta histórica de la asignación queda limitada a la ventana `frozen`, el field-set histórico y `access_control.can_read_frozen`.
 
 #### Paso 5 — Sesiones completadas, iniciadas y futuras
 
@@ -4594,7 +4594,7 @@ La nueva organización no recibe notas privadas, grants, observaciones o gestió
 | --- | --- | --- | --- |
 | Consultar Fitness ID propio | Permitido | No aplica | Ownership personal no depende de relación |
 | Consultar relación histórica ordinaria | Visible para la persona según producto | Fuera de listados operativos | Solo evidencia restringida cuando exista finalidad |
-| Ver sesiones/resultados previamente autorizados `<= T` | Permitido | Solo la membresía exacta autorizada en un caso vigente, con MFA y propósito permitido | El grant `frozen` usa `auth.can_read_frozen`, no el predicado profesional en vivo |
+| Ver sesiones/resultados previamente autorizados `<= T` | Permitido | Solo la membresía exacta autorizada en un caso vigente, con MFA y propósito permitido | El grant `frozen` usa `access_control.can_read_frozen`, no el predicado profesional en vivo |
 | Ver actividad posterior | Permitido | Denegado sin confirmar existencia | Relación histórica nunca cubre futuro |
 | Terminar ejecución iniciada | Permitido para la persona | Denegado para contribuir/anotar | Autoridad personal continúa |
 | Editar/reprogramar asignación | Tras decisión personal compatible | Denegado | Gestión profesional terminó |
@@ -4648,7 +4648,7 @@ Un hold documentado puede suspender la disposición de targets concretos, pero n
 | Cambiar silenciosamente versión o snapshot | No ocurre: ambos permanecen exactos e históricos |
 | Perder sesiones completadas o intentos | No ocurre: Ejecución/Planificación conservan los hechos |
 | Profesional conserva acceso por membresía | No ocurre: fallan relación y asignación efectivas |
-| Grant histórico concede acceso operativo | No ocurre: la relación terminada lo hace inefectivo para la fórmula en vivo; solo `auth.can_read_frozen` puede habilitar lectura histórica restringida |
+| Grant histórico concede acceso operativo | No ocurre: la relación terminada lo hace inefectivo para la fórmula en vivo; solo `access_control.can_read_frozen` puede habilitar lectura histórica restringida |
 | Actividad posterior aparece a la organización | No ocurre: no hay relación/grant vigente y se invalidan derivados |
 | Organización nueva hereda plan o notas | No ocurre: necesita contexto y decisiones nuevos |
 | Programa master cambia de owner | No ocurre: la organización conserva su activo; persona conserva snapshot recibido |

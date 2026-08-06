@@ -247,8 +247,8 @@ La dirección anterior —revocar todo acceso al terminar y conservar únicament
 
 ADR-023 separa explícitamente la operación diaria de la consulta histórica:
 
-- `auth.can_access` conserva la fórmula en vivo y nunca acepta una relación terminada;
-- `auth.can_read_frozen(relationship_id, scope_code, resource, field, occurred_at)` es el único predicado histórico;
+- `access_control.can_access` conserva la fórmula en vivo y nunca acepta una relación terminada;
+- `access_control.can_read_frozen(relationship_id, scope_code, resource, field, occurred_at)` es el único predicado histórico;
 - ningún rol obtiene lectura `frozen` automáticamente;
 - owner/admin pueden administrar casos con `manage_historical_access`, pero esa capacidad no concede lectura;
 - cada lectura requiere un `privacy.historical_access_case` vigente, para una relación, organización, propósito y membresía autorizada exactos;
@@ -270,7 +270,7 @@ Se incorpora `privacy.historical_access_cases`; aquella recertificación añadi�
 
 #### Criterio de cierre
 
-- [x] Existe el predicado separado y nombrado `auth.can_read_frozen`.
+- [x] Existe el predicado separado y nombrado `access_control.can_read_frozen`.
 - [x] El predicado se expresa sobre columnas documentadas.
 - [x] La matriz RLS contiene pruebas positivas y negativas.
 - [x] La pertenencia administrativa no concede acceso general al Fitness ID.
@@ -386,7 +386,7 @@ Los siete huecos originales se cerraron así:
 3. `consent_events` transporta y prueba la tupla exacta persona/relación/organización/definición/scope; `data_grants` la referencia completa.
 4. Un único parcial sobre `(relationship_id,scope_code) WHERE status IN ('active','frozen')` impide dos grants efectivos de versiones distintas.
 5. `privacy.grant_consent`, `privacy.revoke_grant` y `relationships.terminate_relationship` son entradas cerradas; el trigger de transición gobierna `frozen_at`, `revoked_at` y prohíbe reactivación.
-6. `auth.grant_of` resuelve solo `active`; `auth.frozen_grant_of` resuelve solo `frozen`. `auth.can_access` y `auth.can_read_frozen` no comparten lookup.
+6. `access_control.grant_of` resuelve solo `active`; `access_control.frozen_grant_of` resuelve solo `frozen`. `access_control.can_access` y `access_control.can_read_frozen` no comparten lookup.
 7. `privacy.access_events` solo es visible directamente al sujeto y solo admite `privacy.log_access_event`; `A10` y `A12` usan superficies de soporte distintas y restringidas.
 
 La suite incorpora `T-PHY-01..07` más `T-NUT-PHY-01..04`: compilación contra catálogo, unicidad concurrente, máquina de estados, separación live/frozen, coherencia definición/scope, privilegios de auditoría y disponibilidad de índices/planes.
@@ -663,7 +663,7 @@ Una regla derivada debe enlazar a la fuente, no volver a presentarse como decisi
 | Tema | Dirección A | Dirección B | Estado o resolución |
 | --- | --- | --- | --- |
 | Terminación de relación | Revocación total | Congelación del histórico hasta `T` | **Resuelto — `active → frozen`; operación/escritura cesan y no hay datos posteriores** |
-| Actor después de terminación | No queda asignación efectiva | El gimnasio conserva lectura restringida | **Resuelto — caso exacto, actor elegible, MFA, propósito, `auth.can_read_frozen` y auditoría según ADR-023** |
+| Actor después de terminación | No queda asignación efectiva | El gimnasio conserva lectura restringida | **Resuelto — caso exacto, actor elegible, MFA, propósito, `access_control.can_read_frozen` y auditoría según ADR-023** |
 | Edad mínima | 18+ | Propuesta 14+ autónoma | **Resuelto — 18+ para V1; 14–17 representado queda diferido** |
 | Estado de Fase 2 | Aprobada inicialmente | Entregables incorporaron conceptos posteriores | **Resuelto — ownership y ERD recertificados el 28 de julio de 2026** |
 | Cantidad de tablas | 91 antes de Nutrición | Ocho tablas exigidas por ADR-027 | **Resuelto — 99 tablas y 99 fichas** |
@@ -684,7 +684,7 @@ Una regla derivada debe enlazar a la fuente, no volver a presentarse como decisi
 | --- | --- | --- | --- |
 | `D-001` | Edad mínima V1 | **18 años o más**. Personas de 14 a 17 años quedan diferidas a un flujo futuro representado | 23 de julio de 2026 |
 | `D-002` | Política normativa de terminación | **`active → frozen` en `T`**; sin operación/escritura, sin datos posteriores y sin tabla `archive` | 23 de julio de 2026 |
-| `D-003` | Actor/predicado para histórico `frozen` | **Caso restringido de máximo 24 h, actor exacto elegible con MFA, finalidad cerrada, `auth.can_read_frozen`, field-set histórico y auditoría obligatoria** | 23 de julio de 2026 |
+| `D-003` | Actor/predicado para histórico `frozen` | **Caso restringido de máximo 24 h, actor exacto elegible con MFA, finalidad cerrada, `access_control.can_read_frozen`, field-set histórico y auditoría obligatoria** | 23 de julio de 2026 |
 | `D-007` | Aprobadores de break-glass | **A10 solicita/ejerce; uno o dos A12 distintos aprueban según sensibilidad; otro A12 revisa; expiración y abuso cerrados por ADR-026** | 26 de julio de 2026 |
 | `D-011` | Mecanismo por invariante cruzada | **35 invariantes: FK compuesta por defecto; constraint trigger diferible para estado/target/familia; entrada cerrada para auditoría particionada** | 28 de julio de 2026 |
 | `D-013` | Contrato físico de RLS | **27 rutas `PR-*`, grants live/frozen separados, proyecciones cerradas, índices obligatorios, `T-PHY-01..07` y `T-NUT-PHY-01..04`** | 28 de julio de 2026 |

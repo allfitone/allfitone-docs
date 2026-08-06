@@ -96,7 +96,7 @@ erDiagram
 6. Una asignación de programa pertenece al historial personal y puede tener una relación de origen.
 7. Una sesión planificada admite varios intentos; una ejecución real pertenece como máximo a un intento.
 8. Una ejecución espontánea existe sin planificación, relación u organización.
-9. Al terminar una relación en `T`, sus grants `active` pasan a `frozen`: dejan de habilitar operación/escritura y solo pueden sustentar la lectura histórica `<= T` mediante un caso vigente y el predicado separado `auth.can_read_frozen` definido por ADR-023.
+9. Al terminar una relación en `T`, sus grants `active` pasan a `frozen`: dejan de habilitar operación/escritura y solo pueden sustentar la lectura histórica `<= T` mediante un caso vigente y el predicado separado `access_control.can_read_frozen` definido por ADR-023.
 
 ## 5. Identidad, onboarding e invitaciones
 

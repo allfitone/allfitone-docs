@@ -265,14 +265,14 @@ Modelar sujeto, relación, organización grantee, parte responsable presentada, 
 | **1. ¿Qué es?** | Una autorización excepcional, temporal y auditada para que una membresía concreta consulte el subconjunto `historical_readable` de una relación terminada. |
 | **2. ¿Qué no es?** | No es un rol, una asignación profesional, un grant nuevo, una reactivación, una lista de antiguos clientes ni permiso de escritura. |
 | **3. ¿Quién lo crea?** | `owner` o `admin` con `manage_historical_access`, MFA, propósito cerrado, referencia y justificación. |
-| **4. ¿Quién es dueño del dato?** | No cambia ownership: la persona conserva sus datos; el caso solo permite a la organización intentar ejercer temporalmente los grants `frozen` de esa relación bajo `auth.can_read_frozen`. |
+| **4. ¿Quién es dueño del dato?** | No cambia ownership: la persona conserva sus datos; el caso solo permite a la organización intentar ejercer temporalmente los grants `frozen` de esa relación bajo `access_control.can_read_frozen`. |
 | **5. ¿Puede existir sin Auth?** | No. Exige actor humano, membresía activa, AAL2/MFA y una relación terminada exacta. |
 | **6. ¿Cuál es su ciclo de vida?** | Abierto → cerrado o expirado en máximo 24 horas. No se reabre; otra necesidad crea otro caso. |
 | **7. Ejemplos y contraejemplos** | **Ejemplo:** un admin abre un caso de disputa para el antiguo titular todavía miembro. **Contraejemplo:** owner consulta antiguos clientes por ser owner. |
 
 ### Implicación para la BD
 
-Modelar `privacy.historical_access_cases` y `auth.can_read_frozen` separados de `auth.can_access`. El caso fija organización, relación, membresía autorizada, propósito y expiración; `staff` nunca es elegible. Cada lectura escribe `ACCESS_EVENT`. Una denegación o revocación posterior reduce el histórico y ninguna restauración después de `T` lo amplía.
+Modelar `privacy.historical_access_cases` y `access_control.can_read_frozen` separados de `access_control.can_access`. El caso fija organización, relación, membresía autorizada, propósito y expiración; `staff` nunca es elegible. Cada lectura escribe `ACCESS_EVENT`. Una denegación o revocación posterior reduce el histórico y ninguna restauración después de `T` lo amplía.
 
 ---
 

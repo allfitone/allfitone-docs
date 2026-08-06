@@ -63,7 +63,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** ninguna saliente. Es la raíz; no referencia a otros dominios.
 - **Uniques y checks:** `CHECK (status in ('active','closed'))`; `UNIQUE (contact_email) WHERE contact_email IS NOT NULL`; `UNIQUE (contact_phone) WHERE contact_phone IS NOT NULL`; `CHECK ((contact_email_verified_at IS NULL) OR (contact_email IS NOT NULL))` y equivalente para teléfono. **El correo de contacto y el correo de ingreso son el mismo dato**: cambiarlo exige actualizar el usuario en WorkOS y volver a verificar, en el flujo de `OP-IDN-021`. Los uniques son parciales y **nunca** se exponen: una consulta por contacto no existe en ninguna superficie, para preservar que una invitación no revele si el contacto ya tiene cuenta.
 - **Actores:** lee la propia persona; escribe solo `activate_person` (INSERT) y el worker de privacidad (anonimización/cierre). Ningún profesional lee esta tabla directamente: usa `identity.v_client_identity`.
-- **RLS:** `auth.is_self(id)` para lectura y update; INSERT bloqueado salvo función de activación.
+- **RLS:** `access_control.is_self(id)` para lectura y update; INSERT bloqueado salvo función de activación.
 - **Consultas:** por `id`; join desde casi todos los dominios.
 - **Índices:** PK. `status` no se indexa (baja cardinalidad).
 - **Retención:** el cierre elimina PII —nombre, apellido, correo y teléfono— y deja tombstone técnico sin PII (`OP-SYS-008`); nunca `deleted_at`. El contacto es dato personal bajo la Ley 1581: clasificación `identity_pii`, misma política de disposición que el resto de la identidad.
@@ -78,7 +78,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `person_id → identity.people(id) ON DELETE RESTRICT`.
 - **Uniques y checks:** `UNIQUE (provider, issuer, subject)`.
 - **Actores:** lee la propia cuenta/persona; escribe la función de activación. **Ninguna organización lee esta tabla:** el `sub` no sale de Identidad.
-- **RLS:** fila = `app.actor_account_id`, o `person_id = auth.person()`.
+- **RLS:** fila = `app.actor_account_id`, o `person_id = access_control.person()`.
 - **Consultas:** por `(provider, issuer, subject)` en cada request; por `person_id`.
 - **Índices:** único `(provider, issuer, subject)`; `person_id`.
 - **Retención:** se anonimiza/elimina con el cierre de la persona.
@@ -138,7 +138,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `person_id → people(id) RESTRICT`; `attribute_code → profile_attributes(code) RESTRICT`; `unit_code → catalog.units(code) RESTRICT`; FK compuesta opcional `(captured_by_assignment_id, person_id) → relationships.relationship_professional_assignments(id, person_id) RESTRICT` (`IX-04`).
 - **Uniques y checks:** `CHECK (value_numeric is not null or value_text is not null)`. Sin unique de "una por atributo": coexisten por procedencia. `UPDATE` revocado (append-only + `revision_events`).
 - **Actores:** la persona (declara, procedencia `person_declared`); el profesional con `contribute` (observación); worker de privacidad dispone.
-- **RLS:** `auth.is_self(person_id)` **OR** `auth.can_access(person_id,'relationship_training','read')`; proyección `identity.v_client_profile` aplica field-set.
+- **RLS:** `access_control.is_self(person_id)` **OR** `access_control.can_access(person_id,'relationship_training','read')`; proyección `identity.v_client_profile` aplica field-set.
 - **Consultas:** `(person_id, attribute_code, valid_from desc)`.
 - **Índices:** `(person_id, attribute_code, valid_from desc)`.
 - **Retención:** por categoría de disposición; anonimización rompe el enlace a `person_id`.
@@ -153,7 +153,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `person_id → people(id) RESTRICT`; `unit_code → catalog.units(code) RESTRICT`.
 - **Uniques y checks:** `CHECK (has_media = (media_ref is not null))`.
 - **Actores:** la persona (lee, escribe, borra); el profesional con `body_progress` **read**; worker de privacidad.
-- **RLS:** `auth.is_self(person_id)` **OR** `auth.can_access(person_id,'body_progress','read')`. `relationship_training` **no** alcanza; Studio usa `identity.v_client_body_progress`.
+- **RLS:** `access_control.is_self(person_id)` **OR** `access_control.can_access(person_id,'body_progress','read')`. `relationship_training` **no** alcanza; Studio usa `identity.v_client_body_progress`.
 - **Consultas:** `(person_id, measured_on desc)`.
 - **Índices:** `(person_id, measured_on desc)`.
 - **Retención:** categoría `body`; borrado propio abre `disposition_case` unitario; imágenes con borrado propagado.
@@ -168,7 +168,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `person_id → people(id) RESTRICT`.
 - **Uniques y checks:** `CHECK (context_type in ('pain','limitation','recovery'))`.
 - **Actores:** la persona; el profesional con `health_context`; worker de privacidad.
-- **RLS:** `auth.is_self(person_id)` **OR** `auth.can_access(person_id,'health_context','read')`; Studio usa `identity.v_client_health_context`.
+- **RLS:** `access_control.is_self(person_id)` **OR** `access_control.can_access(person_id,'health_context','read')`; Studio usa `identity.v_client_health_context`.
 - **Consultas:** `(person_id, valid_from desc)`.
 - **Índices:** `(person_id, valid_from desc)`.
 - **Retención:** categoría `health`; disposición por su política.
@@ -199,7 +199,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `person_id → people(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE person_id`.
 - **Actores:** la persona (dueña); miembros de la misma organización leen.
-- **RLS:** `auth.is_self(person_id)` **OR** membresía vigente compartida en `auth.org()`.
+- **RLS:** `access_control.is_self(person_id)` **OR** membresía vigente compartida en `access_control.org()`.
 - **Consultas:** por `person_id`; por miembros de organización.
 - **Índices:** único `person_id`.
 - **Retención:** con la persona.
@@ -214,7 +214,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `(issued_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`. **Sin** FK a persona destino (`IX-24`).
 - **Uniques y checks:** `UNIQUE token_hash`.
 - **Actores:** la organización (crea, revoca); el invitado por token; worker de expiración.
-- **RLS:** token exacto vigente para el invitado; `organization_id = auth.org()` con capacidad de invitar.
+- **RLS:** token exacto vigente para el invitado; `organization_id = access_control.org()` con capacidad de invitar.
 - **Consultas:** por `token_hash`; por `(organization_id, status)`.
 - **Índices:** único `token_hash`; `(organization_id, status)`.
 - **Retención:** conserva evidencia; se purga tras plazo largo.
@@ -248,7 +248,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `person_id → identity.people(id) ON DELETE CASCADE`.
 - **Uniques y checks:** `UNIQUE (person_id, category, channel)`; `CHECK` sobre los catálogos cerrados de categoría y canal. Las notificaciones de la categoría `security` **no se pueden desactivar**: `CHECK (category <> 'security' OR enabled)`.
 - **Actores:** solo la persona. Ninguna organización lee ni escribe esta tabla.
-- **RLS:** `person_id = auth.person()` y nada más.
+- **RLS:** `person_id = access_control.person()` y nada más.
 - **Consultas:** `(person_id, category, channel)`.
 - **Índices:** el unique sirve la consulta.
 - **Retención:** con la persona.
@@ -265,7 +265,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `type_code → organization_types(code) RESTRICT`.
 - **Uniques y checks:** `CHECK (status in ('active','closed'))`.
 - **Actores:** miembros leen; admin/owner escriben.
-- **RLS:** `auth.has_membership(id)`.
+- **RLS:** `access_control.has_membership(id)`.
 - **Consultas:** por `id`; por membresía del actor.
 - **Índices:** PK.
 - **Retención:** el cierre termina relaciones y abre disposición; conserva activos propios.
@@ -295,7 +295,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `organization_id → organizations(id) ON DELETE CASCADE`.
 - **Uniques y checks:** —.
 - **Actores:** admin/owner escriben; miembros leen.
-- **RLS:** `auth.has_membership(organization_id)`.
+- **RLS:** `access_control.has_membership(organization_id)`.
 - **Consultas:** por `organization_id`.
 - **Índices:** `organization_id`.
 - **Retención:** con la organización.
@@ -310,7 +310,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `organization_id → organizations(id) RESTRICT`; `person_id → identity.people(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE parcial (organization_id, person_id) WHERE status <> 'terminated'`; claves portadoras `UNIQUE (id,organization_id)` y `UNIQUE (id,organization_id,person_id)`.
 - **Actores:** admin/owner gestionan; la persona renuncia; staff y coach leen el directorio.
-- **RLS:** `organization_id = auth.org()` con membresía vigente, **OR** `person_id = auth.person()`.
+- **RLS:** `organization_id = access_control.org()` con membresía vigente, **OR** `person_id = access_control.person()`.
 - **Consultas:** `(organization_id, status)`, `(person_id, status)`.
 - **Índices:** ambos compuestos anteriores.
 - **Retención:** conserva historial; no se borra.
@@ -370,7 +370,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `membership_id → organization_memberships(id) ON DELETE CASCADE`; `role_code → organization_roles(code) RESTRICT`.
 - **Uniques y checks:** `UNIQUE parcial (membership_id, role_code) WHERE valid_to is null`. Trigger de protección del último `owner`.
 - **Actores:** admin/owner; solo owner otorga owner.
-- **RLS:** vía la membresía (`organization_id = auth.org()` con capacidad).
+- **RLS:** vía la membresía (`organization_id = access_control.org()` con capacidad).
 - **Consultas:** `(membership_id, valid_to)`.
 - **Índices:** `(membership_id, role_code, valid_from, valid_to)`.
 - **Retención:** conserva historial.
@@ -419,7 +419,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `organization_id → organizations.organizations(id) RESTRICT`; FK autocontenida opcional `(previous_relationship_id, person_id, organization_id) → service_relationships(id, person_id, organization_id) RESTRICT` (`IX-01`).
 - **Uniques y checks:** `UNIQUE parcial (person_id, organization_id) WHERE status='active'`; claves portadoras `UNIQUE (id, person_id)`, `UNIQUE (id, organization_id)` y `UNIQUE (id, person_id, organization_id)`. `CHECK (ended_at is null or ended_at >= started_at)`.
 - **Actores:** la persona (termina); admin/owner (crean vía aceptación, terminan); coach asignado lee.
-- **RLS:** `person_id = auth.person()` **OR** (`organization_id = auth.org()` **AND** (capacidad de clientes **OR** asignación efectiva)).
+- **RLS:** `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** (capacidad de clientes **OR** asignación efectiva)).
 - **Consultas:** `(person_id, status)`, `(organization_id, status)`.
 - **Índices:** ambos compuestos + parcial de activa.
 - **Retención:** conserva historial; el motivo lo ve solo quien lo declaró.
@@ -498,7 +498,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `(relationship_id, organization_id) → service_relationships(id, organization_id) ON DELETE CASCADE`; `(requested_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`; `(resolved_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE (relationship_id) WHERE status = 'pending'` — **la regla de no duplicado de `OP-REL-009` vive aquí, no en el código**; `CHECK ((status = 'pending') = (resolved_at IS NULL))`; `CHECK (status <> 'resolved' OR resolved_by_membership_id IS NOT NULL)`; `CHECK (length(reason) <= 2000)`.
 - **Actores:** `allfit_api` inserta por cuenta de `A3` titular; `A4`/`A5` resuelven; `A3` puede retirar la suya.
-- **RLS:** `auth.has_membership(organization_id)` **y** (`requested_by_membership_id = auth.membership()` **o** `auth.has_capability(organization_id,'manage_relationships')`). La persona atendida **no** ve estas solicitudes: son deliberación interna de la organización.
+- **RLS:** `access_control.has_membership(organization_id)` **y** (`requested_by_membership_id = access_control.membership()` **o** `access_control.has_capability(organization_id,'manage_relationships')`). La persona atendida **no** ve estas solicitudes: son deliberación interna de la organización.
 - **Consultas:** `(organization_id, status, created_at desc)`; `(relationship_id) WHERE status = 'pending'`.
 - **Índices:** `(organization_id, status, created_at desc)`; el unique parcial sirve la búsqueda de pendiente.
 - **Retención:** operativa; se dispone con la relación.
@@ -560,7 +560,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `(relationship_id, person_id, organization_id) → relationships.service_relationships(id, person_id, organization_id) RESTRICT`; `(scope_definition_id, scope_code) → scope_definitions(id, scope_code) RESTRICT` (`IX-05`).
 - **Uniques y checks:** clave portadora `UNIQUE (id, person_id, relationship_id, organization_id, scope_definition_id, scope_code)`; append-only.
 - **Actores:** la persona decide; la organización ve estado.
-- **RLS:** `person_id = auth.person()` **OR** (`relationship` de `auth.org()`).
+- **RLS:** `person_id = access_control.person()` **OR** (`relationship` de `access_control.org()`).
 - **Consultas:** `(person_id, decided_at desc)`, `(relationship_id, scope_code, decided_at desc)`, `(organization_id, decided_at desc)`.
 - **Índices:** los tres compuestos anteriores.
 - **Retención:** evidencia; auditoría.
@@ -575,7 +575,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `(relationship_id, organization_id) → relationships.service_relationships(id, organization_id) RESTRICT`; `(requested_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`; `(scope_definition_id, scope_code) → scope_definitions(id, scope_code) RESTRICT` (`IX-06`).
 - **Uniques y checks:** `UNIQUE parcial (relationship_id, scope_code) WHERE status='pending'`.
 - **Actores:** la organización solicita/retira; la persona decide.
-- **RLS:** `person_id` de la relación = `auth.person()`, **OR** organización de la relación.
+- **RLS:** `person_id` de la relación = `access_control.person()`, **OR** organización de la relación.
 - **Consultas:** `(relationship_id, status)`, `(organization_id, status)`.
 - **Índices:** ambos compuestos + único parcial pendiente `(relationship_id, scope_code) WHERE status='pending'`.
 - **Retención:** conserva evidencia de lo solicitado.
@@ -589,8 +589,8 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Columnas:** `id` · `person_id uuid` · `relationship_id uuid` · `organization_id uuid` · `scope_definition_id uuid` · `scope_code text` · `consent_event_id uuid` · `access_level privacy.access_level` · `purpose text` · `status privacy.grant_status` · `granted_at timestamptz` · `frozen_at timestamptz` (nullable) · `revoked_at timestamptz` (nullable) · `last_reviewed_at timestamptz` (nullable).
 - **FKs y borrado:** `(relationship_id, person_id, organization_id) → relationships.service_relationships(id, person_id, organization_id) RESTRICT`; `(scope_definition_id, scope_code) → scope_definitions(id, scope_code) RESTRICT`; `(consent_event_id, person_id, relationship_id, organization_id, scope_definition_id, scope_code) → consent_events(id, person_id, relationship_id, organization_id, scope_definition_id, scope_code) RESTRICT` (`IX-07`). `DELETE` revocado.
 - **Uniques y checks:** `UNIQUE parcial (relationship_id, scope_code) WHERE status IN ('active','frozen')` — como máximo un grant no revocado de cada scope, aunque existan versiones distintas. `CHECK` de estado: `active` exige ambos cortes `NULL`; `frozen` exige `frozen_at NOT NULL` y `revoked_at NULL`; `revoked` exige `revoked_at NOT NULL` y puede conservar `frozen_at`. Trigger `privacy.enforce_data_grant_transition_tg` prohíbe `frozen/revoked → active`, `revoked → frozen` y modificar un corte ya fijado.
-- **Actores:** la persona concede/revoca; el profesional asignado y admin/owner leen el estado mientras la relación está activa. `privacy.grant_consent` inserta; `privacy.revoke_grant` actualiza `status, revoked_at`; `relationships.terminate_relationship` actualiza `status, frozen_at`. La lectura histórica solo se ejerce mediante un `historical_access_case` válido y `auth.can_read_frozen`.
-- **RLS:** `person_id = auth.person()` **OR** organización de la relación.
+- **Actores:** la persona concede/revoca; el profesional asignado y admin/owner leen el estado mientras la relación está activa. `privacy.grant_consent` inserta; `privacy.revoke_grant` actualiza `status, revoked_at`; `relationships.terminate_relationship` actualiza `status, frozen_at`. La lectura histórica solo se ejerce mediante un `historical_access_case` válido y `access_control.can_read_frozen`.
+- **RLS:** `person_id = access_control.person()` **OR** organización de la relación.
 - **Estados y su efecto en la lectura:**
 
   | `status` | Qué habilita | Cuándo |
@@ -614,7 +614,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `(executed_session_id, person_id) → execution.executed_sessions(id, person_id) RESTRICT`; `(relationship_id, person_id) → relationships.service_relationships(id, person_id) RESTRICT` (`IX-08`).
 - **Uniques y checks:** `UNIQUE (executed_session_id, relationship_id)`. `frozen_denied_at`, una vez establecido, es inmutable: después de `T` una restauración no amplía la ventana histórica. **`IX-36`**: constraint trigger que rechaza la fila si la sesión se produjo dentro de esa misma relación (`executed_sessions.context_relationship_id = relationship_id`); la regla es de base de datos, no de la aplicación.
 - **Actores:** **solo la persona**. Ninguna organización la lee.
-- **RLS:** `person_id = auth.person()` y nada más.
+- **RLS:** `person_id = access_control.person()` y nada más.
 - **Consultas:** `(executed_session_id, relationship_id)`, `(relationship_id, status)`.
 - **Índices:** único de par + `(relationship_id, status)`.
 - **Retención:** con la persona.
@@ -629,7 +629,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `(relationship_id, organization_id) → relationships.service_relationships(id, organization_id) RESTRICT`; `(authorized_membership_id, organization_id)` y `(opened_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`; `capability_code → organizations.organization_capabilities(code) RESTRICT` (`IX-09`).
 - **Uniques y checks:** `expires_at > opened_at`; `expires_at <= opened_at + interval '24 hours'`; capacidad fija. Constraint trigger diferible `privacy.enforce_historical_case_eligibility_ct` verifica relación terminada, exclusión de `staff`, membresía autorizada activa y rol `owner`/`admin` o antiguo titular; cambios de membresía, rol o asignación deben cerrar el caso en la misma transacción (`IX-10`). Un índice parcial impide más de un caso abierto por `(relationship_id, authorized_membership_id, purpose)`.
 - **Actores:** `owner`/`admin` con `manage_historical_access` abren/cierran; ejerce únicamente la membresía autorizada con MFA.
-- **RLS:** gestión por organización con capacidad; la fila solo es ejercible por `authorized_membership_id = auth.membership()` y `status='open'` y `expires_at > statement_timestamp()`.
+- **RLS:** gestión por organización con capacidad; la fila solo es ejercible por `authorized_membership_id = access_control.membership()` y `status='open'` y `expires_at > statement_timestamp()`.
 - **Consultas:** `(organization_id, relationship_id, status)`, `(authorized_membership_id, status, expires_at)`, `case_reference`.
 - **Índices:** compuestos anteriores + parcial de casos abiertos.
 - **Retención:** 24 meses después de cerrar/expirar, alineada con `access_events`; una política posterior puede exigir más por disputa u obligación.
@@ -644,7 +644,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `subject_person_id` y `actor_person_id` con FK `RESTRICT` a `identity.people`; las referencias de alto volumen a relación, grant y caso se validan en la entrada cerrada, no con FK dura sobre cada partición.
 - **Uniques y checks:** PK `(id,occurred_at)`; rango mensual; `access_events_id_partition_time_chk` exige UUIDv7 y `occurred_at=extensions.uuid_v7_timestamp(id)`, lo que hace global la unicidad local. Actor humano obligatorio; frozen permitido exige caso/relación/grant. `privacy.log_access_event` es la única entrada y `privacy.enforce_access_event_context_tg` valida `IX-23`.
 - **Actores:** la persona consulta las suyas mediante `privacy.v_my_access_events`; `A12` audita metadatos break-glass mediante `support.list_break_glass_audit_events`; `A10` consulta sus ejercicios en `support.break_glass_events`, no esta tabla. `privacy.log_access_event` inserta en la misma transacción de la lectura.
-- **RLS:** en la tabla base, `SELECT` solo cuando `subject_person_id = auth.person()`; `INSERT` directo revocado. Ninguna organización, `A10` o `A12` recibe `SELECT` directo.
+- **RLS:** en la tabla base, `SELECT` solo cuando `subject_person_id = access_control.person()`; `INSERT` directo revocado. Ninguna organización, `A10` o `A12` recibe `SELECT` directo.
 - **Consultas:** `(subject_person_id, occurred_at desc)`.
 - **Índices:** `(subject_person_id, occurred_at desc)` por partición.
 - **Retención:** **24 meses**; la purga es `DROP` de partición.
@@ -674,7 +674,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `person_id → identity.people(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE parcial (person_id, scope) WHERE status='open'`; clave portadora `UNIQUE (id, person_id)`.
 - **Actores:** la persona; worker de privacidad resuelve.
-- **RLS:** `person_id = auth.person()`.
+- **RLS:** `person_id = access_control.person()`.
 - **Consultas:** `(person_id, status)`.
 - **Índices:** compuesto + parcial abierto.
 - **Retención:** evidencia del ejercicio del derecho.
@@ -689,7 +689,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `subject_person_id → identity.people(id) RESTRICT`; FK compuesta opcional `(erasure_request_id, subject_person_id) → erasure_requests(id, person_id) RESTRICT` (`IX-26`).
 - **Uniques y checks:** clave portadora `UNIQUE (id, subject_person_id)`.
 - **Actores:** worker de privacidad; la persona ve estado; soporte ve metadatos.
-- **RLS:** `subject_person_id = auth.person()` para la persona; worker por rol.
+- **RLS:** `subject_person_id = access_control.person()` para la persona; worker por rol.
 - **Consultas:** `(subject_person_id, status)`.
 - **Índices:** `(subject_person_id, status)`.
 - **Retención:** auditoría.
@@ -1110,7 +1110,7 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `program_version_id → program_versions(id) RESTRICT`; FK compuesta opcional `(origin_relationship_id, person_id) → relationships.service_relationships(id, person_id) RESTRICT` (`IX-11`).
 - **Uniques y checks:** clave portadora `UNIQUE (id, person_id)`.
 - **Actores:** la persona (autoasigna, decide continuidad); el coach con `contribute` (asigna, cancela).
-- **RLS:** `person_id = auth.person()` **OR** (`origin_relationship_id` visible **AND** grant `relationship_training`).
+- **RLS:** `person_id = access_control.person()` **OR** (`origin_relationship_id` visible **AND** grant `relationship_training`).
 - **Consultas / índices:** `(person_id, lifecycle)`, `(origin_relationship_id, lifecycle)`.
 - **Retención:** historial personal; se conserva al desacoplar.
 - **Eventos:** `planning.assignment_created.v1`, `planning.assignment_detached.v1`, `planning.assignment_cancelled.v1`, `planning.assignment_continued.v1`, `planning.assignment_ended.v1`.
@@ -1172,7 +1172,7 @@ Nota de conteo: `planning` tiene 16 tablas y 16 fichas; §9.5–9.8 son cuatro t
 - **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `activity_type_id → catalog.activity_types(id) RESTRICT`; `result_contract_id → catalog.result_contracts(id) RESTRICT`; FK compuesta de contexto `MATCH SIMPLE (context_relationship_id, person_id, context_organization_id) → relationships.service_relationships(id, person_id, organization_id) RESTRICT` (`IX-14`).
 - **Uniques y checks:** clave portadora `UNIQUE (id, person_id)`; `revision_number >= 0`; `CHECK (ended_at is null or ended_at >= started_at)`; `CHECK` que exige ambos IDs de contexto cuando `is_autonomous=false` y ambos `NULL` cuando `is_autonomous=true`; sin `UPDATE` de resultados por terceros (privilegios).
 - **Actores:** la persona (crea, corrige, invalida); el profesional lee proyectado.
-- **RLS:** `auth.is_self(person_id)` **OR** (relación con `relationship_training` para lo producido en ella; `prior_training_history` para lo autónomo, con evaluación de `session_denied`). Proyección `execution.v_client_executions`.
+- **RLS:** `access_control.is_self(person_id)` **OR** (relación con `relationship_training` para lo producido en ella; `prior_training_history` para lo autónomo, con evaluación de `session_denied`). Proyección `execution.v_client_executions`.
 - **Consultas / índices:** `(person_id, started_at desc)`, `(context_relationship_id, started_at desc)`.
 - **Retención:** categoría `training`; disposición por política; cierre anonimiza `person_id`.
 - **Eventos:** `execution.attempt_started.v1`, `execution.session_started.v1`, `execution.finalized.v1`, `execution.revised.v1`, `execution.annulled.v1`.
@@ -1284,7 +1284,7 @@ Nota de conteo: `planning` tiene 16 tablas y 16 fichas; §9.5–9.8 son cuatro t
 - **FKs y borrado:** `executed_session_id → executed_sessions(id) ON DELETE CASCADE`; FK compuesta opcional `(session_segment_id, executed_session_id) → session_segments(id, executed_session_id) RESTRICT`; `unit_code → catalog.units(code) RESTRICT` (`IX-18`).
 - **Uniques y checks:** sin `UPDATE`/`DELETE` (raw inmutable).
 - **Actores:** la persona y el importador controlado escriben sobre sesiones propias; solo la persona puede leer; ningún profesional u organización accede en V1.
-- **RLS:** `auth.is_self(person_id)` vía la sesión, y nada más. Ningún grant lo expone.
+- **RLS:** `access_control.is_self(person_id)` vía la sesión, y nada más. Ningún grant lo expone.
 - **Consultas / índices:** `(executed_session_id, sampled_at)`.
 - **Retención:** con la sesión; excluible del análisis sin alterar payload.
 - **Eventos:** ninguno propio.
@@ -1312,7 +1312,7 @@ Nota de conteo: `planning` tiene 16 tablas y 16 fichas; §9.5–9.8 son cuatro t
 - **FKs y borrado:** `(proposer_assignment_id, person_id) → relationships.relationship_professional_assignments(id, person_id) RESTRICT`; cada `target_*` a su tabla `RESTRICT`; `proposed_unit_code → catalog.units(code) RESTRICT`.
 - **Uniques y checks:** exactamente un target y exactamente una columna `proposed_*` no nulos; unidad solo con `proposed_numeric`. Constraint trigger diferible `execution.enforce_correction_subject_ct` resuelve target/sujeto y valida que `target_field`, tipo y unidad sean editables para esa tabla (`IX-20`).
 - **Actores:** el profesional con `contribute` propone; la persona decide.
-- **RLS:** `person_id = auth.person()` **OR** proponente con asignación efectiva.
+- **RLS:** `person_id = access_control.person()` **OR** proponente con asignación efectiva.
 - **Consultas / índices:** `(person_id, status, expires_at)`, `(proposer_assignment_id, status)`.
 - **Retención:** conserva; vencidas y canceladas se marcan, no se borran.
 - **Eventos:** `execution.correction_proposed.v1`, `execution.correction_decided.v1`, `execution.correction_expired.v1`.
@@ -1354,7 +1354,7 @@ Nota de conteo: `planning` tiene 16 tablas y 16 fichas; §9.5–9.8 son cuatro t
 - **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `unit_code → catalog.units(code) RESTRICT`; `data_classification_code → privacy.data_classifications(code) RESTRICT`.
 - **Uniques y checks:** `UNIQUE (person_id, metric_code, period, algorithm_version)`.
 - **Actores:** **solo el worker de mantenimiento** escribe; la persona lee; el profesional lee si accede a todos los inputs.
-- **RLS:** `auth.is_self(person_id)` **OR** acceso a **todas** las clasificaciones heredadas.
+- **RLS:** `access_control.is_self(person_id)` **OR** acceso a **todas** las clasificaciones heredadas.
 - **Consultas / índices:** `(person_id, metric_code, period)`.
 - **Retención:** con sus inputs; invalidado no se sirve.
 - **Eventos:** `execution.derived_recomputed.v1`.
@@ -1387,7 +1387,7 @@ Nota de conteo: `planning` tiene 16 tablas y 16 fichas; §9.5–9.8 son cuatro t
 - **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; clave portadora `UNIQUE(id,person_id)`.
 - **Uniques y checks:** `revision_number>=0`; `CHECK (has_media=(media_ref IS NOT NULL))`; `local_date` corresponde a `occurred_at` bajo `timezone` mediante función de entrada; máximo una foto.
 - **Actores:** solo la persona crea/revisa/borra por funciones; profesional nunca recibe DML.
-- **RLS:** base `auth.is_self(person_id)`; Studio solo por vistas `nutrition.v_client_*`.
+- **RLS:** base `access_control.is_self(person_id)`; Studio solo por vistas `nutrition.v_client_*`.
 - **Consultas:** `(person_id,occurred_at DESC,id DESC)`; por `local_date`.
 - **Índices:** `(person_id,occurred_at DESC,id DESC)`; `(person_id,local_date)`.
 - **Retención:** mientras cuenta activa o hasta borrado personal; disposición elimina hijos, media, vistas/derivados; hold suspende.
@@ -1432,7 +1432,7 @@ Nota de conteo: `planning` tiene 16 tablas y 16 fichas; §9.5–9.8 son cuatro t
 - **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; clave portadora `UNIQUE(id,person_id)`.
 - **Uniques y checks:** `UNIQUE(person_id)`.
 - **Actores:** la persona controla; se crea idempotentemente al publicar/proponer la primera versión.
-- **RLS:** `auth.is_self(person_id)`; profesional solo por vistas/funciones.
+- **RLS:** `access_control.is_self(person_id)`; profesional solo por vistas/funciones.
 - **Consultas:** por `person_id`.
 - **Índices:** único `(person_id)`.
 - **Retención:** con la persona; no se archiva por relación.
@@ -1556,7 +1556,7 @@ Nota de conteo: `planning` tiene 16 tablas y 16 fichas; §9.5–9.8 son cuatro t
 - **FKs y borrado:** todas las referencias de persona → `identity.people(id) RESTRICT`; `person_id` debe tener `platform_role_assignments` activo al entrar en vigencia, validado por trigger diferido.
 - **Uniques y checks:** unique parcial `(person_id,duty_code) WHERE status IN ('scheduled','active','suspended')`; catálogo cerrado de ADR-028 y `actor_mode` derivado del código; `valid_to > valid_from` y `valid_to <= valid_from + interval '90 days'`; `required_aal = 2`; otorgante/recertificador/suspensor/revocador distintos de `person_id`; forma temporal exacta por estado.
 - **Actores:** sólo `A12/manage_platform_access` administra a otra persona; `A12/manage_platform_access` o `audit_platform_access` consulta.
-- **RLS:** tabla base sin acceso directo de cliente; funciones `support.assign_platform_duty`, `suspend_platform_duty` y `revoke_platform_duty` revalidan rol, deber, AAL2 y actor en la transacción. `auth.has_platform_duty` es `SECURITY DEFINER`, `STABLE`, fail-closed y no acepta el código desde contexto no confiable.
+- **RLS:** tabla base sin acceso directo de cliente; funciones `support.assign_platform_duty`, `suspend_platform_duty` y `revoke_platform_duty` revalidan rol, deber, AAL2 y actor en la transacción. `access_control.has_platform_duty` es `SECURITY DEFINER`, `STABLE`, fail-closed y no acepta el código desde contexto no confiable.
 - **Consultas:** autoridad exacta por `(person_id,duty_code,status,valid_from,valid_to)` e inventario interno por estado/vencimiento.
 - **Índices:** unique parcial anterior; `(person_id,status,valid_to)`; `(duty_code,status,valid_to)`; `(status,valid_to)`.
 - **Retención:** historial append-only lógico; no hay `DELETE` en runtime. Usa la clase `platform_security_authority`; la purga queda bloqueada hasta cerrar `DB-P5-015`.
@@ -1622,7 +1622,7 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 - **FKs y borrado:** `organization_id → organizations.organizations(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE (organization_id) WHERE status = 'active'`; `CHECK (provider in ('mercado_pago','wompi'))`.
 - **Actores:** solo `owner`. Ni `admin`, ni `coach`, ni `staff`.
-- **RLS:** `auth.has_membership(organization_id)` **y** `auth.has_capability(organization_id,'manage_billing')`. Ninguna persona atendida lee esta tabla.
+- **RLS:** `access_control.has_membership(organization_id)` **y** `access_control.has_capability(organization_id,'manage_billing')`. Ninguna persona atendida lee esta tabla.
 - **Consultas / índices:** por `organization_id`.
 - **Retención:** con la organización; revocar no borra el historial de cobros.
 - **Eventos:** `payments.gateway_connected.v1`, `payments.gateway_revoked.v1`.
@@ -1638,7 +1638,7 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 - **FKs y borrado:** `organization_id → organizations.organizations(id) RESTRICT`; clave portadora `UNIQUE (id, organization_id)`.
 - **Uniques y checks:** `UNIQUE (organization_id, lower(name))`.
 - **Actores:** `admin` y `owner` escriben; el resto de la organización lee.
-- **RLS:** `auth.has_membership(organization_id)`; la escritura exige `manage_billing`.
+- **RLS:** `access_control.has_membership(organization_id)`; la escritura exige `manage_billing`.
 - **Consultas / índices:** `(organization_id, status)`.
 - **Retención:** con la organización.
 - **Eventos:** `payments.plan_created.v1`.
@@ -1670,7 +1670,7 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 - **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `(plan_version_id, organization_id) → plan_versions(id, organization_id) RESTRICT` (`IX-38`); `(ended_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`; clave portadora `UNIQUE (id, person_id, organization_id)`.
 - **Uniques y checks:** `UNIQUE (person_id, organization_id) WHERE status <> 'ended'`; `CHECK ((status = 'suspended') = (suspended_at IS NOT NULL))`; `CHECK ((status = 'ended') = (ended_at IS NOT NULL))`; **`CHECK (status <> 'ended' OR ended_by_kind IS NOT NULL)`** — nada termina sin un actor humano, y el worker de pagos no puede escribir `ended` porque no tiene actor humano que declarar.
 - **Actores:** la persona se suscribe y cancela; `admin`/`owner` suspenden, reactivan y terminan; el worker de pagos solo transiciona entre `active` y `suspended`.
-- **RLS:** `person_id = auth.person()` **OR** (`organization_id = auth.org()` **AND** `auth.has_capability(organization_id,'manage_billing')`). Un `coach` **no** lee esta tabla: el estado de pago de su cliente no es asunto suyo.
+- **RLS:** `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** `access_control.has_capability(organization_id,'manage_billing')`). Un `coach` **no** lee esta tabla: el estado de pago de su cliente no es asunto suyo.
 - **Consultas / índices:** `(person_id, status)`, `(organization_id, status)`.
 - **Retención:** con la persona; la anonimización rompe el vínculo y conserva el agregado de la organización.
 - **Eventos:** `payments.subscription_started.v1`, `payments.subscription_suspended.v1`, `payments.subscription_reactivated.v1`, `payments.subscription_ended.v1`.
@@ -1782,7 +1782,7 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 - **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `platform_plan_version_id → platform_plan_versions(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE (person_id) WHERE status <> 'ended'`; los mismos checks de estado y actor humano que `plan_subscriptions`. **El worker de pagos no puede escribir `ended`.**
 - **Actores:** la persona se suscribe y cancela; el worker transiciona `active` ↔ `suspended`. **Ninguna organización lee esta tabla.**
-- **RLS:** `person_id = auth.person()` y nada más. Ni `admin`, ni `owner`, ni `coach`.
+- **RLS:** `person_id = access_control.person()` y nada más. Ni `admin`, ni `owner`, ni `coach`.
 - **Consultas / índices:** `(person_id, status)`.
 - **Retención:** con la persona.
 - **Eventos:** `payments.platform_subscription_started.v1`, `.suspended.v1`, `.reactivated.v1`, `.ended.v1`.

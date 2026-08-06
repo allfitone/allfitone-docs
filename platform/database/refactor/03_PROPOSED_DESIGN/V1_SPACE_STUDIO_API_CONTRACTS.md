@@ -387,7 +387,7 @@ Estas rutas no forman parte del CRM operativo y nunca se mezclan con `/clients`.
 
 | Método | Ruta | Operación | Requisitos |
 | --- | --- | --- | --- |
-| `GET` | `/organizations/{orgId}/historical-relationships/{relationshipId}` | `OP-PRV-020` | `X-Historical-Access-Case`, MFA/AAL2 y `auth.can_read_frozen` |
+| `GET` | `/organizations/{orgId}/historical-relationships/{relationshipId}` | `OP-PRV-020` | `X-Historical-Access-Case`, MFA/AAL2 y `access_control.can_read_frozen` |
 | `GET` | `.../historical-relationships/{relationshipId}/executions` | `OP-PRV-020` | Igual; cursor sin total inseguro |
 | `GET` | `.../historical-relationships/{relationshipId}/executions/{id}` | `OP-PRV-020` | Igual; field-set histórico por campo |
 | `GET` | `.../historical-relationships/{relationshipId}/body-progress` | `OP-PRV-020` | Solo medidas estructuradas marcadas `historical_readable` |
@@ -696,9 +696,9 @@ Comandos con varias escrituras que deben ser atómicas. La API los invoca dentro
 
 Las funciones que actúan como entrada cerrada sobre tablas sin DML directo —`activate_person`, `privacy.grant_consent`, `privacy.revoke_grant`, `relationships.terminate_relationship` y `privacy.log_access_event`— son `SECURITY DEFINER`, fijan `search_path = pg_catalog`, califican cada objeto y nunca reciben el actor como parámetro. Las demás son `SECURITY INVOKER`, salvo que su ficha física documente otra necesidad equivalente.
 
-`relationships.terminate_relationship` corta inmediatamente las rutas operativas y de escritura; no revoca los grants. ADR-023 publica una superficie histórica separada, ejercida únicamente por el caso exacto y `auth.can_read_frozen`. `privacy.revoke_grant` acepta `active` o `frozen`; al revocar uno congelado también cierra todos los casos abiertos de la relación antes de confirmar.
+`relationships.terminate_relationship` corta inmediatamente las rutas operativas y de escritura; no revoca los grants. ADR-023 publica una superficie histórica separada, ejercida únicamente por el caso exacto y `access_control.can_read_frozen`. `privacy.revoke_grant` acepta `active` o `frozen`; al revocar uno congelado también cierra todos los casos abiertos de la relación antes de confirmar.
 
-Los lookups `auth.grant_of(relationship_id,scope_code)` y `auth.frozen_grant_of(relationship_id,scope_code)` son `STABLE SECURITY DEFINER`: el primero devuelve exclusivamente el grant `active`; el segundo, exclusivamente el `frozen` e incluye `frozen_at`. `auth.can_access` consume solo el primero y `auth.can_read_frozen`, solo el segundo.
+Los lookups `access_control.grant_of(relationship_id,scope_code)` y `access_control.frozen_grant_of(relationship_id,scope_code)` son `STABLE SECURITY DEFINER`: el primero devuelve exclusivamente el grant `active`; el segundo, exclusivamente el `frozen` e incluye `frozen_at`. `access_control.can_access` consume solo el primero y `access_control.can_read_frozen`, solo el segundo.
 
 ## 10. Vistas de contrato
 

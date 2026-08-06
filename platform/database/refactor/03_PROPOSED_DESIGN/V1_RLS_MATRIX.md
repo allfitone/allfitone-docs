@@ -105,61 +105,63 @@ COMMIT;
 
 Las condiciones RLS se escriben sobre un conjunto pequeño de funciones `STABLE`, para que la policy sea legible y auditable. Cada una es `SECURITY INVOKER` salvo las tres marcadas, que son `SECURITY DEFINER` con `search_path` fijado explícitamente y sin parámetros que puedan alterar su plan.
 
+Todos estos helpers pertenecen al schema privado `access_control`. Este nombre distingue la autorización de dominio de Allfit del schema `auth` reservado y administrado por Supabase. Ningún helper se crea en `auth`, y esta separación no cambia que WorkOS AuthKit autentica mientras PostgreSQL autoriza.
+
 | Predicado | Devuelve | Notas |
 | --- | --- | --- |
-| `auth.actor_kind()` | El tipo de actor del contexto | — |
-| `auth.person()` | `PERSON` del contexto, o `NULL` | — |
-| `auth.membership()` | Membresía organizacional activa del contexto, o `NULL` | Se deriva, no se confía en input libre |
-| `auth.is_self(person_id)` | La fila pertenece al actor | Base de casi toda la superficie Space |
-| `auth.org()` | `ORGANIZATION` del contexto, o `NULL` | Solo si hay membresía vigente |
-| `auth.has_membership(org_id)` | Membresía vigente del actor en esa organización | `SECURITY DEFINER` |
-| `auth.has_capability(org_id, capability)` | Capacidad efectiva vía rol vigente | `SECURITY DEFINER` |
-| `auth.effective_assignment(relationship_id)` | Asignación profesional efectiva del actor: titular **o** suplencia aceptada y vigente | `SECURITY DEFINER` |
-| `auth.grant_of(relationship_id, scope_code)` | Grant `active` único con versión, nivel y propósito, o conjunto vacío | Nunca acepta `frozen`/`revoked` |
-| `auth.frozen_grant_of(relationship_id, scope_code)` | Grant `frozen` único con versión, propósito y `frozen_at`, o conjunto vacío | Nunca acepta `active`/`revoked` |
-| `auth.can_access(person_id, scope_code, level)` | La **fórmula completa** de diez condiciones | Compuesta por las anteriores |
-| `auth.has_verified_credential(person_id, credential_type)` | Verificación profesional vigente y no revocada | `SECURITY DEFINER`; nunca amplía scopes |
-| `auth.can_guide_nutrition(person_id, level)` | Fórmula live + `guide_nutrition` + credencial `nutrition_professional` | Solo para proyecciones/comandos nutricionales Studio |
-| `auth.can_read_frozen(relationship_id, scope_code, resource, field, occurred_at)` | Caso histórico, grant `frozen`, corte, field-set histórico, denegación y retención válidos | Predicado separado de ADR-023 |
-| `auth.session_denied(session_id, relationship_id)` | Existe denegación aplicable | Se evalúa **antes** de proyectar y de contar |
-| `auth.has_platform_role(role)` | Asignación vigente en `support.platform_role_assignments`; falla cerrado si no puede resolverse | — |
+| `access_control.actor_kind()` | El tipo de actor del contexto | — |
+| `access_control.person()` | `PERSON` del contexto, o `NULL` | — |
+| `access_control.membership()` | Membresía organizacional activa del contexto, o `NULL` | Se deriva, no se confía en input libre |
+| `access_control.is_self(person_id)` | La fila pertenece al actor | Base de casi toda la superficie Space |
+| `access_control.org()` | `ORGANIZATION` del contexto, o `NULL` | Solo si hay membresía vigente |
+| `access_control.has_membership(org_id)` | Membresía vigente del actor en esa organización | `SECURITY DEFINER` |
+| `access_control.has_capability(org_id, capability)` | Capacidad efectiva vía rol vigente | `SECURITY DEFINER` |
+| `access_control.effective_assignment(relationship_id)` | Asignación profesional efectiva del actor: titular **o** suplencia aceptada y vigente | `SECURITY DEFINER` |
+| `access_control.grant_of(relationship_id, scope_code)` | Grant `active` único con versión, nivel y propósito, o conjunto vacío | Nunca acepta `frozen`/`revoked` |
+| `access_control.frozen_grant_of(relationship_id, scope_code)` | Grant `frozen` único con versión, propósito y `frozen_at`, o conjunto vacío | Nunca acepta `active`/`revoked` |
+| `access_control.can_access(person_id, scope_code, level)` | La **fórmula completa** de diez condiciones | Compuesta por las anteriores |
+| `access_control.has_verified_credential(person_id, credential_type)` | Verificación profesional vigente y no revocada | `SECURITY DEFINER`; nunca amplía scopes |
+| `access_control.can_guide_nutrition(person_id, level)` | Fórmula live + `guide_nutrition` + credencial `nutrition_professional` | Solo para proyecciones/comandos nutricionales Studio |
+| `access_control.can_read_frozen(relationship_id, scope_code, resource, field, occurred_at)` | Caso histórico, grant `frozen`, corte, field-set histórico, denegación y retención válidos | Predicado separado de ADR-023 |
+| `access_control.session_denied(session_id, relationship_id)` | Existe denegación aplicable | Se evalúa **antes** de proyectar y de contar |
+| `access_control.has_platform_role(role)` | Asignación vigente en `support.platform_role_assignments`; falla cerrado si no puede resolverse | — |
 
 ### 5.1 La fórmula, escrita
 
-`auth.can_access` implementa las diez condiciones del [ERD §7.1](./V1_CONCEPTUAL_ERD.md). Ninguna se omite, ninguna se cachea y todas se evalúan dentro de la transacción de la operación:
+`access_control.can_access` implementa las diez condiciones del [ERD §7.1](./V1_CONCEPTUAL_ERD.md). Ninguna se omite, ninguna se cachea y todas se evalúan dentro de la transacción de la operación:
 
 ```text
-auth.actor_kind() = 'professional'
+access_control.actor_kind() = 'professional'
 ∧ la persona profesional está activa
-∧ auth.has_membership(org)                              -- membresía vigente
-∧ auth.has_capability(org, capability_requerida)        -- capacidad compatible
+∧ access_control.has_membership(org)                              -- membresía vigente
+∧ access_control.has_capability(org, capability_requerida)        -- capacidad compatible
 ∧ la relación (person, org) está vigente
-∧ auth.effective_assignment(relationship)               -- titular o suplente vigente
-∧ EXISTS (SELECT 1 FROM auth.grant_of(relationship, scope)) -- una fila: grant active de esa relación y org
+∧ access_control.effective_assignment(relationship)               -- titular o suplente vigente
+∧ EXISTS (SELECT 1 FROM access_control.grant_of(relationship, scope)) -- una fila: grant active de esa relación y org
 ∧ el access_level del grant cubre el nivel pedido
-∧ NOT auth.session_denied(...)                          -- denegación prevalece
+∧ NOT access_control.session_denied(...)                          -- denegación prevalece
 ∧ la clasificación del campo está en el field-set de la VERSIÓN congelada
 ```
 
 La última condición no la resuelve RLS: la resuelve la proyección. Las nueve primeras sí.
 
-Esta fórmula cubre exclusivamente acceso profesional **en vivo** con relación y asignación efectivas. Un grant `frozen` nunca satisface `auth.can_access`.
+Esta fórmula cubre exclusivamente acceso profesional **en vivo** con relación y asignación efectivas. Un grant `frozen` nunca satisface `access_control.can_access`.
 
 ### 5.2 La fórmula `frozen`, escrita
 
 ```text
-auth.actor_kind() = 'professional'
+access_control.actor_kind() = 'professional'
 ∧ app.authn_assurance = 'aal2'
-∧ auth.has_membership(org)
-∧ auth.membership() = historical_access_case.authorized_membership_id
+∧ access_control.has_membership(org)
+∧ access_control.membership() = historical_access_case.authorized_membership_id
 ∧ el caso está open, no vencido y coincide con org, relación y propósito
 ∧ el actor es owner/admin o el antiguo titular exacto; nunca staff
 ∧ la relación está terminated
-∧ EXISTS (SELECT 1 FROM auth.frozen_grant_of(relationship, scope))
+∧ EXISTS (SELECT 1 FROM access_control.frozen_grant_of(relationship, scope))
 ∧ occurred_at <= grant.frozen_at
 ∧ la versión congelada permite resource/field
 ∧ scope_resource_rule.historical_readable = true
-∧ NOT auth.frozen_session_denied(...)
+∧ NOT access_control.frozen_session_denied(...)
 ∧ la retención aplicable no venció
 ```
 
@@ -174,7 +176,7 @@ Ninguna función `SECURITY DEFINER` acepta como parámetro el identificador del 
 Las dos funciones de lookup son `STABLE SECURITY DEFINER`, fijan `search_path = pg_catalog`, califican todos los objetos y no aceptan actor, persona u organización como parámetros:
 
 ```text
-auth.grant_of(
+access_control.grant_of(
   p_relationship_id uuid,
   p_scope_code text
 ) RETURNS TABLE (
@@ -186,7 +188,7 @@ auth.grant_of(
   purpose text
 )
 
-auth.frozen_grant_of(
+access_control.frozen_grant_of(
   p_relationship_id uuid,
   p_scope_code text
 ) RETURNS TABLE (
@@ -200,7 +202,7 @@ auth.frozen_grant_of(
 )
 ```
 
-La primera filtra `status='active'`; la segunda `status='frozen'`. El índice único parcial por `(relationship_id, scope_code) WHERE status IN ('active','frozen')` hace que cada función devuelva cero o una fila. `auth.can_access` consume solo `grant_of`; `auth.can_read_frozen` consume solo `frozen_grant_of`.
+La primera filtra `status='active'`; la segunda `status='frozen'`. El índice único parcial por `(relationship_id, scope_code) WHERE status IN ('active','frozen')` hace que cada función devuelva cero o una fila. `access_control.can_access` consume solo `grant_of`; `access_control.can_read_frozen` consume solo `frozen_grant_of`.
 
 ## 6. Cómo se lee una ficha de recurso
 
@@ -236,7 +238,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | `A9` privacy | Por criterio de disposición | — | Anonimización | Solo `delete` decidido |
 | `A10` | — salvo break-glass | — | — | — |
 
-- **Condición RLS** — `SELECT`: `auth.is_self(id)` **OR** existe relación vigente entre `id` y `auth.org()` con `auth.effective_assignment(...)`. `INSERT`: exclusivo de la función transaccional de activación (`OP-IDN-003`); ninguna policy permite un `INSERT` directo desde la API. `UPDATE`: `auth.is_self(id)`.
+- **Condición RLS** — `SELECT`: `access_control.is_self(id)` **OR** existe relación vigente entre `id` y `access_control.org()` con `access_control.effective_assignment(...)`. `INSERT`: exclusivo de la función transaccional de activación (`OP-IDN-003`); ninguna policy permite un `INSERT` directo desde la API. `UPDATE`: `access_control.is_self(id)`.
 - **Contexto requerido** — `actor_kind`, `actor_person_id`; `actor_org_id` para el acceso profesional.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `UPDATE(campos propios)`. Sin `DELETE`. `allfit_worker_privacy`: `SELECT`, `UPDATE`, `DELETE`.
 - **Proyección** — El acceso profesional **nunca** consulta la tabla: usa `identity.v_client_identity`, que expone únicamente nombre de presentación e identificador de relación.
@@ -254,7 +256,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | `A2` | Propias | — | — | — |
 | Resto | — | — | — | — |
 
-- **Condición RLS** — La fila coincide con `app.actor_account_id`, o su `person_id` coincide con `auth.person()`.
+- **Condición RLS** — La fila coincide con `app.actor_account_id`, o su `person_id` coincide con `access_control.person()`.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(person_id)` únicamente desde la función de activación.
 - **Índice para la policy** — único sobre `(provider, issuer, subject)`; índice sobre `person_id`.
 - **`T-ACCOUNT-1` (positiva)** — Una cuenta recién autenticada lee su propia fila sin persona vinculada.
@@ -285,7 +287,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | `A4`, `A5`, `A6` | — | — | — | — |
 | `A9` privacy | Por disposición | — | Anonimización | Sí |
 
-- **Condición RLS** — `SELECT`: `auth.is_self(person_id)` **OR** `auth.can_access(person_id, 'relationship_training', 'read')`. `INSERT`: `auth.is_self(person_id)` con procedencia `person_declared`, **o** `auth.can_access(person_id, 'relationship_training', 'contribute')` con procedencia `professional_observation` y autoría en la asignación. `UPDATE`: prohibido; toda corrección es un `REVISION_EVENT`.
+- **Condición RLS** — `SELECT`: `access_control.is_self(person_id)` **OR** `access_control.can_access(person_id, 'relationship_training', 'read')`. `INSERT`: `access_control.is_self(person_id)` con procedencia `person_declared`, **o** `access_control.can_access(person_id, 'relationship_training', 'contribute')` con procedencia `professional_observation` y autoría en la asignación. `UPDATE`: prohibido; toda corrección es un `REVISION_EVENT`.
 - **Contexto requerido** — Completo, incluido `app.purpose` para el acceso profesional.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`. **Sin `UPDATE` ni `DELETE`**: la inmutabilidad se garantiza con privilegios, no solo con disciplina.
 - **Proyección** — `identity.v_client_profile`, que aplica el `SCOPE_RESOURCE_RULE` de la **versión congelada en el grant**. Un grant v1 no recibe atributos añadidos en v2 aunque la fila los tenga.
@@ -304,7 +306,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | `A3`, `A7` | `R*` con `body_progress` | — | — | — |
 | Resto | — | — | — | — |
 
-- **Condición RLS** — `auth.is_self(person_id)` **OR** `auth.can_access(person_id, 'body_progress', 'read')`. **`relationship_training` no alcanza**, aunque la medición esté asociada a una sesión visible.
+- **Condición RLS** — `access_control.is_self(person_id)` **OR** `access_control.can_access(person_id, 'body_progress', 'read')`. **`relationship_training` no alcanza**, aunque la medición esté asociada a una sesión visible.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `DELETE` propio. `allfit_worker_privacy`: todos.
 - **Proyección** — `identity.v_client_body_progress`. Las imágenes se sirven por URL firmada de vigencia corta, emitida **por petición** tras reevaluar el grant; nunca se devuelve una ruta estable.
 - **Índice para la policy** — sobre `(person_id, measured_on DESC)`.
@@ -321,7 +323,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | `A3`, `A7` | `R*` con `health_context` | `W` con `contribute` | Propia, vía revisión | — |
 | Resto | — | — | — | — |
 
-- **Condición RLS** — `auth.is_self(person_id)` **OR** `auth.can_access(person_id, 'health_context', 'read')`. Es la categoría más restrictiva de V1.
+- **Condición RLS** — `access_control.is_self(person_id)` **OR** `access_control.can_access(person_id, 'health_context', 'read')`. Es la categoría más restrictiva de V1.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`. Sin `UPDATE`.
 - **Proyección** — `identity.v_client_health_context`, minimizada: nunca historia clínica, diagnósticos, laboratorios ni documentos.
 - **Índice para la policy** — sobre `(person_id, valid_from DESC)`.
@@ -350,7 +352,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | `A3`–`A6` | De los miembros de la misma organización | — | — | — |
 | Resto | — | — | — | — |
 
-- **Condición RLS** — `auth.is_self(person_id)` **OR** existe membresía vigente de esa persona en `auth.org()`.
+- **Condición RLS** — `access_control.is_self(person_id)` **OR** existe membresía vigente de esa persona en `access_control.org()`.
 - **Índice para la policy** — sobre `person_id` en `ORGANIZATION_MEMBERSHIP` con `(organization_id, status)`.
 - **`T-PROF-1` (negativa)** — El perfil profesional **no** es público: no existe una lectura anónima ni entre organizaciones. Perfiles públicos y marketplace están diferidos.
 
@@ -363,7 +365,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | `A3`–`A6` | Las de su organización | Sí, con capacidad | Revocación | — |
 | `A9` maintenance | Vencidas | — | Vencimiento | — |
 
-- **Condición RLS** — `SELECT` del invitado: coincidencia exacta de token vigente y no revocado. `SELECT` de la organización: `organization_id = auth.org()` con `auth.has_capability(org, 'invite')`.
+- **Condición RLS** — `SELECT` del invitado: coincidencia exacta de token vigente y no revocado. `SELECT` de la organización: `organization_id = access_control.org()` con `access_control.has_capability(org, 'invite')`.
 - **Contexto requerido** — Para el invitado basta `actor_kind IN ('account','person')`: la invitación se consulta **antes** de existir la persona.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(status)`. Sin `DELETE`: una invitación vencida o revocada conserva evidencia.
 - **Índice para la policy** — único sobre el hash del token; sobre `(organization_id, status)`.
@@ -384,7 +386,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | `A4` | La suya | Sedes | Datos y sedes | — |
 | `A5` | La suya | Sedes | Todo, cierre | — |
 
-- **Condición RLS** — `auth.has_membership(id)`. Las sedes heredan por `organization_id`. `ORGANIZATION_TYPE` es catálogo global de lectura para cualquier autenticado.
+- **Condición RLS** — `access_control.has_membership(id)`. Las sedes heredan por `organization_id`. `ORGANIZATION_TYPE` es catálogo global de lectura para cualquier autenticado.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE`. Sin `DELETE`: cerrar es un cambio de estado.
 - **Índice para la policy** — sobre `(person_id, organization_id, status)` en `ORGANIZATION_MEMBERSHIP`.
 - **`T-ORG-1` (negativa)** — Una organización no lee ni referencia datos privados de otra. Se prueba con dos organizaciones independientes.
@@ -399,7 +401,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | `A6` | Las de su organización | — | — | — |
 | `A4`, `A5` | Las de su organización | Sí | Roles, terminación | — |
 
-- **Condición RLS** — `organization_id = auth.org()` con membresía vigente, **OR** `person_id = auth.person()`. `INSERT` y `UPDATE` de roles exigen `auth.has_capability(org, 'manage_staff')`; otorgar `owner` exige que el actor sea `owner`.
+- **Condición RLS** — `organization_id = access_control.org()` con membresía vigente, **OR** `person_id = access_control.person()`. `INSERT` y `UPDATE` de roles exigen `access_control.has_capability(org, 'manage_staff')`; otorgar `owner` exige que el actor sea `owner`.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE`. Sin `DELETE`: las bajas conservan historial.
 - **Índice para la policy** — sobre `(organization_id, status)` y sobre `(person_id, status)`.
 - **`T-MEMB-1` (negativa)** — Una membresía, en cualquier rol, **no** concede acceso a datos fitness de ningún cliente. Un `admin` sin asignación ni grant no lee nada del Fitness ID.
@@ -441,7 +443,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | `A6` | Las de su organización, sin contenido | — | — | — |
 | `A4`, `A5` | Las de su organización | Vía aceptación | Terminación | — |
 
-- **Condición RLS** — `person_id = auth.person()` **OR** (`organization_id = auth.org()` **AND** (`auth.has_capability(org,'manage_clients')` **OR** `auth.effective_assignment(id)`)). `INSERT` exclusivo de la función de aceptación de invitación: ninguna policy permite crear una relación desde Studio.
+- **Condición RLS** — `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** (`access_control.has_capability(org,'manage_clients')` **OR** `access_control.effective_assignment(id)`)). `INSERT` exclusivo de la función de aceptación de invitación: ninguna policy permite crear una relación desde Studio.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT` restringido, `UPDATE(status, ended_at, ended_reason)`. Sin `DELETE`.
 - **Índice para la policy** — sobre `(person_id, status)`, `(organization_id, status)` y `(relationship_id, status)` en la tabla de asignaciones.
 - **`T-REL-1` (negativa)** — Un profesional **no** consulta relaciones ajenas: sin asignación efectiva, la colección viene vacía aunque tenga rol `coach`.
@@ -449,7 +451,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **`T-REL-3` (positiva)** — Una persona con dos profesionales de organizaciones distintas tiene dos relaciones independientes; ninguna ve a la otra.
 - **`T-REL-4` (negativa)** — Una persona no puede tener dos relaciones activas con la **misma** organización: lo impide un índice único parcial.
 - **`T-REL-5` (positiva)** — Terminar la relación **congela** los grants (`frozen`, con `frozen_at`), desacopla las asignaciones y pausa las sesiones futuras en **una** transacción, con un único instante efectivo.
-- **`T-REL-8` (positiva)** — Con caso exacto y `auth.can_read_frozen`, la superficie histórica devuelve el conjunto autorizado **hasta la fecha de corte** y **ninguna** fila posterior. Se prueba creando una ejecución después del corte y verificando que no aparece ni en detalle ni en conteos.
+- **`T-REL-8` (positiva)** — Con caso exacto y `access_control.can_read_frozen`, la superficie histórica devuelve el conjunto autorizado **hasta la fecha de corte** y **ninguna** fila posterior. Se prueba creando una ejecución después del corte y verificando que no aparece ni en detalle ni en conteos.
 - **`T-REL-9` (negativa)** — Un grant `frozen` **no** habilita ninguna escritura: ni observaciones, ni propuestas de corrección, ni asignaciones.
 - **`T-REL-6` (negativa)** — Los datos creados después de la terminación no son visibles para la organización anterior.
 - **`T-REL-7` (negativa)** — Una relación nueva con la misma organización no hereda gestión, grants, notas privadas ni acceso a la asignación desacoplada.
@@ -463,7 +465,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | `A7` | La suya | — | — | — |
 | `A4`, `A5` | Las de su organización | Sí | Reasignación, cierre | — |
 
-- **Condición RLS** — Vía la relación: la fila es visible si la relación lo es. `INSERT` exige `auth.has_capability(org,'manage_assignments')` **y** que la membresía destino esté vigente **en la misma organización** con rol `coach`. La activación de una suplencia exige `person_id = auth.person()`.
+- **Condición RLS** — Vía la relación: la fila es visible si la relación lo es. `INSERT` exige `access_control.has_capability(org,'manage_assignments')` **y** que la membresía destino esté vigente **en la misma organización** con rol `coach`. La activación de una suplencia exige `person_id = access_control.person()`.
 - **Contexto requerido** — Completo, con `actor_org_id`.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(status, ended_at)`. Sin `DELETE`.
 - **Índice para la policy** — sobre `(relationship_id, status, valid_from, valid_to)`; **único parcial** que garantiza un solo titular efectivo por relación.
@@ -483,7 +485,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | `A6` | — | — | — | — |
 | `A4`, `A5` | Las de su organización | — | Resolver | — |
 
-- **Condición RLS** — `auth.has_membership(organization_id)` **AND** (`requested_by_membership_id = auth.membership()` **OR** `auth.has_capability(organization_id,'manage_relationships')`). La persona atendida **no** aparece como actor: la solicitud es deliberación interna de la organización y nunca se le expone.
+- **Condición RLS** — `access_control.has_membership(organization_id)` **AND** (`requested_by_membership_id = access_control.membership()` **OR** `access_control.has_capability(organization_id,'manage_relationships')`). La persona atendida **no** aparece como actor: la solicitud es deliberación interna de la organización y nunca se le expone.
 - **Contexto requerido** — Completo, con `actor_org_id`.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(status, resolution, resolved_by_membership_id, resolved_at)`. Sin `DELETE`.
 - **Índice para la policy** — `(organization_id, status, created_at desc)`; **único parcial** `UNIQUE (relationship_id) WHERE status = 'pending'`.
@@ -522,7 +524,7 @@ Es el dominio donde una policy mal escrita produce una fuga real. Todas sus fich
 | `A3`–`A5` | Los de sus relaciones, sin contenido | Solicitudes | Retiro | — |
 | Resto | — | — | — | — |
 
-- **Condición RLS** — En `consent_events`: `person_id = auth.person()` **OR** (`organization_id = auth.org()` **AND** existe `service_relationships(id=relationship_id, organization_id=auth.org())`). En `grant_requests`: join por `(relationship_id, organization_id)`; la persona compara `service_relationships.person_id`, la organización compara `organization_id`. La organización ve **estado**, nunca contenido amparado.
+- **Condición RLS** — En `consent_events`: `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** existe `service_relationships(id=relationship_id, organization_id=access_control.org())`). En `grant_requests`: join por `(relationship_id, organization_id)`; la persona compara `service_relationships.person_id`, la organización compara `organization_id`. La organización ve **estado**, nunca contenido amparado.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`. Sin `UPDATE` ni `DELETE`: el evento de consentimiento es evidencia inmutable.
 - **Índice para la policy** — `consent_events`: `(person_id, decided_at DESC)`, `(relationship_id, scope_code, decided_at DESC)`, `(organization_id, decided_at DESC)`; `grant_requests`: `(relationship_id, status)`, `(organization_id, status)` y único parcial pendiente `(relationship_id, scope_code)`.
 - **`T-CONSENT-1` (positiva)** — Rechazar o revocar conserva la evidencia sin dejar grant activo.
@@ -539,7 +541,7 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 | `A4`, `A5` | Los de su organización | — | — | — |
 | `A9` privacy | Por disposición | — | Cierre | — |
 
-- **Condición RLS** — `person_id = auth.person()` **OR** (`organization_id = auth.org()` **AND** existe `service_relationships(id=relationship_id, organization_id=auth.org())`). `INSERT` exclusivo de `privacy.grant_consent`, que exige sujeto propio y solicitud pendiente exacta. `UPDATE` solo mediante `privacy.revoke_grant` o `relationships.terminate_relationship`; el trigger de transición valida columnas y dirección.
+- **Condición RLS** — `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** existe `service_relationships(id=relationship_id, organization_id=access_control.org())`). `INSERT` exclusivo de `privacy.grant_consent`, que exige sujeto propio y solicitud pendiente exacta. `UPDATE` solo mediante `privacy.revoke_grant` o `relationships.terminate_relationship`; el trigger de transición valida columnas y dirección.
 - **Contexto requerido** — Completo.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT` restringido y `UPDATE(status, frozen_at, revoked_at, last_reviewed_at)`. **Sin `DELETE`**. Policies + trigger solo permiten: consentimiento `INSERT`; persona `active/frozen → revoked`; terminación `active → frozen`; mantenimiento de `last_reviewed_at` sin cambiar autoridad.
 - **Índice para la policy** — **crítico**: único parcial `(relationship_id, scope_code) WHERE status IN ('active','frozen')`, `(person_id, status)`, `(organization_id, status)` y parcial `(relationship_id, scope_code, frozen_at) WHERE status='frozen'`.
@@ -560,7 +562,7 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 | `A2` | Las propias | Propias | Propias | Propias |
 | Resto | **—** | — | — | — |
 
-- **Condición RLS** — `person_id = auth.person()`, y **solo eso**. Ninguna organización, en ningún rol, lee esta tabla: saber que existe una denegación ya revela que hay algo oculto.
+- **Condición RLS** — `person_id = access_control.person()`, y **solo eso**. Ninguna organización, en ningún rol, lee esta tabla: saber que existe una denegación ya revela que hay algo oculto.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE`, `DELETE` **solo** para el dueño.
 - **Proyección** — La denegación se aplica **dentro** de las proyecciones de ejecución, antes de proyectar y antes de agregar. No es un filtro posterior.
 - **Índice para la policy** — sobre `(executed_session_id, relationship_id)` único, y `(relationship_id, status)` para la evaluación en lote.
@@ -583,7 +585,7 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 | `A6` | — | — | — | — |
 | Resto | — | — | — | — |
 
-- **Condición RLS** — gestión: organización de `auth.org()` + capacidad `manage_historical_access`; ejercicio: `authorized_membership_id = auth.membership()` + `status='open'` + `expires_at > statement_timestamp()` + propósito/contexto coincidentes.
+- **Condición RLS** — gestión: organización de `access_control.org()` + capacidad `manage_historical_access`; ejercicio: `authorized_membership_id = access_control.membership()` + `status='open'` + `expires_at > statement_timestamp()` + propósito/contexto coincidentes.
 - **Contexto requerido** — organización, membresía, `aal2`, propósito, `historical_access_case_id` y `request_id`.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT` restringido y `UPDATE(status, closed_at)`. Sin `DELETE`.
 - **Índices para la policy** — `(authorized_membership_id, status, expires_at)` y `(organization_id, relationship_id, status)`.
@@ -604,7 +606,7 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 | `allfit_api` | — | Solo vía `privacy.log_access_event` | — | — |
 | `A9` privacy | —; inspecciona catálogo de particiones | — | — | Particiones vencidas mediante mantenimiento, no filas |
 
-- **Condición RLS** — `subject_person_id = auth.person()` para la persona. **Ninguna organización lee esta tabla**: un profesional no audita quién más accedió a los datos de su cliente.
+- **Condición RLS** — `subject_person_id = access_control.person()` para la persona. **Ninguna organización lee esta tabla**: un profesional no audita quién más accedió a los datos de su cliente.
 - **Grants mínimos** — Tabla base: `allfit_api` sin `INSERT` directo; `EXECUTE` sobre `privacy.log_access_event`. `SELECT` solo para la proyección personal bajo RLS. `A10` recibe `EXECUTE` sobre la función de lectura de eventos de plataforma. **Sin `UPDATE` ni `DELETE`**; privacidad elimina particiones vencidas.
 - **Índice para la policy** — sobre `(subject_person_id, occurred_at DESC)`. Particionamiento por tiempo previsto en Fase 4: es la tabla de mayor crecimiento del sistema.
 - **`T-ACCESS-1` (positiva)** — Toda lectura en vivo escribe un evento con **actor humano real**, membresía, asignación, relación, scope, versión y propósito.
@@ -624,7 +626,7 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 | `A10` | Estado, sin contenido | — | — | — |
 | `A11` | `RETENTION_POLICY` | Versiones | — | — |
 
-- **Condición RLS** — `subject_person_id = auth.person()` para la persona; `actor_kind = 'worker'` con rol `allfit_worker_privacy` para la ejecución. `RETENTION_POLICY` es catálogo de lectura autenticada y escritura de plataforma.
+- **Condición RLS** — `subject_person_id = access_control.person()` para la persona; `actor_kind = 'worker'` con rol `allfit_worker_privacy` para la ejecución. `RETENTION_POLICY` es catálogo de lectura autenticada y escritura de plataforma.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT` de solicitudes. `allfit_worker_privacy`: lo necesario para disponer, incluido `DELETE` sobre los targets decididos.
 - **Índice para la policy** — sobre `(subject_person_id, status)`, `(status, due_at)` para el barrido del worker, y sobre el target tipado.
 - **`T-DISP-1` (positiva)** — Una solicitud de supresión resuelve **cada categoría** mediante su política versionada, no con una regla global.
@@ -663,7 +665,7 @@ El catálogo es el único dominio con lectura amplia. Su riesgo no es la fuga de
 | Autenticado | Publicado | — | — | — |
 | `A11` | Todo | Sí | Estado | — |
 
-- **Condición RLS** — Por tabla: `disciplines.status='published'`; `activity_types.content_scope='global' AND status='published'` o contenido de `owner_organization_id=auth.org()`; `units` tiene lectura autenticada completa; `equipment.content_scope='global'` o `owner_organization_id=auth.org()`. Alias heredan mediante su FK al padre.
+- **Condición RLS** — Por tabla: `disciplines.status='published'`; `activity_types.content_scope='global' AND status='published'` o contenido de `owner_organization_id=access_control.org()`; `units` tiene lectura autenticada completa; `equipment.content_scope='global'` o `owner_organization_id=access_control.org()`. Alias heredan mediante su FK al padre.
 - **Grants mínimos** — `allfit_api`: `SELECT`, más `INSERT`/`UPDATE` restringidos a soporte.
 - **Índice para la policy** — `disciplines(code)` único y `(status)`; `activity_types(content_scope, owner_organization_id, status)`; `units(code)` único; `equipment(content_scope, owner_organization_id)`; cada alias indexa su FK padre.
 - **`T-CAT-1` (negativa)** — Una organización no puede crear ni alterar disciplinas ni tipos de actividad globales.
@@ -678,7 +680,7 @@ El catálogo es el único dominio con lectura amplia. Su riesgo no es la fuga de
 | `A4`, `A5` | Igual | Igual | Igual, más archivar | — |
 | `A11` | Todo | Globales | Globales | — |
 
-- **Condición RLS** — `content_scope = 'global'` **OR** (`content_scope = 'organization'` **AND** `owner_organization_id = auth.org()` **AND** `auth.has_membership(owner_organization_id)`) **OR** (`content_scope = 'person'` **AND** `owner_person_id = auth.person()`).
+- **Condición RLS** — `content_scope = 'global'` **OR** (`content_scope = 'organization'` **AND** `owner_organization_id = access_control.org()` **AND** `access_control.has_membership(owner_organization_id)`) **OR** (`content_scope = 'person'` **AND** `owner_person_id = access_control.person()`).
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE`. **Sin `DELETE`**: un movimiento referenciado por una versión publicada o una ejecución nunca se borra; se archiva.
 - **Índice para la policy** — `(content_scope, owner_organization_id, status)`, `(content_scope, discipline_code, status)` y textual sobre `normalized_name`.
 - **`T-MOV-1` (negativa)** — Una organización **no** ve los movimientos privados de otra, ni por búsqueda, ni por identificador directo, ni por conteo de resultados.
@@ -712,7 +714,7 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 | `A6` | — | — | — | — |
 | Personas ajenas | — | — | — | — |
 
-- **Condición RLS** — (`owner_organization_id = auth.org()` **AND** `auth.has_membership(owner_organization_id)`) **OR** `owner_person_id = auth.person()`. Un constraint garantiza que exactamente uno de los dos owners es no nulo.
+- **Condición RLS** — (`owner_organization_id = access_control.org()` **AND** `access_control.has_membership(owner_organization_id)`) **OR** `owner_person_id = access_control.person()`. Un constraint garantiza que exactamente uno de los dos owners es no nulo.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE`. Sin `DELETE`.
 - **Índice para la policy** — sobre `(owner_organization_id, status)` y `(owner_person_id, status)`.
 - **`T-TPL-1` (negativa)** — Un borrador **nunca** es referenciable por un programa ni por una asignación.
@@ -726,7 +728,7 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 | `A2` destinataria | La versión que le fue **asignada** | — | — | — |
 | Resto | — | — | — | — |
 
-- **Condición RLS** — Owner del contenido, **OR** existe una `PROGRAM_ASSIGNMENT` de `auth.person()` que referencia esa versión. Los pasos y targets heredan de su versión.
+- **Condición RLS** — Owner del contenido, **OR** existe una `PROGRAM_ASSIGNMENT` de `access_control.person()` que referencia esa versión. Los pasos y targets heredan de su versión.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`. **Sin `UPDATE` ni `DELETE` para ningún rol de runtime**: es la garantía de inmutabilidad de las versiones publicadas.
 - **Índice para la policy** — sobre `(template_id, version_number)` único, y sobre `program_version_id` en la asignación.
 - **`T-VER-1` (negativa)** — Ninguna vía permite editar una versión publicada.
@@ -744,7 +746,7 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 | `A4`, `A5` | Igual | — | Cancelación | — |
 | `A6` | — | — | — | — |
 
-- **Condición RLS** — `person_id = auth.person()` **OR** (`origin_relationship_id` visible **AND** `auth.can_access(person_id,'relationship_training','read')`). El `INSERT` profesional exige además `access_level = 'contribute'` y periodo de gestión abierto.
+- **Condición RLS** — `person_id = access_control.person()` **OR** (`origin_relationship_id` visible **AND** `access_control.can_access(person_id,'relationship_training','read')`). El `INSERT` profesional exige además `access_level = 'contribute'` y periodo de gestión abierto.
 - **Contexto requerido** — Completo.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(lifecycle)`. Sin `DELETE`.
 - **Índice para la policy** — sobre `(person_id, lifecycle)`, `(origin_relationship_id, lifecycle)` y **único parcial** que garantiza un solo periodo de gestión vigente por asignación.
@@ -785,18 +787,18 @@ Es el dominio donde convergen las tres decisiones difíciles: una fila puede con
 | `A4`, `A5`, `A6` | — | — | — | — |
 | `A9` privacy | Por disposición | — | Anonimización | Solo `delete` decidido |
 
-- **Condición RLS** — `SELECT`: `auth.is_self(person_id)` **OR**
+- **Condición RLS** — `SELECT`: `access_control.is_self(person_id)` **OR**
 
   ```text
   (   la sesión fue producida dentro de la relación
-      ∧ auth.can_access(person_id, 'relationship_training', 'read')  )
+      ∧ access_control.can_access(person_id, 'relationship_training', 'read')  )
   OR
   (   la sesión es autónoma o previa
-      ∧ auth.can_access(person_id, 'prior_training_history', 'read')
-      ∧ NOT auth.session_denied(id, relationship_id)                 )
+      ∧ access_control.can_access(person_id, 'prior_training_history', 'read')
+      ∧ NOT access_control.session_denied(id, relationship_id)                 )
   ```
 
-  `INSERT` y `UPDATE`: `auth.is_self(person_id)` exclusivamente. **Ningún profesional escribe jamás en esta tabla.**
+  `INSERT` y `UPDATE`: `access_control.is_self(person_id)` exclusivamente. **Ningún profesional escribe jamás en esta tabla.**
 - **Contexto requerido** — Completo, con `app.purpose` para el acceso profesional.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(execution_status, validation_status)`. **Sin `DELETE`.**
 - **Proyección** — `execution.v_client_executions`, que aplica denegaciones **antes** de proyectar y de contar, y redacta cada campo según **su propia** clasificación.
@@ -832,7 +834,7 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 | `A2` | Propias | Vía fixture controlada | — | — |
 | `A3`, `A7` | **—** | — | — | — |
 
-- **Condición RLS** — `auth.is_self(person_id)` vía la sesión, y **nada más**. Frecuencia cardiaca, GPS y wearables permanecen **fuera de los siete scopes V1**: ninguna combinación de grants los expone.
+- **Condición RLS** — `access_control.is_self(person_id)` vía la sesión, y **nada más**. Frecuencia cardiaca, GPS y wearables permanecen **fuera de los siete scopes V1**: ninguna combinación de grants los expone.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`. Sin `UPDATE` ni `DELETE`: el raw es inmutable.
 - **`T-SAMPLE-1` (negativa)** — Ningún grant V1 expone muestras de sensor a una organización.
 - **`T-SAMPLE-2` (positiva)** — `sensor_enriched` se valida con fixtures controladas, sin conectores, credenciales ni raw stores productivos.
@@ -846,7 +848,7 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 | `A3`, `A7` autor | Las propias | Con `contribute` | Vía revisión propia | — |
 | `A3`, `A7` no autor | Las de su organización sobre esa relación | — | **—** | — |
 
-- **Condición RLS** — `INSERT`: `auth.can_access(person_id, scope_del_contenido, 'contribute')` con autoría en la asignación efectiva del actor. `UPDATE`: solo el autor, y solo mediante `REVISION_EVENT`.
+- **Condición RLS** — `INSERT`: `access_control.can_access(person_id, scope_del_contenido, 'contribute')` con autoría en la asignación efectiva del actor. `UPDATE`: solo el autor, y solo mediante `REVISION_EVENT`.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`. Sin `UPDATE` directo.
 - **Índice para la policy** — sobre `(person_id, relationship_id, created_at DESC)` y sobre `author_assignment_id`.
 - **`T-OBS-1` (negativa)** — Un grant `read` no permite crear observaciones.
@@ -863,7 +865,7 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 | `A3`, `A7` proponente | Las que emitió | Con `contribute` | — | — |
 | `A9` maintenance | Vencidas | — | Vencimiento | — |
 
-- **Condición RLS** — `person_id = auth.person()` **OR** proponente con asignación efectiva. La decisión exige `person_id = auth.person()`.
+- **Condición RLS** — `person_id = access_control.person()` **OR** proponente con asignación efectiva. La decisión exige `person_id = access_control.person()`.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(status)`. Sin `DELETE`.
 - **Índice para la policy** — sobre `(person_id, status, expires_at)` y `(proposer_assignment_id, status)`.
 - **`T-PROP-1` (positiva)** — Proponer no modifica nada; aceptar crea una revisión que conserva el original.
@@ -892,7 +894,7 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 | `A3`, `A7` | `R*` si **todos** sus inputs son visibles | — | — | — |
 | `A9` maintenance | Por recálculo | Sí | Invalidación | — |
 
-- **Condición RLS** — `auth.is_self(person_id)` **OR** el actor puede acceder a **todas** las clasificaciones que el derivado hereda. Un derivado hereda la **más restrictiva** de sus inputs.
+- **Condición RLS** — `access_control.is_self(person_id)` **OR** el actor puede acceder a **todas** las clasificaciones que el derivado hereda. Un derivado hereda la **más restrictiva** de sus inputs.
 - **Grants mínimos** — `allfit_api`: `SELECT`. La escritura pertenece a `allfit_worker_maintenance`: **ningún actor humano escribe un derivado**.
 - **Índice para la policy** — sobre `(person_id, metric_code, period)` y sobre la clasificación heredada.
 - **`T-DERIV-1` (negativa)** — Un derivado calculado con peso corporal **no** es visible sin `body_progress`, aunque el entrenamiento sí lo sea.
@@ -923,9 +925,9 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 | Admin/owner/staff | — | — | — | — |
 | `A10` break-glass | Solo proyección cerrada `nutrition_intake`, con ventana restringida vigente | — | — | — |
 
-- **Condición RLS base** — `auth.is_self(person_id)`. Las tablas hijas heredan mediante FK/`EXISTS` al `meal` propio.
-- **Condición Studio** — sin `SELECT` a tablas base; `nutrition.v_client_meals_live` exige `auth.can_guide_nutrition(person_id,'read')` y `nutrition_intake/read`.
-- **Medios** — Space puede recibir una URL firmada para una comida propia. Studio solo recibe un enlace a `OP-NUT-013`, que reevalúa `auth.can_guide_nutrition`, `nutrition_intake/read` y `nutrition_media/read` en cada GET, registra `ACCESS_EVENT`, transmite el objeto saneado y nunca redirige a storage; media aislada no produce una fila ni bytes. Break-glass jamás habilita `nutrition_media`, `OP-NUT-013`, storage, `media_ref`, URLs o bytes.
+- **Condición RLS base** — `access_control.is_self(person_id)`. Las tablas hijas heredan mediante FK/`EXISTS` al `meal` propio.
+- **Condición Studio** — sin `SELECT` a tablas base; `nutrition.v_client_meals_live` exige `access_control.can_guide_nutrition(person_id,'read')` y `nutrition_intake/read`.
+- **Medios** — Space puede recibir una URL firmada para una comida propia. Studio solo recibe un enlace a `OP-NUT-013`, que reevalúa `access_control.can_guide_nutrition`, `nutrition_intake/read` y `nutrition_media/read` en cada GET, registra `ACCESS_EVENT`, transmite el objeto saneado y nunca redirige a storage; media aislada no produce una fila ni bytes. Break-glass jamás habilita `nutrition_media`, `OP-NUT-013`, storage, `media_ref`, URLs o bytes.
 - **Grants mínimos** — `allfit_api` ejecuta funciones y vistas cerradas; `UPDATE/DELETE` directos revocados.
 - **Índices** — meals `(person_id,occurred_at DESC,id DESC)`; hijos `(meal_id,position)`; valores único `(meal_item_id,nutrient_definition_id)`.
 
@@ -939,8 +941,8 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 | `A10` break-glass | Solo proyección cerrada `nutrition_guidance`, con ventana estándar vigente | — | — | — |
 
 - **Condición RLS base** — persona mediante `goal_sets.person_id`; hijos heredan por FK.
-- **Propuesta profesional** — `auth.can_guide_nutrition(person_id,'contribute')`, relación/asignación/contexto coincidentes y credencial vigente.
-- **Frozen** — solo `nutrition.v_client_guidance_frozen`, `auth.can_read_frozen(...,'nutrition_guidance',...)`, origen profesional de la relación y `goal_versions.created_at<=T`.
+- **Propuesta profesional** — `access_control.can_guide_nutrition(person_id,'contribute')`, relación/asignación/contexto coincidentes y credencial vigente.
+- **Frozen** — solo `nutrition.v_client_guidance_frozen`, `access_control.can_read_frozen(...,'nutrition_guidance',...)`, origen profesional de la relación y `goal_versions.created_at<=T`.
 - **Grants mínimos** — contenido de versiones/targets inmutable; estados/decisiones solo por funciones cerradas.
 - **Índices** — goal set único `(person_id)`; versiones `(goal_set_id,created_at DESC,id DESC)` y `(origin_relationship_id,created_at DESC,id DESC)`, activo único y pendiente único por relación; targets `(goal_version_id,nutrient_definition_id)`; decisión única `(goal_version_id)`.
 
@@ -982,7 +984,7 @@ Este dominio tiene una particularidad: **el `coach` no aparece en ninguna fila**
 | `A5` | La de su organización | Sí | Revocar | — |
 | `A2`, `A3`, `A4`, `A6` | — | — | — | — |
 
-- **Condición RLS** — `auth.has_membership(organization_id)` **AND** `auth.has_capability(organization_id,'manage_billing')`, capacidad asignada **solo a `owner`**.
+- **Condición RLS** — `access_control.has_membership(organization_id)` **AND** `access_control.has_capability(organization_id,'manage_billing')`, capacidad asignada **solo a `owner`**.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(status, revoked_at)`. Sin `DELETE`.
 - **`T-PAY-1` (negativa)** — Un `admin` no lee ni escribe la conexión de pasarela.
 - **`T-PAY-2` (negativa)** — `credential_secret_ref` nunca contiene el secreto: se prueba verificando que el valor no descifra nada por sí solo.
@@ -995,7 +997,7 @@ Este dominio tiene una particularidad: **el `coach` no aparece en ninguna fila**
 | `A4`, `A5` | Igual | Sí | Solo deprecación | — |
 | `A2` | **Solo versiones publicadas de organizaciones con las que tiene relación** | — | — | — |
 
-- **Condición RLS** — Para la organización: `auth.has_membership(organization_id)`. Para la persona: `status = 'published' AND deprecated_at IS NULL AND EXISTS (relación vigente entre auth.person() y organization_id)`.
+- **Condición RLS** — Para la organización: `access_control.has_membership(organization_id)`. Para la persona: `status = 'published' AND deprecated_at IS NULL AND EXISTS (relación vigente entre access_control.person() y organization_id)`.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(status, deprecated_at)`. **Sin `UPDATE` sobre monto, moneda ni periodo en runtime**: la inmutabilidad de la versión se impone con privilegios, no con disciplina.
 - **Índice para la policy** — `(organization_id, status)` y `(plan_id, status)`.
 - **`T-PAY-3` (negativa)** — Una persona sin relación con la organización no ve ningún plan suyo: no existe catálogo público.
@@ -1010,7 +1012,7 @@ Este dominio tiene una particularidad: **el `coach` no aparece en ninguna fila**
 | `A3`, `A6` | — | — | — | — |
 | `A9` | Las alcanzadas por el webhook | `payment_records` | Solo `active` ↔ `suspended` | — |
 
-- **Condición RLS** — `person_id = auth.person()` **OR** (`organization_id = auth.org()` **AND** `auth.has_capability(organization_id,'manage_billing')`).
+- **Condición RLS** — `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** `access_control.has_capability(organization_id,'manage_billing')`).
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(status, suspended_at, ended_at, ended_by_kind, ended_by_membership_id, current_period_end)`. El rol del worker de pagos tiene `UPDATE` **restringido a `status`, `suspended_at` y `current_period_end`**: no puede escribir `ended_at` ni el actor humano.
 - **Índice para la policy** — `(person_id, status)`, `(organization_id, status)`.
 - **`T-PAY-5` (negativa)** — Un `coach` con la persona asignada y grant vigente **no** lee su suscripción ni sus pagos.
@@ -1031,7 +1033,7 @@ Este dominio tiene una particularidad: **el `coach` no aparece en ninguna fila**
 | `A2` | Los ejercicios que la afectan | — | — | — |
 | Resto | — | — | — | — |
 
-- **Condición RLS** — toda ruta exige rol base `allfit_admin`, AAL2 y deber exacto resueltos en la transacción. `break_glass_requests`: `A10/request_break_glass` sin conflicto y `requester_person_id=auth.person()`; `A12` sólo con deber de decidir/auditar. `nutrition_guidance` es estándar (un A12, máximo 30 minutos), `nutrition_intake` es restringida (dos A12 distintos, máximo 15 minutos), una mezcla hereda el nivel restringido y cualquier solicitud con `nutrition_media` se rechaza. `break_glass_approvals`: A12 distinto, solicitud ajena/pending, sin conflicto y `UNIQUE(request_id,approver_person_id)`; la ventana abre sólo al quorum calculado. `break_glass_events`: A10 solicitante exacto, rol/deber/quorum/ventana/alcance vigentes y categoría revalidada; `A12/audit_break_glass` no pudo solicitar ni aprobar el caso.
+- **Condición RLS** — toda ruta exige rol base `allfit_admin`, AAL2 y deber exacto resueltos en la transacción. `break_glass_requests`: `A10/request_break_glass` sin conflicto y `requester_person_id=access_control.person()`; `A12` sólo con deber de decidir/auditar. `nutrition_guidance` es estándar (un A12, máximo 30 minutos), `nutrition_intake` es restringida (dos A12 distintos, máximo 15 minutos), una mezcla hereda el nivel restringido y cualquier solicitud con `nutrition_media` se rechaza. `break_glass_approvals`: A12 distinto, solicitud ajena/pending, sin conflicto y `UNIQUE(request_id,approver_person_id)`; la ventana abre sólo al quorum calculado. `break_glass_events`: A10 solicitante exacto, rol/deber/quorum/ventana/alcance vigentes y categoría revalidada; `A12/audit_break_glass` no pudo solicitar ni aprobar el caso.
 - **Grants mínimos** — `allfit_support`: `SELECT` solo sobre `support.v_support_metadata` y `EXECUTE` sobre proyecciones break-glass cerradas; `A12` ejecuta `support.list_break_glass_audit_events`; sin acceso a tablas de contenido, `privacy.access_events`, DML, exportación, `OP-NUT-013` ni storage.
 - **Índice para la policy** — requests `(requester_person_id,status,request_expires_at)`, `(status,window_ends_at)` y `(subject_person_id)`; approvals `UNIQUE(request_id,approver_person_id)` más `(request_id,decision)`; events `(request_id)`, `(requester_person_id,exercised_at DESC)` y `(subject_person_id,exercised_at DESC)`.
 - **`T-BG-1` (negativa)** — El solicitante no puede aprobar su propia ventana.
@@ -1057,7 +1059,7 @@ origen no confiable, **todo lo demás deja de valer**.
 | `A12/audit_platform_access` | Todas | — | — | — |
 | Cualquier otro | — | — | — | — |
 
-- **Condición RLS** — `auth.has_platform_role('allfit_admin') AND auth.has_platform_duty(<operación>) AND auth.aal()>=2`, todo resuelto **dentro de la transacción** contra las tablas. Nunca desde WorkOS AuthKit, cabecera, payload o caché. El código de operación determina el deber; el caller no lo elige.
+- **Condición RLS** — `access_control.has_platform_role('allfit_admin') AND access_control.has_platform_duty(<operación>) AND access_control.aal()>=2`, todo resuelto **dentro de la transacción** contra las tablas. Nunca desde WorkOS AuthKit, cabecera, payload o caché. El código de operación determina el deber; el caller no lo elige.
 - **Grants mínimos** — tablas base sin DML directo; `allfit_api` sólo `EXECUTE` sobre funciones cerradas. **Sin `DELETE` para ningún rol runtime.**
 - **Índice para la policy** — rol `(person_id,status)` y único parcial vigente; deber unique parcial `(person_id,duty_code)` más `(person_id,status,valid_to)` y `(duty_code,status,valid_to)`.
 - **`T-ROLE-1` (negativa)** — Nadie se asigna su propio rol: lo impide un `CHECK`, no el código.
@@ -1082,10 +1084,10 @@ Un índice que solo existe para consultas de negocio no basta: la condición RLS
 | Tabla | Índice | Por qué |
 | --- | --- | --- |
 | `ACCESS_ACCOUNT` | único `(provider, issuer, subject)`; `(person_id)` | Resolución del actor en cada request |
-| `ORGANIZATION_MEMBERSHIP` | `(person_id, status)`; `(organization_id, status)` | `auth.has_membership` en cada operación de Studio |
-| `MEMBERSHIP_ROLE` | `(membership_id, role_code, valid_from, valid_to)` | `auth.has_capability` |
+| `ORGANIZATION_MEMBERSHIP` | `(person_id, status)`; `(organization_id, status)` | `access_control.has_membership` en cada operación de Studio |
+| `MEMBERSHIP_ROLE` | `(membership_id, role_code, valid_from, valid_to)` | `access_control.has_capability` |
 | `SERVICE_RELATIONSHIP` | `(person_id, status)`; `(organization_id, status)`; único parcial `(person_id, organization_id) WHERE status='active'` | Visibilidad y unicidad de relación activa |
-| `RELATIONSHIP_PROFESSIONAL_ASSIGNMENT` | `(relationship_id, status, valid_from, valid_to)`; único parcial de titular efectivo | `auth.effective_assignment` |
+| `RELATIONSHIP_PROFESSIONAL_ASSIGNMENT` | `(relationship_id, status, valid_from, valid_to)`; único parcial de titular efectivo | `access_control.effective_assignment` |
 | `CONSENT_EVENT` | `(person_id, decided_at DESC)`; `(relationship_id, scope_code, decided_at DESC)`; `(organization_id, decided_at DESC)` | Estado para persona y organización |
 | `GRANT_REQUEST` | `(relationship_id, status)`; `(organization_id, status)`; único parcial pendiente `(relationship_id, scope_code)` | Solicitud exacta por tenant/scope |
 | `DATA_GRANT` | único parcial `(relationship_id, scope_code) WHERE status IN ('active','frozen')`; `(person_id, status)`; `(organization_id, status)`; parcial frozen con corte | Lookup live/frozen y unicidad efectiva |
@@ -1096,7 +1098,7 @@ Un índice que solo existe para consultas de negocio no basta: la condición RLS
 | `ASSIGNMENT_MANAGEMENT_PERIOD` | único parcial de periodo vigente por asignación | Un solo gestor a la vez |
 | `PLANNED_SESSION_EXECUTION` | único `(planned_session_id, attempt_number)` | Numeración de intentos bajo concurrencia |
 | `ACCESS_EVENT` | `(subject_person_id, occurred_at DESC)` | Consulta de la persona; particionamiento en Fase 4 |
-| `HISTORICAL_ACCESS_CASE` | `(authorized_membership_id, status, expires_at)`; `(organization_id, relationship_id, status)` | Predicado `auth.can_read_frozen` |
+| `HISTORICAL_ACCESS_CASE` | `(authorized_membership_id, status, expires_at)`; `(organization_id, relationship_id, status)` | Predicado `access_control.can_read_frozen` |
 | `DISPOSITION_ITEM` | `(status, due_at)`; sobre el target tipado | Barrido del worker de disposición |
 | `MOVEMENT` | `(content_scope, owner_organization_id, status)` | Aislamiento de contenido privado |
 | `NUTRITION_MEAL` | `(person_id, occurred_at DESC, id DESC)` | Self y listados live autorizados |
