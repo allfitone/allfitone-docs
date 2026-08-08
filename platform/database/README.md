@@ -1,8 +1,19 @@
-# Datos y base de datos
+# Data and database
 
-- [Refactor de base de datos](refactor/README.md)
-- [Decisiones de arquitectura](refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md)
-- [Diseño propuesto](refactor/03_PROPOSED_DESIGN/)
-- [Plan de ejecución](refactor/04_EXECUTION/)
+This directory owns Allfit One's shared data architecture, database engineering
+standards and operational runbooks.
 
-El modelo compartido cubre necesidades de Allfit Studio, Allfit Space y Allfit Backoffice. Su implementación se realiza incrementalmente con cada HU.
+## Current standards
+
+- [Database and Supabase best practices](DATABASE_AND_SUPABASE_BEST_PRACTICES.md)
+- [Database operations](OPERATIONS.md)
+
+## Database refactor
+
+- [Refactor overview](refactor/README.md)
+- [Architecture decisions](refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md)
+- [Proposed design](refactor/03_PROPOSED_DESIGN/)
+- [Execution plan](refactor/04_EXECUTION/)
+
+The shared model covers Allfit Studio, Allfit Space and Allfit Backoffice. Its
+implementation advances incrementally with each approved vertical slice.

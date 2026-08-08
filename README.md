@@ -1,57 +1,74 @@
 # Allfit One Documentation
 
-Repositorio central de la documentación técnica transversal y de la definición detallada de los productos que componen Allfit One.
+Central repository for Allfit One product, architecture, engineering and
+operational documentation.
 
-Aquí viven las especificaciones de producto, historias de usuario, decisiones de arquitectura, contratos y modelos compartidos por el ecosistema. El monorepo de implementación conserva la documentación necesaria para desarrollar, operar y mantener su código.
+This repository owns product specifications, user stories, architecture
+decisions, shared data and identity rules, operational runbooks, recovery
+procedures and cross-product traceability. Implementation repositories keep
+executable artifacts and link back to the canonical documents here.
 
-## Productos
+## Products
 
-| Producto | Documentación |
+| Product | Documentation |
 | --- | --- |
-| Allfit Studio | [Especificación e historias de usuario](products/studio/README.md) |
-| Allfit Space | [Especificación e historias de usuario](products/space/README.md) |
-| Allfit Backoffice | [Especificación e historias de usuario](products/backoffice/README.md) |
+| Allfit Studio | [Specification and user stories](products/studio/README.md) |
+| Allfit Space | [Specification and user stories](products/space/README.md) |
+| Allfit Backoffice | [Specification and user stories](products/backoffice/README.md) |
 
-La estructura admite nuevos productos mediante un directorio adicional en `products/<slug>/`.
+New products use an additional `products/<slug>/` directory.
 
-## Plataforma compartida
+## Shared platform
 
-- [Datos y base de datos](platform/database/README.md)
-- [Refactor de base de datos](platform/database/refactor/README.md)
-- [Decisiones de arquitectura](platform/database/refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md)
-- [Diseño propuesto](platform/database/refactor/03_PROPOSED_DESIGN/)
-- [Plan de ejecución](platform/database/refactor/04_EXECUTION/)
+- [Platform documentation](platform/README.md)
+- [Data and database](platform/database/README.md)
+- [Database and Supabase best practices](platform/database/DATABASE_AND_SUPABASE_BEST_PRACTICES.md)
+- [Database operations](platform/database/OPERATIONS.md)
+- [Database architecture decisions](platform/database/refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md)
+- [Proposed database design](platform/database/refactor/03_PROPOSED_DESIGN/)
+- [Database execution plan](platform/database/refactor/04_EXECUTION/)
 
-## Topología de repositorios
+## Repository topology
 
-- [`dinnartec/allfitone`](https://github.com/dinnartec/allfitone) es el monorepo de implementación de la plataforma. Contiene API, worker, Studio, Space, Backoffice y los paquetes compartidos de autenticación, cola, contratos y base de datos.
-- `allfitone-docs` es la fuente normativa de producto, arquitectura, requisitos y trazabilidad contractual transversal.
-- El OpenAPI ejecutable pertenece a [`allfitone/packages/contracts/openapi`](https://github.com/dinnartec/allfitone/tree/main/packages/contracts/openapi), junto al código que lo consume y valida.
-- `allfitone-design-system` permanece como biblioteca UI publicada y `allfitone-landing-page` como sitio público de marketing.
+- [`dinnartec/allfitone`](https://github.com/dinnartec/allfitone) is the platform
+  implementation monorepo. It contains the API, worker, Studio, Space,
+  Backoffice and the shared authentication, queue, contract and database
+  packages.
+- `allfitone-docs` is the only durable documentation repository and the
+  normative source for product, architecture, engineering and operations.
+- The executable OpenAPI source belongs to
+  [`allfitone/packages/contracts/openapi`](https://github.com/dinnartec/allfitone/tree/main/packages/contracts/openapi),
+  beside the code that validates and consumes it.
+- `allfitone-design-system` is the published UI library and
+  `allfitone-landing-page` is the public marketing site.
 
-La decisión completa, incluidos los límites entre aplicaciones y deployables, está en [ADR-029](platform/database/refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md#adr-029-monorepo-de-implementación-con-deployables-independientes).
+The complete implementation topology decision is recorded in
+[ADR-029](platform/database/refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md#adr-029-monorepo-de-implementación-con-deployables-independientes).
 
-## Frontera documental
+## Documentation boundary
 
-| `allfitone-docs` | Repositorios de código |
+| `allfitone-docs` | Implementation repositories |
 | --- | --- |
-| Definición, alcance e historias de cada producto | README y navegación de cada aplicación o paquete |
-| Arquitectura y decisiones que afectan a más de un producto | Instalación, desarrollo, pruebas y despliegue |
-| Requisitos, semántica y trazabilidad de contratos compartidos | OpenAPI ejecutable, DTOs y decisiones internas de implementación |
-| Iniciativas técnicas transversales y su trazabilidad | Changelog, contribución, operación y mantenimiento local |
+| Product definition, scope and user stories | Executable source code and configuration |
+| Architecture, security and shared data decisions | Migrations, OpenAPI and generated artifacts |
+| Database, deployment, operations and recovery runbooks | CI/CD workflows that enforce the documented policy |
+| Requirements, semantics and cross-product traceability | Concise repository onboarding and canonical links |
 
-- El monorepo `allfitone`, `allfitone-design-system` y `allfitone-landing-page` mantienen la documentación local que necesitan.
-- Una fuente de verdad no se copia entre repositorios: se conserva en su propietario y los demás documentos la enlazan.
-- La especificación OpenAPI se edita y valida en `allfitone`; este repositorio conserva su contexto funcional y la enlaza, pero no mantiene otra copia del YAML.
-- Si una decisión inicialmente local pasa a afectar a varios productos, su definición normativa se traslada a este repositorio y la documentación local conserva el enlace y el detalle de implementación.
+- A source of truth is never copied between repositories.
+- Implementation repositories link here for durable documentation.
+- Executable artifacts stay with the code and are linked from their documented
+  context here.
+- All new or modified documentation is written in English.
 
-## Validación
+## Validation
 
 ```bash
 npm ci
 npm run check
 ```
 
-La validación comprueba la estructura básica de Markdown y los enlaces y anchors internos. El OpenAPI 3.1 se valida en el CI de `allfitone`, donde vive su fuente canónica.
+Validation checks Markdown structure, internal links and anchors. The OpenAPI
+3.1 document is validated by `allfitone` CI, where its canonical executable
+source lives.
 
-Las reglas para decidir dónde vive cada documento y cómo mantener sus fuentes de verdad están en [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for ownership and writing rules.
