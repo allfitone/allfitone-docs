@@ -282,17 +282,17 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
-| `A1` | Propio | Propio | Propio | — |
+| `A1` | Propio | Vía función gobernada | Vía función gobernada | — |
 | `A2` | Propios históricos | — | — | — |
 | `A9` privacy | Por disposición | — | — | Sí |
 | Resto | — | — | — | — |
 
 - **Condición RLS** — `account_id = app.actor_account_id`. La evidencia hereda la condición de su intento.
-- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(status)`. Sin `DELETE`.
+- **Grants mínimos** — `allfit_api`: `SELECT` sobre intentos y evidencia; `EXECUTE` sobre inicio, registro de evidencia y activación. Sin DML directo de runtime.
 - **Índice para la policy** — sobre `account_id`; parcial sobre intentos abiertos.
 - **`T-ONBOARD-1` (positiva)** — Una cuenta lee y avanza su propio intento.
-- **`T-ONBOARD-2` (negativa)** — Un intento con evidencia `fail` o `review_required` no puede transicionar a `activated`: lo impide un constraint, no solo la aplicación.
-- **`T-ONBOARD-3` (negativa)** — Ninguna organización lee evidencia de elegibilidad de nadie. La fecha de nacimiento nunca sale de Identidad.
+- **`T-ONBOARD-2` (negativa)** — Un intento sin evidencia `pass` vigente para la política V1 no puede transicionar a `activated`: lo impide un constraint, no solo la aplicación.
+- **`T-ONBOARD-3` (negativa)** — Ninguna organización lee evidencia de elegibilidad de nadie. La declaración y el snapshot de política nunca salen de Identidad.
 
 #### `FITNESS_PROFILE_CLAIM`
 
