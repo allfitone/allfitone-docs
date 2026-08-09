@@ -47,24 +47,30 @@ Cuatro roles, y no hay más. No se pueden crear roles a medida.
 > **Gestionar una relación no es acceder a los datos.**
 
 Un admin administra clientes sin ver un solo registro de entrenamiento. Para que
-un profesional vea algo de una persona hacen falta **tres cosas a la vez**:
+un profesional acceda a una categoría o ejecute una acción se aplica siempre
+**LA FÓRMULA** completa:
 
 1. Una relación vigente con esa persona.
-2. Que él esté **asignado** a esa relación.
-3. Que su membresía y su rol sigan vigentes.
+2. Un grant vigente para la categoría, la finalidad y el nivel de acceso requeridos.
+3. Que el profesional esté **asignado** a esa relación.
+4. Que su membresía siga vigente.
+5. Que su rol, sus capacidades y, cuando corresponda, sus credenciales permitan la acción.
 
-Falta una, no ve nada.
+Falta una, no puede acceder a la categoría ni ejecutar la acción.
 
-**El permiso no se pide aparte.** La persona autoriza al aceptar la relación, en
-un solo paso, y ve antes qué va a compartir. Desde ese momento su coach trabaja
-sin pedir nada más.
+La relación y los grants se deciden dentro del mismo flujo, pero son decisiones
+distintas. **Aceptar la relación no concede por sí solo ninguna categoría.** La
+persona ve antes qué se solicita y acepta o rechaza cada scope y nivel de acceso
+de forma independiente. Todo puede confirmarse en una sola pantalla y con una
+sola acción; no hace falta un segundo flujo de solicitudes después.
 
 Lo que ella conserva es poder **revocar** una categoría cuando quiera, **ocultar**
 una sesión concreta, y **ver quién miró sus datos**. Cada consulta queda
 registrada con el nombre del profesional y ella la ve desde su aplicación.
 
 Las categorías son independientes entre sí: entrenamiento, historial previo,
-cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
+cuerpo, salud y las tres de nutrición. Cada una se acepta, rechaza, revoca o
+vence por separado; decidir una no decide las demás.
 
 ## 4. Vocabulario
 
@@ -75,6 +81,10 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 | **Membresía** | Que alguien trabaja en la organización. Nunca lo que paga un cliente |
 | **Plantilla de sesión** | Lo que en fuerza la interfaz llama "rutina" |
 | **Movimiento** | Lo que en fuerza la interfaz llama "ejercicio" |
+| **Scope** | Contrato versionado que define una categoría, su finalidad y los campos que cubre |
+| **Grant** | Autorización de la persona para un scope, versión y nivel de acceso exactos |
+| **Nivel de acceso** | Acciones autorizadas sobre un scope, como lectura o contribución |
+| **Perfil profesional** | Perfil personal y portátil del profesional: presentación general, especialidades, experiencia y credenciales |
 
 ## 5. Qué no entra en esta versión
 
@@ -154,21 +164,24 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 
 ## E-STUDIO-01 · Perfil profesional y organización
 
-### HU-STUDIO-005 — Completar mi perfil dentro del gimnasio
+### HU-STUDIO-005 — Completar mi perfil profesional
 
-**Como** persona que trabaja en un gimnasio
-**quiero** llenar mi perfil profesional dentro de esa organización
-**para** que mis clientes sepan quién los atiende.
+**Como** profesional
+**quiero** completar mi perfil profesional personal
+**para** que las personas sepan quién las atiende sin que pierda mi trayectoria al cambiar de organización.
 
 `E-STUDIO-01` · imprescindible
 
 **Criterios**
 
-1. Mi perfil —cargo, presentación, especialidades, años de experiencia— **pertenece al gimnasio** en el que trabajo, no a mí.
-2. Si trabajo en dos gimnasios tengo **dos perfiles distintos**, y cada uno lo administra su gimnasio.
-3. Cuando salgo del gimnasio, ellos pueden deshabilitar o borrar ese perfil. Es suyo.
-4. **Mi título profesional verificado es la excepción: ese es mío.** Un diploma no se lo queda un gimnasio, y si me cambio de trabajo no tengo que volver a verificarlo.
-5. Tener el perfil lleno no me habilita a ver los datos de nadie: para eso me tienen que asignar clientes.
+1. El perfil profesional pertenece a la persona y puede existir sin una organización.
+2. La presentación general, las especialidades, los años de experiencia y las credenciales verificadas viven en **un único perfil personal**; no se duplican por gimnasio.
+3. La organización no crea, copia ni administra otro perfil profesional. Su contexto se limita a la membresía y sus roles vigentes.
+4. La ficha que ve un cliente combina el perfil profesional personal vigente con la organización, la membresía y los roles efectivos desde sus fuentes canónicas, sin copiar el perfil a la organización.
+5. Si trabajo en dos gimnasios mantengo un solo perfil profesional, dos membresías y los roles que correspondan en cada una.
+6. Al salir de una organización termina esa membresía y dejo de aparecer como parte de su equipo operativo. La organización no puede modificar ni borrar mi perfil personal o mis credenciales.
+7. Actualizar el perfil personal se refleja en las vistas autorizadas de las organizaciones donde mantengo una membresía; no cambia mis membresías ni sus roles.
+8. Completar el perfil no me habilita a ver datos de nadie: para eso se aplica **LA FÓRMULA** completa.
 
 ### HU-STUDIO-006 — Ver en qué gimnasios trabajo
 
@@ -195,11 +208,12 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 
 **Criterios**
 
-1. Cualquier persona con cuenta puede crear su organización. **No hace falta un perfil profesional previo**: el perfil se llena después, ya dentro de ella.
+1. Cualquier persona con cuenta puede crear su organización. **No hace falta tener completo el perfil profesional**: sigue siendo personal y puede completarse antes o después, sin pertenecer a la organización.
 2. Al crearla quedo como propietario.
-3. Si trabajo solo, mi organización es mi propia práctica: sirve como frontera de operación y no implica tener una empresa constituida.
-4. No existe una marca permanente de "independiente": esta misma organización puede incorporar equipo después sin cambiar de identidad ni migrar nada.
-5. Reintentar no crea una segunda organización.
+3. Al crearla nace también mi membresía propietaria inicial, que referencia mi identidad y mi perfil profesional personal sin copiarlos.
+4. Si trabajo solo, mi organización es mi propia práctica: sirve como frontera de operación y no implica tener una empresa constituida.
+5. No existe una marca permanente de "independiente": esta misma organización puede incorporar equipo después sin cambiar de identidad ni migrar nada.
+6. Reintentar no crea una segunda organización.
 
 ### HU-STUDIO-008 — Actualizar los datos de la organización
 
@@ -439,9 +453,12 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 
 1. Invito por email o celular. Nunca puedo crear la cuenta, la persona ni el Fitness ID de alguien.
 2. Puedo proponer la relación y, opcionalmente, un programa inicial. **Cada propuesta se decidirá por separado.**
-3. La invitación **incluye qué información va a compartir conmigo** si acepta. Ella lo ve antes de decidir, y aceptar la relación autoriza en el mismo paso. No hay que pedirle nada después ni esperar a que responda otra vez.
-4. Si propongo un programa, su versión debe estar publicada y ser nuestra; si no, se rechaza la invitación completa.
-5. Hasta que la persona acepte, no existe relación, ni asignación, ni persona provisional en nuestro sistema.
+3. La invitación presenta por separado cada scope solicitado, su finalidad, la versión de su contrato y el nivel de acceso solicitado.
+4. La persona acepta o rechaza cada scope de forma independiente dentro de la misma confirmación. **Aceptar la relación no concede automáticamente ningún scope.**
+5. La persona puede aceptar la relación y rechazar todos los scopes. La relación queda vigente, pero ningún profesional accede a su Fitness ID y el programa inicial no se materializa.
+6. Si propongo un programa, su versión debe estar publicada y ser nuestra; si no, se rechaza la invitación completa.
+7. El programa inicial solo se materializa si la persona acepta la relación, acepta esa propuesta y concede `relationship_training` con el nivel requerido. Si falta una condición, el programa no se materializa.
+8. Hasta que la persona acepte, no existe relación, grant, asignación ni persona provisional en nuestro sistema.
 
 ### HU-STUDIO-024 — Ver el directorio de personas
 
@@ -521,25 +538,29 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 3. **La persona es notificada.** Una reasignación nunca es silenciosa.
 4. Si la notificación no puede quedar encolada, la reasignación no se confirma.
 
-### HU-STUDIO-029 — Asignar un suplente
+### HU-STUDIO-029 — Proponer una suplencia
 
 **Como** coach responsable, admin u owner
-**quiero** poner a otro profesional a cubrir a un cliente por un tiempo
+**quiero** proponer a otro profesional para cubrir a un cliente por un tiempo
 **para** que nadie se quede sin atención cuando el titular no está.
 
 `E-STUDIO-04` · importante
 
 **Criterios**
 
-1. **La asignación es inmediata.** El gimnasio decide a quién pone y el suplente empieza a atender enseguida, sin pedirle permiso a nadie.
-2. Toda suplencia lleva fecha de fin y **caduca sola** al llegar.
-3. El suplente ve **lo mismo que el titular**, ni más ni menos.
-4. Solo puedo poner de suplente a alguien de mi propio gimnasio con rol de coach.
-5. La persona atendida **es informada** de quién la va a atender mientras tanto.
+1. Solo puedo proponer a alguien de mi organización con membresía vigente y rol de coach.
+2. Toda propuesta indica el profesional, la fecha de inicio y una fecha de fin obligatoria.
+3. La propuesta queda `pending_person_decision` y se notifica a la persona atendida. **Proponer no concede acceso.**
+4. Hasta que la persona acepte, el profesional propuesto no satisface **LA FÓRMULA** y no puede leer ni escribir nada de esa relación. El silencio nunca equivale a aceptación.
+5. Si la persona acepta, la suplencia entra en vigor en la fecha propuesta o en el instante de aceptación, lo que ocurra después. Nunca produce acceso retroactivo.
+6. Si la persona rechaza, la relación y el profesional titular no cambian.
+7. Aceptar la suplencia no crea ni amplía grants. El suplente nunca accede a más que el titular y puede acceder a menos si sus capacidades o credenciales no permiten una acción.
+8. La suplencia caduca automáticamente en su fecha de fin y el acceso se corta sin depender de que un proceso posterior actualice su estado.
+9. Reintentar la propuesta no crea otra suplencia pendiente equivalente y toda decisión queda en el historial.
 
 ### HU-STUDIO-030 — Terminar una suplencia
 
-**Como** coach responsable, admin u owner
+**Como** admin u owner
 **quiero** terminar una suplencia antes de su fecha
 **para** devolver la atención al titular.
 
@@ -550,6 +571,7 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 1. El acceso del suplente se corta de inmediato.
 2. No afecta la relación ni al profesional titular.
 3. Lo que el suplente haya registrado se conserva con su autoría.
+4. La persona atendida también puede terminar la suplencia desde Allfit Space.
 
 ### HU-STUDIO-031 — Ver las suplencias de una relación
 
@@ -606,9 +628,10 @@ cuerpo, salud y las tres de nutrición. Revocar una no revoca las demás.
 
 ## E-STUDIO-05 · Qué nos autorizó cada persona
 
-Un coach **no le pide permiso a nadie ni espera a que le respondan**. La persona
-autoriza al aceptar la relación, en un solo paso, y desde ese momento su coach
-puede trabajar.
+Un coach no inicia un segundo flujo de solicitudes después de la invitación. La
+persona decide la relación y cada scope de forma independiente dentro de la
+misma confirmación. Desde ese momento el coach puede trabajar únicamente con los
+grants que quedaron vigentes.
 
 Lo que queda de este lado es solo saber qué autorizó y qué no.
 
@@ -1376,7 +1399,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 
 **Criterios**
 
-1. Veo lo que espera acción mía: invitaciones sin responder, personas sin profesional asignado, permisos que pedí y siguen sin respuesta.
+1. Veo lo que espera acción mía: invitaciones sin responder y relaciones aceptadas sin profesional asignado.
 2. Como coach veo mis clientes con sesiones sin registrar y sus resultados recién cerrados.
 3. Como admin veo el estado del equipo, las relaciones nuevas y los cobros que fallaron.
 4. **Lo que veo depende de mi rol.** Un coach no ve cobros; un staff no ve nada de entrenamiento.
@@ -1410,7 +1433,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 
 1. En un solo lugar veo su perfil, su programa, sus sesiones y su progreso, **según lo que me haya autorizado**.
 2. Lo que no me autorizó **no aparece como vacío ni como bloqueado**: no aparece.
-4. Cada consulta queda registrada y la persona la ve.
+3. Cada consulta queda registrada y la persona la ve.
 
 ### HU-STUDIO-084 — Entender por qué dejé de ver algo
 
@@ -1452,5 +1475,6 @@ estado de pago de una persona no es un dato de entrenamiento.
 
 El camino mínimo para lanzar es: entrar, crear el gimnasio con su equipo,
 invitar a una persona, armar un programa y asignárselo, ver lo que ejecutó, y
-cobrarle su plan. **Sin pedir permisos por separado ni esperar respuestas**: la
-persona autoriza al aceptar la relación y el coach trabaja desde el primer día.
+cobrarle su plan. En una sola confirmación, la persona acepta la relación y
+decide cada scope de forma independiente; el coach trabaja desde el primer día
+únicamente con los grants que la persona concedió.

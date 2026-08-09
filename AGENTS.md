@@ -18,9 +18,9 @@ Read this file before changing any document.
 
 ## Language
 
-All new or modified documentation, filenames, headings and technical writing
-must be in English. When touching a legacy Spanish document, translate the whole
-document rather than creating a mixed-language source.
+Documentation may be written in English or Spanish. Preserve the language of an
+existing document unless a translation is explicitly requested, and keep each
+document internally consistent.
 
 Technical identifiers use English `lower_snake_case`. Normative document names
 use `UPPER_SNAKE_CASE.md`; conventional files such as `README.md`, `AGENTS.md`,

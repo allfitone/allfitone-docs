@@ -43,7 +43,7 @@ la persona, no al gimnasio ni al entrenador.
 De ahí salen tres reglas que atraviesan todas las historias:
 
 1. **Una persona puede usar la aplicación sola.** Sin gimnasio, sin entrenador y sin invitación. Todo lo demás es opcional.
-2. **Nadie ve sus datos sin que ella lo autorice.** Autoriza al aceptar una relación, viendo antes qué comparte, y en cualquier momento puede quitar una categoría o esconder una sesión concreta.
+2. **Nadie ve sus datos sin que ella lo autorice.** Dentro de la misma confirmación decide la relación y cada categoría de forma independiente, viendo antes qué comparte; en cualquier momento puede quitar una categoría o esconder una sesión concreta.
 3. **Terminar con un gimnasio no le quita nada.** Conserva su historial completo.
 
 ## 3. Vocabulario
@@ -55,6 +55,9 @@ Tres palabras que significan cosas distintas y no deben mezclarse:
 | **Programa** | El entrenamiento que la persona sigue: semanas de sesiones planificadas |
 | **Plan** | Lo que le paga a un gimnasio, o lo que le paga a Allfit por Premium |
 | **Membresía** | Que alguien *trabaja* en una organización. Nunca se usa para lo que un cliente paga |
+| **Scope** | Contrato versionado que define una categoría, su finalidad y los campos que cubre |
+| **Grant** | Mi autorización para un scope, versión y nivel de acceso exactos |
+| **Nivel de acceso** | Acciones que autorizo sobre un scope, como lectura o contribución |
 
 En fuerza la interfaz puede decir "rutina" y "ejercicio". En el resto del
 producto son **plantilla de sesión** y **movimiento**, porque running, yoga y
@@ -314,11 +317,12 @@ movilidad no se organizan en series y repeticiones.
 
 **Criterios**
 
-1. Veo la organización, la parte responsable que se presenta, el propósito, y **cada propuesta por separado**: unirme al equipo, iniciar una relación profesional, o recibir un programa.
-2. Puedo abrir la invitación antes de tener cuenta.
-3. La invitación no revela si mi contacto ya tiene cuenta en Allfit.
-4. Una invitación inválida y una vencida se ven igual: no puedo deducir cuál es cuál.
-5. Abrir la invitación no acepta nada.
+1. Veo la organización, la parte responsable que se presenta, el propósito y **cada propuesta por separado**: unirme al equipo, iniciar una relación profesional o recibir un programa.
+2. Para la relación veo por separado cada scope solicitado, su finalidad, la versión de su contrato y el nivel de acceso solicitado.
+3. Puedo abrir la invitación antes de tener cuenta.
+4. La invitación no revela si mi contacto ya tiene cuenta en Allfit.
+5. Una invitación inválida y una vencida se ven igual: no puedo deducir cuál es cuál.
+6. Abrir la invitación no acepta nada.
 
 ### HU-SP-017 — Aceptar o rechazar cada propuesta por separado
 
@@ -332,11 +336,15 @@ movilidad no se organizan en series y repeticiones.
 
 1. Puedo aceptar la relación profesional y rechazar el programa propuesto: es un resultado válido y esperado.
 2. No existe ningún botón de "aceptar todo".
-3. Antes de aceptar veo **qué información voy a compartir** con ese gimnasio. Aceptar la relación lo autoriza en el mismo paso: no hay que volver a preguntarme después.
-4. Aceptar **no** significa aceptar términos futuros, pagos, publicación, investigación ni uso de mis datos para entrenar modelos. Solo lo que se me mostró.
-5. Si rechazo la relación, el programa que dependía de ella tampoco se materializa.
-6. Si ya tenía cuenta, acepto con mi identidad existente y mi historial anterior no se comparte hacia atrás.
-7. Reintentar la decisión no crea vínculos duplicados.
+3. Antes de decidir veo **qué información voy a compartir**, para qué finalidad, bajo qué versión y con qué nivel de acceso.
+4. Acepto o rechazo cada scope de forma independiente. **Aceptar la relación no concede automáticamente ningún scope.**
+5. La relación y los scopes pueden confirmarse en una sola pantalla y con una sola acción, sin convertirlos en una aceptación global.
+6. Puedo aceptar la relación y rechazar todos los scopes. La relación queda vigente, pero el gimnasio no accede a mi Fitness ID y el programa propuesto no se materializa.
+7. Aceptar **no** significa aceptar términos futuros, pagos, publicación, investigación ni uso de mis datos para entrenar modelos. Solo lo que decidí explícitamente.
+8. Si rechazo la relación, el programa que dependía de ella tampoco se materializa.
+9. Aunque acepte el programa, solo se materializa si acepté la relación y concedí `relationship_training` con el nivel requerido.
+10. Si ya tenía cuenta, acepto con mi identidad existente y mi historial anterior no se comparte hacia atrás.
+11. Reintentar la decisión no crea vínculos ni grants duplicados.
 
 ### HU-SP-018 — Ver mis relaciones profesionales
 
@@ -365,6 +373,26 @@ movilidad no se organizan en series y repeticiones.
 1. Veo altas, cambios de profesional, suplencias, consentimientos y la terminación, en orden.
 2. El registro no se edita ni se borra.
 3. Si la organización declaró un motivo de terminación, no lo veo: cada parte solo ve el motivo que declaró.
+
+### HU-SP-095 — Decidir y controlar una suplencia
+
+**Como** persona con una relación profesional vigente
+**quiero** aceptar o rechazar a un suplente y poder terminar su cobertura
+**para** controlar qué profesionales pueden ejercer temporalmente mis grants.
+
+`E-SP-02` · importante
+
+**Criterios**
+
+1. La propuesta muestra la identidad del profesional, la organización y las fechas de inicio y fin de la cobertura.
+2. Mientras la propuesta esté pendiente, el profesional no obtiene acceso. Mi silencio nunca equivale a aceptación.
+3. Solo puedo aceptar o rechazar una propuesta pendiente, no vencida y perteneciente a una relación mía que siga vigente.
+4. Si acepto, la suplencia entra en vigor en la fecha propuesta o en el instante de aceptación, lo que ocurra después. Nunca produce acceso retroactivo.
+5. Si rechazo, la relación y el profesional titular no cambian.
+6. Aceptar no crea ni amplía grants. El acceso exige simultáneamente relación y grant vigentes, suplencia aceptada y dentro de fecha, membresía activa, rol compatible y las capacidades o credenciales que requiera cada acción.
+7. Puedo terminar una suplencia activa en cualquier momento, sin justificarlo. El acceso se corta de inmediato sin terminar la relación ni afectar al titular.
+8. La suplencia caduca automáticamente en su fecha de fin aunque nadie ejecute otra acción.
+9. Mi decisión y cualquier terminación quedan en el historial; reintentar no las duplica.
 
 ### HU-SP-020 — Terminar una relación profesional
 
@@ -513,9 +541,11 @@ movilidad no se organizan en series y repeticiones.
 
 ## E-SP-04 · Mis datos y quién los ve
 
-Cuando acepto una relación con un gimnasio, **autorizo en el mismo paso** lo que
-voy a compartir con él. Veo qué es antes de aceptar. No me piden permisos por
-separado ni me llegan solicitudes después.
+La relación y los grants se deciden dentro de la misma confirmación, pero son
+decisiones distintas. **Aceptar la relación no concede por sí solo ninguna
+categoría.** Veo antes cada scope, su finalidad, versión y nivel de acceso, y
+acepto o rechazo cada uno de forma independiente. No me llegan solicitudes
+adicionales después.
 
 Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera y
 **esconder** una sesión concreta.
@@ -533,7 +563,9 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 1. Antes de aceptar veo, categoría por categoría, qué van a poder ver: mi entrenamiento, mi historial anterior, mis medidas, mi contexto de salud, mi alimentación.
 2. De cada categoría veo qué incluye y qué **no** incluye.
 3. Lo que se me presentó queda guardado tal como lo vi. Si mañana cambian las definiciones, a mí me sigue aplicando la que acepté.
-4. **Aceptar la relación autoriza todo eso de una vez.** No hay un segundo paso ni una espera.
+4. De cada categoría veo la finalidad, la versión del contrato y si se solicita lectura o contribución.
+5. Acepto o rechazo cada categoría de forma independiente. **Aceptar la relación no autoriza automáticamente ninguna.**
+6. Puedo confirmar todas mis decisiones en una sola acción; que la confirmación sea única no convierte los scopes en una autorización global.
 
 ### HU-SP-030 — Ver todo lo que comparto y con quién
 
@@ -1569,7 +1601,7 @@ y lo sigue viendo.
 
 **Criterios**
 
-1. Veo mis avisos: invitaciones, permisos que me piden, correcciones que me proponen, cambios de entrenador, cobros fallidos.
+1. Veo mis avisos: invitaciones, propuestas de suplencia, correcciones que me proponen, cambios de entrenador y cobros fallidos.
 2. Distingo lo que espera una decisión mía de lo que es solo informativo.
 3. Desde cada aviso llego a donde se resuelve.
 4. **Un aviso nunca contiene mis datos**: dice qué pasó y me lleva a la aplicación.
@@ -1626,7 +1658,7 @@ y lo sigue viendo.
 | --- | --- | ---: |
 | `E-SP-00` Entrar a la aplicación | `HU-SP-001` – `HU-SP-005` | 4 de 5 |
 | `E-SP-01` Registro y onboarding | `HU-SP-006` – `HU-SP-015` | 8 de 10 |
-| `E-SP-02` Invitaciones y relaciones | `HU-SP-016` – `HU-SP-020` | 3 de 5 |
+| `E-SP-02` Invitaciones y relaciones | `HU-SP-016` – `HU-SP-020`, `HU-SP-095` | 3 de 6 |
 | `E-SP-03` Perfil, cuerpo y salud | `HU-SP-021` – `HU-SP-028` | 2 de 8 |
 | `E-SP-04` Mis datos y quién los ve | `HU-SP-029` – `HU-SP-036` | 6 de 8 |
 | `E-SP-05` Agenda y asignaciones | `HU-SP-037` – `HU-SP-041` | 5 de 5 |
@@ -1641,7 +1673,7 @@ y lo sigue viendo.
 | `E-SP-14` Qué pasa si no pago | `HU-SP-083` | 0 de 1 |
 | `E-SP-15` Allfit Premium | `HU-SP-084` – `HU-SP-088` | 5 de 5 |
 | `E-SP-16` Hoy y navegación | `HU-SP-089` – `HU-SP-094` | 3 de 6 |
-| **Total** | **94 historias** | **50 imprescindibles** |
+| **Total** | **95 historias** | **50 imprescindibles** |
 
 El camino mínimo para lanzar es: crear cuenta y entrar, activar el Fitness ID,
 ver qué toca hoy, entrenar y registrarlo aunque no haya señal, ver el historial,

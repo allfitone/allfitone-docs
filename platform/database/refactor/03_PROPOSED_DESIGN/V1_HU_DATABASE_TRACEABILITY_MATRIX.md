@@ -8,7 +8,7 @@
 
 ## 1. Resultado
 
-Se inventariaron y clasificaron las **211 historias reales**: 33 de Backoffice, 84 de Allfit Studio y 94 de Allfit Space. La propuesta deja **191** como `included_v1`, **3** como `client_only_v1` y **17** como `deferred`. No se propone ninguna HU como `rejected`.
+Se inventariaron y clasificaron las **212 historias reales**: 33 de Backoffice, 84 de Allfit Studio y 95 de Allfit Space. La propuesta deja **192** como `included_v1`, **3** como `client_only_v1` y **17** como `deferred`. No se propone ninguna HU como `rejected`.
 
 Producto aprobó el 3 de agosto de 2026 las 27 decisiones de alcance: 7 HU `después` incluidas, 17 diferidas y 3 de cliente. El P0 `DB-P5-001` continúa abierto sólo por la trazabilidad técnica pendiente: sustituir capacidades `NEW-*`, asignar rutas `PR-*` y cerrar objetos, contratos e invariantes.
 
@@ -16,8 +16,8 @@ Producto aprobó el 3 de agosto de 2026 las 27 decisiones de alcance: 7 HU `desp
 | --- | ---: | ---: | ---: | ---: |
 | Backoffice | 33 | 17 | 14 | 2 |
 | Allfit Studio | 84 | 42 | 27 | 15 |
-| Allfit Space | 94 | 50 | 37 | 7 |
-| **Total** | **211** | **109** | **78** | **24** |
+| Allfit Space | 95 | 50 | 38 | 7 |
+| **Total** | **212** | **109** | **79** | **24** |
 
 ## 2. Reglas de clasificación
 
@@ -123,7 +123,7 @@ Lectura de columnas:
 | `HU-STUDIO-002 — Cerrar sesión` | `imprescindible` | `included_v1` | `EXT-AUTH` | Proveedor Auth + identity para proyección local | Auth/claims; positivo, denegación, tenant y reintento | Documentar frontera proveedor Auth → proyección DB y claims. |
 | `HU-STUDIO-003 — Recuperar mi contraseña` | `imprescindible` | `included_v1` | `EXT-AUTH` | Proveedor Auth + identity para proyección local | Auth/claims; positivo, denegación, tenant y reintento | Documentar frontera proveedor Auth → proyección DB y claims. |
 | `HU-STUDIO-004 — Elegir en qué gimnasio estoy trabajando` | `imprescindible` | `client_only_v1` | `CLIENT-ORG-CONTEXT` | Estado local; sin DDL | Sin PR; probar no persistencia y aislamiento local | Selector de contexto de organización; persiste sólo la sesión local y usa membresías ya existentes. |
-| `HU-STUDIO-005 — Completar mi perfil dentro del gimnasio` | `imprescindible` | `included_v1` | `OP-IDN-010 + OP-IDN-017` | identity: personas, identidades, contactos y preferencias | PR-002 + PR-003; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
+| `HU-STUDIO-005 — Completar mi perfil profesional` | `imprescindible` | `included_v1` | `OP-IDN-010 + OP-IDN-017` | identity: personas, identidades, contactos y preferencias | PR-002 + PR-003; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-STUDIO-006 — Ver en qué gimnasios trabajo` | `imprescindible` | `included_v1` | `OP-ORG-014` | organization: organizaciones, sedes, membresías e invitaciones | PR-005; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-004/005/006. |
 | `HU-STUDIO-007 — Crear mi organización` | `imprescindible` | `included_v1` | `OP-ORG-001` | organization: organizaciones, sedes, membresías e invitaciones | PR-005; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-004/005/006. |
 | `HU-STUDIO-008 — Actualizar los datos de la organización` | `imprescindible` | `included_v1` | `OP-ORG-002` | organization: organizaciones, sedes, membresías e invitaciones | PR-005; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-004/005/006. |
@@ -147,7 +147,7 @@ Lectura de columnas:
 | `HU-STUDIO-026 — Ver la historia de una relación` | `importante` | `included_v1` | `OP-REL-014` | relationship: relaciones, asignaciones y terminaciones | PR-006; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-STUDIO-027 — Asignar el profesional responsable` | `imprescindible` | `included_v1` | `OP-REL-002` | relationship: relaciones, asignaciones y terminaciones | PR-006; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-STUDIO-028 — Cambiar el profesional responsable` | `imprescindible` | `included_v1` | `OP-REL-003` | relationship: relaciones, asignaciones y terminaciones | PR-006; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
-| `HU-STUDIO-029 — Asignar un suplente` | `importante` | `included_v1` | `OP-REL-004` | relationship: relaciones, asignaciones y terminaciones | PR-006; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
+| `HU-STUDIO-029 — Proponer una suplencia` | `importante` | `included_v1` | `OP-REL-004` | relationship: relaciones, asignaciones y terminaciones | PR-006; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-STUDIO-030 — Terminar una suplencia` | `importante` | `included_v1` | `OP-REL-006` | relationship: relaciones, asignaciones y terminaciones | PR-006; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-STUDIO-031 — Ver las suplencias de una relación` | `después` | `deferred` | `OP-REL-013` | Sin objetos V1 | N/A V1; probar ausencia de DDL, permisos y rutas | No crear una vista, índice o consulta dedicada al historial de suplencias; conservar las asignaciones requeridas por otros flujos. |
 | `HU-STUDIO-032 — Terminar una relación` | `imprescindible` | `included_v1` | `OP-REL-008` | relationship: relaciones, asignaciones y terminaciones | PR-006; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
@@ -222,6 +222,7 @@ Lectura de columnas:
 | `HU-SP-017 — Aceptar o rechazar cada propuesta por separado` | `imprescindible` | `included_v1` | `OP-IDN-009` | identity: personas, identidades, contactos y preferencias | PR-004; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-SP-018 — Ver mis relaciones profesionales` | `importante` | `included_v1` | `OP-REL-012` | relationship: relaciones, asignaciones y terminaciones | PR-006; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-SP-019 — Ver la historia de una relación` | `importante` | `included_v1` | `OP-REL-014` | relationship: relaciones, asignaciones y terminaciones | PR-006; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
+| `HU-SP-095 — Decidir y controlar una suplencia` | `importante` | `included_v1` | `OP-REL-005 + OP-REL-006` | relationship: relaciones, asignaciones y terminaciones | PR-006; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-SP-020 — Terminar una relación profesional` | `imprescindible` | `included_v1` | `OP-REL-007` | relationship: relaciones, asignaciones y terminaciones | PR-006; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-SP-021 — Declarar mi contexto de entrenamiento` | `imprescindible` | `included_v1` | `OP-IDN-004` | identity: personas, identidades, contactos y preferencias | PR-002; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-SP-022 — Corregir algo que declaré` | `importante` | `included_v1` | `OP-IDN-005` | identity: personas, identidades, contactos y preferencias | PR-002; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
