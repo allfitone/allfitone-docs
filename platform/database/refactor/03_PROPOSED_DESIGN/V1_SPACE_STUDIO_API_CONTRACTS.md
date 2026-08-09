@@ -72,7 +72,7 @@ Toda operación de Studio que toque datos de una persona cuelga de `/organizatio
 
 `{orgId}` no se resuelve desde el token ni desde una preferencia guardada. Está en la ruta, aparece en los logs y en el `ACCESS_EVENT`, y se valida contra una membresía vigente dentro de la transacción.
 
-Las dos únicas excepciones son `GET /studio/v1/me` y `GET /studio/v1/me/memberships`, que responden "quién soy" y "dónde puedo actuar".
+Las rutas personales `GET /studio/v1/me` y `GET /studio/v1/me/memberships`, el catálogo `GET /studio/v1/organization-types` y la activación propia mediante `/studio/v1/onboarding-attempts` no reciben una organización. Las rutas de onboarding aceptan una cuenta autenticada sin persona; el resto exige una persona activa.
 
 ## 3. Convenciones
 
@@ -188,7 +188,7 @@ Tres reglas que no se negocian:
 
 ### 3.7 Autoridad OpenAPI y gate de implementación
 
-[`allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml) es la fuente canónica de rutas, DTOs, ejemplos y caché para las veinticinco operaciones HTTP de la primera rebanada vertical ampliada. [`V1_OPENAPI_CONTRACT.md`](./V1_OPENAPI_CONTRACT.md) registra su alcance y las pruebas `T-API-01..11` + `T-NUT-API-01..14`.
+[`allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml) es la fuente canónica de rutas, DTOs, ejemplos y caché para las treinta y una operaciones HTTP de la primera rebanada vertical ampliada. [`V1_OPENAPI_CONTRACT.md`](./V1_OPENAPI_CONTRACT.md) registra su alcance y las pruebas `T-API-01..11` + `T-NUT-API-01..14`.
 
 Un endpoint estable de producto listado más adelante pero ausente del YAML todavía es **diseño**, no una superficie implementable. Debe incorporarse contract-first con su `x-allfit-operation` antes de crear el handler.
 
@@ -298,15 +298,19 @@ Sujeto implícito: la persona autenticada. Ningún endpoint recibe un `person_id
 
 ## 5. Contrato de Studio
 
-Sujeto: la organización de la ruta.
+Sujeto: la cuenta o persona autenticada en las rutas personales y de onboarding; la organización explícita de la ruta para toda operación organizacional.
 
 ### 5.1 Identidad profesional y organización
 
 | Método | Ruta | Operación |
 | --- | --- | --- |
+| `POST` | `/onboarding-attempts` | `OP-IDN-001` |
+| `POST` | `/onboarding-attempts/{id}/eligibility-evidence` | `OP-IDN-002` |
+| `POST` | `/onboarding-attempts/{id}/completion` | `OP-IDN-003` |
 | `GET` | `/me` | `OP-IDN-017` |
 | `PUT` | `/me/professional-profile` | `OP-IDN-010` |
 | `GET` | `/me/memberships` | `OP-ORG-014` |
+| `GET` | `/organization-types` | `OP-ORG-019` |
 | `POST` | `/organizations` | `OP-ORG-001` |
 | `GET` · `PATCH` | `/organizations/{orgId}` | `OP-ORG-013` · `OP-ORG-002` |
 | `POST` · `PATCH` | `/organizations/{orgId}/sites[/{siteId}]` | `OP-ORG-003` · `OP-ORG-004` |

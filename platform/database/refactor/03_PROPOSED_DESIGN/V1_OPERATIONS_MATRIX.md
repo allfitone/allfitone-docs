@@ -254,7 +254,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/onboarding-attempts` |
+| **Superficie** | `POST /space/v1/onboarding-attempts` o `POST /studio/v1/onboarding-attempts` |
 | **Actor** | `A1` — usuario WorkOS válido sin persona vinculada |
 | **Filtros obligatorios** | `ACCESS_ACCOUNT` derivado de `(issuer, subject)` del token verificado; la cuenta no debe tener ya una `PERSON` vinculada |
 | **Transacción** | Crear `ONBOARDING_ATTEMPT` y vincularlo a la cuenta externa. Si el flujo viene de una invitación, congelar el token de referencia sin materializar ninguna intención |
@@ -271,14 +271,14 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/eligibility-evidence` |
+| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/eligibility-evidence` o `POST /studio/v1/onboarding-attempts/{id}/eligibility-evidence` |
 | **Actor** | `A1`, dueño del intento |
 | **Filtros obligatorios** | El intento pertenece a la cuenta autenticada y está abierto |
 | **Transacción** | Crear `ELIGIBILITY_EVIDENCE` aplicando la **versión vigente** de la política adulta y congelarla en la evidencia |
 | **Idempotencia** | `Idempotency-Key`. Reenviar la misma evaluación no crea otra evidencia; una evaluación distinta se añade como intento adicional, append-only |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Sin conexión no hay evaluación |
-| **Información sensible** | Fecha de nacimiento o equivalente. Categoría personal identificable, nunca expuesta a ninguna organización |
+| **Información sensible** | Declaración explícita de tener al menos 18 años bajo la política adulta V1 para Colombia. No se almacena fecha de nacimiento |
 | **Evento de dominio** | `identity.eligibility_evaluated.v1` |
 | **Reglas** | `fail` y `review_required` **no** son elegibilidad. La ausencia de evidencia tampoco. Un intento no elegible no crea perfil, ni datos fitness, ni persona parcial |
 | **Falla cerrada** | Cualquier error de evaluación deja el intento como no elegible |
@@ -288,16 +288,16 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/completion` |
+| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/completion` o `POST /studio/v1/onboarding-attempts/{id}/completion` |
 | **Actor** | `A1`, dueño del intento |
-| **Filtros obligatorios** | Intento abierto, propio, con `ELIGIBILITY_EVIDENCE` en estado `pass` vigente, y con aceptación de términos registrada |
+| **Filtros obligatorios** | Intento abierto, propio, con `ELIGIBILITY_EVIDENCE` en estado `pass` vigente, y con aceptaciones versionadas de `platform_terms_v1` y `privacy_notice_v1` registradas |
 | **Transacción** | Una sola: crear `PERSON`, vincular `ACCESS_ACCOUNT` a esa persona, cerrar el `ONBOARDING_ATTEMPT` como `activated` y, si el intento porta una invitación, marcarla como reclamable por esa persona **sin** materializar intenciones |
 | **Idempotencia** | `Idempotency-Key`. Un reintento sobre un intento ya activado devuelve la misma `PERSON`; nunca crea una segunda |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Dos peticiones concurrentes producen una sola persona: la unicidad se resuelve en la base, no en el cliente |
 | **Información sensible** | Datos identificativos básicos |
 | **Evento de dominio** | `identity.person_activated.v1` |
-| **Reglas** | Es el **único** camino que crea una `PERSON`. Studio no lo puede invocar en nombre de nadie. Si la cuenta ya tenía persona (invitación posterior sobre alguien ya registrado en Space), reutiliza el mismo `person_id` y no duplica el Fitness ID |
+| **Reglas** | Es el **único** camino que crea una `PERSON`. Studio puede invocarlo exclusivamente para que el titular autenticado complete su propia activación; nunca puede activar a otra persona ni adquirir por ello potestades organizacionales. Si la cuenta ya tenía persona (invitación posterior sobre alguien ya registrado en Space), reutiliza el mismo `person_id` y no duplica el Fitness ID |
 | **Falla cerrada** | Sin elegibilidad `pass` no hay persona, aunque la invitación exista y esté vigente |
 
 #### `OP-IDN-004` — Declarar afirmación de perfil
@@ -734,6 +734,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | `OP-ORG-016` | Listar invitaciones emitidas | Consulta | `A4`, `A5`, `A6` |
 | `OP-ORG-017` | Consultar catálogo de roles y capacidades | Consulta | `A3`–`A6` |
 | `OP-ORG-018` | Crear una organización y entregarla a su dueño | Comando | `A10` |
+| `OP-ORG-019` | Consultar catálogo de tipos de organización | Consulta | `A2` |
 
 ---
 
@@ -744,7 +745,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Tipo** | Comando |
 | **Superficie** | `POST /studio/v1/organizations` |
 | **Actor** | `A2` — cualquier persona activa |
-| **Filtros obligatorios** | Persona activa con `PROFESSIONAL_PROFILE`. El tipo solicitado pertenece al catálogo gobernado de `ORGANIZATION_TYPE` |
+| **Filtros obligatorios** | Persona activa. El tipo solicitado pertenece al catálogo gobernado de `ORGANIZATION_TYPE` |
 | **Transacción** | Una sola: crear `ORGANIZATION`, crear `ORGANIZATION_MEMBERSHIP` para el creador, asignarle `MEMBERSHIP_ROLE` = `owner` y registrar el `ORGANIZATION_EVENT` de alta. Solo confirma si el constraint diferible verifica exactamente un `owner` activo |
 | **Idempotencia** | `Idempotency-Key`. Un reintento devuelve la organización creada, nunca una segunda |
 | **Paginación y orden** | No aplica |
@@ -752,7 +753,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Información sensible** | Datos de la parte responsable. Ningún dato fitness |
 | **Evento de dominio** | `organization.created.v1`, `organization.membership_created.v1` |
 | **Reglas** | El onboarding `solo_professional` crea una organización de tipo `professional_practice`: es una **frontera operativa**, no necesariamente una persona jurídica. No existe una bandera permanente de "independiente": la misma organización incorpora equipo después sin cambiar de identidad. Toda organización activa conserva exactamente un `owner` activo |
-| **Falla cerrada** | Sin perfil profesional, rechazo |
+| **Falla cerrada** | Sin persona activa o con tipo fuera del catálogo, rechazo |
 
 #### `OP-ORG-002` — Actualizar datos de la organización
 
@@ -955,8 +956,24 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Offline / concurrencia** | Cacheable para presentación, **nunca** para decidir en qué organización se puede actuar |
 | **Información sensible** | Ninguna categoría personal |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Es la única operación de Studio fuera del ámbito `/organizations/{orgId}`. Devuelve organizaciones, roles vigentes y capacidades efectivas |
+| **Reglas** | Es una operación personal de Studio fuera del ámbito `/organizations/{orgId}`. Devuelve organizaciones, roles vigentes y capacidades efectivas |
 | **Falla cerrada** | — |
+
+#### `OP-ORG-019` — Consultar catálogo de tipos de organización
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /studio/v1/organization-types` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Persona activa = sujeto del token |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Sin paginación. Orden gobernado por código |
+| **Información sensible** | Ninguna |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Devuelve los tipos activos `professional_practice`, `gym`, `studio`, `academy` y `clinic`. El cliente nunca inventa ni persiste tipos libres |
+| **Falla cerrada** | Sin persona activa, rechazo |
 
 #### `OP-ORG-015` — Listar membresías de la organización
 
