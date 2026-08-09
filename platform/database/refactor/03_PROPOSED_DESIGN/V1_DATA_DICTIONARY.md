@@ -107,7 +107,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Columnas:** `id` · `account_id uuid` · `person_id uuid` (nullable) · `status identity.onboarding_status` · `invitation_token_hash text` (nullable) · `terms_version text` (nullable) · `terms_accepted_at timestamptz` (nullable) · `privacy_notice_version text` (nullable) · `privacy_notice_accepted_at timestamptz` (nullable) · `expires_at timestamptz`.
 - **FKs y borrado:** `account_id → access_accounts(id) RESTRICT`; `person_id → people(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE parcial (account_id) WHERE status='open'` (un intento abierto por cuenta).
-- **Actores:** la propia cuenta lee/escribe; worker de privacidad dispone.
+- **Actores:** la propia cuenta lee; los cambios ocurren mediante funciones gobernadas; worker de privacidad dispone.
 - **RLS:** `account_id = app.actor_account_id`.
 - **Consultas:** por `account_id` y estado abierto.
 - **Índices:** parcial de intento abierto por cuenta.
@@ -118,7 +118,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 - **Propósito:** aplicación versionada de la política de mayoría de edad, congelada en la evidencia.
 - **Dominio / fuente de verdad:** Identidad.
-- **Clasificación:** `identity_pii` (puede incluir fecha de nacimiento o su equivalente).
+- **Clasificación:** `identity_pii` (declaración explícita de mayoría de edad y snapshot versionado de la política; no incluye fecha de nacimiento).
 - **Columnas:** `id` · `onboarding_attempt_id uuid` · `result identity.eligibility_result` · `policy_version integer` · `policy_snapshot_schema_version smallint` (`1`) · `policy_snapshot jsonb` · `evaluated_at timestamptz`.
 - **FKs y borrado:** `onboarding_attempt_id → onboarding_attempts(id) ON DELETE CASCADE`.
 - **Uniques y checks:** `CHECK (result in ('pass','fail','review_required','unknown'))`.
@@ -126,7 +126,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **RLS:** hereda del intento (`account_id`).
 - **Consultas:** por `onboarding_attempt_id`; última evidencia `pass`.
 - **Índices:** `(onboarding_attempt_id, evaluated_at desc)`.
-- **Retención:** se minimiza tras la activación: no se conserva la fecha de nacimiento completa solo para esta finalidad.
+- **Retención:** se conserva el resultado y el snapshot versionado necesarios para trazabilidad; esta política no recopila fecha de nacimiento.
 - **Eventos:** `identity.eligibility_evaluated.v1`.
 
 ### 4.5 `identity.profile_attributes`
@@ -411,10 +411,10 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** historia append-only de la membresía y sus roles.
 - **Dominio / fuente de verdad:** Organizaciones.
 - **Clasificación:** `audit`.
-- **Columnas:** `id` · `membership_id uuid` · `event_type text` · `snapshot_schema_version smallint` (`1`) · `before jsonb` (nullable) · `after jsonb` (nullable).
+- **Columnas:** `id` · `membership_id uuid` · `event_type text` · `snapshot_schema_version smallint` (`1`) · `before jsonb` (nullable) · `after jsonb` (nullable) · `created_at timestamptz`.
 - **FKs y borrado:** `membership_id → organization_memberships(id) ON DELETE CASCADE`.
-- **Uniques y checks:** append-only.
-- **Actores:** `allfit_api` inserta; admin/owner y la propia persona leen.
+- **Uniques y checks:** append-only; un único `organization.membership_created.v1` por membresía; versión de snapshot `1`; al menos uno de `before` o `after` presente.
+- **Actores:** los comandos gobernados de `allfit_api` provocan la inserción mediante un trigger cerrado; no existe DML directo de runtime. Admin/owner y la propia persona leen.
 - **RLS:** hereda de la membresía.
 - **Consultas:** `(membership_id, created_at desc)`.
 - **Índices:** `(membership_id, created_at desc)`.
