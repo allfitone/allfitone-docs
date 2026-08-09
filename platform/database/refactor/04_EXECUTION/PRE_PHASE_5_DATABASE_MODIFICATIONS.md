@@ -18,7 +18,7 @@ La revisión parte de:
 - los entregables vigentes de Fases 1 a 4;
 - el estado declarado en [PHASE_5_READINESS_REVIEW.md](./PHASE_5_READINESS_REVIEW.md).
 
-Este documento autoriza iniciar Fase 5 únicamente mediante rebanadas verticales que hayan cerrado su propio gate. No autoriza generar de una vez las 116 tablas documentadas, crear placeholders ni implementar una HU mientras alguno de los P0 que consume siga abierto.
+Este documento autoriza iniciar Fase 5 únicamente mediante rebanadas verticales que hayan cerrado su propio gate. No autoriza generar de una vez las 117 tablas documentadas, crear placeholders ni implementar una HU mientras alguno de los P0 que consume siga abierto.
 
 ## 2. Veredicto
 
@@ -32,10 +32,10 @@ La inspección reproducible del estado actual arroja:
 | --- | ---: | ---: |
 | Historias de usuario | No forman parte de las fuentes de la revisión | 211 |
 | Schemas físicos | 10 | 11 |
-| Tablas con ficha en el diccionario | 99 | 115 tras aprobar opción B |
+| Tablas con ficha en el diccionario | 99 | 117 tras opción B, sesión opaca y bloqueo causal |
 | Operaciones únicas `OP-*` | 150 | 184 tras completar `OP-SUP-*` |
-| IDs/rangos de prueba explícitos en la matriz RLS | 186 | 211 tras añadir `T-DUTY-01..08` y `T-ROLE-6` |
-| Rutas físicas `PR-*` | 27 | 28, ninguna para pagos |
+| IDs/rangos de prueba explícitos en la matriz RLS | 186 | 216 tras añadir deberes, no resurrección comercial y concurrencia causal |
+| Rutas físicas `PR-*` | 27 | 29, incluida `PR-29` para suspensión/reactivación causal |
 | Operaciones en el OpenAPI canónico | 21 | 21, ninguna de identidad, organizaciones, pagos o Backoffice |
 | Objetos `allfitone/packages/db` | esperados en Fase 5 | CLI fijada e infraestructura local inicializada bajo `packages/db/supabase`; aún no existen migraciones de dominio, tablas Allfit, tipos generados ni pruebas SQL ejecutables |
 
@@ -410,7 +410,7 @@ Modificar `organizations.organization_events`:
 - conserve historial, relación y grants;
 - permita al coach seguir leyendo lo autorizado;
 - bloquee nuevas asignaciones, reprogramaciones, prescripciones, observaciones y correcciones;
-- reactive exactamente el estado anterior cuando el pago se confirme.
+- al confirmar el pago, cierre únicamente el bloqueo comercial que causó esa suspensión y recalcule el estado efectivo vigente.
 
 Actualizar masivamente `planned_sessions.status='paused'` no es suficiente: no distingue la causa, mezcla terminación con falta de pago y no permite reanudar únicamente lo que esa suspensión pausó.
 
@@ -426,12 +426,12 @@ Añadir una entidad de bloqueo reversible. Nombre recomendado:
 - `relationship_id` nullable;
 - `subscription_id` nullable;
 - `source_kind`: `subscription_suspension`, `organization_suspension`;
-- `source_id`;
+- `organization_event_id` nullable;
 - `blocks_future_sessions boolean`;
 - `blocks_professional_contribution boolean`;
 - `started_at`, `ended_at`;
 - `created_by_kind`;
-- unique parcial por fuente mientras está abierto.
+- unique parcial por `subscription_id` y otro por `organization_event_id` mientras están abiertos; `CHECK` exige exactamente una fuente tipada según `source_kind`.
 
 La alternativa de no crear tabla solo es válida si una vista/predicado puede reconstruir históricamente cada periodo desde eventos de suscripción y organización sin ambigüedad. La decisión debe quedar escrita y probada.
 
@@ -443,6 +443,8 @@ La alternativa de no crear tabla solo es válida si una vista/predicado puede re
 - Una asignación conserva `lifecycle='active'`; no pasa a `detached_pending_choice`.
 - Reactivar cierra únicamente el bloqueo de la suscripción correspondiente.
 - Dos fuentes simultáneas —por ejemplo pago y suspensión de organización— deben cerrarse por separado; terminar una no abre mientras la otra siga vigente.
+- El bloqueo no guarda snapshots de grants, relaciones, membresías, asignaciones ni sesiones. Cerrarlo nunca escribe esas entidades: las vuelve a consultar en su estado actual.
+- La reactivación se serializa con terminación de suscripción o relación, revocación de grants, cambios de asignación y otros bloqueos; ante una transición concurrente incompatible falla cerrada y se reintenta desde estado fresco.
 
 ### 10.4 Pruebas
 
@@ -450,9 +452,12 @@ La alternativa de no crear tabla solo es válida si una vista/predicado puede re
 - Coach lee pero no escribe.
 - Persona continúa entrenamiento autónomo y nutrición propia.
 - Sesiones futuras aparecen pausadas; las completadas no cambian.
-- Reactivar recupera contribución sin nuevo consentimiento.
+- Reactivar recupera contribución sin nuevo consentimiento **solo si** el grant, la relación, la membresía y la asignación siguen vigentes.
 - Cerrar un bloqueo no elimina otro vigente.
 - Terminar la relación durante una suspensión aplica la terminación completa y no se revierte al recibir un pago posterior.
+- Revocar un grant o cambiar la asignación/membresía durante la suspensión permanece efectivo después del pago.
+- Una sesión cancelada, iniciada o pasada durante la suspensión no reaparece como futura disponible.
+- Una reactivación concurrente con terminación, revocación u otro bloqueo converge sin restaurar estado anterior.
 
 ## 11. Pagos y Allfit Premium
 
@@ -706,7 +711,7 @@ Cada flujo debe probar concurrencia, timeout después de commit, replay con body
 
 ### 16.1 Integridad
 
-La matriz actual llega a `IX-41`, mientras el plan de Fase 5 todavía ordena implementar `IX-01..35`. Debe renumerarse o ampliar el gate sin perder ninguna invariante.
+La matriz actual llega a `IX-44` y el plan de Fase 5 ordena implementar `IX-01..44`; cualquier invariante nueva debe ampliar ambos sin perder ni renumerar las existentes.
 
 Añadir invariantes para:
 
@@ -802,7 +807,7 @@ Además de los fixtures existentes, Fase 5 debe preparar:
 - coach que conserva lectura y pierde contribución;
 - sesiones futuras efectivamente pausadas;
 - entrenamiento autónomo intacto;
-- reactivación exacta;
+- cierre exacto de la causa sin resurrección de estado;
 - terminación durante suspensión.
 
 ### Avisos y preferencias

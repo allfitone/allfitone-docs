@@ -116,6 +116,8 @@ Studio puede crear una invitación por email o celular con intenciones tipadas:
 
 Cada intención se acepta o rechaza de forma independiente. La aceptación parcial es válida. Términos, políticas, contratos, scopes, pagos y usos secundarios no se aceptan implícitamente mediante la invitación.
 
+Cuando la invitación contiene una intención `service_relationship`, presenta también sus opciones de scope. La persona decide la relación y cada scope de forma independiente en una sola confirmación autenticada. En V1 no existe una solicitud posterior de permisos iniciada por Studio: un scope rechazado o revocado permanece denegado y volver a compartir exige una nueva relación y una nueva aceptación.
+
 Una persona ya registrada en Space acepta la invitación con su cuenta y `person_id` existentes. Nunca se crea otro Fitness ID por entrar a una organización o relación.
 
 ### 5.3 Elegibilidad adulta
@@ -156,6 +158,8 @@ El onboarding `solo_professional` crea una organización `professional_practice`
 
 - La organización puede incorporar staff y otros profesionales sin cambiar de identidad.
 - El número de integrantes se deriva de membresías activas.
+- Toda organización activa tiene exactamente una membresía activa con rol `owner`; esa membresía puede acumular otros roles compatibles.
+- `owner` no se concede ni se revoca mediante la gestión genérica de roles. El autoservicio de transferencia está diferido de V1 y cualquier cambio excepcional debe ejecutarse de forma controlada y atómica por Allfit.
 - No existe un tipo permanente `independent_professional` ni un `is_independent` que gobierne permisos.
 - Una organización operativa no implica por sí sola una persona jurídica.
 
@@ -612,7 +616,11 @@ Durante la suspensión:
 | Grants | Intactos, en estado `active` | Nada. Suspender el servicio **no** es retirar el consentimiento |
 | Asignación | Su versión, revisiones y origen | Nada. **No** pasa a `detached_pending_choice` |
 
-Al confirmarse el pago todo se reanuda sin ninguna aceptación nueva.
+Al confirmarse el pago se cierra únicamente el bloqueo de esa suscripción y se
+recalculan escritura y agenda con el estado vigente. No se restaura un snapshot:
+un grant revocado, una relación terminada, una asignación o membresía cambiada y
+una sesión cancelada, iniciada o pasada no reviven. No hace falta repetir una
+aceptación que siga vigente; si otro bloqueo continúa abierto, su efecto permanece.
 
 ### 16.4 Frontera con la terminación
 

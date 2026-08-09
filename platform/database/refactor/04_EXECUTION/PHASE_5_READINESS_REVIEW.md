@@ -37,7 +37,7 @@ El actor, predicado y superficie de lectura histórica quedaron resueltos el 23 
 Fase 2 quedó recertificada el 28 de julio de 2026 con Nutrición como noveno dominio conceptual, además de `staff`, titular/suplente, Soporte y separación de deberes `A10/A12`.
 La integridad cross-table quedó recertificada mediante ADR-024/027 y una matriz de 35 invariantes con mecanismo y prueba negativa exactos.
 El drift físico de RLS quedó cerrado mediante 27 rutas operación→policy→índice→prueba, contratos separados para grants `active`/`frozen`, siete pruebas físicas `T-PHY-*` y cuatro `T-NUT-PHY-*`.
-El inventario y diccionario físico contienen 116 tablas con ficha individual; `identity.access_sessions` materializa únicamente la sesión técnica de Studio.
+El inventario y diccionario físico contienen 117 tablas con ficha individual; `identity.access_sessions` materializa la sesión técnica de Studio y `planning.service_access_blocks` la suspensión causal sin snapshots.
 La idempotencia durable quedó cerrada el 26 de julio de 2026 separando replay HTTP de 24 h y `Command-Id`, con scope calculado, tombstone mínimo, concurrencia transaccional y diez pruebas `T-IDEM-*`.
 El contrato HTTP contiene OpenAPI 3.1 con 22 paths, 25 operaciones, DTOs cerrados, cookie opaca Studio, ejemplos, caché, URL firmada Space, proxy autenticado Studio, once verificaciones `T-API-*` y catorce `T-NUT-API-*`.
 La gobernanza de verificación y break-glass quedó recertificada con `nutrition_guidance` estándar, `nutrition_intake` restringida y `nutrition_media` prohibida, además de catálogo mínimo, evidencia permitida, conflictos, deberes de 90 días, quorum por sensibilidad, revisión independiente y respuesta ante abuso.
@@ -48,8 +48,8 @@ La gobernanza de verificación y break-glass quedó recertificada con `nutrition
 | --- | --- | --- |
 | Aprobación de diseño | Fases 1, 2, 3 y 4 aprobadas | Cumple |
 | Bloqueos críticos | 8 de 8 P0 resueltos; 0 activos | Cumple |
-| Inventario físico | 116 tablas en ERD, diccionario y catálogo, sin diferencias | Cumple |
-| Fichas físicas | 116 de 116 completas | Cumple |
+| Inventario físico | 117 tablas en ERD, diccionario y catálogo, sin diferencias | Cumple |
+| Fichas físicas | 117 de 117 completas | Cumple |
 | Seguridad RLS | 186 pruebas funcionales/RLS: 73 positivas y 113 negativas | Cumple |
 | Trazabilidad física | 27 rutas `PR-*`; cada `OP-NUT-001..013` aparece una vez con pruebas semánticamente correspondientes | Cumple |
 | Primera rebanada | 22 paths/25 operaciones en OpenAPI y gate contract-first | Cumple |
@@ -107,8 +107,8 @@ La revisión utiliza como fuentes:
 | ADR consolidados | 29 |
 | Escenarios transversales de Fase 2 | 18 |
 | Operaciones V1 inventariadas | 188 |
-| Tablas físicas declaradas | 116 |
-| Fichas físicas individuales | 116 |
+| Tablas físicas declaradas | 117 |
+| Fichas físicas individuales | 117 |
 | Contratos JSONB registrados | 20 |
 | Pruebas RLS documentadas | 186 |
 | Rutas físicas de autorización | 27 |
@@ -354,7 +354,7 @@ ADR-024/027 y [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](../03_PROPOSED_DESIGN/V1_CR
 - `access_events` conserva la excepción de FK dura por particionamiento, pero solo admite `privacy.log_access_event(...)` y un trigger `BEFORE INSERT` valida el contexto;
 - RLS y la API no forman parte de la garantía estructural.
 
-El inventario original de diez brechas se amplió porque la misma clase de defecto también afectaba consentimiento, solicitudes de grant, denegaciones, casos históricos, autoría de claims, continuidad entre relaciones, disposición, invitaciones, eventos organizacionales, break-glass y revisiones. El registro exhaustivo evita resolver solo los ejemplos conocidos.
+El inventario original de diez brechas se amplió porque la misma clase de defecto también afectaba consentimiento, opciones de scope de invitaciones, denegaciones, casos históricos, autoría de claims, continuidad entre relaciones, disposición, invitaciones, eventos organizacionales, break-glass y revisiones. El registro exhaustivo evita resolver solo los ejemplos conocidos.
 
 #### Prueba estructural
 
@@ -378,15 +378,15 @@ La suite queda definida como `T-INT-01..27` más `T-NUT-INT-01..08`. Usa un rol 
 
 #### Resolución
 
-[`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](../03_PROPOSED_DESIGN/V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md) compila las 150 operaciones en 27 rutas `PR-*`. Cada ruta declara recurso físico, columnas de enlace, join/predicado, proyección, índices y familias de pruebas. Las expresiones “vía”, “hereda” y “relación visible” ya no constituyen especificaciones por sí solas.
+[`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](../03_PROPOSED_DESIGN/V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md) compila el catálogo vigente de operaciones en 27 rutas `PR-*`. Cada ruta declara recurso físico, columnas de enlace, join/predicado, proyección, índices y familias de pruebas. Las expresiones “vía”, “hereda” y “relación visible” ya no constituyen especificaciones por sí solas.
 
 Los siete huecos originales se cerraron así:
 
-1. `scope_code` se denormaliza en `grant_requests`, `consent_events` y `data_grants`, únicamente porque participa en autorización.
+1. `scope_code` se denormaliza en `invitation_scope_options`, `consent_events` y `data_grants`, únicamente porque participa en autorización.
 2. `(scope_definition_id,scope_code)` referencia la clave portadora de `scope_definitions`, por lo que código y versión no pueden divergir.
 3. `consent_events` transporta y prueba la tupla exacta persona/relación/organización/definición/scope; `data_grants` la referencia completa.
 4. Un único parcial sobre `(relationship_id,scope_code) WHERE status IN ('active','frozen')` impide dos grants efectivos de versiones distintas.
-5. `privacy.grant_consent`, `privacy.revoke_grant` y `relationships.terminate_relationship` son entradas cerradas; el trigger de transición gobierna `frozen_at`, `revoked_at` y prohíbe reactivación.
+5. `identity.decide_invitation_intent`, `privacy.revoke_grant` y `relationships.terminate_relationship` son entradas cerradas; el trigger de transición gobierna `frozen_at`, `revoked_at` y prohíbe reactivación.
 6. `access_control.grant_of` resuelve solo `active`; `access_control.frozen_grant_of` resuelve solo `frozen`. `access_control.can_access` y `access_control.can_read_frozen` no comparten lookup.
 7. `privacy.access_events` solo es visible directamente al sujeto y solo admite `privacy.log_access_event`; `A10` y `A12` usan superficies de soporte distintas y restringidas.
 
@@ -671,7 +671,7 @@ Una regla derivada debe enlazar a la fuente, no volver a presentarse como decisi
 | Grant efectivo | Una versión congelada | Unique permitía versiones efectivas paralelas | **Resuelto — único parcial `(relationship_id,scope_code)` para `active/frozen`** |
 | Índice de grant | RLS usa `scope_code` | La columna estaba ausente | **Resuelto — denormalización protegida por FK `(scope_definition_id,scope_code)`** |
 | Consent event | RLS usa org/scope | La ficha no los contenía | **Resuelto — evento porta la tupla exacta y el grant la referencia por FK compuesta** |
-| Integridad tenant/persona | Constraints en PostgreSQL | Varias reglas dependían solo de API/RLS | **Resuelto — ADR-024/027, `IX-01..35`, FKs compuestas y triggers guardianes** |
+| Integridad tenant/persona | Constraints en PostgreSQL | Varias reglas dependían solo de API/RLS | **Resuelto — ADR-024/027, `IX-01..44`, FKs compuestas y triggers guardianes** |
 | Idempotencia offline | Borrador durable | Registro de replay duraba 24 h | **Resuelto — `Command-Id`, tombstone durable, scope y `T-IDEM-01..10`** |
 | Diccionario completo | 99 fichas exactas | Había tablas agrupadas, Nutrición ausente y JSON pendiente | **Resuelto — fichas individuales + catálogo físico/JSONB** |
 | Toda referencia tiene FK | Estándar lo exige | Auditoría/outbox usan referencias lógicas | **Resuelto para P0-05 — `access_events` protegido por `IX-23`; `outbox.aggregate_id` es sobre opaco no autoritativo escrito solo por función tipada** |
@@ -689,7 +689,7 @@ Una regla derivada debe enlazar a la fuente, no volver a presentarse como decisi
 | `D-007` | Aprobadores de break-glass | **A10 solicita/ejerce; uno o dos A12 distintos aprueban según sensibilidad; otro A12 revisa; expiración y abuso cerrados por ADR-026** | 26 de julio de 2026 |
 | `D-011` | Mecanismo por invariante cruzada | **35 invariantes: FK compuesta por defecto; constraint trigger diferible para estado/target/familia; entrada cerrada para auditoría particionada** | 28 de julio de 2026 |
 | `D-013` | Contrato físico de RLS | **27 rutas `PR-*`, grants live/frozen separados, proyecciones cerradas, índices obligatorios, `T-PHY-01..07` y `T-NUT-PHY-01..04`** | 28 de julio de 2026 |
-| `D-014` | Inventario y contratos físicos | **116 fichas; tipos compartidos; nombres determinísticos; 20 JSONB versionados; UUIDv7/particiones y `T-SCHEMA-01..06`** | 6 de agosto de 2026 |
+| `D-014` | Inventario y contratos físicos | **117 fichas; tipos compartidos; nombres determinísticos; 20 JSONB versionados; UUIDv7/particiones y `T-SCHEMA-01..06`** | 6 de agosto de 2026 |
 | `D-010` | Alcance de idempotencia durable | **ADR-025: replay HTTP 24 h + `Command-Id` durable; scope de servidor, terminalidad transaccional, disposición y `T-IDEM-01..10`** | 26 de julio de 2026 |
 | `D-012` | Esquema exacto de DTOs/OpenAPI | **OpenAPI 3.1 canónico para 22 paths/25 operaciones; sesión opaca Studio, DTOs self/profesional separados, autoría mínima, caché, URL firmada Space, proxy Studio y `T-API-01..11` + `T-NUT-API-01..14`** | 6 de agosto de 2026 |
 | `D-015` | Nutrición en V1 | **ADR-027: registro manual y guía profesional no clínica; ocho tablas, tres scopes, autoridad verificada, frozen minimizado y cero legado Factory Fitness** | 28 de julio de 2026 |
@@ -859,7 +859,7 @@ Para la baseline revisada el 28 de julio, la Fase 5 quedó en **GO** y satisfizo
 - [x] Las propuestas se ordenan por columnas físicas `(created_at DESC,id DESC)`.
 - [x] Una respuesta profesional no admite `rationale` ausente, nulo, vacío ni mayor de 2000 caracteres.
 - [x] `OP-NUT-013` conserva `404` indistinguible tras revocación; el `403 scope-required` general no se aplica al proxy de foto.
-- [x] ERD, diccionario y catálogo coinciden en 116 tablas; OpenAPI coincide en 22 paths/25 operaciones.
+- [x] ERD, diccionario y catálogo coinciden en 117 tablas; OpenAPI coincide en 22 paths/25 operaciones.
 - [x] No existe artefacto de migración, compatibilidad o datos de Factory Fitness.
 
 ## 15. Criterio de cierre de Fase 5
@@ -894,7 +894,7 @@ Comenzar Fase 5 no equivale a aprobarla. Su cierre requiere además:
 
 | Documento | Acción |
 | --- | --- |
-| `README.md` | Dimensiones vigentes 9/11/116/7/188/22/25 reflejadas |
+| `README.md` | Dimensiones vigentes 9/11/117/7/188/22/25 reflejadas |
 | `ALLFIT_ARCHITECTURE_DECISIONS.md` | ADR-027 incorpora Nutrición; ADR-026 conserva gobernanza de verificación/break-glass; todavía formalizar rol legal |
 | `ALLFIT_DOMAIN_GLOSSARY.md` | Comida, objetivo nutricional, guía y foto definidos; terminación, caso histórico y edad alineados |
 | `V1_DATABASE_SCOPE.md` | Nutrición no clínica incluida y legado Factory Fitness excluido |
@@ -909,10 +909,10 @@ Comenzar Fase 5 no equivale a aprobarla. Su cierre requiere además:
 | `V1_DEGRADATION_AND_RECOVERY_MATRIX.md` | Alertas/suspensión/revisión break-glass alineadas; todavía aprobar objetivos y aclarar encolar versus entregar notificaciones |
 | `V1_IDEMPOTENCY_CONTRACT.md` | Scope, receipt, retención, concurrencia, disposición y `T-NUT-IDEM-01..06` incorporados |
 | `POSTGRES_MODELING_STANDARD.md` | Diez schemas, FKs, claves portadoras, triggers diferibles, greenfield e identidad durable definidos |
-| `V1_LOGICAL_ERD.md` | Conteo 116, schema `nutrition`, sesión técnica, tipos e idempotencia recertificados |
-| `V1_DATA_DICTIONARY.md` | 116 fichas, incluida `identity.access_sessions` |
+| `V1_LOGICAL_ERD.md` | Conteo 117, schema `nutrition`, sesión técnica, bloqueo causal, tipos e idempotencia recertificados |
+| `V1_DATA_DICTIONARY.md` | 117 fichas, incluidas `identity.access_sessions` y `planning.service_access_blocks` |
 | `V1_PHYSICAL_OBJECT_CATALOG.md` | Nueva fuente normativa de inventario, objetos, JSONB, particiones y `T-SCHEMA-*` |
-| `V1_CROSS_TABLE_INTEGRITY_MATRIX.md` | `IX-01..35`, incluidos ocho invariantes nutricionales, recertificados |
+| `V1_CROSS_TABLE_INTEGRITY_MATRIX.md` | `IX-01..44`, incluidos invariantes nutricionales, comerciales y de soporte, recertificados |
 | `DATABASE_REFACTOR_PHASES.md` | Orden DDL, fixtures, flujo nutricional y suites `T-NUT-*` incorporados |
 | `01_CURRENT_STATE/*` | Evidencia histórica únicamente; no es fuente de migración ni de datos |
 

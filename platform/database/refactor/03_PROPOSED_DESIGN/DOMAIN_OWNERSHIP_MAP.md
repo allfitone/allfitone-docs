@@ -65,7 +65,7 @@ También custodia el sobre de invitación previo al registro. La invitación per
 | Credencial, contraseña, MFA, sesión o token | WorkOS AuthKit / infraestructura de autenticación | WorkOS AuthKit autentica; Allfit solo conserva el vínculo estable con el sujeto externo |
 | Organización, sede, membresía y rol interno | Organizaciones | Son contexto operativo, no identidad personal |
 | Relación profesional-persona | Relaciones | “Cliente” es un rol contextual, no una segunda persona |
-| Consentimiento, grant o definición de scope | Privacidad | El acceso compartido no forma parte de la identidad ni nace de una invitación |
+| Consentimiento, grant o definición de scope | Privacidad | El acceso compartido no forma parte de la identidad. La invitación solo transporta opciones; Privacidad materializa decisiones y grants cuando la persona las confirma autenticadamente |
 | Programa, plantilla, asignación o sesión planificada | Planificación | Son activos y hechos de planificación vinculados a la persona |
 | Sesión ejecutada, intento o resultado | Ejecución | Forman historial de la persona, pero su fuente de verdad es Ejecución |
 | Nota privada profesional u organizacional | Relaciones u Organizaciones, según finalidad | Referirse a una persona no incorpora la nota a su Fitness ID |
@@ -360,6 +360,8 @@ Los espacios, recursos reservables y horarios de clases no forman parte de “Se
 
 Cerrar una organización no elimina automáticamente personas, perfiles profesionales, Fitness IDs, relaciones, programas asignados o ejecuciones. Cada dominio aplica su propio flujo de terminación y disposición, preservando la persona y la evidencia bilateral mínima cuando corresponda.
 
+La suspensión operativa/comercial de una organización se representa como una causa separada. Levantarla cierra solo esa causa y cada dominio recalcula desde sus fuentes vigentes: no reactiva membresías, relaciones, grants, asignaciones, suscripciones o sesiones que cambiaron mientras estuvo suspendida, ni neutraliza otro bloqueo abierto.
+
 ### 4.9 Flujos organizacionales
 
 ```mermaid
@@ -502,7 +504,7 @@ Estas decisiones deberán cerrarse sin alterar los límites anteriores:
 
 - nombres físicos y constraints para organización, sede, membresía, rol y capacidad;
 - catálogo V1 exacto de roles y capacidades, y si admite roles personalizados desde la baseline;
-- reglas de transferencia de ownership administrativo y protección del último owner;
+- mecanismo físico para exigir exactamente un owner activo por organización activa; la cardinalidad y la exclusión de `owner` de la gestión genérica ya están resueltas, mientras el autoservicio de transferencia sigue diferido;
 - representación tipada de persona natural o jurídica responsable y sus datos legales mínimos;
 - transiciones permitidas entre tipos y estados organizacionales;
 - jerarquía, alcance por sede o delegación de roles, si existe un caso V1 real;
@@ -654,7 +656,7 @@ flowchart TD
     rejected["Rechazada/expirada<br/>sin relación"]
     relation["Relación materializada"]
     professional["Profesional asignado efectivamente"]
-    grants["Grants aceptados por separado"]
+    grants["Scopes decididos por separado<br/>en la misma confirmación"]
     gate{"Todos los requisitos vigentes"}
     access["Acceso mínimo permitido"]
     deny["Denegar y auditar"]
@@ -676,7 +678,7 @@ flowchart TD
 2. Identidad conserva la intención sin crear una relación provisional.
 3. La persona elegible decide la intención de forma autenticada.
 4. Relaciones materializa como máximo un vínculo por intención aceptada y válida.
-5. Aceptar el vínculo no acepta programa, términos, contrato o scopes.
+5. La persona decide el vínculo, el programa y cada scope por separado dentro de la misma confirmación; aceptar el vínculo no acepta automáticamente ninguno de los demás.
 6. Una intención de programa solo puede materializarse si su relación dependiente fue aceptada.
 
 #### Relación sin grants de entrenamiento
@@ -829,7 +831,7 @@ En V1 solo la propia persona adulta concede o rechaza permisos sobre su Fitness 
 
 - definiciones publicadas, inmutables y versionadas de scopes;
 - clasificación de categorías, recursos, campos y derivados;
-- solicitudes y decisiones explícitas de consentimiento;
+- opciones de scope presentadas con la intención de relación y decisiones explícitas de consentimiento;
 - evidencia append-only de concesión, rechazo, revocación, expiración o reemplazo;
 - grants efectivos vinculados a persona, relación, organización, propósito y versión exacta de scope;
 - niveles de acceso separados del scope y de las capacidades organizacionales;
@@ -849,7 +851,7 @@ En V1 solo la propia persona adulta concede o rechaza permisos sobre su Fitness 
 | Persona, cuenta, perfil o dato fitness original | Identidad, Planificación o Ejecución | Privacidad decide acceso y disposición; no se convierte en fuente del dato protegido |
 | Organización, membresía, rol o capacidad | Organizaciones | Son condiciones de actor y operación, no consentimiento |
 | Relación y asignación profesional | Relaciones | Definen contexto y actores; no conceden categorías de datos |
-| Invitación o aceptación de una intención | Identidad | Aceptar invitación, membresía, relación o programa no acepta scopes |
+| Invitación o aceptación de una intención | Identidad | Identidad transporta y coordina la confirmación; cada scope sigue siendo una decisión independiente cuya evidencia y grant pertenecen a Privacidad |
 | Programa, sesión o resultado | Planificación o Ejecución | El grant referencia categorías y recursos sin copiarlos |
 | Términos generales, política de privacidad o aceptación contractual | Dominio legal/compliance correspondiente | Tienen texto, finalidad y evidencia propias; no son grants de coaching |
 | Contrato, orden, factura, pago o membresía comercial | Dominio futuro de comercio | Su base y retención no se modelan como consentimiento de Fitness ID |
@@ -860,12 +862,12 @@ En V1 solo la propia persona adulta concede o rechaza permisos sobre su Fitness 
 
 Estos conceptos no son intercambiables:
 
-- **Solicitud de consentimiento:** presentación de una decisión a la persona; no concede acceso.
+- **Opción de scope presentada:** propuesta versionada ligada a una intención de relación; no concede acceso y no existe como solicitud posterior sobre una relación activa.
 - **Evento de consentimiento:** evidencia inmutable de qué decidió la persona, sobre qué texto, definición, finalidad, destinatario, canal y momento.
 - **Grant:** autorización efectiva derivada de una concesión válida; puede vencer, revocarse o ser reemplazada.
 - **Evaluación de acceso:** decisión en tiempo de ejecución que combina el grant con relación, asignación, organización, membresía, capacidad, procedencia y denegaciones.
 
-Un rechazo conserva evidencia, pero no produce un grant. Volver a conceder después de rechazar o revocar crea nuevos eventos y una nueva vigencia; nunca borra o reabre silenciosamente la decisión anterior.
+Un rechazo conserva evidencia, pero no produce un grant. Después de rechazar o revocar, volver a compartir exige una relación nueva y otra aceptación completa; nunca se reabre la decisión anterior ni se crea una solicitud posterior desde Studio.
 
 La evidencia de consentimiento identifica:
 
@@ -1050,8 +1052,9 @@ flowchart TD
 1. La UI presenta parte responsable, organización, propósito, scope, versión, campos materiales, nivel de acceso, vigencia y efecto de negar/revocar.
 2. No existen casillas premarcadas, inactividad como aceptación ni `accept_all`.
 3. La persona decide cada scope independientemente.
-4. Privacidad registra el evento y materializa únicamente grants concedidos.
+4. La relación y todos sus scopes se confirman en una sola acción autenticada; Privacidad registra un evento por opción y materializa únicamente grants concedidos.
 5. Aceptar uno no concede los demás ni usos secundarios.
+6. Studio no puede iniciar otra solicitud de permisos para una relación ya activa.
 
 #### Reasignación profesional interna
 
@@ -1121,7 +1124,7 @@ Los plazos concretos y textos de consentimiento requieren validación jurídica 
 
 ### 6.16 Invariantes de Privacidad
 
-1. Aceptar una invitación, membresía, relación o programa no concede ningún scope.
+1. Aceptar una invitación, membresía, relación o programa no concede automáticamente ningún scope; cada scope se decide explícitamente en la misma confirmación de la relación.
 2. Cada scope se decide independientemente y la denegación es el estado por defecto.
 3. No existe `all_data`, casilla premarcada, consentimiento por inactividad o `accept_all`.
 4. Todo grant de servicio referencia persona, relación, organización, propósito y definición exacta de scope.
@@ -3126,7 +3129,7 @@ Un hold de seguridad documentado puede suspender la disposición de targets conc
 | Cliente provisional en Relaciones | No ocurre: la intención permanece en Identidad hasta ser aceptada |
 | Membresía provisional en Organizaciones | No ocurre: el rol propuesto no es un miembro efectivo |
 | Asignación provisional en Planificación | No ocurre: se referencia programa/versión sin crear asignación |
-| Grant implícito en Privacidad | No ocurre: la invitación no contiene ni concede scopes |
+| Grant implícito en Privacidad | No ocurre: la invitación contiene opciones de scope, pero solo la decisión autenticada de cada una produce evidencia y, si se concede, un grant |
 | Lead CRM confundido con Fitness ID | No ocurre: un lead eventual conserva identidad y finalidad de CRM separadas |
 | Persona duplicada si el contacto ya existe | No ocurre en el estado pendiente; el enlace futuro exige autenticación y reutilización canónica |
 
@@ -3149,7 +3152,7 @@ Demostrar que una persona adulta nueva puede completar personalmente su registro
 #### Precondiciones
 
 - Existe una invitación `client_invitation` vigente dirigida al contacto de la persona.
-- La invitación contiene una intención `service_relationship` y una intención opcional `program_assignment` dependiente de la primera.
+- La invitación contiene una intención `service_relationship`, sus opciones de scope y una intención opcional `program_assignment` dependiente de la primera y del scope mínimo requerido.
 - La organización, el profesional responsable, su membresía y su capacidad siguen vigentes.
 - El programa y la versión exacta presentados permanecen identificables; rechazarlos no requiere crear una copia o asignación.
 - La persona todavía no tiene cuenta local, `person_id` o Fitness ID.
@@ -3163,12 +3166,12 @@ Demostrar que una persona adulta nueva puede completar personalmente su registro
 | Términos de plataforma y política de privacidad | Aceptados mediante evidencia propia de onboarding | Permiten completar el registro; no son una intención de invitación |
 | `service_relationship` | Aceptada | Relaciones crea el vínculo y la asignación del profesional responsable |
 | `program_assignment` | Rechazada | Planificación no crea asignación, calendario, sesiones ni snapshot |
-| Scopes o grants de datos | No presentados en esta operación | Continúan denegados por defecto |
+| Opciones de scope presentadas | Todas rechazadas individualmente | Se registra cada rechazo y no se crea ningún grant |
 | Contrato, compra, pago, marketing, publicación o IA | No presentados | No se crea evidencia ni autorización implícita |
 
 #### Resultado esperado
 
-Al finalizar existen una persona canónica, una cuenta local, un Fitness ID y una relación de servicio con su profesional responsable. La invitación queda `completed` porque todas sus intenciones fueron decididas, aunque no todas fueron aceptadas. La intención de programa queda `rejected` y no existe asignación. La relación no concede acceso a perfil, planificación, sesiones o resultados mientras no haya grants separados.
+Al finalizar existen una persona canónica, una cuenta local, un Fitness ID y una relación de servicio con su profesional responsable. La invitación queda `completed` porque todas sus intenciones y opciones fueron decididas, aunque no todas fueron aceptadas. La intención de programa queda `rejected`, no existe asignación y los rechazos de scope dejan bloqueado el acceso a perfil, planificación, sesiones o resultados.
 
 #### Recorrido de extremo a extremo
 
@@ -3189,14 +3192,14 @@ sequenceDiagram
     Person->>Identity: Elegibilidad, términos y onboarding
     Identity->>Identity: Preparar persona + cuenta + Fitness ID
     Identity-->>Person: Presentar cada intención por separado
-    Person->>Identity: Aceptar relación y rechazar programa
+    Person->>Identity: Confirmar relación, rechazar programa y rechazar cada scope
     Identity->>Organizations: Revalidar organización, profesional y capacidad
     Organizations-->>Identity: Contexto vigente
     Identity->>Relations: Materializar relación aceptada idempotentemente
     Relations->>Relations: Crear vínculo + asignación profesional efectiva
     Identity->>Identity: Registrar programa rechazado sin materializar
     Note right of Planning: No recibe comando, asignación ni calendario
-    Note right of Privacy: No recibe decisión y el acceso se deniega por defecto
+    Identity->>Privacy: Registrar rechazos de scope sin crear grants
     Identity->>Identity: Guardar decisiones y completar invitación
     Identity-->>UI: Registro completado con resultado parcial explícito
 ```
@@ -3329,7 +3332,7 @@ Cuando todas las intenciones quedaron decididas:
 | Asignación profesional | Relaciones | Creada para el responsable presentado | Organización administra; persona y profesional son sujetos afectados |
 | Programa/versión | Planificación | El master preexistente no cambia | Owner original definido por Planificación |
 | Asignación de programa | Planificación | No creada | No aplica |
-| Grants/eventos de consentimiento | Privacidad | No creados | No aplica; denegación por defecto |
+| Grants/eventos de consentimiento | Privacidad | Un evento de rechazo por opción; ningún grant | Persona decide; Privacidad custodia evidencia |
 | Compra/pago/contrato comercial | Dominio futuro | No creados | No aplica |
 
 #### Matriz de autorización resultante
@@ -3391,7 +3394,7 @@ Si el onboarding personal ya quedó completado mediante una operación independi
 | Intención de programa rechazada | Vencimiento de evidencia | Se elimina metadata transitoria y conserva solo evidencia mínima cuando exista finalidad |
 | Relación/asignación profesional | Pausa o terminación efectiva | Se corta autoridad, se retiene evidencia bilateral mínima y se inicia disposición aplicable |
 | Programa master referenciado en rechazo | Retiro o nueva versión | No cambia la decisión histórica ni crea derechos sobre el master |
-| Grants inexistentes | Cualquier cambio de la relación | Nada que revocar; para compartir datos se requiere una decisión futura separada |
+| Grants inexistentes | Cualquier cambio de la relación | Nada que revocar; para compartir datos se requiere una relación nueva con otra aceptación de scopes |
 
 Revocar posteriormente el sobre completado no deshace la relación materializada. Esa relación tiene su propio ciclo bilateral y debe pausarse o terminarse mediante Relaciones. La intención rechazada nunca llega a ese ciclo porque no produjo entidad.
 
@@ -3411,7 +3414,7 @@ Revocar posteriormente el sobre completado no deshace la relación materializada
 
 #### Rama complementaria — Ecosistema vinculado de extremo a extremo
 
-El recorrido anterior prueba que aceptar una relación y rechazar el programa crea únicamente la relación. El flujo vertical obligatorio también exige comprobar la rama complementaria en la que la persona acepta relación y programa, concede solo el scope necesario, ejecuta una sesión y permite una consulta profesional autorizada.
+El recorrido anterior prueba que una sola confirmación puede aceptar la relación y rechazar programa y scopes sin crear grants. El flujo vertical obligatorio también exige comprobar la rama complementaria en la que esa misma confirmación acepta relación y programa, concede solo el scope necesario, ejecuta una sesión y permite una consulta profesional autorizada.
 
 Esta rama parte de otra invitación/persona de prueba con decisiones independientes:
 
@@ -3438,10 +3441,10 @@ sequenceDiagram
     participant Execution as "Ejecución"
     participant API as "API / autorización"
 
-    Person->>Identity: Completar onboarding y aceptar relación/programa
+    Person->>Identity: Confirmar relación, programa y decisiones de scopes
     Identity->>Relations: Materializar relación aceptada
+    Identity->>Privacy: Crear eventos y solo el grant relationship_training/v1
     Identity->>Planning: Materializar programa aceptado sobre versión exacta
-    Person->>Privacy: Conceder relationship_training/v1 y rechazar otros scopes
     Planning->>Planning: Generar sesión planificada + snapshot
     Person->>Execution: Ejecutar sesión vinculada como intento
     Execution->>Execution: Finalizar y validar resultados tipados
@@ -3603,9 +3606,9 @@ La persona recibe las mismas garantías del escenario anterior:
 - el programa apunta a una versión exacta e inmutable;
 - la dependencia del programa respecto de la relación es visible;
 - no existe `accept_all` ni selección premarcada;
-- términos, grants, pagos y usos secundarios quedan fuera.
+- términos, pagos y usos secundarios quedan fuera; los scopes de la relación se presentan como decisiones independientes en la misma confirmación.
 
-En este recorrido la persona acepta ambas intenciones. Aceptar el programa no convierte la relación en un grant y aceptar la relación no comparte automáticamente lo que ya existía en el Fitness ID.
+En este recorrido la persona acepta ambas intenciones y rechaza todas las opciones de scope en la misma confirmación. Aceptar el programa no convierte la relación en un grant y aceptar la relación no comparte automáticamente lo que ya existía en el Fitness ID.
 
 #### Paso 5 — Materialización de la relación
 
@@ -3638,7 +3641,7 @@ La aceptación autoriza recibir esa prescripción concreta. No autoriza por sí 
 
 #### Paso 7 — Ausencia de compartición retroactiva
 
-Privacidad mantiene denegación por defecto porque no se presentó ningún scope. En particular:
+Privacidad mantiene denegación porque la persona rechazó todos los scopes presentados. En particular:
 
 - `relationship_training` no existe;
 - `prior_training_history` no existe;
@@ -3647,7 +3650,7 @@ Privacidad mantiene denegación por defecto porque no se presentó ningún scope
 - frecuencia cardiaca, GPS, biometría y wearables continúan fuera;
 - Studio no puede precargar el nuevo vínculo con datos personales históricos.
 
-Incluso si en el futuro la persona concede `relationship_training`, ese scope no incorpora automáticamente sesiones autónomas o historial previo. Cada categoría y finalidad conserva su definición y versión exactas.
+Para compartir en el futuro se requiere una relación nueva y otra aceptación. Aunque entonces conceda `relationship_training`, ese scope no incorpora automáticamente sesiones autónomas o historial previo: cada categoría y finalidad conserva su definición y versión exactas.
 
 #### Paso 8 — Completitud e integración del Fitness ID
 
@@ -4015,7 +4018,7 @@ Un programa creado por el fundador bajo la organización puede seguir siendo act
 | Miembro pertenece también a un gimnasio | Usa el mismo `person_id`/perfil con membresías, clientes y permisos separados |
 | Conteo vuelve a una sola membresía | La práctica sigue siendo la misma; no reactiva un modo o tipo “independiente” |
 
-Las reglas exactas para proteger al último owner, transferir administración y aplicar límites comerciales permanecen diferidas. Deben resolverse sin convertir tamaño, plan SaaS o rol en identidad organizacional.
+La cardinalidad está resuelta: toda organización activa tiene exactamente una membresía activa con rol `owner`, y la gestión genérica no puede otorgarlo, retirarlo ni terminar esa membresía. El autoservicio de transferencia y los límites comerciales permanecen diferidos; un cambio excepcional de owner debe ser controlado por Allfit, atómico y mantener exactamente uno al confirmar, sin convertir tamaño, plan SaaS o rol en identidad organizacional.
 
 #### Ciclo de vida y disposición
 

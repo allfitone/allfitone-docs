@@ -57,7 +57,7 @@ Para cada concepto se responden las mismas siete preguntas:
 - Space y Studio son independientes funcionalmente, pero comparten en V1 identidad y persistencia autoritativa; independencia no promete tolerancia física separada.
 - Booking/clases, marketplace, conectores de wearables, IA, comunidad y publicación pública son capacidades diferidas sin DDL en la baseline V1.
 - El **plan comercial** que una persona le paga a su gimnasio entra a V1 por DT-017: suscripción recurrente mensual o anual, con la plata yendo directo a la cuenta de pasarela de la organización. Allfit refleja el estado; no cobra, no gira y no almacena datos de tarjeta.
-- La falta de pago **suspende de forma indefinida y nunca termina**: los grants no se tocan, el programa no se desacopla y el coach conserva la lectura pero pierde la escritura.
+- La falta de pago **suspende de forma indefinida y nunca termina**: los grants no se tocan, el programa no se desacopla y el coach conserva la lectura pero pierde la escritura. Reactivar solo elimina el bloqueo comercial exacto y recalcula el estado vigente; nunca restaura un snapshot ni revive permisos, relaciones, asignaciones, membresías o sesiones obsoletas.
 - V1 conserva catálogo global mínimo y contenido privado de entrenamiento; “contenido existente” no significa “publicable en marketplace”.
 - `sensor_enriched` valida la extensibilidad del contrato de resultados, pero no incorpora conectores ni raw streams productivos.
 - Los fallos locales se aíslan por contrato, recursos y colas; autorización, consentimiento, capacidad y dinero nunca dependen de caché obsoleta.
@@ -80,7 +80,7 @@ Para cada concepto se responden las mismas siete preguntas:
 
 ### Implicación para la BD
 
-`identity.invitations` referencia a la organización y al actor emisor, pero no requiere `person_id`. `identity.invitation_intents` contiene propuestas tipadas de `organization_membership`, `service_relationship` o `program_assignment` con estados independientes y referencias verificables. Un RPC/backend transaccional crea/vincula la persona y materializa únicamente intenciones aceptadas cuyas dependencias se cumplen, después de resolver la elegibilidad adulta. El registro directo en Space usa el mismo onboarding de identidad sin crear invitación ni intenciones. Términos, grants, contratos y pagos producen aceptaciones separadas.
+`identity.invitations` referencia a la organización y al actor emisor, pero no requiere `person_id`. `identity.invitation_intents` contiene propuestas tipadas de `organization_membership`, `service_relationship` o `program_assignment` con estados independientes y referencias verificables. Una intención de relación agrupa opciones de scope normalizadas en Privacidad. Un RPC/backend transaccional crea/vincula la persona y, en una sola confirmación, materializa únicamente intenciones y scopes aceptados cuyas dependencias se cumplen. El registro directo en Space usa el mismo onboarding de identidad sin crear invitación ni intenciones. Términos, contratos y pagos conservan decisiones separadas.
 
 ---
 
@@ -246,10 +246,10 @@ La relación debe apuntar a personas, profesional y organización contextual; lo
 | --- | --- |
 | **1. ¿Qué es?** | Una autorización explícita y auditable mediante la cual una persona permite a un destinatario acceder o usar categorías concretas de datos para un propósito y periodo definidos. |
 | **2. ¿Qué no es?** | No es la política RLS, la relación profesional, la aceptación genérica de términos, una membresía ni un permiso permanente para ver todo. RLS aplica técnicamente la decisión; no la reemplaza. |
-| **3. ¿Quién lo crea?** | La persona o representante legal autorizado concede o rechaza. Un profesional/organización puede solicitarlo y el sistema registra evidencia, versión del texto, canal, actor y momento. |
+| **3. ¿Quién lo crea?** | La propia persona adulta concede o rechaza cada opción presentada con una nueva relación; el sistema registra evidencia, versión del texto, canal, actor y momento. Studio no puede solicitar permisos después sobre una relación activa. |
 | **4. ¿Quién es dueño del dato?** | La persona controla el grant sobre sus datos. En servicios V1, la evidencia identifica a la parte responsable y la organización operativa de la relación; los profesionales asignados son actores autorizados, no destinatarios independientes. Allfit conserva evidencia y auditoría. |
-| **5. ¿Puede existir sin Auth?** | No. La invitación puede anticipar una solicitud, pero el consentimiento efectivo solo existe cuando la persona registrada realiza una acción autenticada y auditable. Nunca se activa por el envío de una invitación. |
-| **6. ¿Cuál es su ciclo de vida?** | Solicitado → concedido o rechazado → revocado/expirado/reemplazado. Los eventos son append-only; una revocación no borra la evidencia. Una reasignación dentro de la misma parte responsable conserva el grant y cambia sus actores autorizados; cambiar organización, responsable, finalidad o scope exige otro consentimiento. |
+| **5. ¿Puede existir sin Auth?** | No. La invitación puede transportar opciones de scope, pero el consentimiento efectivo solo existe cuando la persona registrada las decide mediante una acción autenticada y auditable. Nunca se activa por el envío de la invitación. |
+| **6. ¿Cuál es su ciclo de vida?** | Presentado con una relación → concedido o rechazado → revocado/expirado/reemplazado. Los eventos son append-only; una revocación no borra la evidencia. Una reasignación dentro de la misma parte responsable conserva el grant y cambia sus actores autorizados; cambiar organización, responsable, finalidad o scope exige relación y consentimiento nuevos. |
 | **7. Ejemplos y contraejemplos** | **Ejemplo:** compartir resultados de sesiones asignadas mediante `relationship_training`, sin compartir historial previo ni métricas corporales. **Contraejemplo:** “aceptó al coach, por tanto ve todo el Fitness ID”. |
 
 ### Implicación para la BD

@@ -64,7 +64,7 @@ Un actor no es un rol ni un permiso: es el sujeto autenticado desde el que se ev
 | `A2` Persona | `PERSON` activa con Fitness ID. Sujeto de Space | No |
 | `A3` Profesional coach | `PERSON` con `PROFESSIONAL_PROFILE` que opera mediante `ORGANIZATION_MEMBERSHIP` vigente con rol `coach` | No |
 | `A4` Admin de organización | Membresía vigente con rol `admin` | No |
-| `A5` Owner de organización | Membresía vigente con rol `owner`. Único que transfiere ownership y cierra la organización | No |
+| `A5` Owner de organización | La única membresía activa de la organización con rol `owner`. Puede cerrar la organización; la transferencia en autoservicio está diferida de V1 | No |
 | `A6` Staff | Membresía vigente con rol `staff`. Gestiona invitaciones y directorio; nunca datos fitness | No |
 | `A7` Profesional suplente | `A3` con una suplencia aceptada por la persona y vigente dentro de una relación | No |
 | `A8` Backend | La API actuando en nombre de un actor humano. No es un actor autónomo: siempre porta un sujeto | N/A |
@@ -98,7 +98,7 @@ Cuando una ficha dice **`FÓRMULA`** en filtros obligatorios, se refiere a estas
 
 | Rol | Capacidades |
 | --- | --- |
-| `owner` | Todas las de `admin`, más transferir ownership y cerrar la organización. Protegido: una organización nunca queda con cero owners |
+| `owner` | Todas las de `admin`, más cerrar la organización. Protegido: toda organización activa tiene exactamente una membresía activa con este rol; el flujo genérico de roles no puede otorgarlo ni retirarlo |
 | `admin` | Gestionar sedes, membresías, roles, invitaciones, relaciones, asignación de profesionales, terminación de relaciones y casos históricos mediante `manage_historical_access`. Esta capacidad administra casos y **no** concede lectura |
 | `coach` | Crear y publicar contenido, asignar programas, ejercer grants sobre las personas que tiene asignadas, observar y proponer correcciones. `guide_nutrition` puede asociarse al rol, pero solo es efectivo con credencial `nutrition_professional` verificada |
 | `staff` | Crear invitaciones y consultar el directorio de personas relacionadas con la organización: nombre, estado de relación y estado de invitación. **Ningún** dato fitness, de perfil, de ejecución, corporal o de salud |
@@ -392,14 +392,14 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Tipo** | Comando |
 | **Superficie** | `POST /space/v1/invitations/{token}/decisions` |
 | **Actor** | `A2` |
-| **Filtros obligatorios** | Invitación vigente, no revocada, no vencida, y dirigida al contacto verificado de la persona autenticada. Cada `INVITATION_INTENT` se decide por separado |
-| **Transacción** | Una sola por decisión aceptada: materializar **como máximo un destino** por intención (`ORGANIZATION_MEMBERSHIP`, `SERVICE_RELATIONSHIP` o `PROGRAM_ASSIGNMENT`) validando sus dependencias. Las intenciones rechazadas conservan la decisión sin crear nada |
+| **Filtros obligatorios** | Invitación vigente, no revocada, no vencida, y dirigida al contacto verificado de la persona autenticada. Cada `INVITATION_INTENT` se decide por separado; una intención `service_relationship` exige una decisión explícita para cada `INVITATION_SCOPE_OPTION` presentada |
+| **Transacción** | Una sola confirmación: materializar **como máximo un destino** por intención aceptada. Si se acepta `service_relationship`, crear la relación y, por cada opción de scope, un `CONSENT_EVENT`; crear `DATA_GRANT` únicamente para las concedidas. Las rechazadas conservan evidencia sin grant. Una intención de programa solo se materializa si la relación y el scope mínimo requerido fueron concedidos |
 | **Idempotencia** | `Idempotency-Key` por intención. Un reintento no duplica membresías, relaciones ni asignaciones |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Dos aceptaciones concurrentes de la misma intención materializan un solo destino |
 | **Información sensible** | Identidad y vínculo. Ningún dato fitness cambia de manos aquí |
-| **Evento de dominio** | `identity.invitation_intent_decided.v1`, más el evento del dominio destino |
-| **Reglas** | La aceptación parcial es válida: aceptar la relación y rechazar el programa es un resultado correcto. Aceptar **no concede scopes**: el consentimiento es una operación separada (`OP-PRV-003`). Una intención de programa cuya intención de relación fue rechazada no puede materializarse |
+| **Evento de dominio** | `identity.invitation_intent_decided.v1`, más los eventos del dominio destino y `privacy.grant_created.v1` / `privacy.grant_rejected.v1` por opción decidida |
+| **Reglas** | La aceptación parcial es válida: relación, programa y cada scope son decisiones independientes aunque se confirmen en una sola acción. Aceptar la relación no concede automáticamente scopes. No existe una ruta posterior para que Studio solicite permisos sobre una relación activa. Una intención de programa cuya relación fue rechazada o cuyo scope necesario no fue concedido no puede materializarse |
 | **Falla cerrada** | Dependencia faltante, la intención queda pendiente y no se materializa nada |
 
 #### `OP-IDN-010` — Crear o actualizar perfil profesional
@@ -519,7 +519,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Identidad de la organización invitante y contenido de las intenciones |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Muestra organización, parte responsable presentada, propósito y las intenciones **por separado**, para que la decisión pueda ser parcial e informada. No revela si el contacto ya tiene cuenta en Allfit: eso filtraría la existencia de una persona a quien invita |
+| **Reglas** | Muestra organización, parte responsable, propósito, intenciones y, para `service_relationship`, cada opción de scope con versión, campos materiales y nivel **por separado**, para que la decisión pueda ser parcial e informada. No revela si el contacto ya tiene cuenta en Allfit: eso filtraría la existencia de una persona a quien invita |
 | **Falla cerrada** | Token inválido y token vencido devuelven la misma respuesta |
 
 #### `OP-IDN-017` — Consultar mi perfil profesional
@@ -727,7 +727,6 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | `OP-ORG-008` | Retirar rol de una membresía | Comando | `A4`, `A5` |
 | `OP-ORG-009` | Terminar una membresía | Comando | `A4`, `A5` |
 | `OP-ORG-010` | Renunciar a una membresía propia | Comando | `A3`, `A6` |
-| `OP-ORG-011` | Transferir ownership | Comando | `A5` |
 | `OP-ORG-012` | Cerrar la organización | Comando | `A5` |
 | `OP-ORG-013` | Consultar la organización | Consulta | `A3`–`A6` |
 | `OP-ORG-014` | Listar mis membresías | Consulta | `A2` |
@@ -746,13 +745,13 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Superficie** | `POST /studio/v1/organizations` |
 | **Actor** | `A2` — cualquier persona activa |
 | **Filtros obligatorios** | Persona activa con `PROFESSIONAL_PROFILE`. El tipo solicitado pertenece al catálogo gobernado de `ORGANIZATION_TYPE` |
-| **Transacción** | Una sola: crear `ORGANIZATION`, crear `ORGANIZATION_MEMBERSHIP` para el creador, asignarle `MEMBERSHIP_ROLE` = `owner` y registrar el `ORGANIZATION_EVENT` de alta |
+| **Transacción** | Una sola: crear `ORGANIZATION`, crear `ORGANIZATION_MEMBERSHIP` para el creador, asignarle `MEMBERSHIP_ROLE` = `owner` y registrar el `ORGANIZATION_EVENT` de alta. Solo confirma si el constraint diferible verifica exactamente un `owner` activo |
 | **Idempotencia** | `Idempotency-Key`. Un reintento devuelve la organización creada, nunca una segunda |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Datos de la parte responsable. Ningún dato fitness |
 | **Evento de dominio** | `organization.created.v1`, `organization.membership_created.v1` |
-| **Reglas** | El onboarding `solo_professional` crea una organización de tipo `professional_practice`: es una **frontera operativa**, no necesariamente una persona jurídica. No existe una bandera permanente de "independiente": la misma organización incorpora equipo después sin cambiar de identidad |
+| **Reglas** | El onboarding `solo_professional` crea una organización de tipo `professional_practice`: es una **frontera operativa**, no necesariamente una persona jurídica. No existe una bandera permanente de "independiente": la misma organización incorpora equipo después sin cambiar de identidad. Toda organización activa conserva exactamente un `owner` activo |
 | **Falla cerrada** | Sin perfil profesional, rechazo |
 
 #### `OP-ORG-002` — Actualizar datos de la organización
@@ -847,15 +846,15 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Tipo** | Comando |
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/memberships/{id}/roles` |
 | **Actor** | `A4`, `A5` |
-| **Filtros obligatorios** | La membresía pertenece a `{orgId}` y está vigente. El rol pertenece al catálogo V1 |
+| **Filtros obligatorios** | La membresía pertenece a `{orgId}` y está vigente. El rol solicitado es `admin`, `coach` o `staff`; `owner` se rechaza |
 | **Transacción** | Crear `MEMBERSHIP_ROLE` con vigencia y registrar `MEMBERSHIP_EVENT` |
 | **Idempotencia** | `Idempotency-Key`. Asignar un rol ya vigente no lo duplica |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Nunca se confirma un cambio de permisos desde caché o read model atrasado |
 | **Información sensible** | Ninguna categoría personal |
 | **Evento de dominio** | `organization.role_granted.v1` |
-| **Reglas** | Solo `A5` puede otorgar `owner`. Un rol no es consentimiento: conceder `coach` no da acceso a ninguna persona. El efecto es inmediato y no retroactivo: no amplía lo ya ocurrido |
-| **Falla cerrada** | Rol fuera del catálogo, rechazo |
+| **Reglas** | La gestión genérica nunca concede `owner`. Un rol no es consentimiento: conceder `coach` no da acceso a ninguna persona. El efecto es inmediato y no retroactivo: no amplía lo ya ocurrido |
+| **Falla cerrada** | Rol fuera de `admin`, `coach` o `staff`, incluido `owner`, rechazo |
 
 #### `OP-ORG-008` — Retirar rol de una membresía
 
@@ -864,15 +863,15 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Tipo** | Comando |
 | **Superficie** | `DELETE /studio/v1/organizations/{orgId}/memberships/{id}/roles/{roleCode}` |
 | **Actor** | `A4`, `A5` |
-| **Filtros obligatorios** | La membresía pertenece a `{orgId}`; el rol está vigente |
+| **Filtros obligatorios** | La membresía pertenece a `{orgId}`; el rol está vigente y no es `owner` |
 | **Transacción** | Cerrar la vigencia del `MEMBERSHIP_ROLE`, registrar el evento y **reevaluar en la misma transacción** las asignaciones profesionales que dependían de ese rol |
 | **Idempotencia** | `Idempotency-Key`; converge |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Ninguna categoría personal |
 | **Evento de dominio** | `organization.role_revoked.v1` |
-| **Reglas** | Nunca puede quedar la organización sin `owner`. Retirar `coach` deja inefectivas sus asignaciones profesionales: el grant sobrevive, pero ese actor deja de poder ejercerlo. La invalidación es inmediata, sin ventana de caché |
-| **Falla cerrada** | Último owner, rechazo |
+| **Reglas** | La gestión genérica nunca retira `owner`. Retirar `coach` deja inefectivas sus asignaciones profesionales: el grant sobrevive, pero ese actor deja de poder ejercerlo. La invalidación es inmediata, sin ventana de caché |
+| **Falla cerrada** | Intento de retirar `owner`, rechazo |
 
 #### `OP-ORG-009` — Terminar una membresía
 
@@ -888,8 +887,8 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Ninguna categoría personal, pero afecta quién puede leer datos de terceros |
 | **Evento de dominio** | `organization.membership_terminated.v1` |
-| **Reglas** | Terminar una membresía **no** termina las relaciones de servicio de la organización: las deja sin profesional asignado y exige reasignar (`OP-REL-005`). El historial de autoría permanece. No puede terminarse la membresía del último `owner` |
-| **Falla cerrada** | Último owner, rechazo |
+| **Reglas** | Terminar una membresía **no** termina las relaciones de servicio de la organización: las deja sin profesional asignado y exige reasignar (`OP-REL-005`). El historial de autoría permanece. No puede terminarse una membresía mientras tenga el rol `owner` |
+| **Falla cerrada** | Membresía con rol `owner`, rechazo |
 
 #### `OP-ORG-010` — Renunciar a una membresía propia
 
@@ -906,24 +905,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Información sensible** | Ninguna categoría personal |
 | **Evento de dominio** | `organization.membership_resigned.v1` |
 | **Reglas** | Un `owner` no puede renunciar sin transferir ownership antes. La renuncia deja las relaciones sin profesional asignado y notifica a la administración de la organización |
-| **Falla cerrada** | Owner único, rechazo |
-
-#### `OP-ORG-011` — Transferir ownership
-
-| Campo | Valor |
-| --- | --- |
-| **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/organizations/{orgId}/ownership-transfer` |
-| **Actor** | `A5` |
-| **Filtros obligatorios** | El destinatario tiene membresía vigente en `{orgId}` |
-| **Transacción** | Una sola: otorgar `owner` al destinatario y, si corresponde, retirarlo del emisor, registrando ambos eventos |
-| **Idempotencia** | `Idempotency-Key` |
-| **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada. Dos transferencias concurrentes se serializan; la organización nunca queda sin owner en un estado intermedio |
-| **Información sensible** | Identidad de la parte responsable |
-| **Evento de dominio** | `organization.ownership_transferred.v1` |
-| **Reglas** | El disparador de re-consentimiento **no es el cambio de dueño, sino el cambio de la parte responsable presentada** en `RESPONSIBLE_PARTY_SNAPSHOT`. Si la transferencia no altera la marca ni la parte responsable frente a la persona, los grants siguen vigentes y no se le pide nada. Si la altera —típicamente una `professional_practice` cuya parte responsable es una persona natural que pasa a otra—, los grants de esa organización se revocan y exigen nueva aceptación (`OP-PRV-003`); un grant revocado nunca revive. Reasignar profesionales nunca es un cambio de parte responsable |
-| **Falla cerrada** | Destinatario sin membresía, rechazo |
+| **Falla cerrada** | Membresía con rol `owner`, rechazo |
 
 #### `OP-ORG-012` — Cerrar la organización
 
@@ -1076,14 +1058,14 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Tipo** | Comando |
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/invitations` con intención `service_relationship` y, opcionalmente, `program_assignment` |
 | **Actor** | `A3`–`A6` con capacidad de invitar |
-| **Filtros obligatorios** | Membresía vigente. Destino email o celular, nunca `person_id`. Si incluye intención de programa, la versión referenciada debe estar publicada y pertenecer a `{orgId}` |
-| **Transacción** | Crear `INVITATION`, sus `INVITATION_INTENT` tipadas y el `RESPONSIBLE_PARTY_SNAPSHOT` que se presentará; encolar el envío |
+| **Filtros obligatorios** | Membresía vigente. Destino email o celular, nunca `person_id`. Cada opción usa una definición de los siete scopes V1 publicada, nivel permitido y propósito declarado. Si incluye intención de programa, la versión referenciada debe estar publicada y pertenecer a `{orgId}` y debe ofrecer `relationship_training` con nivel compatible |
+| **Transacción** | Crear `INVITATION`, sus `INVITATION_INTENT`, las `INVITATION_SCOPE_OPTION` de la relación y los snapshots exactos que se presentarán; encolar el envío |
 | **Idempotencia** | `Idempotency-Key`. Reinvitar al mismo contacto con las mismas intenciones reutiliza la invitación vigente |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Contacto de la persona invitada |
 | **Evento de dominio** | `relationship.client_invited.v1` |
-| **Reglas** | No crea persona, cuenta, relación ni asignación. Cada intención se decidirá por separado (`OP-IDN-009`). La invitación **no** propone scopes: el consentimiento es posterior y explícito |
+| **Reglas** | No crea persona, cuenta, relación, grant ni asignación. La persona decidirá relación, programa y cada scope de forma independiente en una sola confirmación (`OP-IDN-009`). Las opciones quedan fijadas al emitir; Studio no puede añadirlas o volver a pedirlas después sobre una relación activa |
 | **Falla cerrada** | Versión de programa no publicada, rechazo de toda la invitación |
 
 #### `OP-REL-002` — Asignar profesional titular
@@ -1321,10 +1303,6 @@ Reglas que gobiernan todo el dominio:
 
 | ID | Operación | Tipo | Actor |
 | --- | --- | --- | --- |
-| `OP-PRV-001` | Solicitar un grant | Comando | `A3`, `A4`, `A5` |
-| `OP-PRV-002` | Retirar una solicitud de grant | Comando | `A3`, `A4`, `A5` |
-| `OP-PRV-003` | Conceder un grant | Comando | `A2` |
-| `OP-PRV-004` | Rechazar una solicitud de grant | Comando | `A2` |
 | `OP-PRV-005` | Revocar un grant | Comando | `A2` |
 | `OP-PRV-006` | Ocultar una sesión autónoma para una relación | Comando | `A2` |
 | `OP-PRV-007` | Revertir la ocultación de una sesión | Comando | `A2` |
@@ -1333,7 +1311,7 @@ Reglas que gobiernan todo el dominio:
 | `OP-PRV-010` | Liberar un hold legal | Comando | `A10` |
 | `OP-PRV-011` | Publicar una versión de definición de scope | Comando | `A11` |
 | `OP-PRV-012` | Consultar definiciones de scope publicadas | Consulta | `A2`, `A3`–`A6` |
-| `OP-PRV-013` | Listar mis grants y solicitudes pendientes | Consulta | `A2` |
+| `OP-PRV-013` | Listar mis grants y decisiones de consentimiento | Consulta | `A2` |
 | `OP-PRV-014` | Listar grants recibidos por la organización | Consulta | `A3`–`A5` |
 | `OP-PRV-015` | Consultar el historial de accesos a mis datos | Consulta | `A2` |
 | `OP-PRV-016` | Consultar el estado de una solicitud de supresión | Consulta | `A2` |
@@ -1343,74 +1321,6 @@ Reglas que gobiernan todo el dominio:
 | `OP-PRV-020` | Consultar una relación histórica congelada | Consulta | `A3`, `A4`, `A5` autorizados por el caso |
 
 ---
-
-#### `OP-PRV-001` — Solicitar un grant
-
-| Campo | Valor |
-| --- | --- |
-| **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/organizations/{orgId}/relationships/{relId}/grant-requests` |
-| **Actor** | `A3` (titular), `A4`, `A5` |
-| **Filtros obligatorios** | Relación vigente en `{orgId}`; scope solicitado dentro de los cuatro V1; versión de `SCOPE_DEFINITION` vigente al momento de solicitar; propósito declarado |
-| **Transacción** | Crear la solicitud congelando scope, versión, `access_level`, propósito y `RESPONSIBLE_PARTY_SNAPSHOT`; notificar a la persona |
-| **Idempotencia** | `Idempotency-Key`. Una solicitud pendiente del mismo scope y versión no se duplica |
-| **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
-| **Información sensible** | Ninguna: solicitar no da acceso a nada |
-| **Evento de dominio** | `privacy.grant_requested.v1` |
-| **Reglas** | Una solicitud por scope: no existe una petición conjunta que se acepte en bloque. Solicitar `contribute` exige justificarlo por separado de `read`. Solicitar no crea presunción: el silencio **no** es consentimiento |
-| **Falla cerrada** | Scope fuera de V1 o sin propósito, rechazo |
-
-#### `OP-PRV-002` — Retirar una solicitud de grant
-
-| Campo | Valor |
-| --- | --- |
-| **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/organizations/{orgId}/grant-requests/{id}/withdrawal` |
-| **Actor** | `A3`, `A4`, `A5` |
-| **Filtros obligatorios** | La solicitud pertenece a `{orgId}` y sigue pendiente |
-| **Transacción** | Marcar la solicitud como retirada |
-| **Idempotencia** | `Idempotency-Key`; converge |
-| **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
-| **Información sensible** | Ninguna |
-| **Evento de dominio** | `privacy.grant_request_withdrawn.v1` |
-| **Reglas** | Retirar conserva la evidencia de que se solicitó, para que la persona pueda auditar qué le fue pedido |
-| **Falla cerrada** | — |
-
-#### `OP-PRV-003` — Conceder un grant
-
-| Campo | Valor |
-| --- | --- |
-| **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/consents` |
-| **Actor** | `A2`, sujeto de la relación |
-| **Filtros obligatorios** | Relación propia y vigente; solicitud pendiente o concesión iniciada por la persona; versión de `SCOPE_DEFINITION` publicada y presentada íntegramente |
-| **Transacción** | Una sola: crear `CONSENT_EVENT` con el **snapshot exacto presentado** y crear el `DATA_GRANT` identificando persona, relación, organización receptora, versión de scope, `access_level`, propósito y vigencia |
-| **Idempotencia** | `Idempotency-Key`. Conceder dos veces el mismo scope y versión no crea dos grants |
-| **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada. Jamás se confirma desde caché |
-| **Información sensible** | Habilita el acceso a la categoría concedida |
-| **Evento de dominio** | `privacy.grant_created.v1` |
-| **Reglas** | Conceder un scope **no** concede los demás. El grant permanece `active` mientras la relación esté activa o hasta revocación; al terminar la relación pasa a `frozen` según ADR-005. El recordatorio de revisión a los 12 meses **no** corta el acceso si no hay respuesta. Los grants no se heredan entre relaciones, ni siquiera entre dos relaciones sucesivas con la misma organización |
-| **Falla cerrada** | Versión de scope no publicada o snapshot no presentable, rechazo |
-
-#### `OP-PRV-004` — Rechazar una solicitud de grant
-
-| Campo | Valor |
-| --- | --- |
-| **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/grant-requests/{id}/rejection` |
-| **Actor** | `A2` |
-| **Filtros obligatorios** | La solicitud está dirigida a la persona autenticada y sigue pendiente |
-| **Transacción** | Crear `CONSENT_EVENT` con la decisión negativa **sin** crear grant |
-| **Idempotencia** | `Idempotency-Key` |
-| **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
-| **Información sensible** | Ninguna |
-| **Evento de dominio** | `privacy.grant_rejected.v1` |
-| **Reglas** | Rechazar conserva evidencia de la decisión. Rechazar un scope **no** afecta la relación ni los demás scopes: una relación activa sin `relationship_training` es válida, y en ese estado las funciones de resultados quedan bloqueadas para la organización |
-| **Falla cerrada** | — |
 
 #### `OP-PRV-005` — Revocar un grant
 
@@ -1521,7 +1431,7 @@ Reglas que gobiernan todo el dominio:
 | **Tipo** | Comando |
 | **Superficie** | `POST /backoffice/v1/scope-definitions/{code}/versions` |
 | **Actor** | `A12` con rol base, `manage_privacy_requests`, AAL2 y deber vigente |
-| **Filtros obligatorios** | El scope pertenece a los cuatro V1; la versión enumera recursos, campos, exclusiones, acciones máximas y `historical_readable` de forma exhaustiva |
+| **Filtros obligatorios** | El scope pertenece a los siete V1; la versión enumera recursos, campos, exclusiones, acciones máximas y `historical_readable` de forma exhaustiva |
 | **Transacción** | Crear `SCOPE_DEFINITION` inmutable con sus `SCOPE_RESOURCE_RULE`, incluyendo el subconjunto histórico |
 | **Idempotencia** | `Idempotency-Key` |
 | **Paginación y orden** | No aplica |
@@ -1548,7 +1458,7 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | Permite a la persona leer exactamente qué recursos y campos abarca lo que le están pidiendo, **antes** de decidir |
 | **Falla cerrada** | — |
 
-#### `OP-PRV-013` — Listar mis grants y solicitudes pendientes
+#### `OP-PRV-013` — Listar mis grants y decisiones de consentimiento
 
 | Campo | Valor |
 | --- | --- |
@@ -1562,7 +1472,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Cacheable para presentación |
 | **Información sensible** | Qué comparte y con quién |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Muestra por cada grant: organización, parte responsable, relación, scope, **versión**, `access_level`, propósito, vigencia y quiénes pueden ejercerlo hoy —titular y suplentes—. Es el panel de control del consentimiento |
+| **Reglas** | Muestra por cada decisión: organización, parte responsable, relación, scope, **versión**, nivel, propósito y resultado; para grants vigentes añade quiénes pueden ejercerlos hoy —titular y suplentes—. No muestra solicitudes pendientes ni permite a Studio crear otra. Es el panel de control del consentimiento |
 | **Falla cerrada** | — |
 
 #### `OP-PRV-014` — Listar grants recibidos por la organización
@@ -1579,7 +1489,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Nunca cacheable para decidir acceso |
 | **Información sensible** | **Estado** del consentimiento, no su contenido |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Devuelve qué está concedido y en qué versión, para que la organización sepa qué puede pedir. No devuelve ningún dato amparado |
+| **Reglas** | Devuelve qué está concedido y en qué versión para que la organización sepa qué puede ejercer. No devuelve ningún dato amparado ni ofrece una acción para volver a solicitar un scope rechazado o revocado |
 | **Falla cerrada** | — |
 
 #### `OP-PRV-015` — Consultar el historial de accesos a mis datos
@@ -2730,15 +2640,15 @@ Reglas que gobiernan todo el dominio:
 | **Tipo** | Comando |
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/subscriptions/{id}/suspension` · `/reactivation` |
 | **Actor** | `A4`, `A5` con `manage_billing` |
-| **Filtros obligatorios** | Suscripción de `{orgId}`; estado compatible con la transición |
-| **Transacción** | Cambiar el estado, registrar `subscription_events` con el actor humano y encolar la notificación |
+| **Filtros obligatorios** | Suscripción de `{orgId}` y estado compatible. Para reactivar: sigue suspendida, no está terminada y existe el bloqueo abierto exacto `source_kind='subscription_suspension' AND subscription_id={id}` |
+| **Transacción** | Bajo lock de la suscripción y del bloqueo causal: suspender cambia el estado y abre de forma idempotente `planning.service_access_blocks`; reactivar cambia a `active` y cierra **solo** ese bloqueo. Registrar `subscription_events` con el actor humano y encolar la notificación, sin escribir grants, relación, membresía, asignación ni estado intrínseco de sesiones |
 | **Idempotencia** | `Idempotency-Key`; converge |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
+| **Offline / concurrencia** | Serializa con terminación, revocación, cambio de asignación y apertura/cierre de otros bloqueos. Un estado leído antes de una transición concurrente no autoriza restaurarlo: conflicto y reintento desde estado fresco |
 | **Información sensible** | Estado de pago |
 | **Evento de dominio** | `payments.subscription_suspended.v1` · `payments.subscription_reactivated.v1` |
-| **Reglas** | Suspender **no toca los grants, no desacopla la asignación y no termina la relación**; lo garantiza `IX-40`. Corta la escritura del profesional y pausa las sesiones futuras del programa de esa organización. Reactivar reanuda sin ninguna aceptación nueva de la persona |
-| **Falla cerrada** | Si la transacción intenta escribir en grants o periodos de gestión, se revierte entera |
+| **Reglas** | Suspender **no toca los grants, no desacopla la asignación y no termina la relación**; lo garantiza `IX-40`. El bloqueo hace inefectiva la escritura profesional y proyecta como pausadas las sesiones futuras administradas. Reactivar es sustractivo: quita una causa y recalcula desde el estado vigente; no revive grants revocados, relaciones terminadas, membresías/asignaciones cambiadas ni sesiones canceladas, iniciadas o pasadas. No exige aceptación nueva solo si el grant actual sigue vigente. Otro bloqueo abierto sigue denegando |
+| **Falla cerrada** | Suscripción terminada, bloqueo ausente o de otra fuente, o intento de restaurar/escribir grants, relación, membresía, asignación o sesiones: rechazo y rollback completo |
 
 #### `OP-PAY-010` — Terminar una suscripción desde la organización
 
@@ -2788,7 +2698,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Falla cerrada. **Jamás se confirma desde caché** |
 | **Información sensible** | Vínculo comercial. Ningún dato de tarjeta pasa por Allfit |
 | **Evento de dominio** | `payments.subscription_started.v1` |
-| **Reglas** | Los datos de tarjeta se entregan **directamente a la pasarela de la organización**; Allfit nunca los ve ni los almacena. Suscribirse **no concede ningún acceso a datos**: el consentimiento sigue siendo una operación separada (`OP-PRV-003`). Suscribirse tampoco crea la relación de servicio |
+| **Reglas** | Los datos de tarjeta se entregan **directamente a la pasarela de la organización**; Allfit nunca los ve ni los almacena. Suscribirse **no concede ningún acceso a datos**: los scopes solo se deciden al aceptar una relación nueva. Suscribirse tampoco crea la relación de servicio |
 | **Falla cerrada** | Sin pasarela activa en la organización: rechazo explícito, porque no habría a dónde cobrar |
 
 #### `OP-PAY-013` — Consultar mi suscripción · `OP-PAY-014` — Mi historial de pagos
@@ -2833,13 +2743,13 @@ Reglas que gobiernan todo el dominio:
 | **Superficie** | `SYS` — consumidor del webhook de la pasarela |
 | **Actor** | `A9` con credencial propia |
 | **Filtros obligatorios** | Firma del proveedor verificada; la organización tiene conexión activa; la suscripción existe y pertenece a esa organización |
-| **Transacción** | Insertar `payment_records` y, si corresponde, transicionar la suscripción entre `active` y `suspended`, registrando el evento |
+| **Transacción** | Bajo lock de la suscripción y su bloqueo causal, insertar `payment_records` y, si corresponde, transicionar entre `active` y `suspended`: el fallo abre idempotentemente el bloqueo exacto y el pago exitoso cierra solo ese bloqueo. Registrar el evento sin escribir el estado protegido de otros dominios |
 | **Idempotencia** | `UNIQUE (organization_id, external_payment_ref)`: **el reenvío del webhook no duplica nada por construcción**, no por convención |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Dos entregas concurrentes del mismo cobro producen una sola fila |
+| **Offline / concurrencia** | Dos entregas concurrentes del mismo cobro producen una sola fila. Terminación, revocación, cambios de asignación y otros bloqueos se serializan o fuerzan reintento; nunca se restaura un estado leído antes del lock |
 | **Información sensible** | Estado de pago; **ningún dato de tarjeta** |
 | **Evento de dominio** | `payments.payment_recorded.v1`, más la transición si ocurre |
-| **Reglas** | Un cobro fallido lleva la suscripción a `suspended` y **ahí se queda, de forma indefinida**. Este worker **no puede terminar nada**: la tabla exige actor humano para `ended` y él no lo tiene. Tampoco puede tocar grants ni asignaciones (`IX-40`) |
+| **Reglas** | Un cobro fallido lleva la suscripción a `suspended` y **ahí se queda, de forma indefinida**. Este worker **no puede terminar nada**: la tabla exige actor humano para `ended` y él no lo tiene. Tampoco puede tocar grants, relaciones, membresías, asignaciones o sesiones (`IX-40`). Un pago posterior solo elimina el bloqueo de esa suscripción y recalcula acceso/agenda con el estado vigente; no revive estado obsoleto ni cierra otros bloqueos |
 | **Falla cerrada** | Firma inválida, organización sin conexión activa o suscripción ajena: se descarta y se registra el intento |
 
 #### `OP-PAY-017` — Publicar una versión de plan de plataforma
@@ -3611,7 +3521,7 @@ Un evento se escribe en el outbox dentro de la transacción de su comando. Trans
 | Identidad | `onboarding_attempt_started`, `eligibility_evaluated`, `person_activated`, `contact_changed`, `contact_verified`, `profile_claim_declared`, `profile_claim_revised`, `body_progress_recorded`, `health_context_declared`, `invitation_intent_decided`, `invitation_revoked`, `invitation_expired`, `professional_profile_updated`, `claim_verified` |
 | Organizaciones | `created`, `created_unclaimed`, `updated`, `site_created`, `site_updated`, `membership_created`, `membership_terminated`, `membership_resigned`, `role_granted`, `role_revoked`, `staff_invited`, `ownership_transferred`, `closed` |
 | Relaciones | `client_invited`, `professional_assigned`, `professional_reassigned`, `substitution_proposed`, `substitution_decided`, `substitution_ended`, `substitution_expired`, `termination_requested`, `terminated` |
-| Privacidad | `grant_requested`, `grant_request_withdrawn`, `grant_created`, `grant_rejected`, `grant_frozen`, `grant_revoked`, `grant_review_due`, `scope_definition_published`, `session_visibility_denied`, `session_visibility_restored`, `erasure_requested`, `erasure_resolved`, `disposition_case_opened`, `disposition_executed`, `disposition_reapplied`, `legal_hold_applied`, `legal_hold_released` |
+| Privacidad | `grant_created`, `grant_rejected`, `grant_frozen`, `grant_revoked`, `grant_review_due`, `scope_definition_published`, `session_visibility_denied`, `session_visibility_restored`, `erasure_requested`, `erasure_resolved`, `disposition_case_opened`, `disposition_executed`, `disposition_reapplied`, `legal_hold_applied`, `legal_hold_released` |
 | Catálogo | `private_movement_created`, `private_movement_updated`, `private_movement_archived`, `result_contract_published` |
 | Planificación | `session_template_created`, `session_template_draft_updated`, `session_template_version_published`, `session_template_version_derived`, `session_template_version_deprecated`, `program_created`, `program_draft_updated`, `program_version_published`, `program_version_deprecated`, `assignment_created`, `assignment_detached`, `assignment_cancelled`, `assignment_continued`, `assignment_ended`, `session_rescheduled`, `prescription_revised` |
 | Ejecución | `attempt_started`, `attempt_resumed`, `attempt_abandoned`, `session_started`, `finalized`, `primary_resolved`, `primary_changed`, `revised`, `annulled`, `observation_created`, `observation_revised`, `correction_proposed`, `correction_decided`, `correction_expired`, `derived_recomputed` |

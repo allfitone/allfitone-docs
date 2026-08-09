@@ -18,7 +18,7 @@ entenderlo ni para construir a partir de él.
 **quiero** <qué>
 **para** <para qué>.
 
-`E-STUDIO-07` · imprescindible · HU-STUDIO-041
+`E-STUDIO-07` · imprescindible
 
 **Criterios**
 
@@ -30,10 +30,13 @@ entenderlo ni para construir a partir de él.
 | `HU-STUDIO-###` | Identificador estable. No se reutiliza nunca |
 | `E-STUDIO-##` | Épica a la que pertenece |
 | Prioridad | `imprescindible` sin esto no se lanza · `importante` debería estar · `después` puede esperar |
+| Dependencias | Se declaran una sola vez en el grafo de la sección 6; son prerrequisitos directos, no historias meramente relacionadas |
 
 ## 2. Quién usa Allfit Studio
 
 Cuatro roles, y no hay más. No se pueden crear roles a medida.
+
+Toda organización activa tiene exactamente una membresía activa con rol **propietario**. Esa misma membresía puede tener además roles compatibles como admin o coach, pero la propiedad no se asigna ni se retira desde la gestión común de roles.
 
 | Rol | Puede | No puede |
 | --- | --- | --- |
@@ -98,6 +101,97 @@ vence por separado; decidir una no decide las demás.
 | Copiloto de IA para el profesional | Diferido |
 | Roles a medida o permisos por sede | Fuera de esta versión |
 | Menores de 18 años | Fuera de esta versión |
+
+## 6. Grafo de dependencias
+
+Una arista `A → B` significa que la historia `A` **depende directamente de** `B`: `B` debe estar disponible antes de que `A` pueda cumplir todos sus criterios. `—` identifica una raíz. El grafo solo contiene dependencias de entrega entre historias de Studio; los estados de negocio producidos por Space, proveedores o procesos externos se mantienen como precondiciones en los criterios y contratos, no como aristas ficticias.
+
+| Historia | Depende directamente de |
+| --- | --- |
+| `HU-STUDIO-001` | — |
+| `HU-STUDIO-002` | `HU-STUDIO-001` |
+| `HU-STUDIO-003` | — |
+| `HU-STUDIO-004` | `HU-STUDIO-006` |
+| `HU-STUDIO-005` | `HU-STUDIO-001` |
+| `HU-STUDIO-006` | `HU-STUDIO-001` |
+| `HU-STUDIO-007` | `HU-STUDIO-001` |
+| `HU-STUDIO-008` | `HU-STUDIO-007` |
+| `HU-STUDIO-009` | `HU-STUDIO-007` |
+| `HU-STUDIO-010` | `HU-STUDIO-009` |
+| `HU-STUDIO-011` | `HU-STUDIO-007` |
+| `HU-STUDIO-012` | `HU-STUDIO-017` |
+| `HU-STUDIO-013` | `HU-STUDIO-007` |
+| `HU-STUDIO-014` | `HU-STUDIO-007` |
+| `HU-STUDIO-015` | `HU-STUDIO-014` |
+| `HU-STUDIO-016` | `HU-STUDIO-014` |
+| `HU-STUDIO-017` | `HU-STUDIO-007` |
+| `HU-STUDIO-018` | `HU-STUDIO-007` |
+| `HU-STUDIO-019` | `HU-STUDIO-017`, `HU-STUDIO-018` |
+| `HU-STUDIO-020` | `HU-STUDIO-017`, `HU-STUDIO-018` |
+| `HU-STUDIO-021` | `HU-STUDIO-017` |
+| `HU-STUDIO-022` | `HU-STUDIO-006` |
+| `HU-STUDIO-023` | `HU-STUDIO-007` |
+| `HU-STUDIO-024` | `HU-STUDIO-007` |
+| `HU-STUDIO-025` | `HU-STUDIO-023` |
+| `HU-STUDIO-026` | `HU-STUDIO-025` |
+| `HU-STUDIO-027` | `HU-STUDIO-017`, `HU-STUDIO-025` |
+| `HU-STUDIO-028` | `HU-STUDIO-027` |
+| `HU-STUDIO-029` | `HU-STUDIO-027` |
+| `HU-STUDIO-030` | `HU-STUDIO-029` |
+| `HU-STUDIO-031` | `HU-STUDIO-029` |
+| `HU-STUDIO-032` | `HU-STUDIO-025` |
+| `HU-STUDIO-033` | `HU-STUDIO-027` |
+| `HU-STUDIO-034` | `HU-STUDIO-001` |
+| `HU-STUDIO-035` | `HU-STUDIO-025`, `HU-STUDIO-034` |
+| `HU-STUDIO-036` | `HU-STUDIO-007` |
+| `HU-STUDIO-037` | `HU-STUDIO-036` |
+| `HU-STUDIO-038` | `HU-STUDIO-037` |
+| `HU-STUDIO-039` | `HU-STUDIO-038` |
+| `HU-STUDIO-040` | `HU-STUDIO-038` |
+| `HU-STUDIO-041` | `HU-STUDIO-038` |
+| `HU-STUDIO-042` | `HU-STUDIO-041` |
+| `HU-STUDIO-043` | `HU-STUDIO-042` |
+| `HU-STUDIO-044` | `HU-STUDIO-007` |
+| `HU-STUDIO-045` | `HU-STUDIO-044` |
+| `HU-STUDIO-046` | `HU-STUDIO-027`, `HU-STUDIO-035`, `HU-STUDIO-042` |
+| `HU-STUDIO-047` | `HU-STUDIO-046` |
+| `HU-STUDIO-048` | `HU-STUDIO-046` |
+| `HU-STUDIO-049` | `HU-STUDIO-046` |
+| `HU-STUDIO-050` | `HU-STUDIO-046` |
+| `HU-STUDIO-051` | `HU-STUDIO-027`, `HU-STUDIO-035` |
+| `HU-STUDIO-052` | `HU-STUDIO-027`, `HU-STUDIO-035` |
+| `HU-STUDIO-053` | `HU-STUDIO-027`, `HU-STUDIO-035` |
+| `HU-STUDIO-054` | `HU-STUDIO-027`, `HU-STUDIO-035` |
+| `HU-STUDIO-055` | `HU-STUDIO-054` |
+| `HU-STUDIO-056` | `HU-STUDIO-054` |
+| `HU-STUDIO-057` | `HU-STUDIO-055` |
+| `HU-STUDIO-058` | `HU-STUDIO-057` |
+| `HU-STUDIO-059` | `HU-STUDIO-051` |
+| `HU-STUDIO-060` | `HU-STUDIO-059` |
+| `HU-STUDIO-061` | `HU-STUDIO-032` |
+| `HU-STUDIO-062` | `HU-STUDIO-061` |
+| `HU-STUDIO-063` | `HU-STUDIO-061` |
+| `HU-STUDIO-064` | `HU-STUDIO-007` |
+| `HU-STUDIO-065` | `HU-STUDIO-064` |
+| `HU-STUDIO-066` | `HU-STUDIO-064` |
+| `HU-STUDIO-067` | `HU-STUDIO-007` |
+| `HU-STUDIO-068` | `HU-STUDIO-027`, `HU-STUDIO-035` |
+| `HU-STUDIO-069` | `HU-STUDIO-068` |
+| `HU-STUDIO-070` | `HU-STUDIO-071` |
+| `HU-STUDIO-071` | `HU-STUDIO-027`, `HU-STUDIO-035` |
+| `HU-STUDIO-072` | `HU-STUDIO-068` |
+| `HU-STUDIO-073` | `HU-STUDIO-007` |
+| `HU-STUDIO-074` | `HU-STUDIO-007` |
+| `HU-STUDIO-075` | `HU-STUDIO-074` |
+| `HU-STUDIO-076` | `HU-STUDIO-075` |
+| `HU-STUDIO-077` | `HU-STUDIO-074` |
+| `HU-STUDIO-078` | `HU-STUDIO-075` |
+| `HU-STUDIO-079` | `HU-STUDIO-078` |
+| `HU-STUDIO-080` | `HU-STUDIO-078` |
+| `HU-STUDIO-081` | `HU-STUDIO-016`, `HU-STUDIO-017`, `HU-STUDIO-025`, `HU-STUDIO-027`, `HU-STUDIO-055`, `HU-STUDIO-078` |
+| `HU-STUDIO-082` | `HU-STUDIO-024` |
+| `HU-STUDIO-083` | `HU-STUDIO-035`, `HU-STUDIO-047`, `HU-STUDIO-051`, `HU-STUDIO-054`, `HU-STUDIO-056` |
+| `HU-STUDIO-084` | `HU-STUDIO-028`, `HU-STUDIO-032`, `HU-STUDIO-035` |
 
 ---
 
@@ -209,8 +303,8 @@ vence por separado; decidir una no decide las demás.
 **Criterios**
 
 1. Cualquier persona con cuenta puede crear su organización. **No hace falta tener completo el perfil profesional**: sigue siendo personal y puede completarse antes o después, sin pertenecer a la organización.
-2. Al crearla quedo como propietario.
-3. Al crearla nace también mi membresía propietaria inicial, que referencia mi identidad y mi perfil profesional personal sin copiarlos.
+2. Al crearla quedo como propietario y la transacción solo se confirma si la organización nace con exactamente un propietario activo.
+3. Al crearla nace también mi membresía propietaria inicial, que referencia mi identidad y mi perfil profesional personal sin copiarlos; esa membresía puede recibir además otros roles compatibles.
 4. Si trabajo solo, mi organización es mi propia práctica: sirve como frontera de operación y no implica tener una empresa constituida.
 5. No existe una marca permanente de "independiente": esta misma organización puede incorporar equipo después sin cambiar de identidad ni migrar nada.
 6. Reintentar no crea una segunda organización.
@@ -280,8 +374,9 @@ vence por separado; decidir una no decide las demás.
 
 **Criterios**
 
-1. El destinatario debe formar parte del gimnasio.
-2. El gimnasio nunca queda sin propietario, ni por un instante.
+1. El destinatario debe tener una membresía activa en el gimnasio.
+2. La transferencia es atómica: al confirmar sigue existiendo exactamente un propietario activo, sin estados observables con cero o dos propietarios.
+3. La transferencia es el único flujo que puede cambiar qué membresía tiene el rol de propietario.
 
 > **Fuera de la primera versión.** Se retoma cuando aparezca el primer caso
 > real. Mientras tanto, si un gimnasio necesita cambiar de dueño, lo resuelve el
@@ -388,7 +483,7 @@ vence por separado; decidir una no decide las demás.
 
 **Criterios**
 
-1. Solo el propietario puede otorgar el rol de propietario.
+1. Esta operación solo permite otorgar administrador, coach o staff. El rol de propietario se rechaza y solo puede cambiar mediante una transferencia de propiedad.
 2. **Un rol no es un consentimiento:** dar el rol de coach no da acceso a los datos de ninguna persona.
 3. El efecto es inmediato y no retroactivo: no amplía nada de lo ya ocurrido.
 4. Asignar un rol que ya tiene no lo duplica.
@@ -404,7 +499,7 @@ vence por separado; decidir una no decide las demás.
 
 **Criterios**
 
-1. La organización nunca puede quedarse sin propietario.
+1. Esta operación no permite retirar el rol de propietario; solo una transferencia de propiedad puede cambiarlo.
 2. Al retirar el rol de coach, sus asignaciones sobre relaciones dejan de tener efecto: el permiso de la persona sobrevive, pero ese profesional deja de poder ejercerlo.
 3. La pérdida de acceso es inmediata, sin ventana de gracia.
 
@@ -421,7 +516,7 @@ vence por separado; decidir una no decide las demás.
 1. Se cierran su membresía, sus roles y todas sus asignaciones sobre relaciones.
 2. **No termina las relaciones de servicio de la organización**: quedan sin profesional responsable y hay que reasignarlas.
 3. Su autoría sobre lo que escribió se conserva.
-4. No se puede dar de baja al único propietario.
+4. No se puede dar de baja a una membresía mientras tenga el rol de propietario; primero debe completarse una transferencia de propiedad.
 
 ### HU-STUDIO-022 — Renunciar a mi membresía
 
@@ -1368,8 +1463,11 @@ estado de pago de una persona no es un dato de entrenamiento.
 1. Suspender **no toca los permisos** que la persona nos dio, **no desacopla** su programa y **no termina** la relación.
 2. Lo que sí hace: nuestro coach deja de poder escribir, y se pausan las sesiones futuras del programa que le asignamos.
 3. La persona conserva todo su historial y puede seguir entrenando por su cuenta.
-4. Reactivar devuelve todo a como estaba, **sin pedirle a la persona ninguna autorización nueva**.
-5. Si la operación intentara tocar permisos o asignaciones, se revierte entera.
+4. Reactivar **solo cierra el bloqueo comercial de esta suscripción** y vuelve a calcular el acceso con el estado vigente; no restaura una copia de cómo estaban antes los permisos, la relación, la asignación, la membresía del coach ni las sesiones.
+5. Si durante la suspensión se revocó un permiso, terminó la relación, cambió la asignación o una sesión fue cancelada, iniciada o quedó en el pasado, la reactivación **no revive** ese estado.
+6. No se pide una autorización nueva únicamente cuando el permiso actual sigue vigente. Si existe otro bloqueo —por ejemplo, la organización continúa suspendida—, la escritura y las sesiones afectadas siguen pausadas.
+7. Solo vuelven a estar disponibles las sesiones futuras, no iniciadas y no canceladas que todavía pertenezcan a una relación y asignación vigentes.
+8. Si la operación intentara tocar permisos, relaciones, membresías, asignaciones o el estado intrínseco de una sesión, se revierte entera.
 
 ### HU-STUDIO-080 — Terminar una suscripción
 
@@ -1405,6 +1503,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 4. **Lo que veo depende de mi rol.** Un coach no ve cobros; un staff no ve nada de entrenamiento.
 5. Desde cada aviso llego directo a donde se resuelve.
 6. Si no hay nada pendiente se dice, en lugar de mostrar una pantalla vacía.
+7. Un scope rechazado o revocado nunca reaparece como “permiso pendiente” ni como una acción para que el coach vuelva a solicitarlo. Las decisiones de scopes ocurren únicamente dentro de la aceptación de una nueva relación.
 
 ### HU-STUDIO-082 — Buscar a una persona de mi gimnasio
 

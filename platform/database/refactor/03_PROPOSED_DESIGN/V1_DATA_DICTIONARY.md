@@ -3,12 +3,12 @@
 **Versión de revisión:** 6
 **Fecha:** 6 de agosto de 2026
 **Fase:** 4 — Modelo lógico y diccionario de datos
-**Estado:** 116 fichas; sesión técnica de Studio materializada
+**Estado:** 117 fichas; sesión técnica de Studio y bloqueo causal materializados
 **Deriva de:** [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md), [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md), [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
 
 ## 1. Propósito
 
-La ficha obligatoria de cada una de las **116 tablas físicas** de V1. A las 115 recertificadas tras ADR-028 se suma `identity.access_sessions`, consumida por la sesión opaca de Studio. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
+La ficha obligatoria de cada una de las **117 tablas físicas** de V1. A las 115 recertificadas tras ADR-028 se suman `identity.access_sessions`, consumida por la sesión opaca de Studio, y `planning.service_access_blocks`, que representa suspensiones causales sin snapshots. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
 
 Cada ficha responde los quince campos exigidos por [`DATABASE_REFACTOR_PHASES.md` §Fase 4](../04_EXECUTION/DATABASE_REFACTOR_PHASES.md). El diccionario, el ERD lógico y el SQL de Fase 5 deben coincidir; cualquier divergencia es un defecto que se corrige aquí antes de escribir la migración.
 
@@ -24,7 +24,7 @@ Para no repetir lo que el [estándar](./POSTGRES_MODELING_STANDARD.md) ya fija, 
 - **Contexto RLS:** toda tabla de dominio tiene `FORCE ROW LEVEL SECURITY`; las condiciones exactas están en [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md) y aquí se resume la policy.
 - **`allfit_owner`** posee los objetos; **`allfit_api`** es el rol de runtime; los workers y soporte tienen los suyos.
 - **Clasificación del dato** usa las categorías: `operational` (no personal), `identity_pii`, `training`, `body`, `health`, `nutrition`, `audit`.
-- **Integridad cruzada:** las claves portadoras, FKs compuestas y triggers `IX-01..35` de [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md) son obligatorios aunque una ficha resuma el mecanismo.
+- **Integridad cruzada:** las claves portadoras, FKs compuestas y triggers `IX-01..44` de [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md) son obligatorios aunque una ficha resuma el mecanismo.
 - **Trazabilidad RLS:** toda expresión “vía”, “hereda” o “relación visible” se expande en [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md) a joins, columnas, proyección, índice y pruebas exactos.
 - **Objetos y JSONB:** los nombres físicos, enums compartidos, contratos JSONB y particiones se rigen por [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md); no se difieren a la migración.
 - **Idempotencia:** scope, receipts, PKs offline, expiración, disposición y concurrencia se rigen por [`V1_IDEMPOTENCY_CONTRACT.md`](./V1_IDEMPOTENCY_CONTRACT.md).
@@ -43,7 +43,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 | `relationships` | 6 | §6 |
 | `privacy` | 16 | §7 |
 | `catalog` | 12 | §8 |
-| `planning` | 16 | §9 |
+| `planning` | 17 | §9 |
 | `execution` | 14 | §10 |
 | `nutrition` | 8 | §10A |
 | `system` | 3 | §11 |
@@ -237,13 +237,13 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 ### 4.12 `identity.invitation_intents`
 
-- **Propósito:** propuesta tipada decidida de forma independiente; materializa ≤1 destino.
+- **Propósito:** propuesta tipada decidida de forma independiente; materializa ≤1 destino. Una intención `service_relationship` agrupa las opciones de scope que la persona decide en la misma confirmación, sin convertirlas en una aceptación global.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `operational`.
 - **Columnas:** `id` · `invitation_id uuid` · `kind identity.intent_kind` · `status identity.intent_status` · `proposed_role_code text` (nullable) · `program_version_id uuid` (nullable) · `decided_at timestamptz` (nullable) · `materialized_target_id uuid` (nullable).
 - **FKs y borrado:** `invitation_id → invitations(id) ON DELETE CASCADE`; `program_version_id → planning.program_versions(id) RESTRICT`.
 - **Uniques y checks:** `CHECK` según `kind` (una intención de programa exige `program_version_id`).
-- **Actores:** la persona decide; la organización crea.
+- **Actores:** la persona decide; la organización crea. La decisión de una relación y sus opciones de scope solo entra mediante `identity.decide_invitation_intent`.
 - **RLS:** hereda de la invitación.
 - **Consultas:** por `invitation_id`.
 - **Índices:** `invitation_id`.
@@ -383,8 +383,8 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Clasificación:** `operational`.
 - **Columnas:** `id` · `membership_id uuid` · `role_code text` · `valid_from timestamptz` · `valid_to timestamptz` (nullable).
 - **FKs y borrado:** `membership_id → organization_memberships(id) ON DELETE CASCADE`; `role_code → organization_roles(code) RESTRICT`.
-- **Uniques y checks:** `UNIQUE parcial (membership_id, role_code) WHERE valid_to is null`. Trigger de protección del último `owner`.
-- **Actores:** admin/owner; solo owner otorga owner.
+- **Uniques y checks:** `UNIQUE parcial (membership_id, role_code) WHERE valid_to is null`. El constraint trigger diferible `organizations.enforce_exactly_one_active_owner_ct` comprueba al confirmar que toda organización activa tenga exactamente una membresía activa con un `membership_role owner` vigente. Se evalúa ante altas, bajas o cambios de vigencia/estado en organización, membresía y rol; rechaza tanto cero como más de un `owner`, pero permite que una transferencia controlada cambie ambas vigencias dentro de una sola transacción.
+- **Actores:** admin/owner gestionan `admin`, `coach` y `staff`; el runtime genérico no puede crear ni cerrar `owner`. La propiedad solo cambia mediante transferencia atómica o la operación excepcional controlada de Allfit mientras el autoservicio siga diferido.
 - **RLS:** vía la membresía (`organization_id = access_control.org()` con capacidad).
 - **Consultas:** `(membership_id, valid_to)`.
 - **Índices:** `(membership_id, role_code, valid_from, valid_to)`.
@@ -571,8 +571,8 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** decisión de consentimiento con el snapshot exacto presentado; append-only.
 - **Dominio / fuente de verdad:** Privacidad.
 - **Clasificación:** `audit`.
-- **Columnas:** `id` · `person_id uuid` · `relationship_id uuid` · `organization_id uuid` · `scope_definition_id uuid` · `scope_code text` · `decision privacy.consent_decision` · `presented_snapshot_schema_version smallint` (`1`) · `presented_snapshot jsonb` · `decided_at timestamptz`.
-- **FKs y borrado:** `(relationship_id, person_id, organization_id) → relationships.service_relationships(id, person_id, organization_id) RESTRICT`; `(scope_definition_id, scope_code) → scope_definitions(id, scope_code) RESTRICT` (`IX-05`).
+- **Columnas:** `id` · `person_id uuid` · `relationship_id uuid` · `organization_id uuid` · `invitation_scope_option_id uuid` · `scope_definition_id uuid` · `scope_code text` · `decision privacy.consent_decision` · `presented_snapshot_schema_version smallint` (`1`) · `presented_snapshot jsonb` · `decided_at timestamptz`.
+- **FKs y borrado:** `(relationship_id, person_id, organization_id) → relationships.service_relationships(id, person_id, organization_id) RESTRICT`; `(invitation_scope_option_id, scope_definition_id, scope_code) → invitation_scope_options(id, scope_definition_id, scope_code) RESTRICT`; `(scope_definition_id, scope_code) → scope_definitions(id, scope_code) RESTRICT` (`IX-05`).
 - **Uniques y checks:** clave portadora `UNIQUE (id, person_id, relationship_id, organization_id, scope_definition_id, scope_code)`; append-only.
 - **Actores:** la persona decide; la organización ve estado.
 - **RLS:** `person_id = access_control.person()` **OR** (`relationship` de `access_control.org()`).
@@ -581,20 +581,20 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Retención:** evidencia; auditoría.
 - **Eventos:** `privacy.grant_created.v1`, `privacy.grant_rejected.v1`, `privacy.grant_revoked.v1`.
 
-### 7.5 `privacy.grant_requests`
+### 7.5 `privacy.invitation_scope_options`
 
-- **Propósito:** solicitud de un scope por la organización, pendiente de decisión de la persona.
+- **Propósito:** scopes, nivel y finalidad que se presentan junto con una intención `service_relationship`; no conceden acceso por existir y no pueden crearse para una relación ya activa.
 - **Dominio / fuente de verdad:** Privacidad.
-- **Clasificación:** `operational`.
-- **Columnas:** `id` · `relationship_id uuid` · `organization_id uuid` · `scope_definition_id uuid` · `scope_code text` · `requested_level privacy.access_level` · `purpose text` · `status text` (`pending`, `withdrawn`, `granted`, `rejected`) · `requested_by_membership_id uuid`.
-- **FKs y borrado:** `(relationship_id, organization_id) → relationships.service_relationships(id, organization_id) RESTRICT`; `(requested_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`; `(scope_definition_id, scope_code) → scope_definitions(id, scope_code) RESTRICT` (`IX-06`).
-- **Uniques y checks:** `UNIQUE parcial (relationship_id, scope_code) WHERE status='pending'`.
-- **Actores:** la organización solicita/retira; la persona decide.
-- **RLS:** `person_id` de la relación = `access_control.person()`, **OR** organización de la relación.
-- **Consultas:** `(relationship_id, status)`, `(organization_id, status)`.
-- **Índices:** ambos compuestos + único parcial pendiente `(relationship_id, scope_code) WHERE status='pending'`.
-- **Retención:** conserva evidencia de lo solicitado.
-- **Eventos:** `privacy.grant_requested.v1`, `privacy.grant_request_withdrawn.v1`.
+- **Clasificación:** `operational` hasta la decisión; la evidencia definitiva queda en `consent_events`.
+- **Columnas:** `id` · `invitation_intent_id uuid` · `scope_definition_id uuid` · `scope_code text` · `offered_access_level privacy.access_level` · `purpose text` · `presented_snapshot_schema_version smallint` (`1`) · `presented_snapshot jsonb` · `decision privacy.consent_decision` (nullable mientras la invitación no se decide) · `decided_at timestamptz` (nullable).
+- **FKs y borrado:** `invitation_intent_id → identity.invitation_intents(id) ON DELETE CASCADE`; `(scope_definition_id, scope_code) → scope_definitions(id, scope_code) RESTRICT` (`IX-06`).
+- **Uniques y checks:** `UNIQUE (invitation_intent_id, scope_code)`; clave portadora `UNIQUE (id, scope_definition_id, scope_code)`; `CHECK ((decision is null) = (decided_at is null))`. El constraint trigger `privacy.enforce_invitation_scope_option_ct` exige que el padre sea una intención `service_relationship`, que su invitación pertenezca a la organización que emitió la propuesta y que ninguna opción cambie después de decidirse.
+- **Actores:** la organización las fija al emitir la invitación; la persona decide todas las opciones dentro de `identity.decide_invitation_intent`. No existe `INSERT` o `UPDATE` desde una relación activa ni una ruta Studio para volver a pedirlas.
+- **RLS:** hereda el acceso de la invitación y su intención; DML directo revocado.
+- **Consultas:** por `invitation_intent_id`.
+- **Índices:** único `(invitation_intent_id, scope_code)`.
+- **Retención:** con la invitación; `consent_events` conserva la evidencia inmutable de la decisión materializada.
+- **Eventos:** ninguno propio; la confirmación produce `privacy.grant_created.v1` o `privacy.grant_rejected.v1` por opción.
 
 ### 7.6 `privacy.data_grants`
 
@@ -604,7 +604,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Columnas:** `id` · `person_id uuid` · `relationship_id uuid` · `organization_id uuid` · `scope_definition_id uuid` · `scope_code text` · `consent_event_id uuid` · `access_level privacy.access_level` · `purpose text` · `status privacy.grant_status` · `granted_at timestamptz` · `frozen_at timestamptz` (nullable) · `revoked_at timestamptz` (nullable) · `last_reviewed_at timestamptz` (nullable).
 - **FKs y borrado:** `(relationship_id, person_id, organization_id) → relationships.service_relationships(id, person_id, organization_id) RESTRICT`; `(scope_definition_id, scope_code) → scope_definitions(id, scope_code) RESTRICT`; `(consent_event_id, person_id, relationship_id, organization_id, scope_definition_id, scope_code) → consent_events(id, person_id, relationship_id, organization_id, scope_definition_id, scope_code) RESTRICT` (`IX-07`). `DELETE` revocado.
 - **Uniques y checks:** `UNIQUE parcial (relationship_id, scope_code) WHERE status IN ('active','frozen')` — como máximo un grant no revocado de cada scope, aunque existan versiones distintas. `CHECK` de estado: `active` exige ambos cortes `NULL`; `frozen` exige `frozen_at NOT NULL` y `revoked_at NULL`; `revoked` exige `revoked_at NOT NULL` y puede conservar `frozen_at`. Trigger `privacy.enforce_data_grant_transition_tg` prohíbe `frozen/revoked → active`, `revoked → frozen` y modificar un corte ya fijado.
-- **Actores:** la persona concede/revoca; el profesional asignado y admin/owner leen el estado mientras la relación está activa. `privacy.grant_consent` inserta; `privacy.revoke_grant` actualiza `status, revoked_at`; `relationships.terminate_relationship` actualiza `status, frozen_at`. La lectura histórica solo se ejerce mediante un `historical_access_case` válido y `access_control.can_read_frozen`.
+- **Actores:** la persona concede dentro de `identity.decide_invitation_intent` y revoca después; el profesional asignado y admin/owner leen el estado mientras la relación está activa. La función de decisión inserta; `privacy.revoke_grant` actualiza `status, revoked_at`; `relationships.terminate_relationship` actualiza `status, frozen_at`. La lectura histórica solo se ejerce mediante un `historical_access_case` válido y `access_control.can_read_frozen`.
 - **RLS:** `person_id = access_control.person()` **OR** organización de la relación.
 - **Estados y su efecto en la lectura:**
 
@@ -1172,7 +1172,21 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Retención:** con la asignación.
 - **Eventos:** `planning.session_rescheduled.v1`.
 
-Nota de conteo: `planning` tiene 16 tablas y 16 fichas; §9.5–9.8 son cuatro tablas físicas independientes.
+### 9.17 `planning.service_access_blocks`
+
+- **Propósito:** representar una causa reversible que hace inefectiva la contribución profesional y/o las sesiones futuras sin mutar sus fuentes de verdad. Es un bloqueo causal, **no** un snapshot del estado que deberá restaurarse.
+- **Dominio / fuente de verdad:** Planificación conserva el bloqueo operativo; Pagos u Organizaciones conservan la transición que lo origina.
+- **Clasificación:** `operational` con causa comercial restringida.
+- **Columnas:** `id uuid` · `person_id uuid` · `organization_id uuid` · `relationship_id uuid` (nullable) · `subscription_id uuid` (nullable) · `organization_event_id uuid` (nullable) · `source_kind text` (`subscription_suspension`, `organization_suspension`) · `blocks_future_sessions boolean` · `blocks_professional_contribution boolean` · `started_at timestamptz` · `ended_at timestamptz` (nullable) · `created_by_kind identity.actor_kind` · `created_by_membership_id uuid` (nullable).
+- **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `(relationship_id, person_id, organization_id) → relationships.service_relationships(id, person_id, organization_id) RESTRICT` cuando se declara relación; `(subscription_id, person_id, organization_id) → payments.plan_subscriptions(id, person_id, organization_id) RESTRICT`; `organization_event_id → organizations.organization_events(id) RESTRICT`; `(created_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`. `planning.enforce_service_access_block_source_ct` valida que el evento organizacional pertenezca al mismo tenant y sea una suspensión.
+- **Uniques y checks:** `UNIQUE (subscription_id) WHERE ended_at IS NULL AND subscription_id IS NOT NULL`; `UNIQUE (organization_event_id, person_id) WHERE ended_at IS NULL AND organization_event_id IS NOT NULL`; `CHECK (num_nonnulls(subscription_id, organization_event_id) = 1)` y correspondencia exhaustiva con `source_kind`; `CHECK (ended_at IS NULL OR ended_at >= started_at)`; al menos uno de los dos flags es verdadero. Una fila cerrada no se reabre ni cambia de fuente.
+- **Actores:** solo funciones cerradas de suspensión/reactivación de Pagos u Organizaciones insertan o fijan `ended_at`; no hay DML directo de runtime. Cerrar exige lock de la fuente y cierra una sola fila coincidente.
+- **RLS:** la persona ve sus bloqueos y `admin`/`owner` con la capacidad correspondiente ven los de su organización. Un coach no lee la causa comercial: las proyecciones cerradas solo consumen `access_control.has_service_block(...)` para denegar contribución o proyectar agenda efectiva.
+- **Consultas / índices:** `(person_id, ended_at)`, `(organization_id, ended_at)`, `(relationship_id, ended_at)` y el unique parcial de fuente abierta.
+- **Retención:** se conserva como evidencia del periodo bloqueado junto con el evento causal; su cierre no altera ni revive grants, relaciones, membresías, asignaciones o sesiones.
+- **Eventos:** ninguno propio; la transición causal emite el evento de suscripción u organización correspondiente.
+
+Nota de conteo: `planning` tiene 17 tablas y 17 fichas; §9.5–9.8 son cuatro tablas físicas independientes.
 
 ---
 
@@ -1684,7 +1698,7 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 - **Columnas:** `id` · `person_id uuid` · `organization_id uuid` · `plan_version_id uuid` · `status payments.subscription_status` (`active`, `suspended`, `ended`) · `external_subscription_ref text` (nullable) · `current_period_end date` (nullable) · `started_at timestamptz` · `suspended_at timestamptz` (nullable) · `ended_at timestamptz` (nullable) · `ended_by_kind identity.actor_kind` (nullable) · `ended_by_membership_id uuid` (nullable).
 - **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `(plan_version_id, organization_id) → plan_versions(id, organization_id) RESTRICT` (`IX-38`); `(ended_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`; clave portadora `UNIQUE (id, person_id, organization_id)`.
 - **Uniques y checks:** `UNIQUE (person_id, organization_id) WHERE status <> 'ended'`; `CHECK ((status = 'suspended') = (suspended_at IS NOT NULL))`; `CHECK ((status = 'ended') = (ended_at IS NOT NULL))`; **`CHECK (status <> 'ended' OR ended_by_kind IS NOT NULL)`** — nada termina sin un actor humano, y el worker de pagos no puede escribir `ended` porque no tiene actor humano que declarar.
-- **Actores:** la persona se suscribe y cancela; `admin`/`owner` suspenden, reactivan y terminan; el worker de pagos solo transiciona entre `active` y `suspended`.
+- **Actores:** la persona se suscribe y cancela; `admin`/`owner` suspenden, reactivan y terminan; el worker de pagos solo transiciona entre `active` y `suspended`. Suspender y reactivar se ejecutan mediante funciones cerradas que abren o cierran el `planning.service_access_blocks` exacto bajo lock (`IX-40`); ninguna transición restaura filas de otros dominios.
 - **RLS:** `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** `access_control.has_capability(organization_id,'manage_billing')`). Un `coach` **no** lee esta tabla: el estado de pago de su cliente no es asunto suyo.
 - **Consultas / índices:** `(person_id, status)`, `(organization_id, status)`.
 - **Retención:** con la persona; la anonimización rompe el vínculo y conserva el agregado de la organización.
@@ -1831,13 +1845,13 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 | `relationships` | 6 |
 | `privacy` | 16 |
 | `catalog` | 12 |
-| `planning` | 16 |
+| `planning` | 17 |
 | `execution` | 14 |
 | `nutrition` | 8 |
 | `payments` | 12 |
 | `system` | 3 |
 | `support` | 5 |
-| **Total** | **116** |
+| **Total** | **117** |
 
 ### 14.2 Invariantes transversales confirmadas por el diccionario
 
@@ -1868,7 +1882,7 @@ P0-07 cerró objetos/JSONB/particiones y P0-08 cerró receipts, PKs offline y re
 
 Entregable principal de detalle de la Fase 4, complementado por el catálogo de objetos físicos. Se considera completo cuando la revisión confirme que:
 
-1. las 116 tablas tienen ficha completa en sus quince campos;
+1. las 117 tablas tienen ficha completa en sus quince campos;
 2. el diccionario, el ERD lógico y las cardinalidades coinciden;
 3. cada tabla tiene responsabilidad clara, integridad y justificación en operaciones reales;
 4. ninguna tabla podría no existir sin romper una operación de la matriz;

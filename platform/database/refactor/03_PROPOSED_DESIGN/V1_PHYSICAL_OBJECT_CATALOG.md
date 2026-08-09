@@ -2,7 +2,7 @@
 
 **Fecha:** 3 de agosto de 2026
 **Fase:** 4 — cierre de especificación física
-**Estado:** inventario de 116 tablas; sesión técnica de Studio materializada
+**Estado:** inventario de 117 tablas; sesión técnica de Studio y bloqueo causal materializados
 **Deriva de:** [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`V1_DATA_DICTIONARY.md`](./V1_DATA_DICTIONARY.md)
 
 ## 1. Propósito
@@ -15,7 +15,7 @@ Este catálogo cierra las decisiones que no pueden dejarse a quien escriba la pr
 - forma, versión y validación de cada JSONB;
 - identidad global y mantenimiento de tablas particionadas.
 
-No sustituye las fichas de las 116 tablas. Fija las reglas mecánicas que todas consumen.
+No sustituye las fichas de las 117 tablas. Fija las reglas mecánicas que todas consumen.
 
 ## 2. Inventario recertificado
 
@@ -26,15 +26,15 @@ No sustituye las fichas de las 116 tablas. Fija las reglas mecánicas que todas 
 | `relationships` | 6 |
 | `privacy` | 16 |
 | `catalog` | 12 |
-| `planning` | 16 |
+| `planning` | 17 |
 | `execution` | 14 |
 | `nutrition` | 8 |
 | `payments` | 12 |
 | `system` | 3 |
 | `support` | 5 |
-| **Total** | **116** |
+| **Total** | **117** |
 
-El conteo se obtiene de 116 fichas de tabla en el diccionario, incluida `identity.access_sessions` como almacenamiento técnico de sesión. Incluye cuatro targets, cinco resultados tipados, ocho tablas nutricionales y las cinco tablas de soporte de ADR-028 como tablas independientes. Excluye:
+El conteo se obtiene de 117 fichas de tabla en el diccionario, incluidas `identity.access_sessions` como almacenamiento técnico de sesión y `planning.service_access_blocks` como bloqueo causal. Incluye cuatro targets, cinco resultados tipados, ocho tablas nutricionales y las cinco tablas de soporte de ADR-028 como tablas independientes. Excluye:
 
 - enums;
 - vistas y funciones;
@@ -87,8 +87,8 @@ Reglas adicionales:
 1. `<columnas>` conserva el orden del DDL y omite `DESC`.
 2. Una tabla tiene como máximo una policy por comando; las alternativas de actor se combinan dentro de ella.
 3. Si el nombre excede 63 bytes, se conserva un prefijo de 54 bytes y se añade `_` + los primeros 8 hex de `sha256(nombre_completo)`. El script generador y el verificador usan la misma función.
-4. Los índices obligatorios son los de las fichas y `PR-01..27`; no se crean índices “por si acaso”.
-5. Los triggers guardianes `IX-01..35`, `privacy.enforce_data_grant_transition_tg`, los validadores JSONB y los de partición conservan los nombres publicados, no los regeneran.
+4. Los índices obligatorios son los de las fichas y `PR-01..29`; no se crean índices “por si acaso”.
+5. Los triggers guardianes `IX-01..44`, `privacy.enforce_data_grant_transition_tg`, los validadores JSONB y los de partición conservan los nombres publicados, no los regeneran.
 
 ## 5. Contrato transversal JSONB
 
@@ -184,7 +184,7 @@ La migración inicial crea el mes actual más tres meses futuros. Una escritura 
 
 | ID | Demostración |
 | --- | --- |
-| `T-SCHEMA-01` | ERD, diccionario e inventario reportan exactamente 116 tablas y el diccionario contiene 116 fichas únicas. |
+| `T-SCHEMA-01` | ERD, diccionario e inventario reportan exactamente 117 tablas y el diccionario contiene 117 fichas únicas. |
 | `T-SCHEMA-02` | Cada tabla/columna/FK/check/índice de las fichas se compara con `pg_catalog`; falta o nombre distinto falla CI. |
 | `T-SCHEMA-03` | Cada tabla con RLS tiene exactamente las policies esperadas por comando y ninguna policy extra permisiva. |
 | `T-SCHEMA-04` | Cada JSONB acepta fixtures V1 válidos y rechaza versión, claves, tipos y campos adicionales inválidos. |

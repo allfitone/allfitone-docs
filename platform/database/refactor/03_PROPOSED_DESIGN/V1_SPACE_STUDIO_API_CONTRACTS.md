@@ -160,7 +160,7 @@ GET /space/v1/executions?limit=25&cursor=eyJ2IjoxLCJzIjoi...
 | `precondition-required` | 428 | Falta el `If-Match` obligatorio para una escritura con revisión |
 | `precondition-failed` | 412 | Estado incompatible: relación terminada, versión no publicada |
 | `conflict` | 409 | Escritura concurrente perdida; versión optimista |
-| `integrity-conflict` | 409 | Los IDs visibles no forman el mismo contexto de persona/organización/relación según `IX-01..35`; nunca revela cuál ID ajeno existe |
+| `integrity-conflict` | 409 | Los IDs visibles no forman el mismo contexto de persona/organización/relación según `IX-01..44`; nunca revela cuál ID ajeno existe |
 | `idempotency-key-required` | 400 | Falta la identidad de replay en un comando HTTP |
 | `command-id-required` | 400 | Falta la identidad durable en un comando HTTP |
 | `idempotency-key-reuse` | 409 | Misma clave, cuerpo distinto |
@@ -233,9 +233,7 @@ Sujeto implícito: la persona autenticada. Ningún endpoint recibe un `person_id
 | Método | Ruta | Operación | Notas |
 | --- | --- | --- | --- |
 | `GET` | `/consents` | `OP-PRV-013` | Panel de control del consentimiento |
-| `POST` | `/consents` | `OP-PRV-003` | Congela versión de scope |
 | `POST` | `/consents/{id}/revocation` | `OP-PRV-005` | Invalidación transaccional |
-| `POST` | `/grant-requests/{id}/rejection` | `OP-PRV-004` | |
 | `GET` | `/visibility-denials` | `OP-PRV-017` | |
 | `PUT` | `/executions/{id}/visibility` | `OP-PRV-006` | Ocultar por relación |
 | `DELETE` | `/executions/{id}/visibility/{relId}` | `OP-PRV-007` | |
@@ -312,7 +310,6 @@ Sujeto: la organización de la ruta.
 | `POST` | `/organizations` | `OP-ORG-001` |
 | `GET` · `PATCH` | `/organizations/{orgId}` | `OP-ORG-013` · `OP-ORG-002` |
 | `POST` · `PATCH` | `/organizations/{orgId}/sites[/{siteId}]` | `OP-ORG-003` · `OP-ORG-004` |
-| `POST` | `/organizations/{orgId}/ownership-transfer` | `OP-ORG-011` |
 | `POST` | `/organizations/{orgId}/closure` | `OP-ORG-012` |
 | `GET` | `/organizations/{orgId}/roles` | `OP-ORG-017` |
 
@@ -340,8 +337,6 @@ Sujeto: la organización de la ruta.
 | `POST` | `/organizations/{orgId}/relationships/{id}/termination` | `OP-REL-008` | Ninguno |
 | `POST` | `/organizations/{orgId}/relationships/{id}/termination-requests` | `OP-REL-009` | Ninguno |
 | `GET` | `/organizations/{orgId}/grants` | `OP-PRV-014` | Ninguno — estado del consentimiento |
-| `POST` | `.../relationships/{relId}/grant-requests` | `OP-PRV-001` | Ninguno |
-| `POST` | `/organizations/{orgId}/grant-requests/{id}/withdrawal` | `OP-PRV-002` | Ninguno |
 | `POST` | `/organizations/{orgId}/historical-access-cases` | `OP-PRV-018` | `manage_historical_access`; no concede lectura |
 | `POST` | `/organizations/{orgId}/historical-access-cases/{caseId}/closure` | `OP-PRV-019` | `manage_historical_access`; no concede lectura |
 
@@ -380,6 +375,16 @@ Todas exigen la fórmula completa y escriben `ACCESS_EVENT`.
 Ninguna de estas rutas exige scope: **el estado de pago no es un dato fitness**.
 Y ninguna la puede ejercer un `coach`: `manage_billing` se asigna solo a
 `owner` y `admin`.
+
+`/reactivation` cierra únicamente el `service_access_block` abierto cuya fuente
+es esa suscripción. La respuesta se calcula después del lock con grants,
+relación, membresía, asignación, sesiones y demás bloqueos vigentes; el comando
+no acepta ni devuelve un snapshot que pueda restaurarse.
+
+Si la suscripción terminó, no existe el bloqueo exacto o la transición compite
+con un cambio incompatible, responde conflicto y el cliente debe releer. Un
+éxito nunca implica que todo “volvió a como estaba”: solo confirma que esa causa
+comercial dejó de bloquear.
 
 ### 5.5 Datos históricos restringidos
 
@@ -669,14 +674,13 @@ Comandos con varias escrituras que deben ser atómicas. La API los invoca dentro
 | Función | Operación | Qué garantiza en una sola transacción |
 | --- | --- | --- |
 | `activate_person(attempt_id)` | `OP-IDN-003` | Crea `PERSON`, vincula `ACCESS_ACCOUNT`, cierra el intento. Único camino que crea una persona |
-| `decide_invitation_intent(intent_id, decision)` | `OP-IDN-009` | Materializa **como máximo un** destino y valida dependencias; la aceptación parcial no acopla intenciones |
-| `create_organization(...)` | `OP-ORG-001` | Organización + membresía + rol `owner` |
+| `decide_invitation_intent(intent_id, decision, scope_decisions)` | `OP-IDN-009` | Materializa **como máximo un** destino; para `service_relationship` exige una decisión por opción, crea la relación, todos los `CONSENT_EVENT` y solo los `DATA_GRANT` concedidos en la misma transacción |
+| `create_organization(...)` | `OP-ORG-001` | Organización + membresía + rol `owner`; el constraint diferible confirma exactamente un owner activo |
 | `terminate_membership(membership_id)` | `OP-ORG-009` | Cierra membresía, roles y asignaciones profesionales efectivas |
 | `assign_professional(rel_id, membership_id)` | `OP-REL-002/003` | Cierra el titular anterior, abre el nuevo, notifica |
 | `relationships.terminate_relationship(rel_id)` | `OP-REL-007/008` | **La más crítica:** toma el actor del contexto y usa un instante `T` único; **congela** grants (`frozen`, `frozen_at = T`), cierra asignaciones y suplencias, cierra periodos de gestión, desacopla asignaciones, pausa sesiones futuras, cancela correcciones y propuestas nutricionales de esa relación, invalida read models |
 | `open_historical_access_case(rel_id, membership_id, purpose, reference, expires_at)` | `OP-PRV-018` | Valida relación terminada, actor elegible, capacidad de gestión, MFA y ventana `<=24h`; crea un caso exacto |
 | `close_historical_access_case(case_id)` | `OP-PRV-019` | Cierra el caso e invalida cualquier contexto asociado |
-| `privacy.grant_consent(request_id)` | `OP-PRV-003` | Resuelve persona, relación, organización, definición, scope, nivel y propósito desde la solicitud pendiente exacta; crea `CONSENT_EVENT` con snapshot + `DATA_GRANT` |
 | `privacy.revoke_grant(grant_id)` | `OP-PRV-005` | Acepta `active` o `frozen`, fija `revoked_at`, cierra casos históricos abiertos e invalida proyecciones y cachés antes de confirmar |
 | `privacy.log_access_event(subject_person_id, relationship_id, data_grant_id, historical_access_case_id, scope_code, scope_version, access_mode, resource, result)` | `OP-PRV-015` y toda lectura amparada | Única entrada a `privacy.access_events`; toma actor, membresía, propósito, request y tiempo del contexto, valida la tupla completa y falla la lectura si no puede registrar |
 | `create_assignment(rel_id, program_version_id, starts_on, tz)` | `OP-PLN-010` | Asignación + periodo de gestión + **materialización completa** de sesiones |
@@ -694,7 +698,7 @@ Comandos con varias escrituras que deben ser atómicas. La API los invoca dentro
 | `nutrition.propose_goal_version(person_id,...)` | `OP-NUT-012` | Comprueba contexto profesional/credencial/grant y supersede pendiente de la relación |
 | Proxy autenticado de foto nutricional | `OP-NUT-013` | Reevalúa contexto profesional y ambos scopes, registra acceso y transmite el objeto saneado sin redirect |
 
-Las funciones que actúan como entrada cerrada sobre tablas sin DML directo —`activate_person`, `privacy.grant_consent`, `privacy.revoke_grant`, `relationships.terminate_relationship` y `privacy.log_access_event`— son `SECURITY DEFINER`, fijan `search_path = pg_catalog`, califican cada objeto y nunca reciben el actor como parámetro. Las demás son `SECURITY INVOKER`, salvo que su ficha física documente otra necesidad equivalente.
+Las funciones que actúan como entrada cerrada sobre tablas sin DML directo —`activate_person`, `identity.decide_invitation_intent`, `privacy.revoke_grant`, `relationships.terminate_relationship` y `privacy.log_access_event`— son `SECURITY DEFINER`, fijan `search_path = pg_catalog`, califican cada objeto y nunca reciben el actor como parámetro. Las demás son `SECURITY INVOKER`, salvo que su ficha física documente otra necesidad equivalente.
 
 `relationships.terminate_relationship` corta inmediatamente las rutas operativas y de escritura; no revoca los grants. ADR-023 publica una superficie histórica separada, ejercida únicamente por el caso exacto y `access_control.can_read_frozen`. `privacy.revoke_grant` acepta `active` o `frozen`; al revocar uno congelado también cierra todos los casos abiertos de la relación antes de confirmar.
 

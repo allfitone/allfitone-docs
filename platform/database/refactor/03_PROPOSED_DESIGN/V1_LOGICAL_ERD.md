@@ -14,7 +14,7 @@ Cada tabla aplica las convenciones de [`POSTGRES_MODELING_STANDARD.md`](./POSTGR
 
 ## 2. Del concepto a la tabla
 
-El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **116 tablas de dominio** en once schemas. A las 115 tablas recertificadas tras ADR-028 se suma `identity.access_sessions`, almacenamiento técnico requerido por la sesión opaca de Studio. Enums, vistas, funciones y particiones hijas no cuentan como tablas adicionales.
+El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **117 tablas de dominio** en once schemas. A las 115 tablas recertificadas tras ADR-028 se suman `identity.access_sessions`, almacenamiento técnico requerido por la sesión opaca de Studio, y `planning.service_access_blocks`, bloqueo causal sin snapshot. Enums, vistas, funciones y particiones hijas no cuentan como tablas adicionales.
 
 | Entidad conceptual | Tablas físicas | Por qué se expande |
 | --- | --- | --- |
@@ -29,20 +29,20 @@ El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **116 tab
 
 | Schema | Tablas | Nº |
 | --- | --- | --- |
-| `identity` | `people`, `access_accounts`, `onboarding_attempts`, `eligibility_evidence`, `profile_attributes`, `fitness_profile_claims`, `body_progress_records`, `health_context_claims`, `profile_verifications`, `professional_profiles`, `invitations`, `invitation_intents`, `notification_preferences` | 13 |
+| `identity` | `people`, `access_accounts`, `access_sessions`, `onboarding_attempts`, `eligibility_evidence`, `profile_attributes`, `fitness_profile_claims`, `body_progress_records`, `health_context_claims`, `profile_verifications`, `professional_profiles`, `invitations`, `invitation_intents`, `notification_preferences` | 14 |
 | `organizations` | `organizations`, `organization_types`, `organization_sites`, `organization_memberships`, `organization_roles`, `organization_capabilities`, `role_capabilities`, `membership_roles`, `organization_events`, `membership_events` | 10 |
 | `relationships` | `service_relationships`, `responsible_party_snapshots`, `relationship_professional_assignments`, `professional_assignment_events`, `relationship_events`, `relationship_termination_requests` | 6 |
-| `privacy` | `data_classifications`, `scope_definitions`, `scope_resource_rules`, `consent_events`, `grant_requests`, `data_grants`, `session_visibility_denials`, `historical_access_cases`, `access_events`, `retention_policies`, `erasure_requests`, `disposition_cases`, `disposition_items`, `disposition_events`, `legal_holds`, `hold_applications` | 16 |
+| `privacy` | `data_classifications`, `scope_definitions`, `scope_resource_rules`, `consent_events`, `invitation_scope_options`, `data_grants`, `session_visibility_denials`, `historical_access_cases`, `access_events`, `retention_policies`, `erasure_requests`, `disposition_cases`, `disposition_items`, `disposition_events`, `legal_holds`, `hold_applications` | 16 |
 | `catalog` | `disciplines`, `activity_types`, `activity_type_aliases`, `movements`, `movement_aliases`, `movement_variants`, `equipment`, `movement_equipment`, `units`, `result_contracts`, `activity_type_result_contracts`, `contract_fixtures` | 12 |
-| `planning` | `session_templates`, `session_template_drafts`, `session_template_versions`, `planned_steps`, `strength_targets`, `endurance_targets`, `interval_targets`, `mobility_targets`, `programs`, `program_drafts`, `program_versions`, `program_version_sessions`, `program_assignments`, `assignment_management_periods`, `prescription_revisions`, `planned_sessions` | 16 |
+| `planning` | `session_templates`, `session_template_drafts`, `session_template_versions`, `planned_steps`, `strength_targets`, `endurance_targets`, `interval_targets`, `mobility_targets`, `programs`, `program_drafts`, `program_versions`, `program_version_sessions`, `program_assignments`, `assignment_management_periods`, `prescription_revisions`, `planned_sessions`, `service_access_blocks` | 17 |
 | `execution` | `executed_sessions`, `planned_session_executions`, `session_segments`, `strength_sets`, `endurance_laps`, `interval_results`, `round_results`, `mobility_results`, `metric_samples`, `professional_observations`, `correction_proposals`, `revision_events`, `result_validation_events`, `derived_results` | 14 |
 | `nutrition` | `nutrient_definitions`, `meals`, `meal_items`, `meal_nutrient_values`, `goal_sets`, `goal_versions`, `goal_targets`, `goal_decisions` | 8 |
 | `payments` | `gateway_connections`, `organization_plans`, `plan_versions`, `plan_subscriptions`, `payment_records`, `subscription_events`, `platform_plans`, `platform_plan_versions`, `platform_features`, `platform_plan_features`, `platform_subscriptions`, `organization_premium_entitlements` | 12 |
 | `system` | `outbox_events`, `idempotency_keys`, `job_runs` | 3 |
 | `support` | `platform_role_assignments`, `platform_duty_assignments`, `break_glass_requests`, `break_glass_approvals`, `break_glass_events` | 5 |
-| **Total** | | **115** |
+| **Total** | | **117** |
 
-Nota: el total anterior era 111. La opción B agrega exclusivamente `support.platform_duty_assignments`, `support.break_glass_requests`, `support.break_glass_approvals` y `support.break_glass_events`; no convierte vistas, funciones ni tipos enumerados en tablas.
+Nota: el total anterior era 111. La opción B agrega `support.platform_duty_assignments`, `support.break_glass_requests`, `support.break_glass_approvals` y `support.break_glass_events`; la sesión opaca agrega `identity.access_sessions`; el bloqueo causal agrega `planning.service_access_blocks`. No se convierten vistas, funciones ni tipos enumerados en tablas.
 
 ## 4. Tipos enumerados nativos
 
@@ -147,7 +147,7 @@ erDiagram
 | `organization_roles` | `id` | `UNIQUE code`; catálogo cerrado: owner/admin/coach/staff |
 | `organization_capabilities` | `id` | `UNIQUE code`; catálogo de capacidades |
 | `role_capabilities` | `id` | `UNIQUE (role_code, capability_code)`; N:M gobernada |
-| `membership_roles` | `id` | `membership_id`, `role_code`, vigencia; protección del último owner por trigger |
+| `membership_roles` | `id` | `membership_id`, `role_code`, vigencia; constraint trigger diferible exige exactamente un `owner` activo por organización activa y el flujo genérico no puede alterarlo |
 | `organization_events` | `id` | actor membership, cuando existe, pertenece a la organización por FK compuesta; append-only (`IX-25`) |
 | `membership_events` | `id` | append-only |
 
@@ -182,8 +182,9 @@ erDiagram
     people ||--o{ consent_events : "person_id"
     service_relationships ||--o{ consent_events : "relationship_id"
     scope_definitions ||--o{ consent_events : "scope_definition_id"
-    service_relationships ||--o{ grant_requests : "relationship_id"
-    scope_definitions ||--o{ grant_requests : "scope_definition_id"
+    invitation_intents ||--o{ invitation_scope_options : "invitation_intent_id"
+    scope_definitions ||--o{ invitation_scope_options : "scope_definition_id"
+    invitation_scope_options ||--o| consent_events : "invitation_scope_option_id"
     consent_events ||--o| data_grants : "consent_event_id"
     people ||--o{ data_grants : "person_id"
     service_relationships ||--o{ data_grants : "relationship_id"
@@ -208,8 +209,8 @@ erDiagram
 | `data_classifications` | `id` | `UNIQUE code`; clasificación de sensibilidad |
 | `scope_definitions` | `id` | `UNIQUE (scope_code, version_number)`; portadora `UNIQUE (id, scope_code)`; inmutable |
 | `scope_resource_rules` | `id` | `scope_definition_id`, `data_classification_code`; recursos/campos/acciones máximas |
-| `consent_events` | `id` | FKs `(relationship_id,person_id,organization_id)` y `(scope_definition_id,scope_code)`; snapshot en `jsonb`; portadora de la tupla exacta; append-only (`IX-05`) |
-| `grant_requests` | `id` | FKs compuestas relación/organización, membresía solicitante/organización y definición/scope; pendiente único por `(relationship_id,scope_code)` (`IX-06`) |
+| `consent_events` | `id` | FKs con relación y opción exacta presentada; snapshot en `jsonb`; portadora de persona/organización/scope/versión; append-only (`IX-05`) |
+| `invitation_scope_options` | `id` | Solo cuelga de una intención `service_relationship`; definición/scope exactos, una opción por scope e inmutabilidad después de decidir (`IX-06`) |
 | `data_grants` | `id` | FKs compuestas con relación, definición y consentimiento prueban persona, organización, scope y versión exacta; único no revocado por `(relationship_id,scope_code)`; estado/cortes gobernados por trigger (`IX-07`) |
 | `session_visibility_denials` | `id` | ejecución y relación pertenecen a `person_id`; `UNIQUE (executed_session_id, relationship_id)` (`IX-08`) |
 | `historical_access_cases` | `id` | relación y membresías de la organización exacta por FK; elegibilidad temporal por trigger; `expires_at <= opened_at + 24h` (`IX-09/10`) |
@@ -276,6 +277,11 @@ erDiagram
     program_assignments ||--o{ assignment_management_periods : "assignment_id"
     program_assignments ||--o{ prescription_revisions : "assignment_id"
     program_assignments ||--|{ planned_sessions : "assignment_id"
+    people ||--o{ service_access_blocks : "person_id"
+    organizations ||--o{ service_access_blocks : "organization_id"
+    service_relationships o|--o{ service_access_blocks : "relationship_id"
+    plan_subscriptions o|--o{ service_access_blocks : "subscription_id"
+    organization_events o|--o{ service_access_blocks : "organization_event_id"
 ```
 
 | Tabla | PK | Claves e invariantes notables |
@@ -296,6 +302,7 @@ erDiagram
 | `assignment_management_periods` | `id` | `person_id` restringido contra asignación y relación; un periodo vigente por asignación (`IX-12`) |
 | `prescription_revisions` | `id` | `person_id` restringido contra asignación y autor profesional; override tipado (`IX-13`) |
 | `planned_sessions` | `id` | `person_id` restringido contra la asignación; clave portadora para intentos (`IX-15`) |
+| `service_access_blocks` | `id` | Causa tipada y una sola fila abierta por fuente; cerrar quita solo ese bloqueo y nunca restaura estado de otros dominios (`IX-40`) |
 
 ## 11. Ejecución
 
@@ -443,7 +450,7 @@ La regla estructural: `identity.people` y las raíces de autenticación no depen
 
 ### 14.1 Integridad de identidad y tenant
 
-Los 35 invariantes `IX-01..35` cierran los cruces entre persona, organización, membresía, relación, planificación, ejecución, privacidad, nutrición y soporte. Se materializan con las claves portadoras necesarias, FKs compuestas, constraint triggers y entradas cerradas de auditoría. El DDL no puede degradarlos a validaciones de API o RLS.
+Los 44 invariantes `IX-01..44` cierran los cruces entre persona, organización, membresía, relación, planificación, ejecución, privacidad, nutrición, pagos y soporte. Se materializan con las claves portadoras necesarias, FKs compuestas, constraint triggers y entradas cerradas de auditoría. El DDL no puede degradarlos a validaciones de API o RLS.
 
 Cada invariante tiene una prueba negativa `T-INT-*` ejecutada con `BYPASSRLS`; por tanto, el éxito de la suite demuestra integridad estructural y no solo el comportamiento de una policy.
 
@@ -467,7 +474,7 @@ Cada invariante tiene una prueba negativa `T-INT-*` ejecutada con `BYPASSRLS`; p
 
 ## 16. Resolución física
 
-Columnas, nullability, índices, retención y eventos están en las 115 fichas individuales. Nombres, enums compartidos, JSONB y las dos tablas particionadas están cerrados en `V1_PHYSICAL_OBJECT_CATALOG.md`; ninguna de esas decisiones se reserva al DDL.
+Columnas, nullability, índices, retención y eventos están en las 117 fichas individuales. Nombres, enums compartidos, JSONB y las dos tablas particionadas están cerrados en `V1_PHYSICAL_OBJECT_CATALOG.md`; ninguna de esas decisiones se reserva al DDL.
 
 ## 17. Estado de salida
 

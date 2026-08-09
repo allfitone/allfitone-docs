@@ -33,7 +33,7 @@ flowchart TB
 | RLS | Un `WHERE` olvidado, un join mal escrito, un endpoint nuevo sin revisar | **No** filtra columnas: una fila visible es visible entera |
 | Proyecciones y field-sets | Que un campo de otra categoría viaje dentro de una fila legítima | No sustituye a RLS: no restringe qué filas se leen |
 
-La integridad de la fila es ortogonal a estas cuatro capas. RLS puede denegar una fila, pero no puede demostrar que dos IDs válidos pertenezcan a la misma persona u organización. Las escrituras se someten además a las FKs compuestas y guardianes `IX-01..35` de [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md), incluso cuando el actor de prueba usa `BYPASSRLS`.
+La integridad de la fila es ortogonal a estas cuatro capas. RLS puede denegar una fila, pero no puede demostrar que dos IDs válidos pertenezcan a la misma persona u organización. Las escrituras se someten además a las FKs compuestas y guardianes `IX-01..44` de [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md), incluso cuando el actor de prueba usa `BYPASSRLS`.
 
 Las dos reglas que se derivan de esta separación y que atraviesan todo el documento:
 
@@ -417,14 +417,15 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | `A6` | Las de su organización | — | — | — |
 | `A4`, `A5` | Las de su organización | Sí | Roles, terminación | — |
 
-- **Condición RLS** — `organization_id = access_control.org()` con membresía vigente, **OR** `person_id = access_control.person()`. `INSERT` y `UPDATE` de roles exigen `access_control.has_capability(org, 'manage_staff')`; otorgar `owner` exige que el actor sea `owner`.
+- **Condición RLS** — `organization_id = access_control.org()` con membresía vigente, **OR** `person_id = access_control.person()`. `INSERT` y `UPDATE` de roles exigen `access_control.has_capability(org, 'manage_staff')`; las operaciones genéricas solo admiten `admin`, `coach` y `staff` y rechazan `owner`.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE`. Sin `DELETE`: las bajas conservan historial.
 - **Índice para la policy** — sobre `(organization_id, status)` y sobre `(person_id, status)`.
 - **`T-MEMB-1` (negativa)** — Una membresía, en cualquier rol, **no** concede acceso a datos fitness de ningún cliente. Un `admin` sin asignación ni grant no lee nada del Fitness ID.
 - **`T-MEMB-2` (negativa)** — Un rol de una organización no se propaga a otra, aunque la persona sea miembro de ambas.
-- **`T-MEMB-3` (negativa)** — Retirar el último `owner` es imposible: lo impide un constraint.
+- **`T-MEMB-3` (negativa)** — Cerrar el rol o la membresía `owner` y confirmar con cero owners es imposible: lo impide `organizations.enforce_exactly_one_active_owner_ct`.
 - **`T-MEMB-4` (positiva)** — Terminar una membresía deja inefectivas sus asignaciones profesionales **en la misma transacción**; el grant sobrevive, el actor deja de poder ejercerlo.
 - **`T-MEMB-5` (negativa)** — `A6` (staff) ve nombre y estado del directorio, y ninguna columna de perfil, ejecución, medida corporal o salud.
+- **`T-MEMB-6` (negativa)** — Crear un segundo rol `owner` activo y confirmar con dos owners es imposible: lo impide el mismo constraint diferible.
 
 #### `ORGANIZATION_ROLE` · `ORGANIZATION_CAPABILITY` · `ROLE_CAPABILITY`
 
@@ -532,19 +533,21 @@ Es el dominio donde una policy mal escrita produce una fuga real. Todas sus fich
 - **`T-SCOPE-2` (negativa)** — No existe ningún scope, vista, RPC ni endpoint equivalente a `all_data`. Se verifica enumerando el catálogo y comprobando que solo hay siete. El estado de pago **no es un scope** y no se expone por ninguno de ellos.
 - **`T-SCOPE-3` (positiva)** — Cada campo expuesto por una regla tiene una `DATA_CLASSIFICATION` asignada; publicar una regla con un campo sin clasificar falla.
 
-#### `CONSENT_EVENT` · solicitudes de grant
+#### `CONSENT_EVENT` · opciones de scope de la invitación
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
-| `A2` | Los propios | Decisiones propias | — | — |
-| `A3`–`A5` | Los de sus relaciones, sin contenido | Solicitudes | Retiro | — |
+| `A2` | Los propios | Solo mediante decisión de invitación | — | — |
+| `A3`–`A5` | Los de sus relaciones, sin contenido | — | — | — |
 | Resto | — | — | — | — |
 
-- **Condición RLS** — En `consent_events`: `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** existe `service_relationships(id=relationship_id, organization_id=access_control.org())`). En `grant_requests`: join por `(relationship_id, organization_id)`; la persona compara `service_relationships.person_id`, la organización compara `organization_id`. La organización ve **estado**, nunca contenido amparado.
-- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`. Sin `UPDATE` ni `DELETE`: el evento de consentimiento es evidencia inmutable.
-- **Índice para la policy** — `consent_events`: `(person_id, decided_at DESC)`, `(relationship_id, scope_code, decided_at DESC)`, `(organization_id, decided_at DESC)`; `grant_requests`: `(relationship_id, status)`, `(organization_id, status)` y único parcial pendiente `(relationship_id, scope_code)`.
+- **Condición RLS** — En `consent_events`: `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** existe `service_relationships(id=relationship_id, organization_id=access_control.org())`). `invitation_scope_options` hereda el acceso de `identity.invitation_intents`/`invitations` y no admite DML directo. La organización ve **estado**, nunca contenido amparado.
+- **Grants mínimos** — `allfit_api`: `SELECT`; `INSERT` solo mediante `identity.decide_invitation_intent`. Sin `UPDATE` ni `DELETE`: el evento de consentimiento es evidencia inmutable.
+- **Índice para la policy** — `consent_events`: `(person_id, decided_at DESC)`, `(relationship_id, scope_code, decided_at DESC)`, `(organization_id, decided_at DESC)`; `invitation_scope_options`: único `(invitation_intent_id,scope_code)`.
 - **`T-CONSENT-1` (positiva)** — Rechazar o revocar conserva la evidencia sin dejar grant activo.
 - **`T-CONSENT-2` (positiva)** — El evento conserva el **snapshot exacto** que se presentó a la persona, aunque después se publique otra versión del scope.
+- **`T-CONSENT-3` (negativa)** — Ningún endpoint Studio crea opciones para una relación activa; un scope rechazado o revocado no reaparece como pendiente.
+- **`T-CONSENT-4` (positiva)** — Una confirmación puede aceptar la relación y cualquier subconjunto de scopes; produce un evento por opción y grants solo para las concedidas.
 
 #### `DATA_GRANT`
 
@@ -557,7 +560,7 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 | `A4`, `A5` | Los de su organización | — | — | — |
 | `A9` privacy | Por disposición | — | Cierre | — |
 
-- **Condición RLS** — `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** existe `service_relationships(id=relationship_id, organization_id=access_control.org())`). `INSERT` exclusivo de `privacy.grant_consent`, que exige sujeto propio y solicitud pendiente exacta. `UPDATE` solo mediante `privacy.revoke_grant` o `relationships.terminate_relationship`; el trigger de transición valida columnas y dirección.
+- **Condición RLS** — `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** existe `service_relationships(id=relationship_id, organization_id=access_control.org())`). `INSERT` exclusivo de `identity.decide_invitation_intent`, que exige sujeto, invitación, relación recién materializada y opción exactos. `UPDATE` solo mediante `privacy.revoke_grant` o `relationships.terminate_relationship`; el trigger de transición valida columnas y dirección.
 - **Contexto requerido** — Completo.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT` restringido y `UPDATE(status, frozen_at, revoked_at, last_reviewed_at)`. **Sin `DELETE`**. Policies + trigger solo permiten: consentimiento `INSERT`; persona `active/frozen → revoked`; terminación `active → frozen`; mantenimiento de `last_reviewed_at` sin cambiar autoridad.
 - **Índice para la policy** — **crítico**: único parcial `(relationship_id, scope_code) WHERE status IN ('active','frozen')`, `(person_id, status)`, `(organization_id, status)` y parcial `(relationship_id, scope_code, frozen_at) WHERE status='frozen'`.
@@ -1019,7 +1022,7 @@ Este dominio tiene una particularidad: **el `coach` no aparece en ninguna fila**
 - **`T-PAY-3` (negativa)** — Una persona sin relación con la organización no ve ningún plan suyo: no existe catálogo público.
 - **`T-PAY-4` (negativa)** — Publicar una versión nueva **no** cambia el monto que ve una suscripción vigente.
 
-#### `PLAN_SUBSCRIPTION` · `PAYMENT_RECORD` · `SUBSCRIPTION_EVENT`
+#### `PLAN_SUBSCRIPTION` · `PAYMENT_RECORD` · `SUBSCRIPTION_EVENT` · `SERVICE_ACCESS_BLOCK`
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
@@ -1029,14 +1032,19 @@ Este dominio tiene una particularidad: **el `coach` no aparece en ninguna fila**
 | `A9` | Las alcanzadas por el webhook | `payment_records` | Solo `active` ↔ `suspended` | — |
 
 - **Condición RLS** — `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** `access_control.has_capability(organization_id,'manage_billing')`).
+- **Bloqueo causal** — `planning.service_access_blocks` solo se crea/cierra mediante las funciones de suspensión/reactivación. La persona y `admin`/`owner` con capacidad pueden leer la fila; el coach solo consume el booleano efectivo en proyecciones de acceso y agenda, sin causa ni datos de pago.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(status, suspended_at, ended_at, ended_by_kind, ended_by_membership_id, current_period_end)`. El rol del worker de pagos tiene `UPDATE` **restringido a `status`, `suspended_at` y `current_period_end`**: no puede escribir `ended_at` ni el actor humano.
-- **Índice para la policy** — `(person_id, status)`, `(organization_id, status)`.
+- **Índice para la policy** — Suscripciones: `(person_id, status)`, `(organization_id, status)`. Bloqueos: `(person_id, ended_at)`, `(organization_id, ended_at)` y unique parcial por fuente abierta.
 - **`T-PAY-5` (negativa)** — Un `coach` con la persona asignada y grant vigente **no** lee su suscripción ni sus pagos.
 - **`T-PAY-6` (negativa)** — El worker de pagos **no puede** llevar una suscripción a `ended`: le falta el privilegio y le falta el actor humano que exige el `CHECK`.
 - **`T-PAY-7` (negativa)** — Una transición a `suspended` que intente escribir en `privacy.data_grants` o `planning.assignment_management_periods` se revierte entera (`IX-40`).
-- **`T-PAY-8` (positiva)** — Reactivar tras el pago restaura la escritura del profesional y reanuda las sesiones pausadas **sin** ninguna aceptación nueva de la persona.
+- **`T-PAY-8` (positiva)** — Reactivar tras el pago cierra solo el bloqueo de esa suscripción. La escritura y las sesiones futuras elegibles vuelven sin repetir una aceptación únicamente cuando grant, relación, membresía y asignación siguen vigentes.
 - **`T-PAY-9` (negativa)** — El reenvío del mismo webhook no crea un segundo `payment_record`: lo impide el unique, no el código.
 - **`T-PAY-10` (negativa)** — Terminar la suscripción **no** cambia el estado de la relación de servicio ni congela ningún grant.
+- **`T-PAY-11` (negativa)** — Revocar el grant, terminar la relación o cambiar membresía/asignación durante la suspensión permanece efectivo después del pago; la reactivación no actualiza ni inserta esas filas.
+- **`T-PAY-12` (negativa)** — Cerrar el bloqueo de suscripción no cierra un bloqueo simultáneo de organización; la contribución y agenda siguen denegadas por la causa restante.
+- **`T-PAY-13` (negativa)** — Una sesión cancelada, iniciada o pasada durante la suspensión no reaparece como futura disponible tras reactivar.
+- **`T-PAY-14` (concurrencia)** — Reactivación concurrente con terminación, revocación, cambio de asignación u otro bloqueo serializa o falla para reintento; nunca restaura un snapshot anterior.
 
 ### 7.9 Soporte
 
@@ -1105,7 +1113,7 @@ Un índice que solo existe para consultas de negocio no basta: la condición RLS
 | `SERVICE_RELATIONSHIP` | `(person_id, status)`; `(organization_id, status)`; único parcial `(person_id, organization_id) WHERE status='active'` | Visibilidad y unicidad de relación activa |
 | `RELATIONSHIP_PROFESSIONAL_ASSIGNMENT` | `(relationship_id, status, valid_from, valid_to)`; único parcial de titular efectivo | `access_control.effective_assignment` |
 | `CONSENT_EVENT` | `(person_id, decided_at DESC)`; `(relationship_id, scope_code, decided_at DESC)`; `(organization_id, decided_at DESC)` | Estado para persona y organización |
-| `GRANT_REQUEST` | `(relationship_id, status)`; `(organization_id, status)`; único parcial pendiente `(relationship_id, scope_code)` | Solicitud exacta por tenant/scope |
+| `INVITATION_SCOPE_OPTION` | `UNIQUE (invitation_intent_id, scope_code)` | Una opción exacta por scope dentro de la intención de relación |
 | `DATA_GRANT` | único parcial `(relationship_id, scope_code) WHERE status IN ('active','frozen')`; `(person_id, status)`; `(organization_id, status)`; parcial frozen con corte | Lookup live/frozen y unicidad efectiva |
 | `SESSION_VISIBILITY_DENIAL` | único `(executed_session_id, relationship_id)`; `(relationship_id, status)` | Denegación antes de proyectar y de agregar |
 | `EXECUTED_SESSION` | `(person_id, started_at DESC)`; `(context_relationship_id, started_at DESC)` | Listados y evaluación de denegación en lote |

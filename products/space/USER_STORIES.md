@@ -1463,7 +1463,9 @@ ninguno.
 4. Lo único que se pausa son las **sesiones futuras** del programa que me asignó ese gimnasio. Lo que ya entrené no se toca.
 5. Mi entrenador puede seguir viendo lo que le compartí, pero **no puede asignarme nada nuevo** ni escribir sobre mis datos.
 6. La suspensión dura **el tiempo que sea**: no hay un plazo tras el cual me cierren nada.
-7. Al pagar, todo vuelve exactamente como estaba y **no tengo que volver a dar ningún permiso**.
+7. Al pagar se quita **solo el bloqueo de esa suscripción** y se vuelve a calcular qué puedo usar con el estado actual; no se restaura una copia anterior.
+8. No tengo que volver a dar un permiso que siga vigente, pero un permiso revocado, una relación terminada, una asignación cambiada o una sesión cancelada, iniciada o pasada **no revive** por pagar.
+9. Si queda otro bloqueo activo, lo afectado sigue pausado. Solo vuelven las sesiones futuras, no iniciadas y no canceladas que todavía correspondan a una relación y asignación vigentes.
 
 ---
 

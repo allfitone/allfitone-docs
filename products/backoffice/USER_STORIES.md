@@ -372,9 +372,10 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 3. **Sus clientes conservan todo lo suyo**: su historial completo, su entrenamiento por su cuenta y su registro de comidas. Los programas que el gimnasio les asignó quedan pausados.
 4. **Los permisos no se tocan** y las relaciones no se terminan. Suspender no es cancelar.
 5. Si estaba habilitado para dar Premium a sus clientes, esos clientes bajan al plan gratuito mientras dure la suspensión, sin perder ningún dato.
-6. Al levantar la suspensión todo se reanuda **sin que nadie tenga que autorizar nada de nuevo**.
-7. Queda registrado quién lo suspendió, cuándo y con qué motivo.
-8. Suspender o reactivar exige `manage_organization_lifecycle`, AAL2 y motivo cerrado; el actor se conserva como persona y asignación de deber vigentes.
+6. Levantar la suspensión **solo cierra el bloqueo de esa organización** y vuelve a calcular la operación con el estado vigente; no restaura una copia anterior de permisos, relaciones, membresías, asignaciones, suscripciones ni sesiones.
+7. Nadie repite una autorización que siga vigente, pero lo revocado, terminado, cambiado, cancelado, iniciado o vencido durante la suspensión **no revive**. Cualquier otro bloqueo vigente sigue aplicando.
+8. Queda registrado quién lo suspendió o reactivó, cuándo y con qué motivo.
+9. Suspender o reactivar exige `manage_organization_lifecycle`, AAL2 y motivo cerrado; el actor se conserva como persona y asignación de deber vigentes.
 
 ### HU-BO-017 — Cancelar la relación con un gimnasio
 

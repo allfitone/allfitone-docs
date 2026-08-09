@@ -2,7 +2,8 @@
 
 ## Visión del sistema operativo para profesionales y organizaciones fitness
 
-> **Estado del documento:** visión de producto alineada con la baseline técnica documentada en `platform/database/refactor`.
+> **Estado del documento:** visión de producto alineada con la baseline técnica documentada en `platform/database/refactor`.<br>
+> **Actualización de alcance:** 9 de agosto de 2026; incorpora nutrición no clínica y la rebanada limitada de planes de pago aprobadas para V1.
 
 Este documento describe la dirección completa de Allfit Studio. No reemplaza las decisiones de arquitectura, el glosario, el alcance V1 ni el modelo conceptual del refactor.
 
@@ -175,6 +176,8 @@ El onboarding de un profesional independiente crea:
 
 La organización puede incorporar después asistentes, administradores u otros profesionales sin cambiar de identidad ni migrar a otro tipo de cuenta.
 
+Toda organización activa conserva exactamente una membresía activa con rol `owner`. Esa membresía puede tener además roles compatibles, pero `owner` queda fuera de la asignación y revocación genéricas de roles. Cambiarla exige una transferencia atómica; como el autoservicio está diferido de V1, cualquier caso excepcional lo resuelve el equipo de Allfit mediante una operación controlada.
+
 “Independiente” describe una etapa operativa, no un tipo permanente de profesional.
 
 ### Organización con equipo
@@ -281,6 +284,7 @@ Debe permitir:
 - Consultar grants y scopes sin convertirlos en una casilla genérica de consentimiento.
 - Revisar perfil, objetivos y contexto autorizado.
 - Consultar planificación, sesiones y progreso autorizados.
+- Consultar alimentación y objetivos nutricionales autorizados cuando el actor cumpla la fórmula completa y, para contribuir, tenga credencial profesional verificada.
 - Proponer correcciones sin sobrescribir datos ajenos.
 - Terminar una relación con efectos claros y auditables.
 
@@ -292,11 +296,12 @@ La ficha de una persona puede organizarse de forma contextual en:
 - Ejecución e historial autorizado.
 - Progreso.
 - Contexto fitness autorizado.
+- Nutrición autorizada, separando registro, guía e imágenes.
 - Equipo profesional asignado.
 - Relación, grants y privacidad.
 - Historial de acciones y auditoría.
 
-El panel actual ofrece referencias útiles como resumen, calendario, bitácora, entrenamiento, progreso, equipo y perfil. Nutrición y estado financiero pueden incorporarse en fases posteriores, pero no forman parte de la baseline V1.
+El panel actual ofrece referencias útiles como resumen, calendario, bitácora, entrenamiento, progreso, equipo y perfil. La nutrición no clínica autorizada forma parte de V1. El estado comercial también entra en una rebanada limitada, pero permanece separado del Fitness ID: solo owner/admin puede administrar pagos y un coach no los ve por atender a la persona.
 
 ### 6.3 Entrenamiento
 
@@ -361,22 +366,34 @@ Las pantallas actuales de agenda, actividades, ubicaciones, capacidad y reglas d
 
 El lugar para convertir una buena operación en una organización sostenible.
 
+#### Incluido en la baseline V1
+
+- Plan comercial de una organización con identidad estable.
+- Versiones publicadas inmutables con monto, moneda y periodo mensual o anual.
+- Suscripción de una persona a una versión exacta, con precio congelado.
+- Conexión de una única cuenta de pasarela activa por organización, sin guardar secretos en claro ni datos de tarjeta.
+- Registro del resultado y la referencia externa de los cobros procesados por la pasarela.
+- Estados de suscripción `active`, `suspended` y `ended`.
+- Suspensión y reactivación automáticas por resultado de cobro o manuales por la organización.
+- Separación estricta entre suscripción, relación profesional, grants y Fitness ID.
+
+La plata va directamente de la persona a la organización mediante su proveedor. Allfit no recibe, gira, concilia ni retiene dinero. Un cobro fallido puede suspender escritura profesional y sesiones futuras administradas, pero nunca termina automáticamente la relación, la suscripción o los grants.
+
+Reactivar es una operación **sustractiva**: cierra únicamente el bloqueo causado por esa suspensión y recalcula acceso y agenda desde las fuentes vigentes. Nunca restaura un snapshot ni revive grants revocados, relaciones terminadas, membresías o asignaciones cambiadas, ni sesiones canceladas, iniciadas o pasadas. Si otro bloqueo continúa abierto, su efecto permanece.
+
 #### Expansión futura
 
 - CRM y pipeline comercial.
-- Oferta y paquetes.
-- Membresías comerciales.
-- Suscripciones de clientes.
-- Precios y descuentos.
-- Pagos internos, externos y manuales.
+- Productos de pago único, paquetes y descuentos.
+- Procesamiento de pagos por Allfit, cobros manuales internos y flujos avanzados con múltiples pasarelas.
 - Reembolsos.
-- Facturación y conciliación.
-- Entitlements.
+- Impuestos, facturación electrónica y conciliación.
+- Entitlements comerciales fuera de los beneficios explícitos de una versión de plan.
 - Marketplace y perfiles públicos.
 - Analítica financiera.
 - Retención, renovaciones y cohortes.
 
-El panel actual demuestra flujos útiles de CRM, planes y membresías, suscriptores, pagos, integración con Mercado Pago y configuración comercial. Estas capacidades deben reingresar como rebanadas verticales completas, no como una migración automática del esquema anterior.
+El panel actual demuestra flujos útiles de CRM, planes, suscriptores, pagos, integración con Mercado Pago y configuración comercial. V1 adopta únicamente la rebanada descrita arriba. Las demás capacidades deben ingresar como rebanadas verticales completas, no como una migración automática del esquema anterior.
 
 ---
 
@@ -423,7 +440,7 @@ Una persona que ya usa Allfit Space acepta con su cuenta y `person_id` existente
 
 La privacidad no debe aparecer únicamente en una política legal. Debe formar parte de la operación diaria de Allfit Studio.
 
-V1 define cuatro scopes independientes:
+V1 define siete scopes independientes:
 
 ### `relationship_training`
 
@@ -441,6 +458,18 @@ Medidas, composición, perímetros, tendencias y fotos elegidas por la persona.
 
 Dolor, limitaciones, restricciones, recuperación, fatiga, sueño o readiness dentro de la finalidad fitness autorizada.
 
+### `nutrition_intake`
+
+Comidas registradas por la persona, componentes, cantidades, energía, macronutrientes, fibra, agua y resúmenes diarios. No incluye imágenes ni guía profesional.
+
+### `nutrition_guidance`
+
+Objetivos versionados, targets, justificación profesional, autoría mínima y decisión personal. No permite activar unilateralmente una meta, crear menús ni realizar tratamiento clínico.
+
+### `nutrition_media`
+
+La foto elegida por la persona para una comida, sin EXIF ni geolocalización. No concede acceso a una galería ni a otros medios.
+
 Cada scope debe:
 
 - Tener finalidad y campos versionados.
@@ -448,6 +477,8 @@ Cada scope debe:
 - Combinarse con un nivel de acceso y capacidades explícitas.
 - Denegar por defecto lo que no cubre.
 - Evitar filtraciones mediante conteos, gráficas, búsquedas o datos derivados.
+
+`nutrition_media` se acepta y revoca de forma independiente, pero Studio solo puede resolver una imagen si también existe `nutrition_intake/read` vigente. La imagen se sirve mediante un proxy autenticado que reevalúa ambos scopes en cada consulta; Studio nunca recibe una URL directa de almacenamiento.
 
 La persona puede ocultar una sesión autónoma para una relación concreta. Esa sesión puede seguir existiendo en su Fitness ID y permanecer visible para otra relación autorizada.
 
@@ -484,7 +515,7 @@ La persona decide después:
 - Continuar personalmente con la misma asignación.
 - Terminarla y cancelar únicamente las sesiones futuras no iniciadas.
 
-Una organización nueva no hereda gestión, consentimiento o acceso. Debe iniciar una nueva relación y solicitar sus propios grants.
+Una organización nueva no hereda gestión, consentimiento o acceso. Debe iniciar una relación nueva y presentar sus opciones de scope dentro de esa invitación para que la persona vuelva a decidirlas.
 
 ---
 
@@ -683,6 +714,8 @@ Privacidad
 Catálogo
 Planificación
 Ejecución
+Nutrición
+Pagos
 ```
 
 Los dominios pertenecen al ecosistema ALLFIT ONE, no a una aplicación concreta. Space y Studio presentan capacidades diferentes sobre las mismas fuentes de verdad.
@@ -720,10 +753,19 @@ Planes futuros por combinación de:
 
 ### Transacciones
 
-Cuando comercio entre formalmente en alcance:
+V1 incluye una rebanada transaccional acotada:
 
-- Procesamiento de pagos.
-- Suscripciones y membresías.
+- Planes comerciales versionados de la organización.
+- Suscripciones de personas a una versión exacta.
+- Conexión de la cuenta de pasarela de la organización.
+- Registro de referencias y resultados reportados por el proveedor.
+- Suspensión, reactivación y terminación humana de suscripciones.
+
+El proveedor procesa el pago y la plata nunca pasa por Allfit. V1 no almacena tarjetas, no cobra comisiones y no realiza conciliación financiera.
+
+Expansiones futuras:
+
+- Procesamiento o intermediación de pagos por Allfit.
 - Venta de programas.
 - Reservas.
 - Entradas a eventos.
@@ -769,7 +811,7 @@ Relaciones, scopes, capacidades, procedencia y terminación están incorporados 
 
 ### 6. Conexión entre servicio, operación y negocio
 
-Con el tiempo, planificación, clases, reservas, membresías, pagos, marketplace e inteligencia pueden operar sobre los mismos dominios y eventos, entrando por fases completas y gobernadas.
+Desde V1, planificación, nutrición autorizada, planes y suscripciones limitadas operan sobre las mismas identidades, relaciones y reglas de privacidad. Clases, reservas, comercio avanzado, marketplace e inteligencia deben incorporarse después como fases completas y gobernadas.
 
 ---
 
@@ -795,7 +837,7 @@ Métricas secundarias:
 - Invitaciones aceptadas sin duplicación de identidad.
 - Revocaciones y terminaciones aplicadas dentro del tiempo definido.
 - Organizaciones que incorporan equipo sin migración de identidad.
-- Ingresos gestionados y renovaciones cuando comercio esté habilitado.
+- Ingresos reportados por la pasarela, suspensiones y renovaciones dentro de la rebanada comercial V1.
 
 ---
 
@@ -803,7 +845,7 @@ Métricas secundarias:
 
 La visión es amplia. La baseline V1 no debe serlo.
 
-### Fase 1 — Baseline compartida de identidad y entrenamiento
+### Fase 1 — Baseline compartida de identidad, entrenamiento, nutrición y planes
 
 Esta fase corresponde al alcance actual de `platform/database/refactor`.
 
@@ -816,7 +858,7 @@ Esta fase corresponde al alcance actual de `platform/database/refactor`.
 - Invitaciones tipadas sin personas provisionales.
 - Relación profesional aceptada.
 - Profesionales asignados.
-- Cuatro scopes V1 y grants versionados.
+- Siete scopes V1 y grants versionados.
 - Catálogo multidisciplina mínimo.
 - Contenido privado.
 - Plantillas y programas versionados.
@@ -824,6 +866,10 @@ Esta fase corresponde al alcance actual de `platform/database/refactor`.
 - Ejecuciones, segmentos y resultados tipados.
 - Progreso básico.
 - Correcciones con procedencia.
+- Registro nutricional personal no clínico, fotos saneadas y resúmenes diarios.
+- Lectura nutricional autorizada y propuestas de objetivos por profesionales verificados.
+- Planes comerciales versionados, suscripciones y conexión directa con la pasarela de la organización.
+- Suspensión causal y reactivación sustractiva, sin alterar ni revivir relación, grants, asignaciones o continuidad personal.
 - Fin de relación, revocación y continuidad personal.
 - Retención, eliminación y anonimización por categoría.
 
@@ -855,13 +901,12 @@ Cada ampliación material requiere volver a alcance, ADR, ownership, modelo, seg
 - Varias sedes.
 - Control de acceso y ocupación.
 
-### Fase 4 — Negocio y marketplace
+### Fase 4 — Negocio avanzado y marketplace
 
 - CRM.
-- Productos y precios.
-- Membresías comerciales.
-- Pagos y conciliación.
-- Facturación.
+- Productos de pago único, paquetes y descuentos.
+- Reembolsos, impuestos y conciliación.
+- Facturación electrónica.
 - Marketplace.
 - Perfiles públicos y reseñas.
 - Analítica comercial.
@@ -870,7 +915,7 @@ Cada ampliación material requiere volver a alcance, ADR, ownership, modelo, seg
 
 - Wearables productivos.
 - Recuperación avanzada.
-- Nutrición como dominio propio.
+- Nutrición clínica, catálogos externos, recetas, menús y suplementos bajo contratos propios.
 - Copiloto para profesionales.
 - Recomendaciones y automatizaciones explicables.
 - Máquinas y sensores conectados.
@@ -891,7 +936,8 @@ Cada ampliación material requiere volver a alcance, ADR, ownership, modelo, seg
 - Programas publicados que cambian retroactivamente.
 - Una organización “independiente” que deba migrar para contratar equipo.
 - Menores o cuentas tuteladas sin un diseño completo y aprobado.
-- Marketplace, pagos o membresías comerciales parcialmente modelados.
+- Marketplace o comercio avanzado parcialmente modelados fuera de la rebanada V1 aprobada.
+- Allfit como intermediario financiero, almacenamiento de tarjetas, comisiones, reembolsos, impuestos o conciliación en V1.
 - Tablas, columnas, roles, endpoints o feature flags para capacidades futuras sin un caso V1.
 - Una interfaz idéntica para todos los tipos de organización y todos los roles.
 
