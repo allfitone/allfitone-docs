@@ -1,75 +1,83 @@
-# Contribuir a Allfit One Documentation
+# Contributing to Allfit One Documentation
 
-Este repositorio mantiene las fuentes normativas transversales del ecosistema y la definición detallada de sus productos. El monorepo de plataforma y los demás repositorios de código mantienen su documentación local según la [frontera documental](README.md#frontera-documental).
+This repository owns the durable documentation for the Allfit One ecosystem.
+Implementation repositories keep executable artifacts and concise pointers to
+their canonical documentation here.
 
-## Dónde debe vivir un documento
+## Where documentation belongs
 
-Un documento pertenece a `allfitone-docs` cuando cumple al menos una de estas condiciones:
+A durable document belongs in `allfitone-docs`, including:
 
-- define alcance, reglas o historias de un producto;
-- afecta a más de un producto, aplicación, paquete o repositorio;
-- establece los requisitos, la semántica o la trazabilidad de un contrato compartido de API, datos, identidad, seguridad o integración;
-- registra una decisión o iniciativa técnica transversal;
-- sirve como fuente de trazabilidad entre producto y plataforma.
+- product scope, rules and user stories;
+- architecture and engineering decisions;
+- shared API, data, identity, security and integration semantics;
+- database standards, deployment procedures and operational runbooks;
+- backup, recovery, observability and incident procedures;
+- cross-product and cross-repository traceability.
 
-Un documento pertenece al repositorio de implementación cuando describe:
+Implementation repositories retain only:
 
-- instalación, desarrollo o ejecución local;
-- estructura y decisiones internas del código;
-- pruebas, despliegue, observabilidad u operación del repositorio;
-- contribución, releases o changelog;
-- uso específico de una librería, aplicación o componente.
+- executable code, migrations, OpenAPI, generated types and CI/CD workflows;
+- source-code comments and configuration required by those artifacts;
+- concise README, `AGENTS.md` and `CLAUDE.md` instructions that link here.
 
-Cuando un documento consume una fuente normativa de este repositorio debe enlazarla, no copiarla. Si una decisión deja de ser local y comienza a afectar a varios productos, su definición normativa se traslada aquí y el repositorio de implementación conserva únicamente el enlace y sus consecuencias locales.
+When implementation consumes a rule from this repository, it links to the
+canonical document instead of copying it. If durable documentation is found in
+a code repository, move it here and leave only a pointer.
 
-Los artefactos ejecutables pertenecen al código que los consume. En particular, la fuente canónica OpenAPI vive en `allfitone/packages/contracts/openapi`; este repositorio documenta requisitos y trazabilidad, enlaza la especificación y no conserva una copia del YAML.
+## Organization
 
-Las rutas estables de producto se definen en `paths`. Las rutas operacionales o provisionales que todavía no constituyen contrato para clientes deben figurar en `x-allfit-contract-gate.exclusions`; la justificación normativa se documenta aquí, pero la lista ejecutable se mantiene únicamente junto al OpenAPI.
+- `products/<slug>/`: definition, scope and user stories for each product.
+- `platform/`: shared architecture, engineering and operational documentation.
+- `platform/database/`: canonical database policy and operations.
+- `platform/database/refactor/`: active database-reconstruction initiative and
+  its traceability while the refactor remains in progress.
 
-## Organización
+A new cross-cutting category needs a clear owner before another directory is
+created. Do not create a separate document merely to record a conversation when
+an existing canonical source can be updated.
 
-- `products/<slug>/`: definición, alcance e historias de cada producto.
-- `platform/`: arquitectura y contratos compartidos por el ecosistema.
-- `platform/database/refactor/`: iniciativa vigente de reconstrucción de la base de datos y sus fuentes normativas mientras dure el refactor.
+## Normative changes
 
-Una nueva categoría transversal debe tener una responsabilidad clara antes de crear otro directorio. No se crean documentos separados para registrar conversaciones cuando ya existe una fuente normativa para el tema.
+Every scope, architecture, contract or operations change must:
 
-## Cambios normativos
+1. update its canonical source first;
+2. update affected derived documents and implementation links;
+3. preserve traceability to the relevant story, ADR, operation or contract;
+4. distinguish approved state from proposals and historical references;
+5. avoid presenting future artifacts as if they already existed.
 
-Todo cambio de alcance, arquitectura o contrato debe:
+Historical documents are not rewritten to appear current. They state which
+decision or document supersedes them.
 
-1. modificar primero su fuente normativa;
-2. actualizar los documentos derivados afectados;
-3. conservar la trazabilidad hacia HU, ADR, operación o contrato correspondiente;
-4. distinguir claramente entre estado aprobado, propuesta y referencia histórica;
-5. evitar enlaces a artefactos futuros como si ya existieran.
+## Language and naming
 
-Los documentos históricos no se reescriben para aparentar vigencia. Deben declarar qué decisión o documento vigente los supersede.
+- All new or modified documents are written entirely in English.
+- A legacy Spanish document must be fully translated when it is modified; do
+  not leave mixed-language documents.
+- Technical and file identifiers use English.
+- Normative documents use `UPPER_SNAKE_CASE.md`; conventional files keep their
+  standard names.
+- Each document has one H1 and does not skip heading levels.
+- Internal references use relative links.
+- External evidence links should target an immutable version or commit when
+  possible.
+- Domain terminology must match the current glossary and architecture decisions.
 
-## Convenciones
-
-- Los nombres técnicos y de archivo se escriben en inglés.
-- Los documentos normativos usan `UPPER_SNAKE_CASE.md`; `README.md` y `CONTRIBUTING.md` conservan sus nombres convencionales.
-- Cada documento tiene un único encabezado H1 y no omite niveles de encabezado.
-- Las referencias internas utilizan enlaces relativos.
-- Los enlaces externos usados como evidencia deben apuntar, cuando sea posible, a una versión o commit inmutable.
-- La terminología de dominio debe coincidir con el glosario y las decisiones vigentes.
-
-## Validación local
+## Local validation
 
 ```bash
 npm ci
 npm run check
 ```
 
-El comando valida Markdown, rutas y anchors internos. La estructura del contrato OpenAPI se valida en `allfitone` durante la HU que modifica la superficie afectada; los errores impiden integrar el cambio.
+The command validates Markdown, paths and internal anchors.
 
-## Revisión
+## Review checklist
 
-Antes de integrar un cambio se comprueba que:
-
-- el documento está en el propietario correcto;
-- no crea una segunda fuente de verdad;
-- los documentos derivados permanecen sincronizados;
-- los estados y fechas no presentan una propuesta como aprobada;
-- `npm run check` finaliza correctamente.
+- The document is in the correct canonical location.
+- No second source of truth was created.
+- The entire modified document is in English.
+- Derived documents and implementation links remain synchronized.
+- Status and dates do not present a proposal as approved.
+- `npm run check` succeeds.
