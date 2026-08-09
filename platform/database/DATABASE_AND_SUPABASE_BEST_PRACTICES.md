@@ -84,13 +84,18 @@ functions. Generated types remain synchronized with the rebuilt schema.
 
 ## Environments and deployment
 
-Local, preview, staging and production use separate databases, credentials and
-data. Preview data is synthetic or sanitized.
+Local, preview and production use separate databases, credentials and data.
+Staging is temporarily deferred; when provisioned it must use a fourth,
+independent project and must never share the production database. Preview data
+is synthetic or sanitized.
 
 - Pull requests validate by rebuilding an ephemeral local stack.
-- Successful CI on `main` deploys pending migrations to staging.
-- Production deployment is manually approved through a protected GitHub
-  Environment.
+- Until staging exists, a successful CI run on `main` **does not deploy a
+  database**. Production deployment is an explicit manual action through the
+  protected `supabase-production` GitHub Environment.
+- The production workflow repeats the complete local database gate before it
+  links to the remote project. This repetition is mandatory while no staging
+  environment exists.
 - Deployment runs `migration list`, `db push --dry-run`, then `db push`, and is
   serialized per environment.
 - Production never runs `db reset`, never loads `seed.sql`, and never deploys

@@ -6,17 +6,19 @@
 | --- | --- | --- | --- |
 | Local | Development and integration tests | Developer CLI | Disposable synthetic data |
 | Preview | Pull-request validation when provisioned | CI only | Synthetic or sanitized data |
-| Staging | Shared pre-production verification | Automatic after successful `main` CI | Non-production data |
+| Staging | Deferred; create before shared pre-production verification is needed | None while unprovisioned | No project or data yet |
 | Production | Customer workloads | Manual approval in CI | Production data |
 
-Staging and production require distinct Supabase projects, passwords and pooler
-connection strings. Sharing a project defeats deployment safety even when the
-schemas appear identical.
+While staging is deferred, production is never reused as a staging target.
+When staging is provisioned, it requires a distinct Supabase project, passwords
+and pooler connection strings. Sharing a project defeats deployment safety even
+when the schemas appear identical.
 
 ## GitHub configuration
 
-Create protected GitHub Environments named `supabase-staging` and
-`supabase-production`. Store these environment secrets in each:
+Create the protected GitHub Environment `supabase-production`. Create
+`supabase-staging` only when its independent project is provisioned. Store these
+environment secrets in each environment that exists:
 
 - `SUPABASE_ACCESS_TOKEN`: deployment token with access to the target project.
 - `SUPABASE_PROJECT_REF`: target Supabase project reference.
@@ -26,7 +28,12 @@ Create protected GitHub Environments named `supabase-staging` and
 - `ALLFIT_API_DB_PASSWORD`: generated password for that environment's
   `allfit_api` role.
 
-Require reviewers for `supabase-production`. The workflow never prints these
+Require reviewers for `supabase-production` when the GitHub plan supports that
+protection on private repositories. The current plan does not; until it is
+upgraded, production is protected by manual dispatch, an environment branch
+policy restricted to `main`, complete database gates and non-cancellable
+serialization. This limitation means dispatch and approval are not independent
+and must remain visible as an operational risk. The workflow never prints secret
 values and does not persist linked-project metadata in Git.
 
 Runtime applications use separate secret configuration:
@@ -43,19 +50,24 @@ same role and password; a shared environment never connects as `postgres`.
 
 ## Deployment
 
-The `Deploy database` workflow deploys staging after CI succeeds on `main`.
-Production is selected through `workflow_dispatch` and requires environment
-approval. A run with no pending migrations is a safe no-op.
+While staging is deferred, the `Deploy database` workflow only accepts a manual
+`workflow_dispatch` from `main` and always targets production. It requires
+environment approval and repeats the full local database gate before linking to
+the remote project. A run with no pending migrations is a safe no-op.
+
+When staging is provisioned, restore automatic staging deployment after
+successful `main` CI without weakening the manual production approval.
 
 Each deployment:
 
-1. validates repository policy;
-2. links the CLI to the explicit target project;
-3. lists local and remote migration state;
-4. runs a dry-run push;
-5. applies pending migrations without seeds;
-6. provisions the environment-specific `allfit_api` credential;
-7. lists migration state again for evidence.
+1. verifies the selected ref is `main` and validates repository policy;
+2. rebuilds the local database, lints it, runs pgTAP and checks generated types;
+3. links the CLI to the explicit target project;
+4. lists local and remote migration state;
+5. runs a dry-run push;
+6. applies pending migrations without seeds;
+7. provisions the environment-specific `allfit_api` credential;
+8. lists migration state again for evidence.
 
 Deployments to the same environment are serialized and never cancelled midway.
 
