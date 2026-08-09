@@ -170,9 +170,10 @@ El perfil profesional pertenece a la persona. Sin embargo, para prestar servicio
 
 El onboarding de un profesional independiente crea:
 
-- Un perfil profesional asociado a su persona.
 - Una organización de tipo `professional_practice`.
 - Una membresía propietaria inicial.
+
+El perfil profesional sigue perteneciendo a la persona, pero completarlo no es precondición para crear la organización. Su configuración queda en una fase posterior del onboarding.
 
 La organización puede incorporar después asistentes, administradores u otros profesionales sin cambiar de identidad ni migrar a otro tipo de cuenta.
 
@@ -215,6 +216,8 @@ Durante el onboarding, Allfit Studio identifica:
 - El modelo de atención: individual, grupal, digital o híbrido.
 - Las capacidades activas de la fase de producto.
 - El rol y los permisos del miembro actual.
+
+La primera rebanada implementa únicamente activación personal, tipo de organización, parte responsable, membresía inicial y rol `owner`. Disciplinas, sedes, tamaño del equipo, modelo de atención y configuración del perfil profesional quedan fuera de ese corte y se incorporan de forma progresiva.
 
 La interfaz se configura según esas condiciones. Una capacidad no contratada, no autorizada o todavía diferida no debe aparecer como una pantalla vacía.
 
@@ -942,6 +945,10 @@ Cada ampliación material requiere volver a alcance, ADR, ownership, modelo, seg
 - Una interfaz idéntica para todos los tipos de organización y todos los roles.
 
 La ausencia deliberada de una capacidad diferida es parte de la calidad de la baseline.
+
+### Deuda explícita de la primera rebanada
+
+La activación registra las aceptaciones versionadas `platform_terms_v1` y `privacy_notice_v1`. Las URLs y páginas con el contenido legal consultable no forman parte de esta rama y deben incorporarse antes de considerar cerrada la experiencia legal definitiva. Esta deuda no autoriza aceptaciones implícitas ni sustituye el versionado de las evidencias almacenadas.
 
 ---
 

@@ -53,14 +53,15 @@ Allfit Space debe permitir que cualquier persona elegible se registre y use su F
 
 ### Decisión
 
-Existen dos entradas al mismo flujo de identidad:
+Existen tres entradas personales al mismo flujo de identidad:
 
 1. **Registro directo en Space:** la persona inicia personalmente el registro mediante WorkOS AuthKit, acredita elegibilidad adulta, acepta términos y completa onboarding sin invitación.
-2. **Invitación opcional desde Studio:** Studio emite una invitación por email o celular; la persona se registra o inicia sesión por sí misma y decide sus intenciones.
+2. **Registro directo desde Studio:** la persona inicia personalmente el registro mediante la aplicación WorkOS de Studio y completa el mismo onboarding canónico desde la superficie Studio antes de crear u operar una organización.
+3. **Invitación opcional desde Studio:** Studio emite una invitación por email o celular; la persona se registra o inicia sesión por sí misma y decide sus intenciones.
 
-La invitación no es requisito para crear una cuenta, activar el Fitness ID o usar las funciones personales de Space. El registro directo crea únicamente persona, cuenta, perfil inicial y evidencia propia del onboarding; no crea organización, membresía, relación profesional, asignación ni grants de servicio.
+La invitación no es requisito para crear una cuenta o activar el Fitness ID. El registro directo, se presente desde Space o Studio, crea únicamente persona, cuenta y evidencia propia del onboarding; no crea organización, membresía, relación profesional, asignación ni grants de servicio.
 
-Allfit Studio **solo puede emitir invitaciones por email o celular** para iniciar propuestas hacia otra persona.
+Allfit Studio **solo puede emitir invitaciones por email o celular** para iniciar propuestas hacia otra persona. La activación disponible en la interfaz de Studio es autoservicio del titular autenticado y no concede a la organización facultad alguna para activarlo a él o a terceros.
 
 Studio nunca puede:
 

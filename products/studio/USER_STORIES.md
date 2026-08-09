@@ -209,8 +209,11 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 
 1. Entro con mi correo y contraseña.
 2. Un intento fallido no me dice si el error fue el correo o la contraseña.
-3. Si no pertenezco a ninguna organización, entro pero no veo nada operativo: se me explica que necesito una invitación.
+3. Si no pertenezco a ninguna organización, elijo entre crear mi propio espacio profesional o un equipo o centro; también puedo continuar más adelante mediante una invitación.
 4. Mi sesión de Allfit Studio es independiente de la de la aplicación personal. Si soy coach y además entreno, son dos accesos distintos.
+5. Si creo la cuenta desde Studio y todavía no tengo una persona vinculada, completo personalmente la acreditación adulta, las aceptaciones legales y mis datos identificativos básicos antes de acceder a cualquier operación profesional.
+6. Studio nunca completa ese registro en nombre de otra persona ni usa el alta administrativa del proveedor de identidad.
+7. Tras completar el registro, una membresía activa entra directamente al workspace y varias membresías presentan un selector de organización.
 
 ### HU-STUDIO-002 — Cerrar sesión
 
