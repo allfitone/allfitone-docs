@@ -101,3 +101,46 @@ topology changes.
 Alert on migration failures, connection-pool saturation, long-running queries,
 lock waits, deadlocks, storage growth and backup failures. Query logs redact
 parameters containing credentials, tokens, health data or identifiers.
+
+## Access-audit partition maintenance
+
+`privacy.access_events` uses monthly range partitions through December 2027 and
+an `access_events_default` partition as an availability safeguard. The default
+partition does not weaken fail-closed auditing: an authorized read still fails
+when its audit write fails, while an event outside the prepared monthly horizon
+continues to have a valid destination.
+
+Create the complete 2028 monthly horizon in a reviewed forward-only migration
+before September 2027. The migration must retain `allfit_owner` ownership,
+forced RLS, inherited parent indexes and no direct `PUBLIC` or `allfit_api`
+privileges. Runtime roles never create, attach or detach partitions.
+
+Before attaching a new monthly partition, check whether
+`privacy.access_events_default` contains rows inside the proposed bounds. If it
+does, use a bounded maintenance transaction to:
+
+1. create a standalone table with the same structure, ownership, forced RLS and
+   indexes as the parent;
+2. move only the bounded month's rows out of the default partition;
+3. add and validate the exact monthly range constraint;
+4. attach the standalone table as the monthly partition; and
+5. verify that the default partition contains no rows inside the newly attached
+   bounds.
+
+Run the database physical-object tests after the migration. They must prove the
+monthly destination, the out-of-horizon default destination, ownership, forced
+RLS, indexes and absence of runtime grants before production deployment.
+
+## Professional membership history rollout
+
+`identity.get_my_professional_context` returns the authenticated person's active
+and terminated organization memberships for professional-profile context. Active
+memberships expose current roles; terminated memberships expose only roles that
+were effective at `ended_at`. Closed organizations remain visible in personal
+history, but that projection does not restore membership authorization.
+
+Deploy the forward-only database migration before the API and Studio versions
+that present this history. Verify with one active and one terminated membership,
+including a closed organization, and confirm that another person cannot request
+the same context. `/studio/v1/me/memberships` remains active-only and continues to
+govern onboarding and workspace routing.

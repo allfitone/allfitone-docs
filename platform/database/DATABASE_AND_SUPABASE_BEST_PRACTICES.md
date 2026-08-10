@@ -62,6 +62,10 @@ unique and descriptions are ASCII `lower_snake_case`.
 - Foreign-key columns and common policy predicates have supporting indexes.
 - Sensitive values are encrypted or hashed as appropriate. Logs and tests never
   expose credentials, session tokens or personal data.
+- Personal history projections remain scoped to the authenticated person inside
+  closed security-definer functions. Returning terminated organization context
+  never reactivates membership-based authorization, which continues to require
+  an active membership.
 
 ## Required local and CI checks
 
