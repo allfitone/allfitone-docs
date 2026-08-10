@@ -283,6 +283,9 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 10. Al salir de una organización termina esa membresía y dejo de aparecer como parte de su equipo operativo. La organización no puede modificar ni borrar mi perfil personal o mis credenciales.
 11. Actualizar el perfil personal se refleja en las vistas autorizadas de las organizaciones donde mantengo una membresía; no cambia mis membresías ni sus roles.
 12. Completar el perfil no me habilita a ver datos de nadie: para eso se aplica **LA FÓRMULA** completa.
+13. Studio no infiere que una persona sea profesional por crear una cuenta, ser propietaria de una organización o pertenecer a un espacio. La persona inicia expresamente la configuración de su perfil profesional.
+14. Mientras no exista un perfil profesional, Studio no presenta formularios de especialidades ni credenciales como tareas pendientes. Declarar credenciales es opcional incluso después de crear el perfil.
+15. Configurar el perfil profesional no forma parte del onboarding inicial. Studio no muestra accesos ni invitaciones para hacerlo mientras la persona completa su identidad, crea o selecciona su primer espacio y ve la confirmación **Listo**.
 
 ### HU-STUDIO-006 — Ver en qué gimnasios trabajo
 
