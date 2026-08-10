@@ -109,14 +109,14 @@ refactor/
 | Matriz de degradación y recuperación | Fijar aislamiento, fallo cerrado, límites, observabilidad y SLO/RTO/RPO | Aprobado — Fase 3 |
 | Contrato de idempotencia durable V1 | Separar replay HTTP, identidad durable, concurrencia, expiración y disposición | Aprobado — resolución de P0-08 |
 | Estándar de modelado PostgreSQL | Fijar convenciones físicas: nombres, schemas, IDs, tipos, constraints, índices | Aprobado — Fase 4 |
-| ERD lógico V1 | Traducir nueve dominios conceptuales a 120 tablas físicas en once schemas | Sesión técnica Studio, bloqueo causal y perfil profesional normalizado incorporados |
-| Diccionario de datos V1 | Ficha de quince campos por cada una de las 120 tablas | 120 fichas únicas verificadas |
+| ERD lógico V1 | Traducir nueve dominios conceptuales a 121 tablas físicas en once schemas | Sesión técnica Studio, bloqueo causal y perfil profesional normalizado incorporados |
+| Diccionario de datos V1 | Ficha de quince campos por cada una de las 121 tablas | 121 fichas únicas verificadas |
 | Catálogo de objetos físicos y contratos JSONB V1 | Fijar inventario, enums compartidos, nombres, documentos JSONB y particiones | Aprobado — resolución de P0-07 |
 | Matriz de integridad cruzada V1 | Fijar claves portadoras, FKs compuestas, triggers guardianes y pruebas negativas | Aprobada — resolución de P0-05 |
 | Revisión de preparación para Fase 5 | Consolidar bloqueos, contradicciones y criterios GO/NO-GO antes del DDL | Histórica; su GO fue supersedido por la revisión P0 |
 | Modificaciones por rebanada en Fase 5 | Fuente de verdad para cerrar cada P0 antes del DDL que lo consume | **GO condicionado por rebanada**; no se autoriza generar la baseline completa por adelantado |
 
-Dimensión actual: **9 dominios conceptuales, 11 schemas físicos, 120 tablas, 7 scopes, 192 operaciones inventariadas, 29 rutas físicas RLS y una primera rebanada OpenAPI de 22 paths/25 operaciones**.
+Dimensión actual: **9 dominios conceptuales, 11 schemas físicos, 121 tablas, 7 scopes, 193 operaciones inventariadas, 29 rutas físicas RLS y una primera rebanada OpenAPI de 22 paths/25 operaciones**.
 
 ## Decisiones acordadas
 

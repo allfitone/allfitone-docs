@@ -119,6 +119,7 @@ erDiagram
     PROFESSIONAL_PROFILE ||--|{ PROFESSIONAL_PROFILE_SPECIALTY : declara
     PROFESSIONAL_SPECIALTY ||--o{ PROFESSIONAL_PROFILE_SPECIALTY : clasifica
     PROFESSIONAL_PROFILE ||--o{ PROFESSIONAL_CREDENTIAL : declara
+    PROFESSIONAL_CREDENTIAL_TYPE ||--o{ PROFESSIONAL_CREDENTIAL : tipifica
     PROFESSIONAL_CREDENTIAL ||--o{ PROFESSIONAL_CREDENTIAL_VERIFICATION : verifica
 
     INVITATION_INTENT o|--o| ORGANIZATION_MEMBERSHIP : materializa
@@ -140,6 +141,7 @@ erDiagram
 | `PROFESSIONAL_PROFILE` | Presentación profesional personal | Existe fuera de una organización; años de experiencia se derivan del año de inicio y operar exige membresía organizacional |
 | `PROFESSIONAL_SPECIALTY` | Especialidad profesional gobernada | No se confunde automáticamente con una disciplina de entrenamiento |
 | `PROFESSIONAL_PROFILE_SPECIALTY` | Especialidad declarada en un perfil | Une el perfil personal con un código publicado sin texto libre |
+| `PROFESSIONAL_CREDENTIAL_TYPE` | Tipo gobernado de credencial profesional | Evita tipos libres y conserva el significado de declaraciones históricas |
 | `PROFESSIONAL_CREDENTIAL` | Credencial profesional declarada | Tiene identidad y revisiones propias; declararla no la verifica |
 | `PROFESSIONAL_CREDENTIAL_VERIFICATION` | Decisión sobre una versión exacta de credencial | No verifica otras credenciales ni el perfil completo y no amplía scopes |
 | `INVITATION` | Sobre temporal de entrega y seguridad | No necesita `person_id` y nunca crea una persona provisional |

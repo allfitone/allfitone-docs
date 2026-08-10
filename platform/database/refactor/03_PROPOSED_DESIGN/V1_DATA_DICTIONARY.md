@@ -3,12 +3,12 @@
 **Versión de revisión:** 6
 **Fecha:** 6 de agosto de 2026
 **Fase:** 4 — Modelo lógico y diccionario de datos
-**Estado:** 120 fichas; sesión técnica de Studio, bloqueo causal y perfil profesional normalizado materializados
+**Estado:** 121 fichas; sesión técnica de Studio, bloqueo causal y perfil profesional normalizado materializados
 **Deriva de:** [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md), [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md), [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
 
 ## 1. Propósito
 
-La ficha obligatoria de cada una de las **120 tablas físicas** de V1. A las 115 recertificadas tras ADR-028 se suman `identity.access_sessions`, consumida por la sesión opaca de Studio; `planning.service_access_blocks`, que representa suspensiones causales sin snapshots; y tres tablas netas para normalizar especialidades y credenciales profesionales sin JSON opaco ni una verificación global del perfil. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
+La ficha obligatoria de cada una de las **121 tablas físicas** de V1. A las 115 recertificadas tras ADR-028 se suman `identity.access_sessions`, consumida por la sesión opaca de Studio; `planning.service_access_blocks`, que representa suspensiones causales sin snapshots; y cuatro tablas netas para normalizar especialidades, tipos de credencial y credenciales profesionales sin JSON opaco ni una verificación global del perfil. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
 
 Cada ficha responde los quince campos exigidos por [`DATABASE_REFACTOR_PHASES.md` §Fase 4](../04_EXECUTION/DATABASE_REFACTOR_PHASES.md). El diccionario, el ERD lógico y el SQL de Fase 5 deben coincidir; cualquier divergencia es un defecto que se corrige aquí antes de escribir la migración.
 
@@ -223,7 +223,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `identity_pii`.
 - **Columnas:** `id uuid` · `professional_profile_id uuid` · `credential_type_code text` · `issuer text` · `name text` · `identifier text` (nullable) · `issued_on date` (nullable) · `expires_on date` (nullable) · `verification_url text` (nullable) · `status text` (`active`, `retired`) · `supersedes_credential_id uuid` (nullable) · `created_at timestamptz` · `retired_at timestamptz` (nullable).
-- **FKs y borrado:** `professional_profile_id → professional_profiles(id) RESTRICT`; `supersedes_credential_id → professional_credentials(id) RESTRICT`.
+- **FKs y borrado:** `professional_profile_id → professional_profiles(id) RESTRICT`; `credential_type_code → catalog.professional_credential_types(code) RESTRICT`; `supersedes_credential_id → professional_credentials(id) RESTRICT`.
 - **Uniques y checks:** fechas coherentes; URL HTTPS; retiro consistente con `retired_at`; una revisión debe pertenecer al mismo perfil y no puede formar ciclos. Los campos materiales son inmutables: corregir crea otra fila y retira la anterior.
 - **Actores:** la persona declara, revisa o retira mediante funciones cerradas. Organizaciones y verificadores no modifican la declaración.
 - **RLS:** lectura y comandos propios; consumidores organizacionales solo reciben la proyección permitida. Sin `DELETE` ni `UPDATE` material desde runtime.
@@ -979,6 +979,19 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **RLS:** autenticados leen `status='published'`; runtime de producto no escribe.
 - **Consultas / índices:** `(status, display_order, code)`.
 - **Retención:** permanente; deprecar evita nuevas selecciones y conserva referencias existentes.
+- **Eventos:** ninguno.
+
+### 8.14 `catalog.professional_credential_types`
+
+- **Propósito:** catálogo global gobernado de tipos de credencial que una persona puede declarar en su perfil profesional.
+- **Dominio / fuente de verdad:** Catálogo.
+- **Clasificación:** `operational`.
+- **Columnas:** `code text` · `name text` · `description text` (nullable) · `status catalog.publication_status` · `display_order integer`.
+- **Uniques y checks:** `PRIMARY KEY code`; nombre no vacío; orden no negativo.
+- **Actores:** lectura autenticada de publicados; escritura solo `A11/curate_global_catalog`.
+- **RLS:** autenticados leen `status='published'`; runtime de producto no escribe.
+- **Consultas / índices:** `(status, display_order, code)`.
+- **Retención:** permanente; deprecar evita nuevas declaraciones y conserva referencias existentes.
 - **Eventos:** ninguno.
 
 ---
@@ -1881,14 +1894,14 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 | `organizations` | 10 |
 | `relationships` | 6 |
 | `privacy` | 16 |
-| `catalog` | 13 |
+| `catalog` | 14 |
 | `planning` | 17 |
 | `execution` | 14 |
 | `nutrition` | 8 |
 | `payments` | 12 |
 | `system` | 3 |
 | `support` | 5 |
-| **Total** | **120** |
+| **Total** | **121** |
 
 ### 14.2 Invariantes transversales confirmadas por el diccionario
 
@@ -1919,7 +1932,7 @@ P0-07 cerró objetos/JSONB/particiones y P0-08 cerró receipts, PKs offline y re
 
 Entregable principal de detalle de la Fase 4, complementado por el catálogo de objetos físicos. Se considera completo cuando la revisión confirme que:
 
-1. las 120 tablas tienen ficha completa en sus quince campos;
+1. las 121 tablas tienen ficha completa en sus quince campos;
 2. el diccionario, el ERD lógico y las cardinalidades coinciden;
 3. cada tabla tiene responsabilidad clara, integridad y justificación en operaciones reales;
 4. ninguna tabla podría no existir sin romper una operación de la matriz;

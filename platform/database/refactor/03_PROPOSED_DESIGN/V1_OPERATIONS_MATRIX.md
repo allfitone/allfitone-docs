@@ -197,14 +197,14 @@ Toda sesión conserva la zona horaria de la persona en el momento del hecho. La 
 | Organizaciones | 13 | 5 | 18 |
 | Relaciones | 9 | 5 | 14 |
 | Privacidad | 13 | 7 | 20 |
-| Catálogo | 4 | 7 | 11 |
+| Catálogo | 4 | 8 | 12 |
 | Planificación | 15 | 6 | 21 |
 | Ejecución | 13 | 7 | 20 |
 | Nutrición | 8 | 5 | 13 |
 | Pagos | 16 | 7 | 23 |
 | Sistema | 10 | 0 | 10 |
 | Soporte | 6 | 5 | 11 |
-| **Total** | **127** | **65** | **192** |
+| **Total** | **127** | **66** | **193** |
 
 Algunas fichas cubren dos identificadores cuando la operación es simétrica —crear y editar un borrador, listar y consultar el detalle—. En esos casos el encabezado nombra ambos y el contenido aplica a los dos.
 
@@ -1688,6 +1688,7 @@ Reglas que gobiernan todo el dominio:
 | `OP-CAT-011` | Listar equipamiento | Consulta | Autenticado |
 | `OP-CAT-012` | Consultar contratos de resultados de un tipo de actividad | Consulta | Autenticado |
 | `OP-CAT-013` | Listar especialidades profesionales | Consulta | Autenticado |
+| `OP-CAT-014` | Listar tipos de credencial profesional | Consulta | Autenticado |
 
 ---
 
@@ -1849,7 +1850,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /catalog/v1/professional-specialties` |
+| **Superficie** | `GET /studio/v1/professional-specialties` |
 | **Actor** | Cualquier cuenta autenticada |
 | **Filtros obligatorios** | Solo `status='published'` |
 | **Transacción** | Ninguna |
@@ -1860,6 +1861,23 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Una especialidad es vocabulario profesional gobernado y no se infiere automáticamente desde `catalog.disciplines` |
 | **Falla cerrada** | Códigos draft, deprecados o archivados no se devuelven para nuevas selecciones |
+
+#### `OP-CAT-014` — Listar tipos de credencial profesional
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /studio/v1/professional-credential-types` |
+| **Actor** | `A2` con sesión Studio activa |
+| **Filtros obligatorios** | Solo `status='published'` |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Sin paginación en V1; `display_order`, desempate por código |
+| **Offline / concurrencia** | Cacheable con `ETag` |
+| **Información sensible** | Ninguna |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | El tipo gobierna nuevas declaraciones; deprecarlo conserva credenciales históricas y evita nuevas declaraciones o revisiones con ese código |
+| **Falla cerrada** | Códigos draft, deprecados o archivados no se devuelven para nuevas declaraciones |
 
 ### 7.6 Planificación
 

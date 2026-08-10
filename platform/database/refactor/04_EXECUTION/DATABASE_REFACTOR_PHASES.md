@@ -639,7 +639,7 @@ La lista siguiente describe el resultado acumulado de Fase 5. Cada rebanada ejec
 - comparar constraints instalados contra `IX-01..44`;
 - Detectar tablas sin RLS.
 - comparar policies, vistas, funciones e índices instalados contra `PR-01..29`;
-- comparar las 120 fichas y nombres determinísticos contra `pg_catalog`;
+- comparar las 121 fichas y nombres determinísticos contra `pg_catalog`;
 - generar fixtures positivos/negativos para cada contrato JSONB V1;
 - detectar funciones `security definer` inseguras;
 - generar seed idempotente y tipos.

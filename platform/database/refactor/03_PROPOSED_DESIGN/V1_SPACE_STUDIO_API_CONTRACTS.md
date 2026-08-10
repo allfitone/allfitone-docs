@@ -475,7 +475,8 @@ Las cinco operaciones Studio exigen además relación/asignación/membresía efe
 | Método | Ruta | Operación | Cacheable |
 | --- | --- | --- | --- |
 | `GET` | `/disciplines` | `OP-CAT-007` | Sí, con `ETag` |
-| `GET` | `/professional-specialties` | `OP-CAT-013` | Sí, con `ETag` |
+| `GET` | `/studio/v1/professional-specialties` | `OP-CAT-013` | Sí, con `ETag` |
+| `GET` | `/studio/v1/professional-credential-types` | `OP-CAT-014` | Sí, con `ETag` |
 | `GET` | `/activity-types` | `OP-CAT-008` | Sí |
 | `GET` | `/activity-types/{id}/result-contracts` | `OP-CAT-012` | Sí |
 | `GET` | `/movements?discipline=&q=` | `OP-CAT-009` | Solo el subconjunto global |

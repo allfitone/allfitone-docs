@@ -14,7 +14,7 @@ Cada tabla aplica las convenciones de [`POSTGRES_MODELING_STANDARD.md`](./POSTGR
 
 ## 2. Del concepto a la tabla
 
-El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **120 tablas de dominio** en once schemas. A las 115 tablas recertificadas tras ADR-028 se suman `identity.access_sessions`, almacenamiento técnico requerido por la sesión opaca de Studio; `planning.service_access_blocks`, bloqueo causal sin snapshot; y tres tablas netas para normalizar especialidades y credenciales profesionales. Enums, vistas, funciones y particiones hijas no cuentan como tablas adicionales.
+El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **121 tablas de dominio** en once schemas. A las 115 tablas recertificadas tras ADR-028 se suman `identity.access_sessions`, almacenamiento técnico requerido por la sesión opaca de Studio; `planning.service_access_blocks`, bloqueo causal sin snapshot; y cuatro tablas netas para normalizar especialidades, tipos de credencial y credenciales profesionales. Enums, vistas, funciones y particiones hijas no cuentan como tablas adicionales.
 
 | Entidad conceptual | Tablas físicas | Por qué se expande |
 | --- | --- | --- |
@@ -33,16 +33,16 @@ El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **120 tab
 | `organizations` | `organizations`, `organization_types`, `organization_sites`, `organization_memberships`, `organization_roles`, `organization_capabilities`, `role_capabilities`, `membership_roles`, `organization_events`, `membership_events` | 10 |
 | `relationships` | `service_relationships`, `responsible_party_snapshots`, `relationship_professional_assignments`, `professional_assignment_events`, `relationship_events`, `relationship_termination_requests` | 6 |
 | `privacy` | `data_classifications`, `scope_definitions`, `scope_resource_rules`, `consent_events`, `invitation_scope_options`, `data_grants`, `session_visibility_denials`, `historical_access_cases`, `access_events`, `retention_policies`, `erasure_requests`, `disposition_cases`, `disposition_items`, `disposition_events`, `legal_holds`, `hold_applications` | 16 |
-| `catalog` | `disciplines`, `activity_types`, `activity_type_aliases`, `movements`, `movement_aliases`, `movement_variants`, `equipment`, `movement_equipment`, `units`, `result_contracts`, `activity_type_result_contracts`, `contract_fixtures`, `professional_specialties` | 13 |
+| `catalog` | `disciplines`, `activity_types`, `activity_type_aliases`, `movements`, `movement_aliases`, `movement_variants`, `equipment`, `movement_equipment`, `units`, `result_contracts`, `activity_type_result_contracts`, `contract_fixtures`, `professional_specialties`, `professional_credential_types` | 14 |
 | `planning` | `session_templates`, `session_template_drafts`, `session_template_versions`, `planned_steps`, `strength_targets`, `endurance_targets`, `interval_targets`, `mobility_targets`, `programs`, `program_drafts`, `program_versions`, `program_version_sessions`, `program_assignments`, `assignment_management_periods`, `prescription_revisions`, `planned_sessions`, `service_access_blocks` | 17 |
 | `execution` | `executed_sessions`, `planned_session_executions`, `session_segments`, `strength_sets`, `endurance_laps`, `interval_results`, `round_results`, `mobility_results`, `metric_samples`, `professional_observations`, `correction_proposals`, `revision_events`, `result_validation_events`, `derived_results` | 14 |
 | `nutrition` | `nutrient_definitions`, `meals`, `meal_items`, `meal_nutrient_values`, `goal_sets`, `goal_versions`, `goal_targets`, `goal_decisions` | 8 |
 | `payments` | `gateway_connections`, `organization_plans`, `plan_versions`, `plan_subscriptions`, `payment_records`, `subscription_events`, `platform_plans`, `platform_plan_versions`, `platform_features`, `platform_plan_features`, `platform_subscriptions`, `organization_premium_entitlements` | 12 |
 | `system` | `outbox_events`, `idempotency_keys`, `job_runs` | 3 |
 | `support` | `platform_role_assignments`, `platform_duty_assignments`, `break_glass_requests`, `break_glass_approvals`, `break_glass_events` | 5 |
-| **Total** | | **120** |
+| **Total** | | **121** |
 
-Nota: el total anterior era 111. La opción B agrega `support.platform_duty_assignments`, `support.break_glass_requests`, `support.break_glass_approvals` y `support.break_glass_events`; la sesión opaca agrega `identity.access_sessions`; el bloqueo causal agrega `planning.service_access_blocks`; y la normalización del perfil profesional agrega dos tablas netas en Identidad y una en Catálogo. No se convierten vistas, funciones ni tipos enumerados en tablas.
+Nota: el total anterior era 111. La opción B agrega `support.platform_duty_assignments`, `support.break_glass_requests`, `support.break_glass_approvals` y `support.break_glass_events`; la sesión opaca agrega `identity.access_sessions`; el bloqueo causal agrega `planning.service_access_blocks`; y la normalización del perfil profesional agrega dos tablas netas en Identidad y dos en Catálogo. No se convierten vistas, funciones ni tipos enumerados en tablas.
 
 ## 4. Tipos enumerados nativos
 
@@ -103,6 +103,7 @@ erDiagram
     professional_profiles ||--|{ professional_profile_specialties : "professional_profile_id"
     professional_specialties ||--o{ professional_profile_specialties : "specialty_code"
     professional_profiles ||--o{ professional_credentials : "professional_profile_id"
+    professional_credential_types ||--o{ professional_credentials : "credential_type_code"
     professional_credentials ||--o{ professional_credential_verifications : "professional_credential_id"
     organizations ||--o{ invitations : "organization_id"
     organization_memberships ||--o{ invitations : "issued_by_membership_id"
@@ -122,7 +123,7 @@ erDiagram
 | `health_context_claims` | `id` | `person_id`; categoría más restrictiva |
 | `professional_profiles` | `id` | `UNIQUE person_id`; titular, biografía y año de inicio; pertenece a la persona |
 | `professional_profile_specialties` | `(professional_profile_id, specialty_code)` | Solo especialidades publicadas; al menos una al completar el perfil |
-| `professional_credentials` | `id` | Credencial declarada estable; revisión por `supersedes_credential_id`; campos materiales inmutables |
+| `professional_credentials` | `id` | Tipo gobernado por `professional_credential_types`; revisión por `supersedes_credential_id`; campos materiales inmutables |
 | `professional_credential_verifications` | `id` | `professional_credential_id`, verificador, política, registro/emisor, fingerprint, resultado y vigencia `<=12 meses`; append-only |
 | `invitations` | `id` | `UNIQUE (token_hash)`; membresía emisora restringida contra `organization_id`; sin `person_id` destino (`IX-24`) |
 | `invitation_intents` | `id` | `invitation_id`, `kind intent_kind`, `status intent_status`; materializa ≤1 destino |
@@ -479,7 +480,7 @@ Cada invariante tiene una prueba negativa `T-INT-*` ejecutada con `BYPASSRLS`; p
 
 ## 16. Resolución física
 
-Columnas, nullability, índices, retención y eventos están en las 120 fichas individuales. Nombres, enums compartidos, JSONB y las dos tablas particionadas están cerrados en `V1_PHYSICAL_OBJECT_CATALOG.md`; ninguna de esas decisiones se reserva al DDL.
+Columnas, nullability, índices, retención y eventos están en las 121 fichas individuales. Nombres, enums compartidos, JSONB y las dos tablas particionadas están cerrados en `V1_PHYSICAL_OBJECT_CATALOG.md`; ninguna de esas decisiones se reserva al DDL.
 
 ## 17. Estado de salida
 

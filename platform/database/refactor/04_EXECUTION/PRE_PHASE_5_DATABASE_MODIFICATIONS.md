@@ -18,7 +18,7 @@ La revisión parte de:
 - los entregables vigentes de Fases 1 a 4;
 - el estado declarado en [PHASE_5_READINESS_REVIEW.md](./PHASE_5_READINESS_REVIEW.md).
 
-Este documento autoriza iniciar Fase 5 únicamente mediante rebanadas verticales que hayan cerrado su propio gate. No autoriza generar de una vez las 120 tablas documentadas, crear placeholders ni implementar una HU mientras alguno de los P0 que consume siga abierto.
+Este documento autoriza iniciar Fase 5 únicamente mediante rebanadas verticales que hayan cerrado su propio gate. No autoriza generar de una vez las 121 tablas documentadas, crear placeholders ni implementar una HU mientras alguno de los P0 que consume siga abierto.
 
 ## 2. Veredicto
 
