@@ -639,7 +639,7 @@ La lista siguiente describe el resultado acumulado de Fase 5. Cada rebanada ejec
 - comparar constraints instalados contra `IX-01..44`;
 - Detectar tablas sin RLS.
 - comparar policies, vistas, funciones e índices instalados contra `PR-01..29`;
-- comparar las 117 fichas y nombres determinísticos contra `pg_catalog`;
+- comparar las 120 fichas y nombres determinísticos contra `pg_catalog`;
 - generar fixtures positivos/negativos para cada contrato JSONB V1;
 - detectar funciones `security definer` inseguras;
 - generar seed idempotente y tipos.
@@ -671,7 +671,7 @@ Probar que el diseño funciona desde los productos involucrados en cada rebanada
 - una persona no puede leer información privada de otra;
 - una organización no puede referenciar datos privados de otra;
 - las ocho pruebas `T-PHY-*` y cuatro `T-NUT-PHY-*` demuestran compilación física, grants, transiciones, no resurrección comercial, live/frozen, scopes, privilegios, índices y planes de autorización;
-- las seis pruebas `T-SCHEMA-*` demuestran inventario 117, objetos nombrados, contracts JSONB y unicidad/mantenimiento particionado;
+- las seis pruebas `T-SCHEMA-*` demuestran inventario 120, objetos nombrados, contracts JSONB y unicidad/mantenimiento particionado;
 - las diez pruebas `T-IDEM-*` y seis `T-NUT-IDEM-*` demuestran scope, concurrencia, captura offline, foto diferida, doble decisión, crash, disposición y minimización;
 - las nueve pruebas `T-API-*` y catorce `T-NUT-API-*` demuestran contrato OpenAPI resoluble, operación trazable, ejemplos válidos, headers obligatorios, caché, redacción, agregados, autoría mínima, URL firmada Space, proxy autenticado Studio y DTOs sin drift;
 - las seis pruebas `T-VG-*` y doce `T-BGG-*` demuestran verificación acotada, conflictos, deberes temporales, quorum, expiración, auditoría y suspensión por abuso;

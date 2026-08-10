@@ -18,7 +18,7 @@ La revisión parte de:
 - los entregables vigentes de Fases 1 a 4;
 - el estado declarado en [PHASE_5_READINESS_REVIEW.md](./PHASE_5_READINESS_REVIEW.md).
 
-Este documento autoriza iniciar Fase 5 únicamente mediante rebanadas verticales que hayan cerrado su propio gate. No autoriza generar de una vez las 117 tablas documentadas, crear placeholders ni implementar una HU mientras alguno de los P0 que consume siga abierto.
+Este documento autoriza iniciar Fase 5 únicamente mediante rebanadas verticales que hayan cerrado su propio gate. No autoriza generar de una vez las 120 tablas documentadas, crear placeholders ni implementar una HU mientras alguno de los P0 que consume siga abierto.
 
 ## 2. Veredicto
 
@@ -32,7 +32,7 @@ La inspección reproducible del estado actual arroja:
 | --- | ---: | ---: |
 | Historias de usuario | No forman parte de las fuentes de la revisión | 211 |
 | Schemas físicos | 10 | 11 |
-| Tablas con ficha en el diccionario | 99 | 117 tras opción B, sesión opaca y bloqueo causal |
+| Tablas con ficha en el diccionario | 99 | 120 tras opción B, sesión opaca, bloqueo causal y perfil profesional normalizado |
 | Operaciones únicas `OP-*` | 150 | 184 tras completar `OP-SUP-*` |
 | IDs/rangos de prueba explícitos en la matriz RLS | 186 | 216 tras añadir deberes, no resurrección comercial y concurrencia causal |
 | Rutas físicas `PR-*` | 27 | 29, incluida `PR-29` para suspensión/reactivación causal |
@@ -209,7 +209,7 @@ Columnas mínimas:
 
 ### 6.1 Problema
 
-`HU-BO-021` exige una cola de verificaciones pendientes, el título declarado, la fuente que debe consultarse, renovación y resultado. `identity.profile_verifications` modela el resultado terminal, pero no la solicitud pendiente ni su ciclo de trabajo.
+`HU-BO-021` exige una cola de verificaciones pendientes, la versión exacta de la credencial declarada, la fuente que debe consultarse, renovación y resultado. `identity.professional_credential_verifications` modela el resultado terminal, pero no la solicitud pendiente ni su ciclo de trabajo.
 
 ### 6.2 Modificación requerida
 
@@ -218,7 +218,7 @@ Añadir `identity.credential_verification_requests` o una entidad equivalente.
 Columnas mínimas:
 
 - `id`;
-- `claim_id`;
+- `professional_credential_id`;
 - `credential_type_code`;
 - `requested_by_person_id`;
 - `status`: `pending`, `in_review`, `verified`, `unverifiable`, `rejected`, `cancelled`, `expired`, `appealed`;
@@ -228,12 +228,12 @@ Columnas mínimas:
 - `supersedes_request_id` para renovación o apelación;
 - `created_at`.
 
-Modificar `identity.profile_verifications` para referenciar la solicitud que resolvió.
+Modificar `identity.professional_credential_verifications` para referenciar la solicitud que resolvió.
 
 ### 6.3 Invariantes
 
 - Una credencial puede tener solo una revisión vigente del mismo propósito.
-- El resultado es append-only y no modifica la afirmación original.
+- El resultado es append-only y no modifica la versión declarada de la credencial.
 - No se guardan documentos; solo fuente, método, referencia y fingerprint mínimo.
 - `verified` siempre tiene `valid_to` de máximo 12 meses.
 - Una incompatibilidad posterior abre otra solicitud, no reescribe el resultado anterior.

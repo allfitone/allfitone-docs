@@ -48,7 +48,7 @@ Nutrición usa el `credential_type_code = nutrition_professional`. No crea otro 
 
 ### 2.3 Exclusiones explícitas
 
-No usan `PROFILE_VERIFICATION`:
+No usan `PROFESSIONAL_CREDENTIAL_VERIFICATION`:
 
 - email de autenticación: lo verifica WorkOS AuthKit;
 - teléfono: exige el contrato separado de prueba de control definido por ADR-002/`DB-P5-019`;
@@ -65,7 +65,7 @@ No usan `PROFILE_VERIFICATION`:
 El servidor rechaza la decisión si el `A11`:
 
 1. es el sujeto;
-2. creó, capturó o corrigió la afirmación;
+2. declaró, revisó o corrigió la credencial evaluada;
 3. tiene membresía activa en una organización donde el sujeto también la tenga;
 4. tiene una relación o asignación profesional efectiva con el sujeto;
 5. decidió la verificación apelada.
@@ -75,7 +75,7 @@ El verificador declara ausencia de conflicto, pero la declaración no reemplaza 
 ### 2.5 Ciclo de vida
 
 ```text
-claim existente
+versión exacta de credencial profesional existente
   → evaluación no persistida como autoridad
   → verified | rejected | unverifiable (decisión append-only)
   → expired por valid_to | revoked por otro evento
@@ -84,9 +84,9 @@ claim existente
 
 - `valid_to` es obligatorio.
 - Renovar crea otro registro; no extiende el anterior.
-- Revocar conserva el hecho histórico y emite `identity.claim_verification_revoked.v1`.
+- Revocar conserva el hecho histórico y emite `identity.professional_credential_verification_revoked.v1`.
 - Una apelación la decide un `A11` distinto y crea otro evento enlazado.
-- `verified` no cambia la procedencia de la afirmación ni amplía scopes.
+- `verified` no cambia la procedencia de la credencial, no verifica el perfil completo ni amplía scopes.
 
 ## 3. Catálogo break-glass V1
 

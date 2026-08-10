@@ -193,18 +193,18 @@ Toda sesión conserva la zona horaria de la persona en el momento del hecho. La 
 
 | Dominio | Comandos | Consultas | Total |
 | --- | --- | --- | --- |
-| Identidad | 17 | 11 | 28 |
+| Identidad | 20 | 11 | 31 |
 | Organizaciones | 13 | 5 | 18 |
 | Relaciones | 9 | 5 | 14 |
 | Privacidad | 13 | 7 | 20 |
-| Catálogo | 4 | 6 | 10 |
+| Catálogo | 4 | 7 | 11 |
 | Planificación | 15 | 6 | 21 |
 | Ejecución | 13 | 7 | 20 |
 | Nutrición | 8 | 5 | 13 |
 | Pagos | 16 | 7 | 23 |
 | Sistema | 10 | 0 | 10 |
 | Soporte | 6 | 5 | 11 |
-| **Total** | **124** | **64** | **188** |
+| **Total** | **127** | **65** | **192** |
 
 Algunas fichas cubren dos identificadores cuando la operación es simétrica —crear y editar un borrador, listar y consultar el detalle—. En esos casos el encabezado nombra ambos y el contenido aplica a los dos.
 
@@ -212,7 +212,7 @@ Algunas fichas cubren dos identificadores cuando la operación es simétrica —
 
 ### 7.1 Identidad
 
-Este dominio es dueño de `PERSON`, `ACCESS_ACCOUNT`, `ACCESS_SESSION`, `ONBOARDING_ATTEMPT`, `ELIGIBILITY_EVIDENCE`, `FITNESS_PROFILE_CLAIM`, `BODY_PROGRESS_RECORD`, `HEALTH_CONTEXT_CLAIM`, `PROFILE_VERIFICATION`, `PROFESSIONAL_PROFILE`, `INVITATION` e `INVITATION_INTENT`.
+Este dominio es dueño de `PERSON`, `ACCESS_ACCOUNT`, `ACCESS_SESSION`, `ONBOARDING_ATTEMPT`, `ELIGIBILITY_EVIDENCE`, `FITNESS_PROFILE_CLAIM`, `BODY_PROGRESS_RECORD`, `HEALTH_CONTEXT_CLAIM`, `PROFESSIONAL_PROFILE`, `PROFESSIONAL_PROFILE_SPECIALTY`, `PROFESSIONAL_CREDENTIAL`, `PROFESSIONAL_CREDENTIAL_VERIFICATION`, `INVITATION` e `INVITATION_INTENT`.
 
 Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Ninguna operación crea una `PERSON` sin control personal del sujeto, elegibilidad adulta resuelta y onboarding completo.
 
@@ -228,7 +228,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-008` | Declarar contexto de salud fitness | Comando | `A2` |
 | `OP-IDN-009` | Decidir las intenciones de una invitación | Comando | `A2` |
 | `OP-IDN-010` | Crear o actualizar perfil profesional | Comando | `A2` |
-| `OP-IDN-011` | Registrar verificación de una afirmación | Comando | `A11` |
+| `OP-IDN-011` | Registrar verificación de una credencial profesional | Comando | `A11` |
 | `OP-IDN-012` | Consultar mi identidad y cuentas vinculadas | Consulta | `A2` |
 | `OP-IDN-013` | Consultar la proyección actual de mi perfil | Consulta | `A2` |
 | `OP-IDN-014` | Consultar el historial de un atributo | Consulta | `A2` |
@@ -246,6 +246,9 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-026` | Completar callback y crear sesión Studio | Comando | `A0` → `A1`, `A2` |
 | `OP-IDN-027` | Consultar la sesión actual de Studio | Consulta | `A1`, `A2` |
 | `OP-IDN-028` | Cerrar la sesión actual de Studio | Comando | `A1`, `A2` |
+| `OP-IDN-029` | Declarar una credencial profesional | Comando | `A2` |
+| `OP-IDN-030` | Revisar una credencial profesional | Comando | `A2` |
+| `OP-IDN-031` | Retirar una credencial profesional | Comando | `A2` |
 
 ---
 
@@ -410,30 +413,30 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Superficie** | `PUT /studio/v1/me/professional-profile` |
 | **Actor** | `A2` |
 | **Filtros obligatorios** | Sujeto = persona autenticada |
-| **Transacción** | Crear o revisar `PROFESSIONAL_PROFILE` |
+| **Transacción** | Crear o actualizar `PROFESSIONAL_PROFILE` y reemplazar atómicamente sus relaciones `PROFESSIONAL_PROFILE_SPECIALTY` por códigos publicados |
 | **Idempotencia** | `Idempotency-Key`. `PUT` con el mismo contenido no genera revisión |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Sin modo offline |
 | **Información sensible** | Presentación profesional. No es dato fitness |
 | **Evento de dominio** | `identity.professional_profile_updated.v1` |
-| **Reglas** | El perfil profesional pertenece a la **persona**, no a la organización, y sobrevive al cambio de organización. Existir no habilita operar: para prestar servicio hace falta membresía vigente. No es un perfil público ni un listing de marketplace |
-| **Falla cerrada** | — |
+| **Reglas** | El perfil profesional pertenece a la **persona**, no a la organización, y sobrevive al cambio de organización. El payload contiene titular, biografía, `practice_started_year` y al menos una especialidad publicada; los años de experiencia se derivan. No acepta credenciales embebidas ni un indicador global de verificación. Existir no habilita operar: para prestar servicio hace falta membresía vigente. No es un perfil público ni un listing de marketplace |
+| **Falla cerrada** | Año futuro, especialidad inexistente/deprecada o perfil de otra persona: rechazo sin escritura parcial |
 
-#### `OP-IDN-011` — Registrar verificación de una afirmación
+#### `OP-IDN-011` — Registrar verificación de una credencial profesional
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
 | **Superficie** | `POST /backoffice/v1/verifications` |
 | **Actor** | `A11` con `verify_professional_credentials`, AAL2 y deber vigente |
-| **Filtros obligatorios** | Claim de credencial profesional; método `official_registry_lookup` o `issuer_confirmation`; evidencia mínima; ausencia de conflicto; `valid_to` obligatorio y `<= min(vencimiento fuente, 12 meses)` |
-| **Transacción** | Crear `PROFILE_VERIFICATION` append-only con política, método, fuente, fingerprint, resultado y vigencia |
+| **Filtros obligatorios** | Versión exacta de `PROFESSIONAL_CREDENTIAL`; método `official_registry_lookup` o `issuer_confirmation`; evidencia mínima; ausencia de conflicto; `valid_to` obligatorio y `<= min(vencimiento fuente, 12 meses)` |
+| **Transacción** | Crear `PROFESSIONAL_CREDENTIAL_VERIFICATION` append-only con política, método, fuente, fingerprint, resultado y vigencia |
 | **Idempotencia** | `Idempotency-Key` |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
-| **Información sensible** | Depende del atributo verificado; hereda su clasificación |
-| **Evento de dominio** | `identity.claim_verified.v1` |
-| **Reglas** | Verificar **una** afirmación no marca otras ni convierte el perfil en verificado. Vencer, revocar, renovar o apelar crea otro evento. Documento, edad, salud, dispositivo, afiliación y perfil completo no son verificables en V1. La verificación no amplía scopes |
+| **Información sensible** | `identity_pii`; la proyección ordinaria nunca devuelve referencia de fuente ni fingerprint |
+| **Evento de dominio** | `identity.professional_credential_verified.v1` |
+| **Reglas** | Verificar **una versión exacta** no marca otras credenciales ni convierte el perfil en verificado. Revisar materialmente la credencial crea otra versión sin heredar el estado. Vencer, revocar, renovar o apelar crea otro evento. Documento, edad, salud, dispositivo, afiliación y perfil completo no son verificables en V1. La verificación no amplía scopes |
 | **Falla cerrada** | Evidencia ausente/ambigua, método no permitido, conflicto, AAL2/deber ausente o vencido: `unverifiable`/denegación; nunca `verified` |
 | **Gobernanza** | Catálogo, conflictos, vigencia y `T-VG-01..06` en [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md) |
 
@@ -534,9 +537,9 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Idempotencia** | N/A |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Sin modo offline |
-| **Información sensible** | Presentación profesional |
+| **Información sensible** | Presentación profesional y credenciales declaradas; sin evidencia interna de verificación |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Devuelve el perfil profesional y un resumen de membresías; el detalle de membresías es `OP-ORG-014` |
+| **Reglas** | Devuelve titular, biografía, año de inicio, años derivados, especialidades publicadas, credenciales y el estado/vigencia proyectados de cada credencial; nunca evidencia interna ni una bandera global de perfil verificado. Incluye un resumen de membresías; el detalle es `OP-ORG-014` |
 | **Falla cerrada** | — |
 
 #### `OP-IDN-018` — Consultar el perfil de entrenamiento de un cliente
@@ -708,6 +711,57 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Cookie host-only, `Path=/studio/v1`, sin `Max-Age`; su borrado usa el mismo path |
 | **Falla cerrada** | Origen distinto: `403 forbidden` sin tocar la sesión |
+
+#### `OP-IDN-029` — Declarar una credencial profesional
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /studio/v1/me/professional-credentials` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Perfil profesional propio; tipo, emisor y nombre normalizados; fechas coherentes; URL opcional HTTPS |
+| **Transacción** | Crear `PROFESSIONAL_CREDENTIAL` activa sin verificación |
+| **Idempotencia** | `Idempotency-Key`; el replay devuelve la misma credencial |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Sin modo offline; dos comandos distintos pueden declarar credenciales distintas |
+| **Información sensible** | `identity_pii` |
+| **Evento de dominio** | `identity.professional_credential_declared.v1` |
+| **Reglas** | Declarar nunca produce `verified`. La credencial tiene identidad estable y no se embebe en `PROFESSIONAL_PROFILE` |
+| **Falla cerrada** | Perfil ajeno, formato inválido o intento de declarar estado de verificación: rechazo |
+
+#### `OP-IDN-030` — Revisar una credencial profesional
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /studio/v1/me/professional-credentials/{credentialId}/revisions` |
+| **Actor** | `A2`, dueño de la credencial |
+| **Filtros obligatorios** | Credencial propia y activa; contenido material distinto y válido |
+| **Transacción** | Crear otra `PROFESSIONAL_CREDENTIAL` con `supersedes_credential_id` y retirar la anterior en la misma transacción |
+| **Idempotencia** | `Idempotency-Key`; un replay no crea otra revisión |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Concurrencia optimista; solo una revisión puede suceder a la versión activa |
+| **Información sensible** | `identity_pii` |
+| **Evento de dominio** | `identity.professional_credential_revised.v1` |
+| **Reglas** | Las verificaciones anteriores permanecen como evidencia histórica y nunca se trasladan a la revisión nueva |
+| **Falla cerrada** | Versión ya retirada, ajena o sin cambios: conflicto/rechazo sin alterar historia |
+
+#### `OP-IDN-031` — Retirar una credencial profesional
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /studio/v1/me/professional-credentials/{credentialId}/retirement` |
+| **Actor** | `A2`, dueño de la credencial |
+| **Filtros obligatorios** | Credencial propia activa |
+| **Transacción** | Cambiar únicamente `status='retired'` y `retired_at`; conservar declaración y verificaciones históricas |
+| **Idempotencia** | `Idempotency-Key`; repetir no cambia el instante original |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Sin modo offline; retiro y revisión concurrentes no pueden confirmar ambos |
+| **Información sensible** | `identity_pii` |
+| **Evento de dominio** | `identity.professional_credential_retired.v1` |
+| **Reglas** | Una credencial retirada deja de presentarse como vigente aunque una verificación histórica todavía tenga `valid_to` futuro |
+| **Falla cerrada** | Credencial ajena o ya sucedida por otra versión: misma respuesta cerrada |
 
 ### 7.2 Organizaciones
 
@@ -972,7 +1026,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Paginación y orden** | Sin paginación. Orden gobernado por código |
 | **Información sensible** | Ninguna |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Devuelve los tipos activos `professional_practice`, `gym`, `studio`, `academy` y `clinic`. El cliente nunca inventa ni persiste tipos libres |
+| **Reglas** | Devuelve únicamente los tipos activos `professional_practice`, `gym` y `studio`. `professional_practice` se presenta como “Profesional independiente”. `academy` y `clinic` permanecen gobernados pero inactivos hasta que un caso real V1 sea aprobado. El cliente nunca inventa ni persiste tipos libres |
 | **Falla cerrada** | Sin persona activa, rechazo |
 
 #### `OP-ORG-015` — Listar membresías de la organización
@@ -1633,6 +1687,7 @@ Reglas que gobiernan todo el dominio:
 | `OP-CAT-010` | Consultar un movimiento | Consulta | Autenticado |
 | `OP-CAT-011` | Listar equipamiento | Consulta | Autenticado |
 | `OP-CAT-012` | Consultar contratos de resultados de un tipo de actividad | Consulta | Autenticado |
+| `OP-CAT-013` | Listar especialidades profesionales | Consulta | Autenticado |
 
 ---
 
@@ -1788,6 +1843,23 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Devuelve contratos, versiones, cuál es default y los mínimos por nivel `partial`, `summary`, `detailed` y `sensor_enriched`. La validación autoritativa sigue siendo del servidor: esta consulta existe para dar mensajes útiles al usuario, no para autorizar |
 | **Falla cerrada** | — |
+
+#### `OP-CAT-013` — Listar especialidades profesionales
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /catalog/v1/professional-specialties` |
+| **Actor** | Cualquier cuenta autenticada |
+| **Filtros obligatorios** | Solo `status='published'` |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Sin paginación en V1; `display_order`, desempate por código |
+| **Offline / concurrencia** | Cacheable con `ETag` |
+| **Información sensible** | Ninguna |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Una especialidad es vocabulario profesional gobernado y no se infiere automáticamente desde `catalog.disciplines` |
+| **Falla cerrada** | Códigos draft, deprecados o archivados no se devuelven para nuevas selecciones |
 
 ### 7.6 Planificación
 
@@ -3535,7 +3607,7 @@ Un evento se escribe en el outbox dentro de la transacción de su comando. Trans
 
 | Dominio | Eventos |
 | --- | --- |
-| Identidad | `onboarding_attempt_started`, `eligibility_evaluated`, `person_activated`, `contact_changed`, `contact_verified`, `profile_claim_declared`, `profile_claim_revised`, `body_progress_recorded`, `health_context_declared`, `invitation_intent_decided`, `invitation_revoked`, `invitation_expired`, `professional_profile_updated`, `claim_verified` |
+| Identidad | `onboarding_attempt_started`, `eligibility_evaluated`, `person_activated`, `contact_changed`, `contact_verified`, `profile_claim_declared`, `profile_claim_revised`, `body_progress_recorded`, `health_context_declared`, `invitation_intent_decided`, `invitation_revoked`, `invitation_expired`, `professional_profile_updated`, `professional_credential_declared`, `professional_credential_revised`, `professional_credential_retired`, `professional_credential_verified`, `professional_credential_verification_revoked` |
 | Organizaciones | `created`, `created_unclaimed`, `updated`, `site_created`, `site_updated`, `membership_created`, `membership_terminated`, `membership_resigned`, `role_granted`, `role_revoked`, `staff_invited`, `ownership_transferred`, `closed` |
 | Relaciones | `client_invited`, `professional_assigned`, `professional_reassigned`, `substitution_proposed`, `substitution_decided`, `substitution_ended`, `substitution_expired`, `termination_requested`, `terminated` |
 | Privacidad | `grant_created`, `grant_rejected`, `grant_frozen`, `grant_revoked`, `grant_review_due`, `scope_definition_published`, `session_visibility_denied`, `session_visibility_restored`, `erasure_requested`, `erasure_resolved`, `disposition_case_opened`, `disposition_executed`, `disposition_reapplied`, `legal_hold_applied`, `legal_hold_released` |

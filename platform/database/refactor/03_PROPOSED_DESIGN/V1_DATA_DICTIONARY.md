@@ -3,12 +3,12 @@
 **Versión de revisión:** 6
 **Fecha:** 6 de agosto de 2026
 **Fase:** 4 — Modelo lógico y diccionario de datos
-**Estado:** 117 fichas; sesión técnica de Studio y bloqueo causal materializados
+**Estado:** 120 fichas; sesión técnica de Studio, bloqueo causal y perfil profesional normalizado materializados
 **Deriva de:** [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md), [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md), [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
 
 ## 1. Propósito
 
-La ficha obligatoria de cada una de las **117 tablas físicas** de V1. A las 115 recertificadas tras ADR-028 se suman `identity.access_sessions`, consumida por la sesión opaca de Studio, y `planning.service_access_blocks`, que representa suspensiones causales sin snapshots. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
+La ficha obligatoria de cada una de las **120 tablas físicas** de V1. A las 115 recertificadas tras ADR-028 se suman `identity.access_sessions`, consumida por la sesión opaca de Studio; `planning.service_access_blocks`, que representa suspensiones causales sin snapshots; y tres tablas netas para normalizar especialidades y credenciales profesionales sin JSON opaco ni una verificación global del perfil. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
 
 Cada ficha responde los quince campos exigidos por [`DATABASE_REFACTOR_PHASES.md` §Fase 4](../04_EXECUTION/DATABASE_REFACTOR_PHASES.md). El diccionario, el ERD lógico y el SQL de Fase 5 deben coincidir; cualquier divergencia es un defecto que se corrige aquí antes de escribir la migración.
 
@@ -38,11 +38,11 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 | Schema | Tablas | Sección |
 | --- | --- | --- |
-| `identity` | 14 | §4 |
+| `identity` | 16 | §4 |
 | `organizations` | 10 | §5 |
 | `relationships` | 6 | §6 |
 | `privacy` | 16 | §7 |
-| `catalog` | 12 | §8 |
+| `catalog` | 13 | §8 |
 | `planning` | 17 | §9 |
 | `execution` | 14 | §10 |
 | `nutrition` | 8 | §10A |
@@ -189,38 +189,64 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Retención:** categoría `health`; disposición por su política.
 - **Eventos:** `identity.health_context_declared.v1`.
 
-### 4.9 `identity.profile_verifications`
-
-- **Propósito:** verificación de **una** afirmación concreta; no marca otras ni el perfil completo.
-- **Dominio / fuente de verdad:** Identidad.
-- **Clasificación:** hereda del atributo verificado.
-- **Columnas:** `id` · `claim_id uuid` · `verifier_person_id uuid` · `policy_code text` · `method text` (`official_registry_lookup`, `issuer_confirmation`) · `credential_type_code text` (incluye `nutrition_professional`) · `source_authority text` · `source_jurisdiction text` · `source_reference text` · `source_status text` · `source_checked_at timestamptz` · `source_valid_to timestamptz` (nullable) · `evidence_fingerprint bytea` · `result text` (`verified`, `rejected`, `unverifiable`, `revoked`) · `decided_at timestamptz` · `valid_from timestamptz` (nullable) · `valid_to timestamptz` (nullable) · `supersedes_verification_id uuid` (nullable) · `revoked_at timestamptz` (nullable).
-- **FKs y borrado:** `claim_id → fitness_profile_claims(id) RESTRICT`; `verifier_person_id → people(id) RESTRICT`; `supersedes_verification_id → profile_verifications(id) RESTRICT`.
-- **Uniques y checks:** `valid_to` obligatorio cuando `result='verified'`; nunca supera `decided_at + interval '12 months'` ni `source_valid_to` cuando la fuente publica vencimiento; `source_checked_at <= decided_at`; una función cerrada valida credencial profesional, fuente/método, AAL2, deber vigente y conflictos antes de insertar. Append-only.
-- **Actores:** solo `A11/verify_professional_credentials` escribe; la persona y el profesional autorizado leen el estado según scope, nunca evidencia adicional.
-- **RLS:** hereda el scope del atributo del claim.
-- **Consultas:** por `claim_id`.
-- **Índices:** `claim_id`.
-- **Retención:** con la afirmación verificada.
-- **Eventos:** `identity.claim_verified.v1`, `identity.claim_verification_revoked.v1`.
-- **Gobernanza:** ADR-026 y `T-VG-01..06`; solo credenciales profesionales y evidencia minimizada.
-
-### 4.10 `identity.professional_profiles`
+### 4.9 `identity.professional_profiles`
 
 - **Propósito:** presentación profesional; pertenece a la persona y sobrevive al cambio de organización.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `identity_pii` (no fitness).
-- **Columnas:** `id` · `person_id uuid` · `headline text` · `bio text` · `credentials_schema_version smallint` (`1`, nullable junto a payload) · `credentials jsonb` (nullable).
+- **Columnas:** `id uuid` · `person_id uuid` · `headline text` · `bio text` · `practice_started_year smallint` · `created_at timestamptz` · `updated_at timestamptz`.
 - **FKs y borrado:** `person_id → people(id) RESTRICT`.
-- **Uniques y checks:** `UNIQUE person_id`.
-- **Actores:** la persona (dueña); miembros de la misma organización leen.
-- **RLS:** `access_control.is_self(person_id)` **OR** membresía vigente compartida en `access_control.org()`.
+- **Uniques y checks:** `UNIQUE person_id`; `headline` normalizado y no vacío, máximo 120 caracteres; `bio` máximo 2.000; `practice_started_year` entre 1900 y 2100, y `OP-IDN-010` rechaza años posteriores al actual.
+- **Actores:** la persona crea y actualiza; integrantes de una organización compartida consumen una proyección cerrada de solo lectura.
+- **RLS:** escritura solo con `access_control.is_self(person_id)`; lectura directa propia. La lectura organizacional ocurre mediante una proyección que exige membresía vigente compartida en `access_control.org()`.
 - **Consultas:** por `person_id`; por miembros de organización.
 - **Índices:** único `person_id`.
 - **Retención:** con la persona.
 - **Eventos:** `identity.professional_profile_updated.v1`.
 
-### 4.11 `identity.invitations`
+### 4.10 `identity.professional_profile_specialties`
+
+- **Propósito:** especialidades gobernadas que la persona declara para su perfil profesional.
+- **Dominio / fuente de verdad:** Identidad para la declaración; Catálogo para el significado del código.
+- **Clasificación:** `identity_pii` (no fitness sensible).
+- **Columnas:** `professional_profile_id uuid` · `specialty_code text` · `declared_at timestamptz`.
+- **FKs y borrado:** `professional_profile_id → professional_profiles(id) ON DELETE CASCADE`; `specialty_code → catalog.professional_specialties(code) RESTRICT`.
+- **Uniques y checks:** `PRIMARY KEY (professional_profile_id, specialty_code)`; `OP-IDN-010` solo acepta códigos publicados y exige al menos uno para completar el perfil.
+- **Actores y RLS:** hereda ownership y proyección de `professional_profiles`; una organización nunca escribe la relación.
+- **Consultas / índices:** PK anterior; índice inverso `(specialty_code, professional_profile_id)`.
+- **Retención:** con el perfil.
+- **Eventos:** incluidos en `identity.professional_profile_updated.v1`.
+
+### 4.11 `identity.professional_credentials`
+
+- **Propósito:** credencial profesional declarada con identidad estable; no implica verificación.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `identity_pii`.
+- **Columnas:** `id uuid` · `professional_profile_id uuid` · `credential_type_code text` · `issuer text` · `name text` · `identifier text` (nullable) · `issued_on date` (nullable) · `expires_on date` (nullable) · `verification_url text` (nullable) · `status text` (`active`, `retired`) · `supersedes_credential_id uuid` (nullable) · `created_at timestamptz` · `retired_at timestamptz` (nullable).
+- **FKs y borrado:** `professional_profile_id → professional_profiles(id) RESTRICT`; `supersedes_credential_id → professional_credentials(id) RESTRICT`.
+- **Uniques y checks:** fechas coherentes; URL HTTPS; retiro consistente con `retired_at`; una revisión debe pertenecer al mismo perfil y no puede formar ciclos. Los campos materiales son inmutables: corregir crea otra fila y retira la anterior.
+- **Actores:** la persona declara, revisa o retira mediante funciones cerradas. Organizaciones y verificadores no modifican la declaración.
+- **RLS:** lectura y comandos propios; consumidores organizacionales solo reciben la proyección permitida. Sin `DELETE` ni `UPDATE` material desde runtime.
+- **Consultas / índices:** `(professional_profile_id, status)`; `(supersedes_credential_id)`.
+- **Retención:** con la persona y las verificaciones asociadas.
+- **Eventos:** `identity.professional_credential_declared.v1`, `identity.professional_credential_revised.v1`, `identity.professional_credential_retired.v1`.
+
+### 4.12 `identity.professional_credential_verifications`
+
+- **Propósito:** verificación de **una versión exacta** de credencial profesional; no marca otras credenciales ni el perfil completo.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `identity_pii`; la evidencia interna permanece restringida.
+- **Columnas:** `id uuid` · `professional_credential_id uuid` · `verifier_person_id uuid` · `policy_code text` · `method text` (`official_registry_lookup`, `issuer_confirmation`) · `source_authority text` · `source_jurisdiction text` · `source_reference text` · `source_status text` · `source_checked_at timestamptz` · `source_valid_to timestamptz` (nullable) · `evidence_fingerprint bytea` · `result text` (`verified`, `rejected`, `unverifiable`, `revoked`) · `decided_at timestamptz` · `valid_from timestamptz` (nullable) · `valid_to timestamptz` (nullable) · `supersedes_verification_id uuid` (nullable) · `revoked_at timestamptz` (nullable).
+- **FKs y borrado:** `professional_credential_id → professional_credentials(id) RESTRICT`; `verifier_person_id → people(id) RESTRICT`; `supersedes_verification_id → professional_credential_verifications(id) RESTRICT`.
+- **Uniques y checks:** `valid_to` obligatorio cuando `result='verified'`; nunca supera `decided_at + interval '12 months'` ni `source_valid_to` cuando la fuente publica vencimiento; `source_checked_at <= decided_at`; una función cerrada valida credencial, fuente/método, AAL2, deber vigente y conflictos antes de insertar. Append-only.
+- **Actores:** solo `A11/verify_professional_credentials` escribe. La persona y consumidores autorizados reciben estado, vigencia y tipo mediante proyecciones; nunca fingerprint ni referencia interna.
+- **RLS:** sin DML directo de runtime. Lectura de estado mediante funciones o proyecciones cerradas; la evidencia interna queda restringida a su finalidad.
+- **Consultas / índices:** `(professional_credential_id, decided_at desc)`; verificaciones vigentes por credencial.
+- **Retención:** con la credencial verificada.
+- **Eventos:** `identity.professional_credential_verified.v1`, `identity.professional_credential_verification_revoked.v1`.
+- **Gobernanza:** ADR-026 y `T-VG-01..06`; solo credenciales profesionales y evidencia minimizada.
+
+### 4.13 `identity.invitations`
 
 - **Propósito:** sobre temporal de entrega y seguridad; no crea persona provisional.
 - **Dominio / fuente de verdad:** Identidad.
@@ -235,7 +261,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Retención:** conserva evidencia; se purga tras plazo largo.
 - **Eventos:** `organization.staff_invited.v1` / `relationship.client_invited.v1`, `identity.invitation_revoked.v1`, `identity.invitation_expired.v1`.
 
-### 4.12 `identity.invitation_intents`
+### 4.14 `identity.invitation_intents`
 
 - **Propósito:** propuesta tipada decidida de forma independiente; materializa ≤1 destino. Una intención `service_relationship` agrupa las opciones de scope que la persona decide en la misma confirmación, sin convertirlas en una aceptación global.
 - **Dominio / fuente de verdad:** Identidad.
@@ -250,11 +276,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Retención:** con la invitación.
 - **Eventos:** `identity.invitation_intent_decided.v1`.
 
----
-
-## 5. Schema `organizations`
-
-### 4.13 `identity.notification_preferences`
+### 4.15 `identity.notification_preferences`
 
 - **Propósito:** qué canales acepta la persona para cada categoría de notificación. Es el dato contra el cual `OP-SYS-002` evalúa su filtro obligatorio de "preferencia vigente para ese canal", que hoy no tiene dónde consultarse.
 - **Dominio / fuente de verdad:** Identidad.
@@ -270,6 +292,8 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Eventos:** ninguno propio.
 
 ---
+
+## 5. Schema `organizations`
 
 ### 5.1 `organizations.organizations`
 
@@ -944,6 +968,19 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Retención:** se elimina con el contrato no publicado; fixtures de contratos publicados se conservan permanentemente para reproducibilidad.
 - **Eventos:** ninguno.
 
+### 8.13 `catalog.professional_specialties`
+
+- **Propósito:** catálogo global gobernado de especialidades que una persona puede declarar en su perfil profesional.
+- **Dominio / fuente de verdad:** Catálogo.
+- **Clasificación:** `operational`.
+- **Columnas:** `code text` · `name text` · `description text` (nullable) · `status catalog.publication_status` · `display_order integer`.
+- **Uniques y checks:** `PRIMARY KEY code`; nombre no vacío; orden no negativo.
+- **Actores:** lectura autenticada de publicados; escritura solo `A11/curate_global_catalog`.
+- **RLS:** autenticados leen `status='published'`; runtime de producto no escribe.
+- **Consultas / índices:** `(status, display_order, code)`.
+- **Retención:** permanente; deprecar evita nuevas selecciones y conserva referencias existentes.
+- **Eventos:** ninguno.
+
 ---
 
 ## 9. Schema `planning`
@@ -1473,7 +1510,7 @@ Nota de conteo: `planning` tiene 17 tablas y 17 fichas; §9.5–9.8 son cuatro t
 - **Dominio / fuente de verdad:** Nutrición.
 - **Clasificación:** `nutrition`.
 - **Columnas:** `id uuid` (**Command-Id en `OP-NUT-007/012`**) · `goal_set_id uuid` · `person_id uuid` · `version_number integer` · `origin nutrition.goal_origin` · `status nutrition.goal_status` · `rationale text` (nullable solo para `self`; obligatorio para `professional`) · `author_person_id uuid` · `author_membership_id uuid` (nullable) · `author_assignment_id uuid` (nullable) · `origin_relationship_id uuid` (nullable) · `origin_organization_id uuid` (nullable) · `credential_verification_id uuid` (nullable) · `created_at timestamptz` · `activated_at timestamptz` (nullable) · `cancelled_at timestamptz` (nullable).
-- **FKs y borrado:** `(goal_set_id,person_id) → goal_sets(id,person_id) RESTRICT`; `author_person_id → identity.people(id) RESTRICT`; para origen profesional: `(origin_relationship_id,person_id,origin_organization_id) → relationships.service_relationships(id,person_id,organization_id) RESTRICT`, `(author_membership_id,origin_organization_id,author_person_id) → organizations.organization_memberships(id,organization_id,person_id) RESTRICT` y `(author_assignment_id,origin_relationship_id,person_id,origin_organization_id,author_membership_id) → relationships.relationship_professional_assignments(id,relationship_id,person_id,organization_id,membership_id) RESTRICT`; `credential_verification_id → identity.profile_verifications(id) RESTRICT`; clave portadora `UNIQUE(id,person_id)` (`IX-30`).
+- **FKs y borrado:** `(goal_set_id,person_id) → goal_sets(id,person_id) RESTRICT`; `author_person_id → identity.people(id) RESTRICT`; para origen profesional: `(origin_relationship_id,person_id,origin_organization_id) → relationships.service_relationships(id,person_id,organization_id) RESTRICT`, `(author_membership_id,origin_organization_id,author_person_id) → organizations.organization_memberships(id,organization_id,person_id) RESTRICT` y `(author_assignment_id,origin_relationship_id,person_id,origin_organization_id,author_membership_id) → relationships.relationship_professional_assignments(id,relationship_id,person_id,organization_id,membership_id) RESTRICT`; `credential_verification_id → identity.professional_credential_verifications(id) RESTRICT`; clave portadora `UNIQUE(id,person_id)` (`IX-30`).
 - **Uniques y checks:** `UNIQUE(goal_set_id,version_number)`; activo único por set; pendiente profesional único por `(goal_set_id,origin_relationship_id)`; shape `self` sin contexto profesional y `professional` con contexto completo más `NULLIF(btrim(rationale),'') IS NOT NULL` y longitud máxima 2000; contenido inmutable, transición solo por funciones.
 - **Actores:** persona publica self y decide; profesional elegible propone; ningún actor actualiza contenido.
 - **RLS:** self por goal set; live/frozen profesional solo por proyecciones.
@@ -1840,18 +1877,18 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 
 | Schema | Tablas fichadas |
 | --- | --- |
-| `identity` | 14 |
+| `identity` | 16 |
 | `organizations` | 10 |
 | `relationships` | 6 |
 | `privacy` | 16 |
-| `catalog` | 12 |
+| `catalog` | 13 |
 | `planning` | 17 |
 | `execution` | 14 |
 | `nutrition` | 8 |
 | `payments` | 12 |
 | `system` | 3 |
 | `support` | 5 |
-| **Total** | **117** |
+| **Total** | **120** |
 
 ### 14.2 Invariantes transversales confirmadas por el diccionario
 
@@ -1882,7 +1919,7 @@ P0-07 cerró objetos/JSONB/particiones y P0-08 cerró receipts, PKs offline y re
 
 Entregable principal de detalle de la Fase 4, complementado por el catálogo de objetos físicos. Se considera completo cuando la revisión confirme que:
 
-1. las 117 tablas tienen ficha completa en sus quince campos;
+1. las 120 tablas tienen ficha completa en sus quince campos;
 2. el diccionario, el ERD lógico y las cardinalidades coinciden;
 3. cada tabla tiene responsabilidad clara, integridad y justificación en operaciones reales;
 4. ninguna tabla podría no existir sin romper una operación de la matriz;

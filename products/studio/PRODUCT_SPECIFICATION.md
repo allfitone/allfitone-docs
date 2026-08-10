@@ -166,6 +166,16 @@ Allfit Studio debe soportar desde un entrenador independiente hasta una red de c
 
 El perfil profesional pertenece a la persona. Sin embargo, para prestar servicios, gestionar relaciones, asignar programas o recibir pagos mediante Allfit Studio, el profesional actúa dentro de una organización activa.
 
+### Perfil profesional personal
+
+El perfil profesional es único y portátil. Conserva el titular profesional, la biografía, el año de inicio de práctica, las especialidades gobernadas y las credenciales declaradas de la persona. Los años de experiencia se calculan desde el año de inicio para evitar un contador que pierda vigencia.
+
+Las especialidades provienen de un catálogo global administrado por Allfit. No son texto libre ni se confunden automáticamente con las disciplinas de entrenamiento. La relación entre una persona y sus especialidades pertenece a Identidad y no a una organización.
+
+Cada credencial profesional es una entidad individual con identidad y ciclo de vida propios. Declararla no la verifica. Solo el flujo competente de Backoffice puede registrar una verificación con fuente, método y vigencia para esa credencial exacta; editar una credencial verificada crea una revisión y exige una nueva verificación. Studio nunca permite marcar una credencial ni el perfil completo como verificados.
+
+Las organizaciones pueden consumir una proyección autorizada del perfil de sus integrantes, pero no editarla, copiarla ni apropiarse de ella. La evidencia interna de verificación nunca forma parte de esa proyección.
+
 ### Práctica unipersonal
 
 El onboarding de un profesional independiente crea:
@@ -183,15 +193,13 @@ Toda organización activa conserva exactamente una membresía activa con rol `ow
 
 ### Organización con equipo
 
-Una organización puede representar progresivamente:
+El catálogo activo inicial permite crear:
 
-- Una práctica profesional.
+- Una organización de tipo `professional_practice`, presentada como “Profesional independiente”.
 - Un gimnasio.
 - Un estudio.
-- Un box.
-- Una academia.
-- Un centro de alto rendimiento.
-- Una clínica u otra operación compatible cuando exista un caso real aprobado.
+
+Academias, boxes, centros de alto rendimiento, clínicas y otras operaciones permanecen inactivos hasta que exista un caso real aprobado y una rebanada vertical que lo soporte. No aparecen en el selector inicial.
 
 El tipo representa la actividad principal, no el tamaño de la organización.
 

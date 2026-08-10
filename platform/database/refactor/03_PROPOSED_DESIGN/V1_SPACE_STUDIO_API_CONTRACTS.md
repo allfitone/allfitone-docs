@@ -309,6 +309,9 @@ Sujeto: la cuenta o persona autenticada en las rutas personales y de onboarding;
 | `POST` | `/onboarding-attempts/{id}/completion` | `OP-IDN-003` |
 | `GET` | `/me` | `OP-IDN-017` |
 | `PUT` | `/me/professional-profile` | `OP-IDN-010` |
+| `POST` | `/me/professional-credentials` | `OP-IDN-029` |
+| `POST` | `/me/professional-credentials/{credentialId}/revisions` | `OP-IDN-030` |
+| `POST` | `/me/professional-credentials/{credentialId}/retirement` | `OP-IDN-031` |
 | `GET` | `/me/memberships` | `OP-ORG-014` |
 | `GET` | `/organization-types` | `OP-ORG-019` |
 | `POST` | `/organizations` | `OP-ORG-001` |
@@ -472,6 +475,7 @@ Las cinco operaciones Studio exigen además relación/asignación/membresía efe
 | Método | Ruta | Operación | Cacheable |
 | --- | --- | --- | --- |
 | `GET` | `/disciplines` | `OP-CAT-007` | Sí, con `ETag` |
+| `GET` | `/professional-specialties` | `OP-CAT-013` | Sí, con `ETag` |
 | `GET` | `/activity-types` | `OP-CAT-008` | Sí |
 | `GET` | `/activity-types/{id}/result-contracts` | `OP-CAT-012` | Sí |
 | `GET` | `/movements?discipline=&q=` | `OP-CAT-009` | Solo el subconjunto global |

@@ -346,20 +346,6 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **`T-HEALTH-1` (negativa)** — Un dolor registrado **dentro** de una sesión visible permanece oculto sin `health_context`. La visibilidad de la sesión no arrastra la del dolor.
 - **`T-HEALTH-2` (negativa)** — `health_context` no expone biometría continua, raw de dispositivos ni inferencias médicas: no existen en V1.
 
-#### `PROFILE_VERIFICATION`
-
-| Actor | SELECT | INSERT | UPDATE | DELETE |
-| --- | --- | --- | --- | --- |
-| `A2` | Propias | — | — | — |
-| `A3`, `A7` | `R*` con el scope del atributo verificado | — | — | — |
-| `A11/verify_professional_credentials` | Las que emitió | Credenciales profesionales | Revocación append-only mediante función | — |
-
-- **Condición RLS** — Hereda el scope del atributo verificado. `INSERT` restringido a `actor_kind = 'support'`, `platform_duty = 'verify_professional_credentials'`, AAL2, deber vigente, método/fuente permitidos y ausencia de conflicto según ADR-026.
-- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT` restringido.
-- **`T-VERIF-1` (negativa)** — Verificar una credencial **no** marca otros atributos ni el perfil completo como verificados.
-- **`T-VERIF-2` (negativa)** — Vencer o revocar una verificación no altera el valor afirmado ni comparte automáticamente la evidencia.
-- **`T-VG-01..06`** — Deber separado, métodos cerrados, exclusiones, conflictos, vigencia y ciclo append-only según [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md).
-
 #### `PROFESSIONAL_PROFILE`
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
@@ -368,9 +354,51 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | `A3`–`A6` | De los miembros de la misma organización | — | — | — |
 | Resto | — | — | — | — |
 
-- **Condición RLS** — `access_control.is_self(person_id)` **OR** existe membresía vigente de esa persona en `access_control.org()`.
+- **Condición RLS** — La tabla base exige `access_control.is_self(person_id)`. La lectura organizacional ocurre exclusivamente mediante una proyección cerrada que comprueba membresía vigente compartida en `access_control.org()` y omite evidencia interna.
 - **Índice para la policy** — sobre `person_id` en `ORGANIZATION_MEMBERSHIP` con `(organization_id, status)`.
 - **`T-PROF-1` (negativa)** — El perfil profesional **no** es público: no existe una lectura anónima ni entre organizaciones. Perfiles públicos y marketplace están diferidos.
+- **`T-PROF-2` (negativa)** — Una organización compartida puede consumir la presentación autorizada, pero no editarla ni convertirla en una copia organizacional.
+
+#### `PROFESSIONAL_PROFILE_SPECIALTY`
+
+| Actor | SELECT | INSERT | UPDATE | DELETE |
+| --- | --- | --- | --- | --- |
+| `A2` | Propias | Vía `OP-IDN-010` | — | Vía `OP-IDN-010` |
+| `A3`–`A6` | Proyección de miembros de la misma organización | — | — | — |
+| Resto | — | — | — | — |
+
+- **Condición RLS** — Hereda el perfil mediante `professional_profile_id`; el comando resuelve el perfil de `access_control.person()` y solo acepta códigos publicados.
+- **Grants mínimos** — Sin DML directo de runtime; `OP-IDN-010` reemplaza el conjunto dentro de una transacción.
+- **`T-PROF-3` (negativa)** — Un código libre, inexistente o no publicado no puede declararse como especialidad.
+
+#### `PROFESSIONAL_CREDENTIAL`
+
+| Actor | SELECT | INSERT | UPDATE | DELETE |
+| --- | --- | --- | --- | --- |
+| `A2` | Propias | Vía `OP-IDN-029` | Solo retiro vía `OP-IDN-031` | — |
+| `A3`–`A6` | Proyección de miembros de la misma organización | — | — | — |
+| `A11/verify_professional_credentials` | Solo la credencial asignada a su solicitud | — | — | — |
+| Resto | — | — | — | — |
+
+- **Condición RLS** — Ownership transitivo desde `professional_profile_id`; la revisión `OP-IDN-030` crea una nueva credencial y retira la anterior en la misma transacción. No existe `UPDATE` material ni `DELETE` de runtime.
+- **Proyección** — Expone identificación profesional, emisor, vigencia declarada y estado de verificación de esa versión; nunca fingerprint, referencia interna ni datos de otra credencial.
+- **`T-CRED-1` (positiva)** — La persona declara, revisa y retira únicamente sus credenciales.
+- **`T-CRED-2` (negativa)** — Revisar una credencial no traslada la verificación de la versión reemplazada.
+
+#### `PROFESSIONAL_CREDENTIAL_VERIFICATION`
+
+| Actor | SELECT | INSERT | UPDATE | DELETE |
+| --- | --- | --- | --- | --- |
+| `A2` | Estado propio mediante proyección | — | — | — |
+| `A3`–`A7` | Estado autorizado mediante proyección | — | — | — |
+| `A11/verify_professional_credentials` | Las asignadas o emitidas, por función cerrada | Vía `OP-IDN-011` | Revocación append-only mediante función | — |
+| Resto | — | — | — | — |
+
+- **Condición RLS** — `OP-IDN-011` restringe a `actor_kind='support'`, deber `verify_professional_credentials`, AAL2, asignación vigente, versión exacta, método/fuente permitidos y ausencia de conflicto según ADR-026.
+- **Grants mínimos** — Sin DML directo de runtime sobre la tabla. Las funciones cerradas insertan decisiones append-only; las proyecciones separan estado público autorizado de evidencia interna.
+- **`T-VERIF-1` (negativa)** — Verificar una credencial **no** marca otras versiones, otras credenciales ni el perfil completo como verificados.
+- **`T-VERIF-2` (negativa)** — Vencer o revocar una verificación no altera la declaración ni comparte automáticamente la evidencia.
+- **`T-VG-01..06`** — Deber separado, métodos cerrados, exclusiones, conflictos, vigencia y ciclo append-only según [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md).
 
 #### `INVITATION` · `INVITATION_INTENT`
 

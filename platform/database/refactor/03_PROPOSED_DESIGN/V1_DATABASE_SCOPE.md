@@ -138,17 +138,26 @@ La elegibilidad se resuelve antes de crear/activar la persona, recopilar datos f
 
 El perfil profesional pertenece a la persona y puede existir sin organización. No constituye otra identidad.
 
+V1 normaliza cuatro piezas distintas:
+
+- `professional_profiles` conserva titular profesional, biografía y año de inicio de práctica;
+- `professional_profile_specialties` referencia un catálogo global de especialidades profesionales;
+- `professional_credentials` conserva cada credencial declarada con identidad y ciclo de vida propios;
+- `professional_credential_verifications` conserva decisiones append-only sobre una versión exacta de una credencial.
+
+Los años de experiencia se derivan del año de inicio. Una credencial declarada no se presenta como verificada; el perfil completo nunca recibe un estado global de verificación. Editar materialmente una credencial verificada crea una revisión y exige una nueva decisión competente.
+
 Para prestar servicios, gestionar clientes, asignar programas o realizar cualquier operación profesional mediante Studio, la persona debe actuar dentro de una organización activa.
 
 ### 6.2 Tipos operativos iniciales
 
-V1 usa una raíz organizacional común para:
+V1 usa una raíz organizacional común y mantiene activos inicialmente estos tipos:
 
-- práctica profesional;
-- gimnasio;
-- estudio;
-- academia;
-- clínica u otra clase compatible cuando exista un caso real V1.
+- `professional_practice`, presentado como “Profesional independiente”;
+- `gym`, presentado como “Gimnasio”;
+- `studio`, presentado como “Estudio”.
+
+`academy` y `clinic` permanecen gobernados pero inactivos hasta que exista un caso real V1 aprobado. El catálogo de onboarding no los devuelve y la creación de organizaciones los rechaza mientras permanezcan inactivos.
 
 El tipo describe la actividad principal, no el tamaño.
 

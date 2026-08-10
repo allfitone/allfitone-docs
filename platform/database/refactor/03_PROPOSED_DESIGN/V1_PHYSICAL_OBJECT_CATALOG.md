@@ -2,7 +2,7 @@
 
 **Fecha:** 3 de agosto de 2026
 **Fase:** 4 — cierre de especificación física
-**Estado:** inventario de 117 tablas; sesión técnica de Studio y bloqueo causal materializados
+**Estado:** inventario de 120 tablas; sesión técnica de Studio, bloqueo causal y perfil profesional normalizado materializados
 **Deriva de:** [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`V1_DATA_DICTIONARY.md`](./V1_DATA_DICTIONARY.md)
 
 ## 1. Propósito
@@ -15,26 +15,26 @@ Este catálogo cierra las decisiones que no pueden dejarse a quien escriba la pr
 - forma, versión y validación de cada JSONB;
 - identidad global y mantenimiento de tablas particionadas.
 
-No sustituye las fichas de las 117 tablas. Fija las reglas mecánicas que todas consumen.
+No sustituye las fichas de las 120 tablas. Fija las reglas mecánicas que todas consumen.
 
 ## 2. Inventario recertificado
 
 | Schema | Tablas |
 | --- | ---: |
-| `identity` | 14 |
+| `identity` | 16 |
 | `organizations` | 10 |
 | `relationships` | 6 |
 | `privacy` | 16 |
-| `catalog` | 12 |
+| `catalog` | 13 |
 | `planning` | 17 |
 | `execution` | 14 |
 | `nutrition` | 8 |
 | `payments` | 12 |
 | `system` | 3 |
 | `support` | 5 |
-| **Total** | **117** |
+| **Total** | **120** |
 
-El conteo se obtiene de 117 fichas de tabla en el diccionario, incluidas `identity.access_sessions` como almacenamiento técnico de sesión y `planning.service_access_blocks` como bloqueo causal. Incluye cuatro targets, cinco resultados tipados, ocho tablas nutricionales y las cinco tablas de soporte de ADR-028 como tablas independientes. Excluye:
+El conteo se obtiene de 120 fichas de tabla en el diccionario, incluidas `identity.access_sessions` como almacenamiento técnico de sesión, `planning.service_access_blocks` como bloqueo causal y las tablas normalizadas de especialidades y credenciales profesionales. Incluye cuatro targets, cinco resultados tipados, ocho tablas nutricionales y las cinco tablas de soporte de ADR-028 como tablas independientes. Excluye:
 
 - enums;
 - vistas y funciones;
@@ -120,7 +120,6 @@ Cada tabla instala un `CHECK` llamado `<table>_<json_column>_contract_chk`. Los 
 | Tabla/columna | Código de contrato V1 | Forma cerrada | Validación adicional |
 | --- | --- | --- | --- |
 | `eligibility_evidence.policy_snapshot` | `identity.eligibility_policy_snapshot` | objeto: `policy_code`, `minimum_age`, `jurisdiction`, `evidence_kind`, `evaluated_result`; opcional `birth_year` | `minimum_age=18`; nunca documento ni fecha de nacimiento completa |
-| `professional_profiles.credentials` | `identity.professional_credentials` | array máximo 100; cada objeto: `credential_type`, `issuer`, `name`; opcionales `identifier`, `issued_on`, `expires_on`, `verification_url` | fechas ISO y URL HTTPS |
 | `identity.invitations.responsible_party_snapshot` | `identity.responsible_party_snapshot` | objeto: `organization_id`, `party_kind`, `party_name`, `purpose`, `captured_at` | organization coincide con la fila |
 | `organizations.responsible_party` | `organizations.responsible_party` | objeto: `party_kind`, `party_name`, `purpose`; opcionales `legal_identifier`, `contact` | `party_kind` natural/legal |
 | `organization_events.before/after` | `audit.organization_event_snapshot` | subset de `type_code`, `legal_name`, `display_name`, `status`, `responsible_party_*` | validator recibe `event_type`; before/after no pueden ser ambos nulos |
@@ -184,7 +183,7 @@ La migración inicial crea el mes actual más tres meses futuros. Una escritura 
 
 | ID | Demostración |
 | --- | --- |
-| `T-SCHEMA-01` | ERD, diccionario e inventario reportan exactamente 117 tablas y el diccionario contiene 117 fichas únicas. |
+| `T-SCHEMA-01` | ERD, diccionario e inventario reportan exactamente 120 tablas y el diccionario contiene 120 fichas únicas. |
 | `T-SCHEMA-02` | Cada tabla/columna/FK/check/índice de las fichas se compara con `pg_catalog`; falta o nombre distinto falla CI. |
 | `T-SCHEMA-03` | Cada tabla con RLS tiene exactamente las policies esperadas por comando y ninguna policy extra permisiva. |
 | `T-SCHEMA-04` | Cada JSONB acepta fixtures V1 válidos y rechaza versión, claves, tipos y campos adicionales inválidos. |

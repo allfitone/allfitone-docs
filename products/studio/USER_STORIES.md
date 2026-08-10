@@ -272,13 +272,17 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 **Criterios**
 
 1. El perfil profesional pertenece a la persona y puede existir sin una organización.
-2. La presentación general, las especialidades, los años de experiencia y las credenciales verificadas viven en **un único perfil personal**; no se duplican por gimnasio.
-3. La organización no crea, copia ni administra otro perfil profesional. Su contexto se limita a la membresía y sus roles vigentes.
-4. La ficha que ve un cliente combina el perfil profesional personal vigente con la organización, la membresía y los roles efectivos desde sus fuentes canónicas, sin copiar el perfil a la organización.
-5. Si trabajo en dos gimnasios mantengo un solo perfil profesional, dos membresías y los roles que correspondan en cada una.
-6. Al salir de una organización termina esa membresía y dejo de aparecer como parte de su equipo operativo. La organización no puede modificar ni borrar mi perfil personal o mis credenciales.
-7. Actualizar el perfil personal se refleja en las vistas autorizadas de las organizaciones donde mantengo una membresía; no cambia mis membresías ni sus roles.
-8. Completar el perfil no me habilita a ver datos de nadie: para eso se aplica **LA FÓRMULA** completa.
+2. Mi presentación contiene un titular profesional, una biografía, el año en que inicié mi práctica y una o más especialidades de un catálogo gobernado.
+3. Los años de experiencia se calculan desde el año de inicio; no guardo ni actualizo manualmente un contador que quede obsoleto.
+4. Puedo declarar credenciales profesionales individualmente. Cada credencial conserva identidad y ciclo de vida propios; no se guarda como un objeto anónimo dentro del perfil.
+5. Una credencial declarada se muestra como **no verificada** hasta que el flujo competente de Allfit verifique esa credencial exacta. Studio no puede verificarla ni presentar el perfil completo como verificado.
+6. Una verificación pertenece a una versión exacta de la credencial, tiene vigencia y puede vencer o revocarse sin alterar mi presentación, especialidades u otras credenciales.
+7. La organización no crea, copia ni administra otro perfil profesional. Su contexto se limita a la membresía y sus roles vigentes.
+8. La ficha que ve un cliente combina el perfil profesional personal vigente con la organización, la membresía y los roles efectivos desde sus fuentes canónicas, sin copiar el perfil a la organización ni exponer evidencia interna de verificación.
+9. Si trabajo en dos gimnasios mantengo un solo perfil profesional, dos membresías y los roles que correspondan en cada una.
+10. Al salir de una organización termina esa membresía y dejo de aparecer como parte de su equipo operativo. La organización no puede modificar ni borrar mi perfil personal o mis credenciales.
+11. Actualizar el perfil personal se refleja en las vistas autorizadas de las organizaciones donde mantengo una membresía; no cambia mis membresías ni sus roles.
+12. Completar el perfil no me habilita a ver datos de nadie: para eso se aplica **LA FÓRMULA** completa.
 
 ### HU-STUDIO-006 — Ver en qué gimnasios trabajo
 

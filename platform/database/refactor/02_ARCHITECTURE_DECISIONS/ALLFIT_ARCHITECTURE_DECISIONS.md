@@ -760,7 +760,7 @@ Modelar al “coach independiente” y al “gimnasio” como raíces incompatib
 - Cada operación profesional debe registrar tanto el actor profesional como la organización bajo la cual actuó.
 - La oferta comercial tiene siempre una organización vendedora, aunque públicamente destaque el perfil de una persona profesional.
 
-Tipos estables como `professional_practice`, `gym`, `studio`, `academy` o `clinic` describen la clase principal de operación; no crean modelos raíz separados. `solo_professional` no es un tipo de organización, sino una modalidad de onboarding.
+Los tipos activos iniciales `professional_practice`, `gym` y `studio` describen la clase principal de operación; no crean modelos raíz separados. `academy` y `clinic` permanecen gobernados pero inactivos hasta que exista un caso real aprobado. `solo_professional` no es un tipo de organización, sino una modalidad de onboarding.
 
 ### Invariantes
 
@@ -921,7 +921,7 @@ El tamaño actual del equipo y la clase de operación son dimensiones diferentes
 - `solo_professional` describe la modalidad de onboarding y procedencia inicial; no limita la evolución posterior ni gobierna autorización.
 - La condición unipersonal se deriva de las membresías activas y no se persiste como `is_independent` o tipo permanente.
 - La práctica puede incorporar staff y otros profesionales conservando el mismo `organization_id`, clientes, relaciones, programas, productos, pagos, suscripción y auditoría.
-- El tipo principal de organización describe su operación —práctica profesional, gimnasio, estudio, academia o clínica—, no el número de integrantes.
+- El tipo principal de organización describe su operación —inicialmente práctica profesional, gimnasio o estudio—, no el número de integrantes. Academia y clínica permanecen como tipos inactivos hasta que exista un caso real aprobado.
 - Añadir miembros no cambia `organization_kind`. Un cambio real de actividad principal requiere una transición explícita y auditada, no una migración de identidad.
 - Cada relación de servicio conserva la organización y el profesional responsable. Una reasignación cambia al responsable mediante historial efectivo, sin reemplazar la procedencia anterior.
 - Los límites comerciales o de SaaS pueden depender del número de miembros, sedes o capacidades, sin alterar la identidad de la organización.
@@ -3337,11 +3337,11 @@ Dejar esas decisiones a un claim, role o permission de WorkOS, un procedimiento 
 
 ### Decisión
 
-1. V1 solo verifica afirmaciones de **credenciales profesionales**. WorkOS verifica el email de autenticación; la prueba de control de celular pertenece al contrato separado de identidad. La mayoría de edad continúa como declaración de elegibilidad; identidad documental, salud, biometría, afiliación comercial y perfil completo no reciben estado `authority_verified`.
+1. V1 solo verifica versiones exactas de **credenciales profesionales** normalizadas. WorkOS verifica el email de autenticación; la prueba de control de celular pertenece al contrato separado de identidad. La mayoría de edad continúa como declaración de elegibilidad; identidad documental, salud, biometría, afiliación comercial y perfil completo no reciben estado `authority_verified`.
 2. `A11` es el actor de plataforma, pero verificar exige el deber separado `verify_professional_credentials`, AAL2 y una asignación interna vigente. Tener `curate_catalog` no concede verificación.
 3. Solo se admiten `official_registry_lookup` e `issuer_confirmation`. No se copian documentos: se conserva autoridad, referencia mínima, instante, resultado, fingerprint y versión de política.
-4. La verificación exige `valid_to`, con máximo de doce meses y nunca posterior al vencimiento publicado por la autoridad. Renovar, revocar o apelar crea otro evento; no reescribe la afirmación.
-5. El verificador no puede ser el sujeto, autor/capturador de la afirmación, miembro activo de una organización compartida con el sujeto, profesional asignado suyo ni decisor de la apelación que revisa. Un conflicto o evidencia ambigua falla cerrado como `unverifiable`.
+4. La verificación exige `valid_to`, con máximo de doce meses y nunca posterior al vencimiento publicado por la autoridad. Renovar, revocar o apelar crea otro evento; no reescribe la credencial declarada ni transfiere autoridad a una revisión posterior de ella.
+5. El verificador no puede ser el sujeto, declarante/revisor de la credencial, miembro activo de una organización compartida con el sujeto, profesional asignado suyo ni decisor de la apelación que revisa. Un conflicto o evidencia ambigua falla cerrado como `unverifiable`.
 6. Los deberes `A10`, `A11` verificador y `A12` se provisionan fuera de roles organizacionales, vencen como máximo a los 90 días y requieren recertificación por seguridad/privacidad. Revocarlos corta inmediatamente nuevas decisiones y cierra ventanas break-glass abiertas del `A10` afectado.
 7. Break-glass usa cinco propósitos cerrados, referencia obligatoria a un caso, AAL2, sujeto exacto, categorías concretas y alcance inmutable. No existe `other`, acceso a “toda la cuenta” ni extensión de una ventana.
 8. `relationship_training`, `prior_training_history` y `nutrition_guidance` requieren una aprobación `A12` y duran como máximo 30 minutos. `body_progress`, `health_context` y `nutrition_intake` requieren **dos aprobaciones de A12 distintos** y duran como máximo 15 minutos. Una solicitud mixta hereda el quorum y plazo más restrictivos.
@@ -3355,7 +3355,7 @@ Dejar esas decisiones a un claim, role o permission de WorkOS, un procedimiento 
 ### Invariantes
 
 1. Ninguna credencial de catálogo, grupo del cliente o rol de gimnasio concede por sí solo autoridad de verificación o break-glass.
-2. Una verificación cubre una afirmación, método, fuente y vigencia exactos.
+2. Una verificación cubre una versión de credencial, método, fuente y vigencia exactos.
 3. Evidencia ambigua o conflicto de interés nunca produce `verified`.
 4. La máxima sensibilidad exige dos aprobadores distintos y una ventana de máximo 15 minutos.
 5. Un rechazo cierra la solicitud; aprobaciones parciales no conceden acceso.
@@ -3386,7 +3386,7 @@ Dejar esas decisiones a un claim, role o permission de WorkOS, un procedimiento 
 1. Un curador sin `verify_professional_credentials` no registra verificaciones.
 2. Una consulta de registro oficial válida verifica una sola credencial y vence dentro de doce meses.
 3. Un documento subido, una declaración de edad o evidencia ambigua no producen `authority_verified`.
-4. El sujeto, autor, profesional asignado o miembro de una organización compartida no verifica la afirmación.
+4. El sujeto, declarante/revisor, profesional asignado o miembro de una organización compartida no verifica la credencial.
 5. Una categoría estándar abre con un A12; una restringida permanece cerrada hasta dos aprobaciones distintas.
 6. Un rechazo, solicitud vencida o deber expirado impiden abrir o ejercer.
 7. La ventana restringida vence a los 15 minutos aunque el job no haya corrido.

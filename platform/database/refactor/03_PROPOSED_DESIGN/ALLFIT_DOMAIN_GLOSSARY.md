@@ -159,7 +159,7 @@ La verificación conserva valor evaluado, autoridad, método, evidencia mínima,
 | **3. ¿Quién lo crea?** | La persona puede solicitar o completar su perfil; una organización puede invitarla; Allfit o un tercero autorizado puede verificar credenciales. |
 | **4. ¿Quién es dueño del dato?** | La persona es dueña de su identidad y presentación profesional. El emisor o Allfit conserva la fuente de verificación. Los roles y condiciones dentro de una organización pertenecen a esa relación organizacional. |
 | **5. ¿Puede existir sin Auth?** | No como profesional del dominio. Antes del registro puede existir una invitación cuyo propósito sea incorporar un profesional, pero no un perfil profesional materializado. |
-| **6. ¿Cuál es su ciclo de vida?** | Perfil solicitado/borrador después del registro → pendiente de verificación → verificado/activo → suspendido o retirado. Entrar o salir de una organización no elimina su identidad profesional global. Para operar en Studio necesita una membresía profesional vigente dentro de una organización. |
+| **6. ¿Cuál es su ciclo de vida?** | Perfil incompleto después del registro → perfil completo → retirado. Las credenciales declaradas siguen ciclos independientes de revisión, verificación, vencimiento y revocación; el perfil completo nunca recibe una verificación global. Entrar o salir de una organización no elimina su identidad profesional global. Para operar en Studio necesita una membresía profesional vigente dentro de una organización. |
 | **7. Ejemplos y contraejemplos** | **Ejemplo:** Ana es atleta y entrenadora verificada usando la misma persona. **Contraejemplo:** crear `coach_users` como una segunda identidad o asumir que todo empleado del gimnasio puede ver datos fitness. |
 
 ### Implicación para la BD
@@ -182,7 +182,7 @@ Separar `people`, perfil profesional, verificaciones, membresías organizacional
 
 ### Implicación para la BD
 
-Las entidades estrictamente organizacionales llevan `organization_id`; los datos personales no deben recibirlo de manera automática. `organization_kind` expresa clases operativas estables como `professional_practice`, `gym`, `studio`, `academy` o `clinic`, sin crear modelos raíz separados. `solo_professional` se registra como modalidad de onboarding, no como tipo permanente ni bandera de autorización. El tamaño se deriva de membresías activas. Una práctica inicialmente unipersonal no implica por sí sola una persona jurídica ni exige datos tributarios hasta que una operación regulada los necesite.
+Las entidades estrictamente organizacionales llevan `organization_id`; los datos personales no deben recibirlo de manera automática. `organization_kind` expresa clases operativas estables sin crear modelos raíz separados. El catálogo activo inicial contiene `professional_practice`, `gym` y `studio`; `academy` y `clinic` permanecen gobernados pero inactivos hasta que exista un caso real aprobado. `solo_professional` se registra como modalidad de onboarding, no como tipo permanente ni bandera de autorización. El tamaño se deriva de membresías activas. Una práctica inicialmente unipersonal no implica por sí sola una persona jurídica ni exige datos tributarios hasta que una operación regulada los necesite.
 
 ---
 
