@@ -2,7 +2,7 @@
 
 **Fecha:** 3 de agosto de 2026
 **Fase:** 4 — cierre de especificación física
-**Estado:** inventario de 121 tablas; sesión técnica de Studio, bloqueo causal y perfil profesional normalizado materializados
+**Estado:** inventario de 122 tablas; sesión técnica de Studio, receipts de recuperación, bloqueo causal y perfil profesional normalizado materializados
 **Deriva de:** [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`V1_DATA_DICTIONARY.md`](./V1_DATA_DICTIONARY.md)
 
 ## 1. Propósito
@@ -15,13 +15,13 @@ Este catálogo cierra las decisiones que no pueden dejarse a quien escriba la pr
 - forma, versión y validación de cada JSONB;
 - identidad global y mantenimiento de tablas particionadas.
 
-No sustituye las fichas de las 121 tablas. Fija las reglas mecánicas que todas consumen.
+No sustituye las fichas de las 122 tablas. Fija las reglas mecánicas que todas consumen.
 
 ## 2. Inventario recertificado
 
 | Schema | Tablas |
 | --- | ---: |
-| `identity` | 16 |
+| `identity` | 17 |
 | `organizations` | 10 |
 | `relationships` | 6 |
 | `privacy` | 16 |
@@ -32,9 +32,9 @@ No sustituye las fichas de las 121 tablas. Fija las reglas mecánicas que todas 
 | `payments` | 12 |
 | `system` | 3 |
 | `support` | 5 |
-| **Total** | **121** |
+| **Total** | **122** |
 
-El conteo se obtiene de 121 fichas de tabla en el diccionario, incluidas `identity.access_sessions` como almacenamiento técnico de sesión, `planning.service_access_blocks` como bloqueo causal y las tablas normalizadas de especialidades, tipos de credencial y credenciales profesionales. Incluye cuatro targets, cinco resultados tipados, ocho tablas nutricionales y las cinco tablas de soporte de ADR-028 como tablas independientes. Excluye:
+El conteo se obtiene de 122 fichas de tabla en el diccionario, incluidas `identity.access_sessions` como almacenamiento técnico de sesión, `identity.password_reset_receipts` como receipt idempotente de recuperación, `planning.service_access_blocks` como bloqueo causal y las tablas normalizadas de especialidades, tipos de credencial y credenciales profesionales. Incluye cuatro targets, cinco resultados tipados, ocho tablas nutricionales y las cinco tablas de soporte de ADR-028 como tablas independientes. Excluye:
 
 - enums;
 - vistas y funciones;
@@ -53,6 +53,7 @@ Un enum existe una sola vez en el schema indicado. Una columna de otro schema us
 | --- | --- |
 | `identity.actor_kind` | todos los dominios que registran actor |
 | `identity.access_session_surface` | `identity.access_sessions` |
+| `identity.password_reset_receipt_result` | `identity.password_reset_receipts` |
 | `identity.provenance` | ejecución y perfil |
 | `privacy.access_level` | relaciones, planificación y ejecución |
 | `catalog.content_scope` | catálogo |
@@ -183,7 +184,7 @@ La migración inicial crea el mes actual más tres meses futuros. Una escritura 
 
 | ID | Demostración |
 | --- | --- |
-| `T-SCHEMA-01` | ERD, diccionario e inventario reportan exactamente 121 tablas y el diccionario contiene 121 fichas únicas. |
+| `T-SCHEMA-01` | ERD, diccionario e inventario reportan exactamente 122 tablas y el diccionario contiene 122 fichas únicas. |
 | `T-SCHEMA-02` | Cada tabla/columna/FK/check/índice de las fichas se compara con `pg_catalog`; falta o nombre distinto falla CI. |
 | `T-SCHEMA-03` | Cada tabla con RLS tiene exactamente las policies esperadas por comando y ninguna policy extra permisiva. |
 | `T-SCHEMA-04` | Cada JSONB acepta fixtures V1 válidos y rechaza versión, claves, tipos y campos adicionales inválidos. |

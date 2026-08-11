@@ -119,6 +119,11 @@ See [OPERATIONS.md](OPERATIONS.md) for credentials and runbooks.
   migration failures and backup status without logging sensitive values.
 - Cross-system writes use the transactional outbox. PostgreSQL and external
   providers are never treated as one transaction.
+- Signed external events that invalidate local security state use a durable
+  idempotency receipt and one narrow `SECURITY DEFINER` function. Signature
+  verification happens before PostgreSQL is called; the receipt and every local
+  effect commit together. Raw payloads, signatures and provider PII are never
+  persisted.
 - Retention, deletion, export and incident access are explicit per domain.
   Production access is time-limited, attributable and audited.
 
