@@ -278,6 +278,22 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **`T-SESSION-4` (concurrencia)** — Solo la versión esperada rota el refresh token; el compare-and-swap perdedor no sobrescribe la versión ganadora.
 - **`T-SESSION-5` (revocación)** — Una sesión revocada deja de cargar inmediatamente.
 
+#### `PASSWORD_RESET_RECEIPT`
+
+| Actor | SELECT | INSERT | UPDATE | DELETE |
+| --- | --- | --- | --- | --- |
+| `A0`–`A12`, incluido `allfit_api` directo | — | — | — | — |
+
+- **Condición RLS** — `FORCE ROW LEVEL SECURITY`; solo `allfit_owner` tiene policy. El runtime no recibe privilegios de tabla.
+- **Contexto requerido** — ninguno aceptado desde el cliente. La función recibe únicamente la proyección firmada `provider + issuer + event_id + subject + occurred_at` después de la verificación del body crudo.
+- **Grants mínimos** — `allfit_api` solo ejecuta `identity.process_password_reset_succeeded`; `PUBLIC` no la ejecuta. La función es la única escritura permitida sobre receipts y la única revocación masiva por reset.
+- **Índice para la policy** — no aplica a lectura directa; la función usa el unique `(provider, issuer, provider_event_id)` y la cuenta se resuelve por `(provider, issuer, subject)`.
+- **`T-PASSWORD-RESET-1` (positiva)** — revoca todas las sesiones activas creadas hasta `occurred_at` y `load_access_session` deja de devolverlas.
+- **`T-PASSWORD-RESET-2` (temporal)** — conserva una sesión creada después del evento.
+- **`T-PASSWORD-RESET-3` (tenant)** — el mismo subject bajo otro issuer no se modifica.
+- **`T-PASSWORD-RESET-4` (idempotencia)** — replay secuencial o concurrente produce un receipt y devuelve el resultado durable.
+- **`T-PASSWORD-RESET-5` (negativa)** — una cuenta inexistente converge a `account_absent`; DML directo sobre receipts o sesiones permanece denegado.
+
 #### `ONBOARDING_ATTEMPT` · `ELIGIBILITY_EVIDENCE`
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |

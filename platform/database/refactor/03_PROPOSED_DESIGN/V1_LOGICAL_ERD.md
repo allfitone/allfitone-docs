@@ -14,7 +14,7 @@ Cada tabla aplica las convenciones de [`POSTGRES_MODELING_STANDARD.md`](./POSTGR
 
 ## 2. Del concepto a la tabla
 
-El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **121 tablas de dominio** en once schemas. A las 115 tablas recertificadas tras ADR-028 se suman `identity.access_sessions`, almacenamiento técnico requerido por la sesión opaca de Studio; `planning.service_access_blocks`, bloqueo causal sin snapshot; y cuatro tablas netas para normalizar especialidades, tipos de credencial y credenciales profesionales. Enums, vistas, funciones y particiones hijas no cuentan como tablas adicionales.
+El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **122 tablas de dominio** en once schemas. A las 115 tablas recertificadas tras ADR-028 se suman `identity.access_sessions`, almacenamiento técnico requerido por la sesión opaca de Studio; `identity.password_reset_receipts`, receipt idempotente de recuperación; `planning.service_access_blocks`, bloqueo causal sin snapshot; y cuatro tablas netas para normalizar especialidades, tipos de credencial y credenciales profesionales. Enums, vistas, funciones y particiones hijas no cuentan como tablas adicionales.
 
 | Entidad conceptual | Tablas físicas | Por qué se expande |
 | --- | --- | --- |
@@ -29,7 +29,7 @@ El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **121 tab
 
 | Schema | Tablas | Nº |
 | --- | --- | --- |
-| `identity` | `people`, `access_accounts`, `access_sessions`, `onboarding_attempts`, `eligibility_evidence`, `profile_attributes`, `fitness_profile_claims`, `body_progress_records`, `health_context_claims`, `professional_profiles`, `professional_profile_specialties`, `professional_credentials`, `professional_credential_verifications`, `invitations`, `invitation_intents`, `notification_preferences` | 16 |
+| `identity` | `people`, `access_accounts`, `access_sessions`, `password_reset_receipts`, `onboarding_attempts`, `eligibility_evidence`, `profile_attributes`, `fitness_profile_claims`, `body_progress_records`, `health_context_claims`, `professional_profiles`, `professional_profile_specialties`, `professional_credentials`, `professional_credential_verifications`, `invitations`, `invitation_intents`, `notification_preferences` | 17 |
 | `organizations` | `organizations`, `organization_types`, `organization_sites`, `organization_memberships`, `organization_roles`, `organization_capabilities`, `role_capabilities`, `membership_roles`, `organization_events`, `membership_events` | 10 |
 | `relationships` | `service_relationships`, `responsible_party_snapshots`, `relationship_professional_assignments`, `professional_assignment_events`, `relationship_events`, `relationship_termination_requests` | 6 |
 | `privacy` | `data_classifications`, `scope_definitions`, `scope_resource_rules`, `consent_events`, `invitation_scope_options`, `data_grants`, `session_visibility_denials`, `historical_access_cases`, `access_events`, `retention_policies`, `erasure_requests`, `disposition_cases`, `disposition_items`, `disposition_events`, `legal_holds`, `hold_applications` | 16 |
@@ -40,9 +40,9 @@ El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **121 tab
 | `payments` | `gateway_connections`, `organization_plans`, `plan_versions`, `plan_subscriptions`, `payment_records`, `subscription_events`, `platform_plans`, `platform_plan_versions`, `platform_features`, `platform_plan_features`, `platform_subscriptions`, `organization_premium_entitlements` | 12 |
 | `system` | `outbox_events`, `idempotency_keys`, `job_runs` | 3 |
 | `support` | `platform_role_assignments`, `platform_duty_assignments`, `break_glass_requests`, `break_glass_approvals`, `break_glass_events` | 5 |
-| **Total** | | **121** |
+| **Total** | | **122** |
 
-Nota: el total anterior era 111. La opción B agrega `support.platform_duty_assignments`, `support.break_glass_requests`, `support.break_glass_approvals` y `support.break_glass_events`; la sesión opaca agrega `identity.access_sessions`; el bloqueo causal agrega `planning.service_access_blocks`; y la normalización del perfil profesional agrega dos tablas netas en Identidad y dos en Catálogo. No se convierten vistas, funciones ni tipos enumerados en tablas.
+Nota: el total anterior era 111. La opción B agrega `support.platform_duty_assignments`, `support.break_glass_requests`, `support.break_glass_approvals` y `support.break_glass_events`; la sesión opaca agrega `identity.access_sessions`; la recuperación agrega `identity.password_reset_receipts`; el bloqueo causal agrega `planning.service_access_blocks`; y la normalización del perfil profesional agrega dos tablas netas en Identidad y dos en Catálogo. No se convierten vistas, funciones ni tipos enumerados en tablas.
 
 ## 4. Tipos enumerados nativos
 
@@ -52,6 +52,7 @@ Estados de máquina y clasificaciones cerradas y estables. Se declaran una vez y
 | --- | --- | --- |
 | `actor_kind` | `identity` | `anonymous`, `account`, `person`, `professional`, `worker`, `support` |
 | `access_session_surface` | `identity` | `studio` |
+| `password_reset_receipt_result` | `identity` | `processed`, `account_absent` |
 | `provenance` | `identity` | `person_declared`, `professional_observation`, `device_observed`, `system_inferred`, `authority_verified` |
 | `onboarding_status` | `identity` | `open`, `activated`, `expired`, `abandoned` |
 | `eligibility_result` | `identity` | `pass`, `fail`, `review_required`, `unknown` |
@@ -92,6 +93,7 @@ Estados de máquina y clasificaciones cerradas y estables. Se declaran una vez y
 erDiagram
     people ||--o{ access_accounts : "person_id"
     access_accounts ||--o{ access_sessions : "access_account_id"
+    access_accounts ||--o{ password_reset_receipts : "access_account_id (nullable)"
     people ||--o{ onboarding_attempts : "person_id (nullable)"
     access_accounts ||--o{ onboarding_attempts : "account_id"
     onboarding_attempts ||--|{ eligibility_evidence : "onboarding_attempt_id"
@@ -115,6 +117,7 @@ erDiagram
 | `people` | `id` | Raíz del Fitness ID. Creada solo por `activate_person` |
 | `access_accounts` | `id` | `UNIQUE (provider, issuer, subject)`; `person_id` nullable hasta activar |
 | `access_sessions` | `id` | hash SHA-256 de cookie; tokens cifrados; `UNIQUE (surface, provider_session_id)`; rotación compare-and-swap |
+| `password_reset_receipts` | `id` | `UNIQUE (provider, issuer, provider_event_id)`; sin payload, email ni subject; resultado y revocaciones atómicos |
 | `onboarding_attempts` | `id` | `account_id` NOT NULL; `person_id` nullable; `status onboarding_status` |
 | `eligibility_evidence` | `id` | `onboarding_attempt_id`; `result eligibility_result`; snapshot de la política aplicada |
 | `profile_attributes` | `id` | `UNIQUE code`; catálogo cerrado de atributos de perfil V1 |
@@ -438,6 +441,7 @@ La regla estructural: `identity.people` y las raíces de autenticación no depen
 | --- | --- | --- |
 | `people` → `access_accounts` | `1 : 0..N` | `UNIQUE (provider,issuer,subject)`; una cuenta a una persona |
 | `access_accounts` → `access_sessions` | `1 : 0..N` | cookie opaca por sesión; `UNIQUE (surface, provider_session_id)` |
+| `access_accounts` → `password_reset_receipts` | `1 : 0..N` | FK nullable para cuenta ausente; evento único por `provider + issuer + provider_event_id` |
 | `onboarding_attempts` → `people` | `1 : 0..1` | intento no elegible no crea persona |
 | `service_relationships` activa por par | `≤ 1` | `UNIQUE parcial WHERE status='active'` |
 | `relationship_professional_assignments` titular efectivo | `≤ 1` | `UNIQUE parcial` de titular vigente |
@@ -480,7 +484,7 @@ Cada invariante tiene una prueba negativa `T-INT-*` ejecutada con `BYPASSRLS`; p
 
 ## 16. Resolución física
 
-Columnas, nullability, índices, retención y eventos están en las 121 fichas individuales. Nombres, enums compartidos, JSONB y las dos tablas particionadas están cerrados en `V1_PHYSICAL_OBJECT_CATALOG.md`; ninguna de esas decisiones se reserva al DDL.
+Columnas, nullability, índices, retención y eventos están en las 122 fichas individuales. Nombres, enums compartidos, JSONB y las dos tablas particionadas están cerrados en `V1_PHYSICAL_OBJECT_CATALOG.md`; ninguna de esas decisiones se reserva al DDL.
 
 ## 17. Estado de salida
 

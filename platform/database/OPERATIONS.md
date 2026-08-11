@@ -40,6 +40,8 @@ Runtime applications use separate secret configuration:
 
 - `DATABASE_URL`: Supavisor transaction-pooler URL for the `allfit_api` role.
 - `SESSION_ENCRYPTION_KEY`: independently generated 32-byte base64 key.
+- `WORKOS_WEBHOOK_SECRET`: server-only signing secret for the environment-level
+  Identity webhook. Use a distinct value in every WorkOS environment.
 
 Never reuse values across staging and production. Never expose them as
 `NEXT_PUBLIC_*` variables or store them in repository files.
@@ -144,3 +146,25 @@ that present this history. Verify with one active and one terminated membership,
 including a closed organization, and confirm that another person cannot request
 the same context. `/studio/v1/me/memberships` remains active-only and continues to
 govern onboarding and workspace routing.
+
+## Password-reset webhook rollout
+
+The WorkOS endpoint is `{API_PUBLIC_URL}/webhooks/workos` and subscribes only to
+`password_reset.succeeded`. Deploy in this order:
+
+1. apply the forward-only migration that creates
+   `identity.password_reset_receipts` and
+   `identity.process_password_reset_succeeded`;
+2. create the endpoint in the matching WorkOS environment and copy its signing
+   secret into the API's `WORKOS_WEBHOOK_SECRET`;
+3. deploy the API and confirm unsigned requests return `400` with
+   `Cache-Control: no-store`;
+4. enable `password_reset.succeeded`; and
+5. complete the two-session sandbox reset described in Studio AuthKit
+   Operations.
+
+Every database failure returns `503` so WorkOS retries. Monitor the closed
+`identity.password_reset.webhook` counter without identifiers. To roll back,
+disable the WorkOS endpoint before rolling back API code and keep the
+forward-only migration. Do not create a local retry worker and do not enable
+`password_reset.created`.

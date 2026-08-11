@@ -3,12 +3,12 @@
 **Versión de revisión:** 6
 **Fecha:** 6 de agosto de 2026
 **Fase:** 4 — Modelo lógico y diccionario de datos
-**Estado:** 121 fichas; sesión técnica de Studio, bloqueo causal y perfil profesional normalizado materializados
+**Estado:** 122 fichas; sesión técnica de Studio, receipts de recuperación, bloqueo causal y perfil profesional normalizado materializados
 **Deriva de:** [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md), [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md), [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
 
 ## 1. Propósito
 
-La ficha obligatoria de cada una de las **121 tablas físicas** de V1. A las 115 recertificadas tras ADR-028 se suman `identity.access_sessions`, consumida por la sesión opaca de Studio; `planning.service_access_blocks`, que representa suspensiones causales sin snapshots; y cuatro tablas netas para normalizar especialidades, tipos de credencial y credenciales profesionales sin JSON opaco ni una verificación global del perfil. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
+La ficha obligatoria de cada una de las **122 tablas físicas** de V1. A las 115 recertificadas tras ADR-028 se suman `identity.access_sessions`, consumida por la sesión opaca de Studio; `identity.password_reset_receipts`, que hace idempotente la revocación local tras AuthKit; `planning.service_access_blocks`, que representa suspensiones causales sin snapshots; y cuatro tablas netas para normalizar especialidades, tipos de credencial y credenciales profesionales sin JSON opaco ni una verificación global del perfil. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
 
 Cada ficha responde los quince campos exigidos por [`DATABASE_REFACTOR_PHASES.md` §Fase 4](../04_EXECUTION/DATABASE_REFACTOR_PHASES.md). El diccionario, el ERD lógico y el SQL de Fase 5 deben coincidir; cualquier divergencia es un defecto que se corrige aquí antes de escribir la migración.
 
@@ -38,7 +38,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 | Schema | Tablas | Sección |
 | --- | --- | --- |
-| `identity` | 16 | §4 |
+| `identity` | 17 | §4 |
 | `organizations` | 10 | §5 |
 | `relationships` | 6 | §6 |
 | `privacy` | 16 | §7 |
@@ -98,6 +98,21 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** uniques anteriores; `(access_account_id)`; parcial `(access_account_id, surface) WHERE revoked_at IS NULL`.
 - **Retención:** hasta revocación y purga operativa; cambiar `SESSION_ENCRYPTION_KEY` invalida los ciphertext existentes y fuerza reautenticación.
 - **Eventos:** ninguno de dominio.
+
+### 4.2.2 `identity.password_reset_receipts`
+
+- **Propósito:** receipt técnico e idempotente de `password_reset.succeeded`; confirma en una transacción el evento consumido y la revocación de sesiones locales anteriores.
+- **Dominio / fuente de verdad:** Identidad para el efecto local; WorkOS conserva la fuente de verdad del cambio de contraseña y sus sesiones alojadas.
+- **Clasificación:** metadato operativo de identidad; no almacena payload, firma, email, subject, token ni identificador del reset.
+- **Columnas:** `id uuid` UUIDv7 · `provider text` (`workos`) · `issuer text` · `provider_event_id text` · `occurred_at timestamptz` · `access_account_id uuid` (nullable) · `result identity.password_reset_receipt_result` (nullable solo dentro de la transacción) · `revoked_session_count integer` · `received_at timestamptz` · `processed_at timestamptz` (nullable solo mientras se procesa).
+- **FKs y borrado:** `access_account_id → identity.access_accounts(id) ON DELETE RESTRICT`; queda nulo si el subject firmado no tiene cuenta local.
+- **Uniques y checks:** `UNIQUE (provider, issuer, provider_event_id)`; proveedor cerrado a `workos`; issuer y evento no vacíos; conteo no negativo; resultado y fecha de procesamiento aparecen juntos.
+- **Actores:** ninguna lectura ni escritura directa desde runtime. `allfit_api` solo ejecuta `identity.process_password_reset_succeeded`; `PUBLIC` no ejecuta la función.
+- **RLS:** habilitada y forzada, con policy exclusiva de `allfit_owner`.
+- **Consultas:** reconocimiento de replay por `(provider, issuer, provider_event_id)`; asociación opcional por `access_account_id`.
+- **Índices:** unique anterior; parcial por `access_account_id WHERE access_account_id IS NOT NULL`.
+- **Retención:** al menos durante la ventana completa de reintentos del proveedor; cualquier purga posterior requiere una política operativa explícita y no forma parte de HU-STUDIO-003.
+- **Eventos:** ninguno de dominio; es evidencia técnica de consumo, no outbox.
 
 ### 4.3 `identity.onboarding_attempts`
 
@@ -1890,7 +1905,7 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 
 | Schema | Tablas fichadas |
 | --- | --- |
-| `identity` | 16 |
+| `identity` | 17 |
 | `organizations` | 10 |
 | `relationships` | 6 |
 | `privacy` | 16 |
@@ -1901,7 +1916,7 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 | `payments` | 12 |
 | `system` | 3 |
 | `support` | 5 |
-| **Total** | **121** |
+| **Total** | **122** |
 
 ### 14.2 Invariantes transversales confirmadas por el diccionario
 
@@ -1932,7 +1947,7 @@ P0-07 cerró objetos/JSONB/particiones y P0-08 cerró receipts, PKs offline y re
 
 Entregable principal de detalle de la Fase 4, complementado por el catálogo de objetos físicos. Se considera completo cuando la revisión confirme que:
 
-1. las 121 tablas tienen ficha completa en sus quince campos;
+1. las 122 tablas tienen ficha completa en sus quince campos;
 2. el diccionario, el ERD lógico y las cardinalidades coinciden;
 3. cada tabla tiene responsabilidad clara, integridad y justificación en operaciones reales;
 4. ninguna tabla podría no existir sin romper una operación de la matriz;
