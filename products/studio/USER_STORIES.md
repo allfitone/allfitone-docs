@@ -427,6 +427,11 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 4. Si vuelvo a invitar al mismo contacto con la misma propuesta, se reutiliza la invitación vigente en lugar de crear otra.
 5. Si falla el envío del correo o el SMS, la invitación sigue siendo válida.
 
+**Corte implementado:** el emisor por correo está implementado detrás de release
+gate, con vigencia de siete días. SMS y la lectura/aceptación del destinatario
+permanecen fuera de este corte; el gate de producción no se habilita hasta
+publicar `HU-SP-016`/`HU-SP-017`.
+
 ### HU-STUDIO-015 — Revocar una invitación
 
 **Como** admin, owner o staff

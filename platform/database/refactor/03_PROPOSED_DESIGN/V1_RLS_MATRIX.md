@@ -427,13 +427,14 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 
 - **Condición RLS** — `SELECT` del invitado: coincidencia exacta de token vigente y no revocado. `SELECT` de la organización: `organization_id = access_control.org()` con `access_control.has_capability(org, 'invite')`.
 - **Contexto requerido** — Para el invitado basta `actor_kind IN ('account','person')`: la invitación se consulta **antes** de existir la persona.
-- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(status)`. Sin `DELETE`: una invitación vencida o revocada conserva evidencia.
+- **Grants mínimos** — En el corte emisor, `allfit_api` no tiene DML directo: solo `EXECUTE` sobre `identity.issue_staff_invitation` y las funciones cerradas del worker. El corte destinatario añadirá la proyección por token sin conceder `DELETE`; una invitación vencida o revocada conserva evidencia.
 - **Índice para la policy** — único sobre el hash del token; sobre `(organization_id, status)`.
 - **`T-INV-1` (positiva)** — Una cuenta sin persona consulta la invitación y ve las intenciones **por separado**.
 - **`T-INV-2` (negativa)** — La respuesta no revela si el contacto invitado ya tiene cuenta en Allfit: eso filtraría la existencia de una persona.
 - **`T-INV-3` (negativa)** — Aceptar la intención de relación y rechazar la de programa **no** concede ningún scope: no aparece ningún `DATA_GRANT`.
 - **`T-INV-4` (negativa)** — Una invitación pendiente no crea cuenta, persona, perfil, relación, grant ni asignación. Se verifica contando filas en las seis tablas.
 - **`T-INV-5` (positiva)** — Dos aceptaciones concurrentes de la misma intención materializan **un** solo destino.
+- **`T-INV-6` (positiva)** — Dos emisiones concurrentes con contacto y propuesta equivalentes convergen a una invitación pendiente y generan un intento de entrega por comando distinto.
 
 ### 7.2 Organizaciones
 
