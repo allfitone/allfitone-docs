@@ -168,3 +168,30 @@ Every database failure returns `503` so WorkOS retries. Monitor the closed
 disable the WorkOS endpoint before rolling back API code and keep the
 forward-only migration. Do not create a local retry worker and do not enable
 `password_reset.created`.
+
+## Studio team-invitation rollout
+
+`OP-ORG-005` crea la invitación, su intención de membresía y el evento
+`organization.staff_invited.v1` en una transacción. La invitación dura siete
+días; un comando distinto con el mismo correo y la misma propuesta reutiliza la
+vigente y solicita una nueva entrega. El outbox solo transporta
+`invitation_id`: nunca correo ni token.
+
+Despliegue en este orden:
+
+1. aplicar la migración forward-only de invitaciones, capacidades, outbox y
+   circuit breaker;
+2. desplegar API, worker y Studio con `STAFF_INVITATIONS_ENABLED=false` y
+   `NEXT_PUBLIC_STAFF_INVITATIONS_ENABLED=false`;
+3. configurar `INVITATION_TOKEN_ACTIVE_VERSION`, la clave HMAC versionada,
+   `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `CRON_SECRET` e
+   `INVITATION_PUBLIC_BASE_URL`;
+4. verificar el cron de Vercel cada minuto, los reintentos 1/2/4/8/16 minutos y
+   el dead-letter al quinto fallo; y
+5. habilitar los dos flags únicamente después de publicar el flujo receptor
+   `HU-SP-016/017` y validar el universal link HTTPS.
+
+El circuit breaker usa ventana de 30 segundos, mínimo 20 resultados, apertura
+al 50 % de fallos durante 60 segundos y tres pruebas half-open. Un fallo de
+correo nunca invalida la invitación. Para rollback, apagar primero los flags y
+el cron; la migración permanece.

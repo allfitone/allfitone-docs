@@ -266,13 +266,13 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** sobre temporal de entrega y seguridad; no crea persona provisional.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `identity_pii` (contacto del invitado).
-- **Columnas:** `id` · `organization_id uuid` · `issued_by_membership_id uuid` · `channel text` (`email`, `sms`) · `contact text` · `token_hash text` · `responsible_party_snapshot_schema_version smallint` (`1`) · `responsible_party_snapshot jsonb` · `status identity.invitation_status` · `expires_at timestamptz`.
+- **Columnas:** `id` · `organization_id uuid` · `issued_by_membership_id uuid` · `channel text` (`email` en el corte actual; `sms` reservado) · `contact citext` · `token_hash bytea` · `token_key_version smallint` · `proposal_hash bytea` · `responsible_party_schema_version smallint` (`1`) · `responsible_party jsonb` · `status identity.invitation_status` · `expires_at timestamptz`.
 - **FKs y borrado:** `(issued_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`. **Sin** FK a persona destino (`IX-24`).
-- **Uniques y checks:** `UNIQUE token_hash`.
+- **Uniques y checks:** `UNIQUE token_hash`; único parcial `(organization_id, proposal_hash) WHERE status='pending'`; hashes de 32 bytes. El token se deriva por HMAC con clave versionada, nunca se guarda en claro ni en el outbox.
 - **Actores:** la organización (crea, revoca); el invitado por token; worker de expiración.
-- **RLS:** token exacto vigente para el invitado; `organization_id = access_control.org()` con capacidad de invitar.
+- **RLS:** `FORCE ROW LEVEL SECURITY`; el corte emisor revoca todo DML directo a `allfit_api` y escribe solo mediante `identity.issue_staff_invitation`. La lectura por token se añade con el corte destinatario.
 - **Consultas:** por `token_hash`; por `(organization_id, status)`.
-- **Índices:** único `token_hash`; `(organization_id, status)`.
+- **Índices:** único `token_hash`; único parcial de propuesta pendiente; `(organization_id, status, expires_at)`.
 - **Retención:** conserva evidencia; se purga tras plazo largo.
 - **Eventos:** `organization.staff_invited.v1` / `relationship.client_invited.v1`, `identity.invitation_revoked.v1`, `identity.invitation_expired.v1`.
 
