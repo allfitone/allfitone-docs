@@ -1,14 +1,14 @@
 # Diccionario de datos V1
 
-**Versión de revisión:** 6
-**Fecha:** 6 de agosto de 2026
+**Versión de revisión:** 7
+**Fecha:** 12 de agosto de 2026
 **Fase:** 4 — Modelo lógico y diccionario de datos
-**Estado:** 122 fichas; sesión técnica de Studio, receipts de recuperación, bloqueo causal y perfil profesional normalizado materializados
+**Estado:** 125 fichas; sesión técnica multi-superficie y autenticación AAL2 Backoffice materializadas
 **Deriva de:** [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md), [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md), [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
 
 ## 1. Propósito
 
-La ficha obligatoria de cada una de las **122 tablas físicas** de V1. A las 115 recertificadas tras ADR-028 se suman `identity.access_sessions`, consumida por la sesión opaca de Studio; `identity.password_reset_receipts`, que hace idempotente la revocación local tras AuthKit; `planning.service_access_blocks`, que representa suspensiones causales sin snapshots; y cuatro tablas netas para normalizar especialidades, tipos de credencial y credenciales profesionales sin JSON opaco ni una verificación global del perfil. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
+La ficha obligatoria de cada una de las **125 tablas físicas** de V1. A las 122 anteriores se suman `identity.access_account_mfa_factors`, `identity.backoffice_authentication_attempts` e `identity.mfa_factor_recovery_events`. `identity.access_sessions` se amplía para materializar evidencia por superficie sin confiar en claims. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
 
 Cada ficha responde los quince campos exigidos por [`DATABASE_REFACTOR_PHASES.md` §Fase 4](../04_EXECUTION/DATABASE_REFACTOR_PHASES.md). El diccionario, el ERD lógico y el SQL de Fase 5 deben coincidir; cualquier divergencia es un defecto que se corrige aquí antes de escribir la migración.
 
@@ -87,14 +87,14 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 ### 4.2.1 `identity.access_sessions`
 
 - **Propósito:** almacenamiento técnico de sesiones opacas de navegador; no representa una persona ni concede acceso de dominio por sí solo.
-- **Dominio / fuente de verdad:** Identidad para persistencia local; WorkOS continúa gobernando la duración máxima de la sesión alojada.
+- **Dominio / fuente de verdad:** Identidad para persistencia y evidencia local; WorkOS gobierna el `sid`, sus tokens y la verificación externa.
 - **Clasificación:** `identity_pii` y secreto operativo.
-- **Columnas:** `id uuid` UUIDv7 · `access_account_id uuid` · `provider_session_id text` (`sid`) · `surface identity.access_session_surface` (`studio`) · `token_hash bytea` (SHA-256, 32 bytes) · `token_ciphertext text` (access y refresh tokens cifrados) · `access_token_expires_at timestamptz` · `token_version integer` · `revoked_at timestamptz` (nullable).
+- **Columnas:** `id uuid` UUIDv7 · `access_account_id uuid` · `provider_session_id text` (`sid`) · `surface identity.access_session_surface` (`studio`, `backoffice`) · `token_hash bytea` (SHA-256, 32 bytes) · `token_ciphertext text` (access y refresh tokens cifrados) · `access_token_expires_at timestamptz` · `token_version integer` · `assurance_level smallint` · `authentication_method text` (nullable para compatibilidad Studio) · `assurance_verified_at timestamptz` (nullable) · `last_activity_at timestamptz` (nullable) · `absolute_expires_at timestamptz` (nullable) · `revoked_at timestamptz` (nullable).
 - **FKs y borrado:** `access_account_id → identity.access_accounts(id) ON DELETE RESTRICT`.
-- **Uniques y checks:** `UNIQUE (surface, provider_session_id)`; `UNIQUE token_hash`; hash de 32 bytes; versión positiva; ciphertext versionado. La cookie sin hash y los tokens en texto plano están prohibidos.
+- **Uniques y checks:** `UNIQUE (surface, provider_session_id)`; `UNIQUE token_hash`; hash de 32 bytes; versión positiva; ciphertext versionado. Toda fila Backoffice exige AAL2, `password_totp`, evidencia, actividad y vencimiento absoluto; Studio conserva AAL1 compatible. La cookie sin hash y los tokens en texto plano están prohibidos.
 - **Actores:** ninguna lectura o escritura directa desde runtime. Solo funciones `SECURITY DEFINER` estrechas concedidas a `allfit_api` crean, cargan, rotan por compare-and-swap y revocan.
 - **RLS:** habilitada y forzada, sin policies de acceso directo para runtime.
-- **Consultas:** por `token_hash + surface`; reemplazo por `surface + provider_session_id`; sesiones activas por cuenta.
+- **Consultas:** por `token_hash + surface`; reemplazo por `surface + provider_session_id`; sesiones activas por cuenta. La carga Backoffice revalida persona, rol, AAL2, quince minutos de inactividad y ocho horas absolutas, y actualiza actividad dentro de la función cerrada.
 - **Índices:** uniques anteriores; `(access_account_id)`; parcial `(access_account_id, surface) WHERE revoked_at IS NULL`.
 - **Retención:** hasta revocación y purga operativa; cambiar `SESSION_ENCRYPTION_KEY` invalida los ciphertext existentes y fuerza reautenticación.
 - **Eventos:** ninguno de dominio.
@@ -113,6 +113,45 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** unique anterior; parcial por `access_account_id WHERE access_account_id IS NOT NULL`.
 - **Retención:** al menos durante la ventana completa de reintentos del proveedor; cualquier purga posterior requiere una política operativa explícita y no forma parte de HU-STUDIO-003.
 - **Eventos:** ninguno de dominio; es evidencia técnica de consumo, no outbox.
+
+### 4.2.3 `identity.access_account_mfa_factors`
+
+- **Propósito:** vínculo local del factor TOTP persistido por cuenta; permite revalidar y revocar sin almacenar el secreto compartido.
+- **Dominio / fuente de verdad:** Identidad conserva estado y asociación; WorkOS conserva y verifica el factor.
+- **Clasificación:** secreto operativo restringido; `provider_factor_id` nunca sale de funciones cerradas.
+- **Columnas:** `id uuid` UUIDv7 · `access_account_id uuid` · `provider text` (`workos`) · `provider_factor_id text` · `factor_kind text` (`totp`) · `status identity.mfa_factor_status` (`pending`, `active`, `revoked`, `superseded`) · `verified_at`, `revoked_at`, `superseded_at` nullable · timestamps.
+- **FKs y borrado:** `access_account_id → identity.access_accounts(id) RESTRICT`; sin cascadas.
+- **Uniques y checks:** unique `(provider, provider_factor_id)` y unique parcial `(access_account_id, factor_kind) WHERE status IN ('pending','active')`; forma temporal exacta por estado. Una cuenta no tiene dos TOTP actuales.
+- **Actores / RLS:** `FORCE RLS`; sin DML o SELECT para `allfit_api`. Sólo funciones cerradas de login, expiración, recuperación y revocación.
+- **Consultas / índices:** factor actual por cuenta y estado; limpieza por eventos de outbox.
+- **Retención:** el factor activo se conserva tras password reset; revocación/supersesión conserva evidencia hasta la política de seguridad aplicable.
+- **Eventos:** solicitudes de limpieza externa sin factor ID en payload público.
+
+### 4.2.4 `identity.backoffice_authentication_attempts`
+
+- **Propósito:** ceremonia temporal entre password correcto y TOTP verificado; nunca constituye una sesión.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** altamente sensible y temporal.
+- **Columnas:** `id uuid` · cuenta/factor · `provider_session_id`, `provider_challenge_id` · `attempt_token_hash bytea` · `secret_ciphertext text` nullable · vencimiento del access token · estado (`pending_enrollment`, `pending_challenge`, `completed`, `failed`, `expired`) · `invalid_code_count` 0..5 · `verification_idempotency_key`, `verification_command_id`, `completed_session_id` nullable · `expires_at`, `terminal_at`, timestamps.
+- **FKs y borrado:** cuenta, factor y sesión completada usan `RESTRICT`.
+- **Uniques y checks:** token, `sid` y challenge únicos; máximo un intento abierto por cuenta; hash de 32 bytes; secreto `v1.*` sólo mientras está abierto; toda fila terminal elimina ciphertext y fija `terminal_at`.
+- **Actores / RLS:** `FORCE RLS`; sin acceso directo runtime. Las funciones bloquean cuenta, factor, intento, rol y sesión; la primera transacción confirmada gana frente a revocación.
+- **Consultas / índices:** hash de cookie; expiración por `(expires_at,id)`; command binding antes de consumir el challenge externo.
+- **Retención:** diez minutos abierta; el worker expira en lotes y elimina secretos. Sólo queda evidencia mínima terminal.
+- **Eventos:** limpieza de `sid` y factor pendiente mediante outbox.
+
+### 4.2.5 `identity.mfa_factor_recovery_events`
+
+- **Propósito:** evidencia inmutable de la ceremonia de recuperación por autenticador perdido.
+- **Dominio / fuente de verdad:** Identidad/seguridad de plataforma.
+- **Clasificación:** `restricted`; la referencia de ceremonia no contiene PII.
+- **Columnas:** `id uuid` · `factor_id` · `subject_person_id` · `requested_by_person_id` · `approved_by_person_id` · `reason_code='lost_authenticator'` · `ceremony_reference` · `occurred_at`.
+- **FKs y borrado:** factor y tres personas con `RESTRICT`; solicitante, aprobador y sujeto deben ser distintos.
+- **Uniques y checks:** razón cerrada, referencia no vacía; fila append-only.
+- **Actores / RLS:** sólo `allfit_migrator` mediante workflow protegido; `FORCE RLS`, sin runtime DML.
+- **Consultas / índices:** historia por `(factor_id, occurred_at DESC, id DESC)`.
+- **Retención:** evidencia durable de seguridad; no se elimina en runtime.
+- **Eventos:** la misma transacción solicita revocar sesiones/intentos y eliminar el factor externo.
 
 ### 4.3 `identity.onboarding_attempts`
 

@@ -124,6 +124,15 @@ See [OPERATIONS.md](OPERATIONS.md) for credentials and runbooks.
   verification happens before PostgreSQL is called; the receipt and every local
   effect commit together. Raw payloads, signatures and provider PII are never
   persisted.
+- Authentication ceremonies store only hashes of browser credentials. Provider
+  tokens, TOTP enrollment material and challenges are encrypted with bounded
+  expiry and removed on every terminal state. A runtime role never receives
+  table DML for factors, attempts, sessions, roles or duties; it executes narrow
+  functions that lock every authority participating in the decision.
+- Bootstrap and factor recovery are not runtime APIs. They require a protected
+  GitHub Environment with `prevent self-review`, a temporary `allfit_migrator`
+  credential, two distinct people, one transaction and durable evidence. The
+  credential is removed or rotated immediately after the ceremony.
 - Retention, deletion, export and incident access are explicit per domain.
   Production access is time-limited, attributable and audited.
 
