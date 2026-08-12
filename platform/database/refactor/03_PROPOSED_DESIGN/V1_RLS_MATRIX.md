@@ -421,20 +421,22 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
 | `A0` | — | — | — | — |
-| `A1`, `A2` | Por token válido y vigente | — | Decisión de intención | — |
-| `A3`–`A6` | Las de su organización | Sí, con capacidad | Revocación | — |
-| `A9` maintenance | Vencidas | — | Vencimiento | — |
+| `A1`, `A2` | — | — | — | — |
+| `A3`–`A6` | — | — | — | — |
+| `A9` maintenance | — | — | — | — |
 
-- **Condición RLS** — `SELECT` del invitado: coincidencia exacta de token vigente y no revocado. `SELECT` de la organización: `organization_id = access_control.org()` con `access_control.has_capability(org, 'invite')`.
-- **Contexto requerido** — Para el invitado basta `actor_kind IN ('account','person')`: la invitación se consulta **antes** de existir la persona.
-- **Grants mínimos** — En el corte emisor, `allfit_api` no tiene DML directo: solo `EXECUTE` sobre `identity.issue_staff_invitation` y las funciones cerradas del worker. El corte destinatario añadirá la proyección por token sin conceder `DELETE`; una invitación vencida o revocada conserva evidencia.
-- **Índice para la policy** — único sobre el hash del token; sobre `(organization_id, status)`.
-- **`T-INV-1` (positiva)** — Una cuenta sin persona consulta la invitación y ve las intenciones **por separado**.
-- **`T-INV-2` (negativa)** — La respuesta no revela si el contacto invitado ya tiene cuenta en Allfit: eso filtraría la existencia de una persona.
-- **`T-INV-3` (negativa)** — Aceptar la intención de relación y rechazar la de programa **no** concede ningún scope: no aparece ningún `DATA_GRANT`.
-- **`T-INV-4` (negativa)** — Una invitación pendiente no crea cuenta, persona, perfil, relación, grant ni asignación. Se verifica contando filas en las seis tablas.
-- **`T-INV-5` (positiva)** — Dos aceptaciones concurrentes de la misma intención materializan **un** solo destino.
-- **`T-INV-6` (positiva)** — Dos emisiones concurrentes con contacto y propuesta equivalentes convergen a una invitación pendiente y generan un intento de entrega por comando distinto.
+- **Condición RLS** — `FORCE ROW LEVEL SECURITY`; solo `allfit_owner` tiene policy física. Ningún actor runtime recibe DML directo.
+- **Contexto requerido** — `resolve_staff_invitation` exige actor anónimo y token hasheado; `decide_staff_invitation` exige persona activa y `app.actor_verified_email`; listar/revocar exigen capacidad `invite`; expirar exige actor worker.
+- **Grants mínimos** — `allfit_api` recibe únicamente `EXECUTE` sobre las funciones cerradas de emitir, limitar, resolver, decidir, listar, revocar y expirar. El token no se expone a SQL en claro.
+- **Índices para funciones** — único sobre `token_hash`; propuesta pendiente; `(organization_id, status, expires_at DESC)`; listado `(organization_id, created_at DESC, id DESC)`.
+- **`T-INV-1` (positiva)** — El actor anónimo resuelve una invitación de staff pendiente y ve organización, responsable, rol y vencimiento, nunca contacto.
+- **`T-INV-2` (negativa)** — Inválida, vencida, revocada y completada producen la misma proyección vacía/`404`.
+- **`T-INV-3` (negativa)** — Un email ausente, no verificado o distinto no puede decidir la invitación.
+- **`T-INV-4` (negativa)** — Aceptar staff no crea perfil de cliente, relación, grant, scope ni asignación.
+- **`T-INV-5` (positiva)** — Aceptar crea o reutiliza una sola membresía activa, conserva `joined_at` y añade el rol faltante una vez.
+- **`T-INV-6` (positiva)** — Aceptación y revocación concurrentes confirman un único efecto terminal.
+- **`T-INV-7` (positiva)** — La expiración por lotes usa bloqueo con `SKIP LOCKED` y emite una sola evidencia por invitación.
+- **`T-INV-8` (negativa)** — Los límites persisten solo hashes SHA-256, nunca email o IP en claro.
 
 ### 7.2 Organizaciones
 

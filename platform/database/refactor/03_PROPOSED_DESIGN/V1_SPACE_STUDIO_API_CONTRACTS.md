@@ -170,7 +170,7 @@ GET /space/v1/executions?limit=25&cursor=eyJ2IjoxLCJzIjoi...
 | `command-effect-disposed` | 410 | El comando ya se aplicó pero su efecto fue dispuesto; nunca se recrea |
 | `validation-failed` | 422 | Cuerpo mal formado o inválido |
 | `contract-validation-failed` | 422 | La ejecución no cumple el contrato de resultados. Incluye errores **tipados** por regla |
-| `rate-limited` | 429 | Cuota del WorkOS Application o del dominio |
+| `rate-limited` | 429 | Cuota del WorkOS Application, perímetro o dominio; siempre incluye `Retry-After` |
 | `service-degraded` | 503 | Dependencia caída; la operación falla cerrada |
 
 Tres reglas que no se negocian:
@@ -188,7 +188,7 @@ Tres reglas que no se negocian:
 
 ### 3.7 Autoridad OpenAPI y gate de implementación
 
-[`allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml) es la fuente canónica de rutas, DTOs, ejemplos y caché para las treinta y una operaciones HTTP de la primera rebanada vertical ampliada. [`V1_OPENAPI_CONTRACT.md`](./V1_OPENAPI_CONTRACT.md) registra su alcance y las pruebas `T-API-01..11` + `T-NUT-API-01..14`.
+[`allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml) es la fuente canónica de rutas, DTOs, ejemplos y caché para las operaciones HTTP implementadas de la primera rebanada vertical ampliada. [`V1_OPENAPI_CONTRACT.md`](./V1_OPENAPI_CONTRACT.md) registra su alcance y sus pruebas contractuales.
 
 Un endpoint estable de producto listado más adelante pero ausente del YAML todavía es **diseño**, no una superficie implementable. Debe incorporarse contract-first con su `x-allfit-operation` antes de crear el handler.
 
@@ -219,8 +219,8 @@ Sujeto implícito: la persona autenticada. Ningún endpoint recibe un `person_id
 
 | Método | Ruta | Operación | Notas |
 | --- | --- | --- | --- |
-| `GET` | `/invitations/{token}` | `OP-IDN-016` | Accesible sin persona |
-| `POST` | `/invitations/{token}/decisions` | `OP-IDN-009` | Decisión **por intención** |
+| `POST` | `/invitations/resolve` | `OP-IDN-016` | Solo invitaciones de cliente; token en cuerpo, accesible sin persona |
+| `POST` | `/invitations/decisions` | `OP-IDN-009` | Solo cliente; token y decisión **por intención** en cuerpo |
 | `GET` | `/relationships` | `OP-REL-012` | Incluye cerradas y su enlace anterior |
 | `GET` | `/relationships/{id}/events` | `OP-REL-014` | |
 | `POST` | `/relationships/{id}/termination` | `OP-REL-007` | Efecto inmediato |
@@ -322,14 +322,23 @@ Sujeto: la cuenta o persona autenticada en las rutas personales y de onboarding;
 
 ### 5.2 Staff y membresías
 
-| Método | Ruta | Operación |
-| --- | --- | --- |
+| Método | Ruta | Operación | Notas |
+| --- | --- | --- | --- |
+| `POST` | `/invitations/resolve` | `OP-IDN-016` | Público; token solo en cuerpo; nunca devuelve el email |
+| `POST` | `/invitations/decisions` | `OP-IDN-009` | Autenticado; email verificado exacto; headers de comando |
 | `GET` | `/organizations/{orgId}/memberships` | `OP-ORG-015` |
 | `POST` · `DELETE` | `/organizations/{orgId}/memberships/{id}/roles[/{roleCode}]` | `OP-ORG-007` · `OP-ORG-008` |
 | `POST` | `/organizations/{orgId}/memberships/{id}/termination` | `OP-ORG-009` |
 | `POST` | `/organizations/{orgId}/me/membership/resignation` | `OP-ORG-010` |
-| `GET` · `POST` | `/organizations/{orgId}/invitations` | `OP-ORG-016` · `OP-ORG-005` / `OP-REL-001` |
-| `POST` | `/organizations/{orgId}/invitations/{id}/revocation` | `OP-ORG-006` |
+| `GET` · `POST` | `/organizations/{orgId}/invitations` | `OP-ORG-016` · `OP-ORG-005` | Listar y emitir exclusivamente invitaciones de equipo |
+| `POST` | `/organizations/{orgId}/invitations/{id}/revocation` | `OP-ORG-006` | Idempotente; serializa contra aceptación |
+
+Las cuatro rutas de invitaciones de equipo pertenecen a `/studio/v1`. Usan
+CORS de origen exacto, `Cache-Control: no-store` y
+`Referrer-Policy: no-referrer`. Inválida, vencida, revocada y consumida son el
+mismo `404`. El token nunca aparece en path o query string. La emisión puede
+cerrarse mediante gate sin retirar resolución, decisión, listado, revocación o
+expiración.
 
 ### 5.3 Clientes, relaciones y consentimiento
 
@@ -683,7 +692,12 @@ Comandos con varias escrituras que deben ser atómicas. La API los invoca dentro
 | Función | Operación | Qué garantiza en una sola transacción |
 | --- | --- | --- |
 | `activate_person(attempt_id)` | `OP-IDN-003` | Crea `PERSON`, vincula `ACCESS_ACCOUNT`, cierra el intento. Único camino que crea una persona |
-| `decide_invitation_intent(intent_id, decision, scope_decisions)` | `OP-IDN-009` | Materializa **como máximo un** destino; para `service_relationship` exige una decisión por opción, crea la relación, todos los `CONSENT_EVENT` y solo los `DATA_GRANT` concedidos en la misma transacción |
+| `identity.decide_staff_invitation(...)` | `OP-IDN-009` · Studio | Bloquea invitación, valida email verificado y materializa membresía/rol o rechazo en una transacción; nunca crea objetos de cliente |
+| `decide_client_invitation_intent(intent_id, decision, scope_decisions)` | `OP-IDN-009` · Space | Materializa **como máximo un** destino; para `service_relationship` exige una decisión por opción, crea la relación, todos los `CONSENT_EVENT` y solo los `DATA_GRANT` concedidos en la misma transacción |
+| `identity.resolve_staff_invitation(token_hash)` | `OP-IDN-016` · Studio | Proyección pública mínima, sin email y sin distinguir estados terminales |
+| `identity.list_staff_invitations(...)` | `OP-ORG-016` | Listado paginado por organización bajo capacidad, con contacto completo para el actor autorizado |
+| `identity.revoke_staff_invitation(...)` | `OP-ORG-006` | Revocación idempotente que bloquea la misma fila que la decisión |
+| `identity.expire_staff_invitations(limit)` | ciclo worker | Expira por lotes con `SKIP LOCKED`, emite evidencia y limpia contadores vencidos |
 | `create_organization(...)` | `OP-ORG-001` | Organización + membresía + rol `owner`; el constraint diferible confirma exactamente un owner activo |
 | `terminate_membership(membership_id)` | `OP-ORG-009` | Cierra membresía, roles y asignaciones profesionales efectivas |
 | `assign_professional(rel_id, membership_id)` | `OP-REL-002/003` | Cierra el titular anterior, abre el nuevo, notifica |
@@ -707,7 +721,7 @@ Comandos con varias escrituras que deben ser atómicas. La API los invoca dentro
 | `nutrition.propose_goal_version(person_id,...)` | `OP-NUT-012` | Comprueba contexto profesional/credencial/grant y supersede pendiente de la relación |
 | Proxy autenticado de foto nutricional | `OP-NUT-013` | Reevalúa contexto profesional y ambos scopes, registra acceso y transmite el objeto saneado sin redirect |
 
-Las funciones que actúan como entrada cerrada sobre tablas sin DML directo —`activate_person`, `identity.decide_invitation_intent`, `privacy.revoke_grant`, `relationships.terminate_relationship` y `privacy.log_access_event`— son `SECURITY DEFINER`, fijan `search_path = pg_catalog`, califican cada objeto y nunca reciben el actor como parámetro. Las demás son `SECURITY INVOKER`, salvo que su ficha física documente otra necesidad equivalente.
+Las funciones que actúan como entrada cerrada sobre tablas sin DML directo —`activate_person`, las funciones `identity.*staff_invitation`, `privacy.revoke_grant`, `relationships.terminate_relationship` y `privacy.log_access_event`— son `SECURITY DEFINER`, fijan `search_path = pg_catalog`, califican cada objeto y toman el actor del contexto transaccional cuando corresponde. Las demás son `SECURITY INVOKER`, salvo que su ficha física documente otra necesidad equivalente.
 
 `relationships.terminate_relationship` corta inmediatamente las rutas operativas y de escritura; no revoca los grants. ADR-023 publica una superficie histórica separada, ejercida únicamente por el caso exacto y `access_control.can_read_frozen`. `privacy.revoke_grant` acepta `active` o `frozen`; al revocar uno congelado también cierra todos los casos abiertos de la relación antes de confirmar.
 

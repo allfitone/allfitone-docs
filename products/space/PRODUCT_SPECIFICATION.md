@@ -77,7 +77,7 @@ Para:
 
 Para el equipo autorizado de Allfit que atiende incidencias, gobierna contenido y planes globales, administra accesos internos y cumple obligaciones de privacidad sin operar en nombre de las personas o los gimnasios.
 
-Los tres productos consumen infraestructura, identidad, datos y contratos compartidos con superficies y permisos diferentes.
+Los tres productos consumen infraestructura, identidad, datos y contratos compartidos con superficies y permisos diferentes. Space recibe y decide invitaciones de clientes —relaciones, programas y scopes—, pero nunca invitaciones para integrarse al staff o equipo: esas abren y terminan exclusivamente en Studio.
 
 ```text
 Allfit Space                      Allfit Studio

@@ -119,10 +119,10 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** flujo previo a activar una persona; puede terminar sin crearla.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `identity_pii`.
-- **Columnas:** `id` · `account_id uuid` · `person_id uuid` (nullable) · `status identity.onboarding_status` · `invitation_token_hash text` (nullable) · `terms_version text` (nullable) · `terms_accepted_at timestamptz` (nullable) · `privacy_notice_version text` (nullable) · `privacy_notice_accepted_at timestamptz` (nullable) · `expires_at timestamptz`.
+- **Columnas:** `id` · `account_id uuid` · `person_id uuid` (nullable) · `status identity.onboarding_status` · `invitation_token_hash text` (nullable, SHA-256 en hexadecimal) · `terms_version text` (nullable) · `terms_accepted_at timestamptz` (nullable) · `privacy_notice_version text` (nullable) · `privacy_notice_accepted_at timestamptz` (nullable) · `expires_at timestamptz`.
 - **FKs y borrado:** `account_id → access_accounts(id) RESTRICT`; `person_id → people(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE parcial (account_id) WHERE status='open'` (un intento abierto por cuenta).
-- **Actores:** la propia cuenta lee; los cambios ocurren mediante funciones gobernadas; worker de privacidad dispone.
+- **Actores:** la propia cuenta lee; los cambios ocurren mediante funciones gobernadas; worker de privacidad dispone. Asociar el hash de una invitación conserva continuidad de navegación y nunca acepta la intención.
 - **RLS:** `account_id = app.actor_account_id`.
 - **Consultas:** por `account_id` y estado abierto.
 - **Índices:** parcial de intento abierto por cuenta.
@@ -266,13 +266,13 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** sobre temporal de entrega y seguridad; no crea persona provisional.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `identity_pii` (contacto del invitado).
-- **Columnas:** `id` · `organization_id uuid` · `issued_by_membership_id uuid` · `channel text` (`email` en el corte actual; `sms` reservado) · `contact citext` · `token_hash bytea` · `token_key_version smallint` · `proposal_hash bytea` · `responsible_party_schema_version smallint` (`1`) · `responsible_party jsonb` · `status identity.invitation_status` · `expires_at timestamptz`.
+- **Columnas:** `id` · `organization_id uuid` · `issued_by_membership_id uuid` · `channel text` (`email`) · `contact citext` · `token_hash bytea` · `token_key_version smallint` · `proposal_hash bytea` · `responsible_party_schema_version smallint` (`1`) · `responsible_party jsonb` · `status identity.invitation_status` (`pending`, `completed`, `revoked`, `expired`) · `expires_at timestamptz` · `created_at` · `updated_at`.
 - **FKs y borrado:** `(issued_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`. **Sin** FK a persona destino (`IX-24`).
 - **Uniques y checks:** `UNIQUE token_hash`; único parcial `(organization_id, proposal_hash) WHERE status='pending'`; hashes de 32 bytes. El token se deriva por HMAC con clave versionada, nunca se guarda en claro ni en el outbox.
-- **Actores:** la organización (crea, revoca); el invitado por token; worker de expiración.
-- **RLS:** `FORCE ROW LEVEL SECURITY`; el corte emisor revoca todo DML directo a `allfit_api` y escribe solo mediante `identity.issue_staff_invitation`. La lectura por token se añade con el corte destinatario.
-- **Consultas:** por `token_hash`; por `(organization_id, status)`.
-- **Índices:** único `token_hash`; único parcial de propuesta pendiente; `(organization_id, status, expires_at)`.
+- **Actores:** la organización emite, lista y revoca; el invitado resuelve y decide; el worker expira por lotes. Todos operan mediante funciones cerradas.
+- **RLS:** `FORCE ROW LEVEL SECURITY`; todo DML directo está revocado a `allfit_api`. Entradas cerradas: `issue_staff_invitation`, `resolve_staff_invitation`, `decide_staff_invitation`, `list_staff_invitations`, `revoke_staff_invitation` y `expire_staff_invitations`.
+- **Consultas:** por `token_hash`; por organización/estado y cursor de emisión; por expiración pendiente.
+- **Índices:** único `token_hash`; único parcial de propuesta pendiente; `(organization_id, status, expires_at DESC)`; `(organization_id, created_at DESC, id DESC)`.
 - **Retención:** conserva evidencia; se purga tras plazo largo.
 - **Eventos:** `organization.staff_invited.v1` / `relationship.client_invited.v1`, `identity.invitation_revoked.v1`, `identity.invitation_expired.v1`.
 
@@ -281,11 +281,11 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** propuesta tipada decidida de forma independiente; materializa ≤1 destino. Una intención `service_relationship` agrupa las opciones de scope que la persona decide en la misma confirmación, sin convertirlas en una aceptación global.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `operational`.
-- **Columnas:** `id` · `invitation_id uuid` · `kind identity.intent_kind` · `status identity.intent_status` · `proposed_role_code text` (nullable) · `program_version_id uuid` (nullable) · `decided_at timestamptz` (nullable) · `materialized_target_id uuid` (nullable).
-- **FKs y borrado:** `invitation_id → invitations(id) ON DELETE CASCADE`; `program_version_id → planning.program_versions(id) RESTRICT`.
-- **Uniques y checks:** `CHECK` según `kind` (una intención de programa exige `program_version_id`).
-- **Actores:** la persona decide; la organización crea. La decisión de una relación y sus opciones de scope solo entra mediante `identity.decide_invitation_intent`.
-- **RLS:** hereda de la invitación.
+- **Columnas:** `id` · `invitation_id uuid` · `kind identity.invitation_intent_kind` (`membership` en el corte físico) · `status identity.invitation_intent_status` (`pending`, `accepted`, `rejected`, `revoked`, `expired`) · `proposed_role_code text` · `materialized_membership_id uuid` (nullable) · `decided_at timestamptz` (nullable) · `created_at` · `updated_at`.
+- **FKs y borrado:** `invitation_id → invitations(id) ON DELETE CASCADE`; `proposed_role_code → organization_roles(code) RESTRICT`; `materialized_membership_id → organization_memberships(id) RESTRICT`.
+- **Uniques y checks:** una intención por `(invitation_id, kind)`; aceptar exige `materialized_membership_id`, los demás terminales lo prohíben.
+- **Actores:** la persona decide; la organización crea y revoca; el worker expira. El corte staff entra solo mediante funciones cerradas y no materializa dominios de cliente.
+- **RLS:** igual que la invitación: runtime sin DML directo.
 - **Consultas:** por `invitation_id`.
 - **Índices:** `invitation_id`.
 - **Retención:** con la invitación.
@@ -1622,6 +1622,18 @@ Nota de conteo: `planning` tiene 17 tablas y 17 fichas; §9.5–9.8 son cuatro t
 - **Consultas / índices:** `(job_name, started_at desc)`; único `(job_name, cycle_key)`.
 - **Retención:** auditoría operativa.
 - **Eventos:** ninguno.
+
+### 11.4 `system.invitation_rate_windows`
+
+- **Propósito:** aplicar límites de emisión/entrega sin persistir el destinatario ni la IP.
+- **Dominio / fuente de verdad:** Sistema; contador operativo temporal.
+- **Clasificación:** `operational` minimizado.
+- **Columnas:** `scope text` (`actor_hour`, `organization_day`, `destination_day`) · `scope_hash bytea` · `window_started_at timestamptz` · `attempt_count integer` · `expires_at timestamptz` · `updated_at timestamptz`.
+- **Uniques y checks:** PK `(scope, scope_hash)`; hash SHA-256 de 32 bytes; contador positivo; expiración no superior a siete días de retención operacional.
+- **Actores / RLS:** solo `allfit_owner` mediante `system.consume_invitation_rate_window`; sin grants de tabla para `allfit_api` y sin IP en la base de aplicación.
+- **Consultas / índices:** la PK resuelve cada ventana; el worker elimina por `expires_at` durante la expiración de invitaciones.
+- **Retención:** máximo siete días.
+- **Eventos:** ninguno; el límite produce métrica sin PII y respuesta `429` con `Retry-After`.
 
 ---
 
