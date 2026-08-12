@@ -91,7 +91,7 @@ El documento registra las decisiones de alcance aprobadas y las brechas de traza
 | `DB-P5-013` | P0 | Tipar referencias de perfil a catálogos | Pendiente |
 | `DB-P5-014` | P0 | Recompilar integridad, RLS e idempotencia | Pendiente |
 | `DB-P5-015` | P0 | Cerrar retención y anonimización física | Pendiente legal/producto |
-| `DB-P5-019` | P0 | Recertificar AuthKit, PKCE, claims y evidencia AAL2 | Pendiente antes de autenticación o Backoffice sensible |
+| `DB-P5-019` | P0 | Recertificar AuthKit, PKCE, claims y evidencia AAL2 | Cerrado para Backoffice V1; pendientes WebAuthn/passkeys y recertificación de otras superficies |
 | `DB-P5-016` | P1 | Sustentar búsquedas y métricas de Backoffice | Pendiente |
 | `DB-P5-017` | P1 | Cerrar eventos, outbox, entregas y DLQ | Pendiente |
 | `DB-P5-018` | P1 | Completar contratos y OpenAPI | Pendiente |
@@ -124,7 +124,9 @@ El diseño de Fases 1–4 sigue siendo referencia y mapa de riesgos, pero deja d
 - binding de invitaciones por email al email verificado por WorkOS y decisión explícita para celular; AuthKit no prueba por sí solo control del teléfono;
 - evidencia verificable de MFA/step-up para establecer `aal2`, incluida la ruta SSO; `auth_time` solo prueba frescura y no basta por sí mismo.
 
-Hasta cerrar el último punto, cualquier operación que exija AAL2 permanece bloqueada y falla cerrada.
+Para Backoffice V1 el último punto se cierra con contraseña + challenge TOTP de la API MFA componible de WorkOS y evidencia local ligada al `sid`: `identity.access_sessions` sólo admite `surface='backoffice'` con `assurance_level=2`, `authentication_method='password_totp'` y `assurance_verified_at`. Cada operación futura revalida rol, deber, vigencia y AAL dentro de la transacción. No se confía en `authenticationMethod`, `auth_time`, roles, permisos u organizaciones del token.
+
+Esta evidencia no es resistente al phishing y no se declara equivalencia integral con una oferta AAL2 moderna hasta incorporar WebAuthn/passkeys. El MFA global de Hosted AuthKit permanece desactivado para Backoffice; SSO, OAuth, Magic Auth, SMS y passkeys siguen fuera de esta fase. `auth.allfit.one` queda diferido: el reset alojado usa `*.authkit.app` y añadir dominio propio después no migra contratos ni sesiones. Las operaciones AAL2 de otras superficies continúan fallando cerradas hasta su recertificación específica.
 
 ## 5. Identidad, contacto y recuperación
 

@@ -249,6 +249,12 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-029` | Declarar una credencial profesional | Comando | `A2` |
 | `OP-IDN-030` | Revisar una credencial profesional | Comando | `A2` |
 | `OP-IDN-031` | Retirar una credencial profesional | Comando | `A2` |
+| `OP-IDN-032` | Iniciar autenticación Backoffice por contraseña | Comando | `A0` |
+| `OP-IDN-033` | Consultar intento de autenticación Backoffice | Consulta | `A0` con cookie temporal |
+| `OP-IDN-034` | Verificar TOTP y crear sesión AAL2 Backoffice | Comando | `A0` con intento válido |
+| `OP-IDN-035` | Consultar sesión Backoffice | Consulta | `allfit_admin` autenticado |
+| `OP-IDN-036` | Cerrar sesión Backoffice | Comando | sesión presente o ausente |
+| `OP-IDN-037` | Solicitar recuperación de contraseña Backoffice | Comando | `A0` |
 
 ---
 
@@ -762,6 +768,81 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | `identity.professional_credential_retired.v1` |
 | **Reglas** | Una credencial retirada deja de presentarse como vigente aunque una verificación histórica todavía tenga `valid_to` futuro |
 | **Falla cerrada** | Credencial ajena o ya sucedida por otra versión: misma respuesta cerrada |
+
+#### `OP-IDN-032` — Iniciar autenticación Backoffice por contraseña
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando público |
+| **Superficie** | `POST /backoffice/v1/auth/password` |
+| **Actor** | `A0`; `Origin` exacto de `BACKOFFICE_WEB_URL` |
+| **Filtros obligatorios** | Application Backoffice, email verificado, cuenta vinculada, persona activa y `allfit_admin` vigente |
+| **Transacción** | Invalida intentos anteriores, persiste/reutiliza factor TOTP y crea intento de diez minutos. No crea sesión |
+| **Idempotencia** | Un único intento abierto por cuenta; concurrencia serializada en PostgreSQL |
+| **Información sensible** | Password, email, tokens, QR, clave manual, factor/challenge IDs nunca se registran; secretos temporales cifrados |
+| **Reglas** | Respuesta `totp-enrollment` o `totp-challenge`; cualquier fallo de credencial/cuenta/persona/rol es el mismo `401` |
+
+#### `OP-IDN-033` — Consultar intento de autenticación Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta pública ligada a cookie temporal |
+| **Superficie** | `GET /backoffice/v1/auth/attempt` |
+| **Actor** | Poseedor de `allfit_backoffice_auth_attempt`, host-only y `SameSite=Strict` |
+| **Filtros obligatorios** | Intento abierto, no vencido, hash exacto y `Origin` exacto |
+| **Transacción** | Lectura por función cerrada; no extiende los diez minutos |
+| **Información sensible** | Sólo `next`, vencimiento y, durante primer enrolamiento, QR/clave manual; nunca identidad o IDs externos |
+| **Falla cerrada** | Ausente, terminal, vencido o corrupto: `401` indistinguible y borrado de cookie |
+
+#### `OP-IDN-034` — Verificar TOTP y crear sesión AAL2 Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/auth/totp/verification` |
+| **Actor** | Intento temporal válido; aún no es actor Backoffice |
+| **Filtros obligatorios** | Código de seis dígitos, `Idempotency-Key`, `Command-Id`, factor vigente, persona activa y rol base vigente |
+| **Transacción** | Vincula command antes de consumir challenge; después bloquea cuenta, factor, intento, rol y sesión, activa factor nuevo y crea sesión AAL2 en una sola confirmación |
+| **Idempotencia** | Token final derivado por HMAC del intento con separación de dominio; el mismo command puede recuperar un challenge ya verificado sin crear otra sesión; otro command recibe `409` |
+| **Concurrencia** | La primera confirmación entre verificación y revocación gana. Máximo cinco códigos inválidos por intento |
+| **Información sensible** | PostgreSQL conserva hash de token; challenge, QR, clave y tokens cifrados se eliminan al terminar |
+| **Evento de dominio** | Solicitudes de limpieza externa si la operación termina o pierde la carrera |
+
+#### `OP-IDN-035` — Consultar sesión Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /backoffice/v1/session` |
+| **Actor** | Persona activa con rol `allfit_admin` y sesión Backoffice AAL2 |
+| **Filtros obligatorios** | Hash y superficie exactos, `sid` válido, AAL2, `password_totp`, inactividad menor de 15 minutos y absoluto menor de 8 horas |
+| **Transacción** | Revalida persona/rol/evidencia y actualiza actividad mediante función cerrada; verifica/refresca token WorkOS fuera de autoridad de dominio |
+| **Información sensible** | Devuelve sólo nivel, método, nombre propio y vencimientos; sin email, factor, deber, claim, token ni permiso |
+| **Falla cerrada** | Cualquier pérdida de autoridad revoca/cierra la sesión y devuelve `401`; proveedor transitoriamente indisponible devuelve `503` sin ampliar vencimientos |
+
+#### `OP-IDN-036` — Cerrar sesión Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando idempotente |
+| **Superficie** | `POST /backoffice/v1/auth/logout` |
+| **Actor** | Sesión Backoffice presente o ausente |
+| **Filtros obligatorios** | `Origin` exacto; razón `manual`, `inactivity` o `recovery` |
+| **Transacción** | Revoca primero la sesión local por función cerrada, elimina cookie y solicita revocar el `sid`; una falla externa queda en outbox para worker |
+| **Idempotencia** | Ausente o ya revocada responde `204` igual que la primera ejecución |
+| **Información sensible** | Métrica sólo con trigger/outcome; sin PII ni `sid` |
+
+#### `OP-IDN-037` — Solicitar recuperación de contraseña Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando público de respuesta uniforme |
+| **Superficie** | `POST /backoffice/v1/auth/password-resets` |
+| **Actor** | `A0`, `Origin` exacto |
+| **Transacción** | Ninguna local al solicitar; WorkOS envía correo y aloja página en `*.authkit.app`. Webhook firmado posterior revoca sesiones Studio/Backoffice e intentos en una transacción |
+| **Idempotencia** | La respuesta siempre es `202`; el receipt del webhook deduplica por evento |
+| **Información sensible** | La API descarta URL/token de reset y no revela existencia de cuenta ni salud del proveedor; TOTP activo se conserva |
+| **Falla cerrada** | `auth.allfit.one` no es dependencia. Sin webhook válido no se aplica revocación local |
 
 ### 7.2 Organizaciones
 

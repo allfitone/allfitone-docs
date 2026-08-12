@@ -1,8 +1,8 @@
 # Catálogo de objetos físicos y contratos JSONB V1
 
-**Fecha:** 3 de agosto de 2026
+**Fecha:** 12 de agosto de 2026
 **Fase:** 4 — cierre de especificación física
-**Estado:** inventario de 122 tablas; sesión técnica de Studio, receipts de recuperación, bloqueo causal y perfil profesional normalizado materializados
+**Estado:** inventario de 125 tablas; sesión multi-superficie y autenticación AAL2 Backoffice materializadas
 **Deriva de:** [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`V1_DATA_DICTIONARY.md`](./V1_DATA_DICTIONARY.md)
 
 ## 1. Propósito
@@ -15,13 +15,13 @@ Este catálogo cierra las decisiones que no pueden dejarse a quien escriba la pr
 - forma, versión y validación de cada JSONB;
 - identidad global y mantenimiento de tablas particionadas.
 
-No sustituye las fichas de las 122 tablas. Fija las reglas mecánicas que todas consumen.
+No sustituye las fichas de las 125 tablas. Fija las reglas mecánicas que todas consumen.
 
 ## 2. Inventario recertificado
 
 | Schema | Tablas |
 | --- | ---: |
-| `identity` | 17 |
+| `identity` | 20 |
 | `organizations` | 10 |
 | `relationships` | 6 |
 | `privacy` | 16 |
@@ -32,9 +32,9 @@ No sustituye las fichas de las 122 tablas. Fija las reglas mecánicas que todas 
 | `payments` | 12 |
 | `system` | 3 |
 | `support` | 5 |
-| **Total** | **122** |
+| **Total** | **125** |
 
-El conteo se obtiene de 122 fichas de tabla en el diccionario, incluidas `identity.access_sessions` como almacenamiento técnico de sesión, `identity.password_reset_receipts` como receipt idempotente de recuperación, `planning.service_access_blocks` como bloqueo causal y las tablas normalizadas de especialidades, tipos de credencial y credenciales profesionales. Incluye cuatro targets, cinco resultados tipados, ocho tablas nutricionales y las cinco tablas de soporte de ADR-028 como tablas independientes. Excluye:
+El conteo se obtiene de 125 fichas de tabla en el diccionario. Incluye `identity.access_sessions` como sesión técnica multi-superficie; `identity.password_reset_receipts`; las nuevas `identity.access_account_mfa_factors`, `identity.backoffice_authentication_attempts` e `identity.mfa_factor_recovery_events`; `planning.service_access_blocks`; y las tablas normalizadas de especialidades, tipos de credencial y credenciales profesionales. Incluye cuatro targets, cinco resultados tipados, ocho tablas nutricionales y las cinco tablas de soporte de ADR-028 como tablas independientes. Excluye:
 
 - enums;
 - vistas y funciones;
@@ -54,6 +54,8 @@ Un enum existe una sola vez en el schema indicado. Una columna de otro schema us
 | `identity.actor_kind` | todos los dominios que registran actor |
 | `identity.access_session_surface` | `identity.access_sessions` |
 | `identity.password_reset_receipt_result` | `identity.password_reset_receipts` |
+| `identity.mfa_factor_status` | `identity.access_account_mfa_factors` |
+| `identity.backoffice_authentication_attempt_status` | `identity.backoffice_authentication_attempts` |
 | `identity.provenance` | ejecución y perfil |
 | `privacy.access_level` | relaciones, planificación y ejecución |
 | `catalog.content_scope` | catálogo |

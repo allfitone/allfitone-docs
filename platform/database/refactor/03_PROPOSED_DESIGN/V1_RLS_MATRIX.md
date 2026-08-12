@@ -277,6 +277,26 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **`T-SESSION-3` (negativa)** — `PUBLIC` no ejecuta ninguna función de sesión.
 - **`T-SESSION-4` (concurrencia)** — Solo la versión esperada rota el refresh token; el compare-and-swap perdedor no sobrescribe la versión ganadora.
 - **`T-SESSION-5` (revocación)** — Una sesión revocada deja de cargar inmediatamente.
+- **`T-SESSION-6` (superficie)** — Una sesión Studio conserva AAL1 compatible y nunca carga en Backoffice; una fila Backoffice no puede existir sin AAL2, `password_totp`, evidencia y vencimientos.
+- **`T-SESSION-7` (tiempo)** — Quince minutos sin actividad u ocho horas absolutas cierran la sesión aunque el token WorkOS continúe vigente.
+
+#### `ACCESS_ACCOUNT_MFA_FACTOR` · `BACKOFFICE_AUTHENTICATION_ATTEMPT` · `MFA_FACTOR_RECOVERY_EVENT`
+
+| Actor | SELECT | INSERT | UPDATE | DELETE |
+| --- | --- | --- | --- | --- |
+| `A0`–`A12`, incluido `allfit_api` directo | — | — | — | — |
+| `allfit_migrator` en ceremonia protegida | Mediante función | Mediante función | Mediante función | — |
+
+- **Condición RLS** — `FORCE ROW LEVEL SECURITY` y policy únicamente para `allfit_owner`. No se conceden privilegios de tabla a `allfit_api`, worker o `PUBLIC`.
+- **Contexto requerido** — Las funciones de login reciben hashes y contexto calculado por servidor. Las de recuperación exigen dos personas distintas del sujeto con `manage_platform_access` vigente y autoridad `allfit_migrator`.
+- **Grants mínimos** — `allfit_api` sólo ejecuta resolver, iniciar/cargar/bind/fallar/completar/expirar mediante funciones cerradas. El worker sólo prepara limpieza por event ID y nunca lee ciphertext, factor ID o `sid` desde la cola.
+- **Índice para la policy** — No hay acceso RLS directo; los lookups usan factor actual por cuenta, token hash único, intento abierto por cuenta y expiración `(expires_at,id)`.
+- **`T-AAL2-1` (negativa)** — Password correcto no crea `ACCESS_SESSION`; sólo un challenge TOTP confirmado puede completar el intento.
+- **`T-AAL2-2` (negativa)** — Persona inactiva, rol ausente/revocado, factor terminal u otra superficie fallan con la misma ausencia de sesión.
+- **`T-AAL2-3` (códigos)** — Los primeros cuatro códigos inválidos conservan el intento; el quinto lo termina y elimina el secreto cifrado.
+- **`T-AAL2-4` (idempotencia)** — Un command se vincula antes de consumir el challenge externo; replay legítimo converge y headers distintos no crean una segunda sesión.
+- **`T-AAL2-5` (concurrencia)** — Completar TOTP y revocar rol/factor serializan cuenta, intento, factor, rol y sesión; sólo la primera transacción confirmada puede ganar.
+- **`T-AAL2-6` (recuperación)** — Dos aprobadores distintos del sujeto revocan factor, sesiones e intentos y escriben evidencia inmutable; runtime y autoaprobación fallan.
 
 #### `PASSWORD_RESET_RECEIPT`
 

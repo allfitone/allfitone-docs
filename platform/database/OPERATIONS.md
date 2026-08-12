@@ -169,6 +169,40 @@ disable the WorkOS endpoint before rolling back API code and keep the
 forward-only migration. Do not create a local retry worker and do not enable
 `password_reset.created`.
 
+## Backoffice AAL2 rollout and ceremonies
+
+Backoffice usa password + TOTP mediante la API MFA componible de WorkOS; no usa
+Hosted AuthKit para login ni requiere `auth.allfit.one`. La recuperación de
+contraseña permanece alojada en `*.authkit.app`. El runbook completo, variables,
+límites y smoke tests están en [Backoffice Authentication Operations](../../products/backoffice/AUTHENTICATION_OPERATIONS.md).
+
+Desplegar en este orden:
+
+1. mantener `BACKOFFICE_AUTH_ENABLED=false`;
+2. aplicar las migraciones forward-only de superficie, estructura y funciones;
+3. configurar `WORKOS_API_KEY_BACKOFFICE` en worker y API, además del client ID e
+   issuer sólo en API;
+4. crear los environments protegidos de GitHub para bootstrap y recuperación,
+   ambos con `prevent self-review`, reviewers autorizados y la credencial
+   administrativa limitada al environment;
+5. ejecutar el bootstrap cruzado de dos personas activas desde `main` y retirar
+   la credencial al terminar;
+6. validar `/cron/outbox`, rate limits y el ciclo real en WorkOS sandbox;
+7. activar primero Preview y después Production.
+
+El endpoint de cron conserva expiración y revocación incluso con el gate de
+login apagado. Alertar por `worker.backoffice_auth.cleanup` con outcome
+`retrying`, intentos abiertos crecientes y errores TOTP sostenidos. Para
+rollback, apagar sólo nuevos passwords; no detener sesión, logout, reset,
+verificación de intentos existentes, worker ni webhook.
+
+La recuperación de un autenticador perdido usa exclusivamente
+`backoffice-totp-recovery.yml`. Deben intervenir el iniciador del workflow y un
+aprobador independiente del environment, y la función exige además dos
+administradores distintos del sujeto. No se recupera el secreto anterior: se
+revoca factor, intentos y sesiones, se conserva evidencia y el próximo login
+enrola otro TOTP.
+
 ## Studio team-invitation rollout
 
 `OP-ORG-005` crea la invitación, su intención de membresía y el evento

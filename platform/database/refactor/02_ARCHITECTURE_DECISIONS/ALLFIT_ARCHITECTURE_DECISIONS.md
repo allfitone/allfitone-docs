@@ -222,7 +222,7 @@ AuthKit verifica email como identidad primaria. La ruta de invitación por celul
 ## ADR-002 — WorkOS AuthKit para autenticación y Supabase únicamente como PostgreSQL
 
 **Estado:** aceptada para V1<br>
-**Fecha:** 3 de agosto de 2026<br>
+**Fecha:** 3 de agosto de 2026; ampliada el 12 de agosto de 2026<br>
 **Supersedida parcialmente por:** ADR-029 sustituye únicamente la separación física de los repositorios de producto; conserva Applications, deployables, identidad y superficies independientes
 
 ### Contexto
@@ -3496,6 +3496,13 @@ Las HU de Backoffice declaraban un único `allfit_admin` con acceso ordinario a 
 14. Ningún runtime usa owner, superuser o `BYPASSRLS`; el rol de conexión de soporte sólo ejecuta funciones/proyecciones cerradas.
 15. Backoffice usa un WorkOS Application propia dentro del WorkOS environment compartido y la API sólo acepta ese `client_id` en `/backoffice/v1`. Los WorkOS Applications de Space u Studio no obtienen acceso por compartir `sub` o `person_id`.
 16. El bootstrap inicial y una recuperación por pérdida total de autoridad no son endpoints. Una ceremonia operativa con aprobación de dos personas usa temporalmente `allfit_migrator` para insertar, en una sola transacción, al menos dos roles base y sus deberes `manage_platform_access` cruzados: cada destinatario tiene como otorgante a la otra persona. El pipeline deshabilita esa credencial al terminar y conserva evidencia; no hay seed ni excepción de autoasignación.
+17. Backoffice V1 autentica correo + contraseña y TOTP mediante las APIs independientes de WorkOS. Hosted AuthKit no participa en el login y el MFA global del environment permanece desactivado para esta superficie.
+18. La API sólo crea la sesión Backoffice después de confirmar el challenge TOTP y revalidar persona activa, rol base, factor y carrera de revocación. PostgreSQL materializa `assurance_level=2`, `authentication_method='password_totp'` y `assurance_verified_at` para el `sid` exacto; ningún claim permite inferirlos.
+19. La sesión Backoffice es host-only, dura ocho horas como máximo y quince minutos sin actividad. Retirar el rol, recuperar el factor o cambiar la contraseña revoca sesiones e intentos; el worker reintenta revocaciones externas con outbox y dead letter.
+20. Una cuenta conserva como máximo un TOTP activo. QR, clave manual, tokens y challenge se cifran sólo mientras el intento está abierto; PostgreSQL conserva el factor ID requerido por WorkOS y únicamente hashes de cookies opacas.
+21. El reset de contraseña usa `createPasswordReset` con la Application Backoffice. WorkOS envía el correo y sirve la página en `*.authkit.app`; la API descarta URL y token y responde uniformemente. `auth.allfit.one` queda diferido como branding/configuración.
+22. Contraseña + TOTP es la evidencia AAL2 interna de V1, pero no es resistente al phishing. No se declarará equivalencia integral con una oferta AAL2 moderna hasta adoptar WebAuthn/passkeys.
+23. El bootstrap y la recuperación TOTP se ejecutan únicamente mediante workflows protegidos con credencial `allfit_migrator`, dos personas, evidencia durable y deshabilitación de la credencial al terminar. No existen endpoints equivalentes.
 
 ### Invariantes
 
