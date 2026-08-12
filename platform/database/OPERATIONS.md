@@ -175,23 +175,54 @@ forward-only migration. Do not create a local retry worker and do not enable
 `organization.staff_invited.v1` en una transacción. La invitación dura siete
 días; un comando distinto con el mismo correo y la misma propuesta reutiliza la
 vigente y solicita una nueva entrega. El outbox solo transporta
-`invitation_id`: nunca correo ni token.
+`invitation_id`: nunca correo ni token. El worker construye únicamente
+`https://studio.allfit.one/invitations#token=…` mediante
+`STAFF_INVITATION_PUBLIC_BASE_URL=https://studio.allfit.one/`.
+
+Los gates son independientes:
+
+- `STAFF_INVITATION_ISSUANCE_ENABLED`: creación/reutilización de propuestas;
+- `STAFF_INVITATION_DELIVERY_ENABLED`: reclamación y entrega de correos;
+- `NEXT_PUBLIC_STAFF_INVITATIONS_ENABLED`: interfaz de emisión en Studio.
+
+Resolver, decidir, listar, revocar y expirar permanecen disponibles con los tres
+gates apagados. El cron tampoco se apaga durante un rollback: debe seguir
+expirando invitaciones y limpiando contadores aunque la entrega esté cerrada.
+
+Antes del despliegue, crear en Vercel las reglas perimetrales siguientes. El
+owner operativo es Platform y Security aprueba y conserva la evidencia del
+cambio; la aplicación no persiste IPs.
+
+| Rule ID | Ruta | Límite |
+| --- | --- | --- |
+| `studio-team-invitation-issue-ip-20h` | `POST /studio/v1/organizations/*/invitations` | 20 por hora e IP |
+| `studio-team-invitation-resolve-ip-30m` | `POST /studio/v1/invitations/resolve` | 30 por minuto e IP |
+| `studio-team-invitation-decision-ip-10h` | `POST /studio/v1/invitations/decisions` | 10 por hora e IP |
+
+PostgreSQL aplica adicionalmente 20 emisiones/hora por actor, 100/día por
+organización y tres entregas/24 horas por destinatario y organización. Solo
+conserva hashes SHA-256 de dimensiones normalizadas durante un máximo de siete
+días. Todo límite responde `429 rate-limited` con `Retry-After`.
 
 Despliegue en este orden:
 
-1. aplicar la migración forward-only de invitaciones, capacidades, outbox y
-   circuit breaker;
-2. desplegar API, worker y Studio con `STAFF_INVITATIONS_ENABLED=false` y
-   `NEXT_PUBLIC_STAFF_INVITATIONS_ENABLED=false`;
-3. configurar `INVITATION_TOKEN_ACTIVE_VERSION`, la clave HMAC versionada,
-   `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `CRON_SECRET` e
-   `INVITATION_PUBLIC_BASE_URL`;
-4. verificar el cron de Vercel cada minuto, los reintentos 1/2/4/8/16 minutos y
-   el dead-letter al quinto fallo; y
-5. habilitar los dos flags únicamente después de publicar el flujo receptor
-   `HU-SP-016/017` y validar el universal link HTTPS.
+1. integrar documentación y código con los tres gates desactivados;
+2. aplicar primero la migración de enums y después la de funciones, índices,
+   límites y ciclo de vida mediante el workflow protegido de producción;
+3. configurar claves HMAC, Resend, cron, base URL y reglas Vercel; desplegar API,
+   worker y Studio con los gates todavía apagados;
+4. consultar invitaciones productivas pendientes. Si alguna fue enviada con un
+   enlace antiguo de Space, detener la activación y aprobar explícitamente una
+   redelivery o compatibilidad revisada; no activar sobre un inventario incierto;
+5. habilitar emisión y entrega para una organización interna y validar con un
+   email real resolución, activación previa, aceptación, rechazo, revocación,
+   eventos, métricas y límites;
+6. habilitar `NEXT_PUBLIC_STAFF_INVITATIONS_ENABLED` para esa organización; y
+7. ampliar gradualmente después de revisar errores, dead-letter y expiraciones.
 
 El circuit breaker usa ventana de 30 segundos, mínimo 20 resultados, apertura
 al 50 % de fallos durante 60 segundos y tres pruebas half-open. Un fallo de
-correo nunca invalida la invitación. Para rollback, apagar primero los flags y
-el cron; la migración permanece.
+correo nunca invalida la invitación. Para rollback, apagar primero la interfaz y
+después la emisión; opcionalmente cerrar entrega para correos aún no reclamados.
+Mantener resolución, decisiones, listado, revocación, cron y expiración. Las
+migraciones forward-only permanecen.

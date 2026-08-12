@@ -13,7 +13,7 @@ Este documento consolida las modificaciones de diseño de base de datos que debe
 La revisión parte de:
 
 - las 94 historias de [Allfit Space](../../../../products/space/USER_STORIES.md);
-- las 84 historias de [Allfit Studio](../../../../products/studio/USER_STORIES.md);
+- las 86 historias de [Allfit Studio](../../../../products/studio/USER_STORIES.md);
 - las 33 historias de [Allfit Backoffice](../../../../products/backoffice/USER_STORIES.md);
 - los entregables vigentes de Fases 1 a 4;
 - el estado declarado en [PHASE_5_READINESS_REVIEW.md](./PHASE_5_READINESS_REVIEW.md).

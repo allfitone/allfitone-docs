@@ -410,17 +410,25 @@ El panel actual demuestra flujos útiles de CRM, planes, suscriptores, pagos, in
 
 ## 7. Invitaciones sin crear personas en nombre de otras personas
 
-Allfit Studio puede iniciar una relación, pero no apropiarse del registro.
+Allfit Studio puede proponer una incorporación al equipo o iniciar una relación
+con un cliente, pero no apropiarse del registro. Nunca crea un usuario WorkOS,
+una persona provisional o un Fitness ID en nombre del destinatario.
 
-La organización solo invita por email o celular. Nunca crea un usuario WorkOS, una persona provisional o un Fitness ID en nombre del destinatario.
+Existen dos ciclos deliberadamente separados:
 
-Una invitación puede transportar intenciones separadas:
+- **Equipo/staff:** se envía solo por email, abre y se decide exclusivamente en
+  Studio. Transporta una única intención de membresía con un rol propuesto. Al
+  aceptar crea o reutiliza una membresía; nunca crea relación, scope, grant ni
+  acceso a datos de clientes.
+- **Cliente:** abre y se decide en Space. Puede transportar una relación
+  profesional, una asignación de programa dependiente de la relación y scopes
+  versionados. Cada intención se acepta o rechaza independientemente y la
+  aceptación parcial es válida.
 
-- Incorporarse como miembro de la organización.
-- Iniciar una relación profesional.
-- Recibir una asignación de programa, dependiente de la relación.
-
-Cada intención se acepta o rechaza independientemente. La aceptación parcial es válida.
+El enlace de equipo usa `https://studio.allfit.one/invitations#token=…`. Studio
+retira el fragmento inmediatamente y envía el token a la API solo dentro del
+cuerpo JSON. El email invitado nunca se presenta al resolver; únicamente puede
+decidir la sesión cuyo correo verificado coincide exactamente con el destino.
 
 Ejemplo:
 
@@ -443,7 +451,10 @@ Aceptar la invitación no significa aceptar implícitamente:
 - IA.
 - Entrenamiento de modelos.
 
-Una persona que ya usa Allfit Space acepta con su cuenta y `person_id` existentes. Su historial no se duplica ni se comparte retroactivamente por defecto.
+Una persona que ya usa Allfit acepta con su cuenta y `person_id` existentes. Su
+historial no se duplica ni se comparte retroactivamente por defecto. Si todavía
+no tiene una persona activa, completa primero su propia activación; activar la
+cuenta no acepta ninguna invitación.
 
 ---
 

@@ -233,7 +233,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-013` | Consultar la proyección actual de mi perfil | Consulta | `A2` |
 | `OP-IDN-014` | Consultar el historial de un atributo | Consulta | `A2` |
 | `OP-IDN-015` | Consultar mis registros de progreso corporal | Consulta | `A2` |
-| `OP-IDN-016` | Consultar una invitación por token | Consulta | `A1`, `A2` |
+| `OP-IDN-016` | Consultar una invitación por token protegido | Consulta | `A0`, `A1`, `A2` |
 | `OP-IDN-017` | Consultar mi perfil profesional | Consulta | `A3` |
 | `OP-IDN-018` | Consultar el perfil de entrenamiento de un cliente | Consulta | `A3`, `A7` |
 | `OP-IDN-019` | Consultar el progreso corporal de un cliente | Consulta | `A3`, `A7` |
@@ -393,16 +393,16 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/invitations/{token}/decisions` |
+| **Superficie** | `POST /studio/v1/invitations/decisions` para staff; `POST /space/v1/invitations/decisions` para clientes. El token viaja en el cuerpo |
 | **Actor** | `A2` |
-| **Filtros obligatorios** | Invitación vigente, no revocada, no vencida, y dirigida al contacto verificado de la persona autenticada. Cada `INVITATION_INTENT` se decide por separado; una intención `service_relationship` exige una decisión explícita para cada `INVITATION_SCOPE_OPTION` presentada |
-| **Transacción** | Una sola confirmación: materializar **como máximo un destino** por intención aceptada. Si se acepta `service_relationship`, crear la relación y, por cada opción de scope, un `CONSENT_EVENT`; crear `DATA_GRANT` únicamente para las concedidas. Las rechazadas conservan evidencia sin grant. Una intención de programa solo se materializa si la relación y el scope mínimo requerido fueron concedidos |
-| **Idempotencia** | `Idempotency-Key` por intención. Un reintento no duplica membresías, relaciones ni asignaciones |
+| **Filtros obligatorios** | Invitación pendiente, vigente y dirigida al email verificado exacto de la persona autenticada. Staff admite una única intención `membership`; cliente decide cada intención y cada `INVITATION_SCOPE_OPTION` presentada |
+| **Transacción** | Staff: bloquear invitación, aceptar o rechazar, crear/reutilizar membresía activa y añadir solo el rol faltante. Cliente: materializar **como máximo un destino** por intención; relación, consentimientos, grants concedidos y programa dependiente se confirman juntos. Los dos flujos preservan evidencia y no mezclan entidades |
+| **Idempotencia** | `Idempotency-Key` y `Command-Id`. Un reintento no duplica membresías, roles, relaciones, grants ni asignaciones |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada. Dos aceptaciones concurrentes de la misma intención materializan un solo destino |
+| **Offline / concurrencia** | Falla cerrada. Dos decisiones concurrentes materializan un solo destino; en staff, aceptación y revocación bloquean la misma fila y gana la primera confirmada |
 | **Información sensible** | Identidad y vínculo. Ningún dato fitness cambia de manos aquí |
 | **Evento de dominio** | `identity.invitation_intent_decided.v1`, más los eventos del dominio destino y `privacy.grant_created.v1` / `privacy.grant_rejected.v1` por opción decidida |
-| **Reglas** | La aceptación parcial es válida: relación, programa y cada scope son decisiones independientes aunque se confirmen en una sola acción. Aceptar la relación no concede automáticamente scopes. No existe una ruta posterior para que Studio solicite permisos sobre una relación activa. Una intención de programa cuya relación fue rechazada o cuyo scope necesario no fue concedido no puede materializarse |
+| **Reglas** | Staff se decide exclusivamente en Studio y nunca crea perfil de cliente, relación, scope o grant. Cliente se decide exclusivamente en Space: relación, programa y cada scope son independientes aunque se confirmen en una sola acción. Activar la persona no acepta ninguna intención |
 | **Falla cerrada** | Dependencia faltante, la intención queda pendiente y no se materializa nada |
 
 #### `OP-IDN-010` — Crear o actualizar perfil profesional
@@ -508,21 +508,21 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | Las URLs de imagen son firmadas, de vigencia corta y no enumerables |
 | **Falla cerrada** | — |
 
-#### `OP-IDN-016` — Consultar una invitación por token
+#### `OP-IDN-016` — Consultar una invitación por token protegido
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /space/v1/invitations/{token}` |
-| **Actor** | `A1`, `A2` |
-| **Filtros obligatorios** | Token válido, vigente y no revocado |
+| **Superficie** | `POST /studio/v1/invitations/resolve` para staff; `POST /space/v1/invitations/resolve` para clientes. El token viaja en el cuerpo |
+| **Actor** | `A0`, `A1`, `A2` |
+| **Filtros obligatorios** | Token válido y pendiente. Inválido, vencido, revocado y consumido devuelven el mismo `404` |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
-| **Información sensible** | Identidad de la organización invitante y contenido de las intenciones |
+| **Offline / concurrencia** | Falla cerrada. Límite perimetral de resolución por IP y respuesta `429` con `Retry-After` |
+| **Información sensible** | Identidad de la organización invitante y contenido mínimo de las intenciones; nunca el email destinatario |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Muestra organización, parte responsable, propósito, intenciones y, para `service_relationship`, cada opción de scope con versión, campos materiales y nivel **por separado**, para que la decisión pueda ser parcial e informada. No revela si el contacto ya tiene cuenta en Allfit: eso filtraría la existencia de una persona a quien invita |
+| **Reglas** | Staff muestra organización, responsable, rol y vencimiento únicamente en Studio. Cliente muestra en Space relación, programa y scopes por separado. El token nunca aparece en path, query, logs o referrers; consultar no acepta ni materializa nada |
 | **Falla cerrada** | Token inválido y token vencido devuelven la misma respuesta |
 
 #### `OP-IDN-017` — Consultar mi perfil profesional
@@ -867,14 +867,14 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Tipo** | Comando |
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/invitations` con intención de tipo `membership` |
 | **Actor** | `A4`, `A5`, `A6` |
-| **Filtros obligatorios** | Membresía vigente con capacidad de invitar. El destino es un email o celular; **nunca** un `person_id` |
+| **Filtros obligatorios** | Membresía vigente con capacidad de invitar. El destino V1 es un email; **nunca** un `person_id` |
 | **Transacción** | Crear `INVITATION` con su token e `INVITATION_INTENT` de membresía, incluyendo el rol propuesto, y encolar el envío en el outbox |
 | **Idempotencia** | `Idempotency-Key`. Reinvitar al mismo contacto con la misma intención reutiliza la invitación vigente en lugar de crear otra |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
+| **Offline / concurrencia** | Falla cerrada. PostgreSQL limita 20 emisiones/hora por actor, 100/día por organización y tres entregas/24 h por destinatario y organización |
 | **Información sensible** | Contacto de la persona invitada. La organización **no** aprende si ese contacto ya tiene cuenta |
 | **Evento de dominio** | `organization.staff_invited.v1` |
-| **Reglas** | Studio nunca ejecuta `Create User` ni crea personas. La invitación no crea cuenta, persona, perfil ni membresía: solo transporta una propuesta. El envío es asíncrono; un fallo del proveedor no invalida la invitación |
+| **Reglas** | Studio nunca ejecuta `Create User` ni crea personas. La invitación no crea cuenta, persona, perfil ni membresía: solo transporta una propuesta. El correo enlaza a `https://studio.allfit.one/invitations#token=…`; el envío es asíncrono y un fallo del proveedor no invalida la invitación |
 | **Falla cerrada** | Sin capacidad de invitar, rechazo |
 
 #### `OP-ORG-006` — Revocar una invitación emitida
@@ -885,7 +885,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/invitations/{id}/revocation` |
 | **Actor** | `A4`, `A5`, `A6` |
 | **Filtros obligatorios** | La invitación pertenece a `{orgId}` y sigue pendiente |
-| **Transacción** | Marcar la invitación y todas sus intenciones pendientes como revocadas |
+| **Transacción** | Bloquear y marcar la invitación y todas sus intenciones pendientes como revocadas; serializa sobre la misma fila que aceptación |
 | **Idempotencia** | `Idempotency-Key`; converge |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Si la aceptación llega primero, la revocación no deshace lo materializado |
@@ -1053,14 +1053,14 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Tipo** | Consulta |
 | **Superficie** | `GET /studio/v1/organizations/{orgId}/invitations` |
 | **Actor** | `A4`, `A5`, `A6` |
-| **Filtros obligatorios** | Invitaciones patrocinadas por `{orgId}` |
+| **Filtros obligatorios** | Invitaciones de equipo patrocinadas por `{orgId}` y filtro opcional de estado |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | Cursor. Orden: emisión descendente, desempate por identificador |
-| **Offline / concurrencia** | Cacheable para presentación |
+| **Offline / concurrencia** | `no-store`; el cursor conserva el filtro y el orden estable |
 | **Información sensible** | Contactos invitados |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Muestra el estado por **intención**, no una aceptación global. Nunca revela si el contacto tiene cuenta en Allfit mientras la invitación siga pendiente |
+| **Reglas** | Muestra contacto completo, rol, vencimiento y estado por **intención** únicamente a actores autorizados. Nunca revela si el contacto tiene cuenta en Allfit mientras la invitación siga pendiente |
 | **Falla cerrada** | — |
 
 #### `OP-ORG-017` — Consultar catálogo de roles y capacidades

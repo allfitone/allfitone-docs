@@ -192,6 +192,8 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 | `HU-STUDIO-082` | `HU-STUDIO-024` |
 | `HU-STUDIO-083` | `HU-STUDIO-035`, `HU-STUDIO-047`, `HU-STUDIO-051`, `HU-STUDIO-054`, `HU-STUDIO-056` |
 | `HU-STUDIO-084` | `HU-STUDIO-028`, `HU-STUDIO-032`, `HU-STUDIO-035` |
+| `HU-STUDIO-085` | `HU-STUDIO-014` |
+| `HU-STUDIO-086` | `HU-STUDIO-001`, `HU-STUDIO-085` |
 
 ---
 
@@ -227,6 +229,19 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 
 1. Al cerrar sesión no queda nada consultable sin volver a entrar.
 2. La sesión caduca sola tras un tiempo de inactividad.
+3. Desde que se solicita el cierre, Studio desmonta el workspace y no vuelve a
+   mostrar nombres, organizaciones ni datos protegidos durante la comprobación.
+4. Si el navegador recuerda un cierre pero la cookie aún es válida, no recupera
+   la sesión automáticamente: muestra una pantalla segura y exige completar el
+   cierre antes de permitir un nuevo acceso.
+5. Si la API confirma que la sesión ya no existe, vuelvo al acceso normal. Si no
+   puede comprobarlo, permanezco bloqueado y puedo reintentar sin que se monte
+   el workspace.
+6. Completar la recuperación borra la cookie, conserva la idempotencia del
+   logout y me obliga a pulsar de nuevo **Entrar a Studio**.
+7. El cierre manual, por inactividad o desde otra pestaña mantiene cualquier
+   invitación de equipo pendiente solo en esa pestaña para poder cambiar de
+   cuenta sin perderla.
 
 ### HU-STUDIO-003 — Recuperar mi contraseña
 
@@ -421,16 +436,16 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 
 **Criterios**
 
-1. Invito por email o celular. **Nunca** puedo invitar seleccionando una persona existente del sistema.
+1. Invito por email. **Nunca** puedo invitar seleccionando una persona existente del sistema.
 2. La invitación **no crea** cuenta, persona, perfil ni membresía: solo transporta una propuesta.
 3. No aprendo si ese contacto ya tiene cuenta en Allfit.
 4. Si vuelvo a invitar al mismo contacto con la misma propuesta, se reutiliza la invitación vigente en lugar de crear otra.
-5. Si falla el envío del correo o el SMS, la invitación sigue siendo válida.
+5. Si falla el envío del correo, la invitación sigue siendo válida y puede reintentarse sin crear otra propuesta.
+6. La invitación vence a los siete días y su enlace abre exclusivamente Allfit Studio.
 
-**Corte implementado:** el emisor por correo está implementado detrás de release
-gate, con vigencia de siete días. SMS y la lectura/aceptación del destinatario
-permanecen fuera de este corte; el gate de producción no se habilita hasta
-publicar `HU-SP-016`/`HU-SP-017`.
+**Corte implementado:** emisión y entrega por correo tienen gates independientes.
+La resolución y decisión se realizan en Studio mediante `HU-STUDIO-085` y
+`HU-STUDIO-086`; no dependen de historias de Space.
 
 ### HU-STUDIO-015 — Revocar una invitación
 
@@ -459,6 +474,42 @@ publicar `HU-SP-016`/`HU-SP-017`.
 
 1. Veo el estado **por propuesta**, no una aceptación global.
 2. Mientras la invitación siga pendiente, no puedo saber si el contacto ya tiene cuenta en Allfit.
+3. Puedo filtrar por estado, avanzar por páginas y ver rol propuesto, vencimiento y correo completo porque soy un integrante autorizado de la organización.
+4. Los estados terminales son aceptada, rechazada, revocada y vencida; nunca se confunden con una invitación pendiente.
+
+### HU-STUDIO-085 — Consultar una invitación de equipo
+
+**Como** persona que recibió una invitación para trabajar en una organización
+**quiero** consultar en Studio quién invita, el rol propuesto y el vencimiento
+**para** decidir con información sin exponer el destinatario.
+
+`E-STUDIO-02` · imprescindible
+
+**Criterios**
+
+1. El enlace abre `studio.allfit.one/invitations`; el token viaja en el fragmento, se retira inmediatamente de la barra y no aparece en paths, query strings, logs ni referrers.
+2. Puedo consultar la organización, la parte responsable, el rol propuesto y el vencimiento antes de iniciar sesión, pero nunca veo el correo destinatario.
+3. Consultar no acepta ni crea cuenta, persona, membresía, perfil de cliente, relación, scope o grant.
+4. Una invitación inválida, vencida, revocada o consumida produce el mismo resultado y no revela su estado real.
+5. El token se conserva solo en la pestaña durante login, cambio de cuenta o activación, y se elimina al decidir o alcanzar un estado terminal.
+
+### HU-STUDIO-086 — Aceptar o rechazar una invitación de equipo
+
+**Como** persona invitada a trabajar en una organización
+**quiero** aceptar o rechazar la propuesta desde Studio
+**para** decidir si me incorporo a ese equipo.
+
+`E-STUDIO-02` · imprescindible
+
+**Criterios**
+
+1. Solo puedo decidir autenticado con el mismo correo verificado al que se envió la invitación; si uso otra cuenta puedo cerrar sesión y cambiarla sin que Studio revele el destinatario.
+2. Si mi cuenta aún no tiene una persona activa, completo primero la activación y luego regreso a la invitación; activarme no equivale a aceptarla.
+3. Aceptar crea una membresía con el rol propuesto. Si ya tengo una membresía activa, conserva su identidad y fecha de ingreso y añade solo el rol faltante; una membresía terminada no se reutiliza.
+4. Rechazar completa la invitación sin crear membresía ni rol.
+5. Aceptar nunca crea perfil de cliente, relación profesional, scope, grant ni acceso a datos de clientes.
+6. Reintentar el mismo comando devuelve el mismo resultado. En una carrera con revocación gana la primera operación confirmada.
+7. Tras aceptar entro a la organización; tras rechazar veo la confirmación y puedo regresar a Studio.
 
 ### HU-STUDIO-017 — Ver el equipo de la organización
 
@@ -1572,7 +1623,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 | --- | --- | ---: |
 | `E-STUDIO-00` Entrar | `HU-STUDIO-001` – `HU-STUDIO-004` | 4 de 4 |
 | `E-STUDIO-01` Perfil y organización | `HU-STUDIO-005` – `HU-STUDIO-013` | 5 de 9 |
-| `E-STUDIO-02` Equipo, roles y membresías | `HU-STUDIO-014` – `HU-STUDIO-022` | 7 de 9 |
+| `E-STUDIO-02` Equipo, roles y membresías | `HU-STUDIO-014` – `HU-STUDIO-022`, `HU-STUDIO-085` – `HU-STUDIO-086` | 9 de 11 |
 | `E-STUDIO-03` Invitación de personas y directorio | `HU-STUDIO-023` – `HU-STUDIO-026` | 3 de 4 |
 | `E-STUDIO-04` Responsable, suplencias y terminación | `HU-STUDIO-027` – `HU-STUDIO-033` | 3 de 7 |
 | `E-STUDIO-05` Qué nos autorizó cada persona | `HU-STUDIO-034` – `HU-STUDIO-035` | 1 de 2 |
@@ -1585,7 +1636,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 | `E-STUDIO-12` Nutrición | `HU-STUDIO-068` – `HU-STUDIO-072` | 0 de 5 |
 | `E-STUDIO-13` Planes y cobro | `HU-STUDIO-073` – `HU-STUDIO-080` | 5 de 8 |
 | `E-STUDIO-14` Resumen del día | `HU-STUDIO-081` – `HU-STUDIO-084` | 3 de 4 |
-| **Total** | **84 historias** | **42 imprescindibles** |
+| **Total** | **86 historias** | **44 imprescindibles** |
 
 El camino mínimo para lanzar es: entrar, crear el gimnasio con su equipo,
 invitar a una persona, armar un programa y asignárselo, ver lo que ejecutó, y

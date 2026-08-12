@@ -1,6 +1,6 @@
 # Allfit Studio AuthKit Operations
 
-**Applies to:** `HU-STUDIO-001 — Sign in`, `HU-STUDIO-002 — Sign out`, `HU-STUDIO-003 — Password recovery`
+**Applies to:** `HU-STUDIO-001 — Sign in`, `HU-STUDIO-002 — Sign out`, `HU-STUDIO-003 — Password recovery`, `HU-STUDIO-085 — Consult team invitation`, `HU-STUDIO-086 — Decide team invitation`
 **Authentication surface:** WorkOS AuthKit Hosted UI
 **Application:** Allfit Studio
 
@@ -32,9 +32,10 @@ Studio uses the following browser-session policy in every WorkOS environment:
 | Access token duration  | 5 minutes  |
 
 The inactivity timeout is enforced twice. WorkOS ends the hosted session when
-refresh activity stops, while Studio hides already-rendered content after 30
-minutes without deliberate keyboard, pointer, or touch interaction. Background
-requests do not extend the browser guard.
+refresh activity stops, while Studio unmounts protected content after 30
+minutes without deliberate keyboard, pointer, or touch interaction. A neutral
+guard is the only content mounted while the local session is being checked.
+Background requests do not extend the browser guard.
 
 The API receives these values through `WORKOS_CLIENT_ID_STUDIO`,
 `WORKOS_API_KEY_STUDIO`, `WORKOS_ISSUER`, `API_PUBLIC_URL`, and
@@ -46,6 +47,40 @@ Studio and Space share the WorkOS user directory but not application sessions.
 The API validates the token `client_id` against the requested surface and uses
 only `sub` and `sid`. WorkOS organization, role, and permission claims never
 authorize an Allfit operation.
+
+For a Studio team-invitation decision, the authentication adapter additionally
+maps the provider email only when WorkOS reports `emailVerified=true`. The API
+normalizes it to lowercase, encrypts it inside the opaque local session, and
+uses it only to compare against the invitation destination inside the decision
+transaction. `GET /studio/v1/session` never exposes this email. An absent or
+unverified provider email cannot decide an invitation.
+
+The callback prioritizes a token already captured by `/invitations` before the
+normal membership router. The token remains tab-scoped through sign-in, account
+switching, and personal activation. Logging out to switch accounts must not
+clear it; completing a decision or observing a terminal invitation must clear
+it. The token is never forwarded to WorkOS.
+
+## Safe logout recovery
+
+Studio records a locally ended session with an optional closed reason of
+`manual`, `inactivity`, or `unknown`. Records created before the reason was
+introduced remain valid. This browser record is a safety boundary, not proof
+that the server cookie was revoked.
+
+When an unconfirmed ended record exists, Studio checks `GET /studio/v1/session`
+without mounting protected children. A `401` confirms the close and exposes the
+normal access landing. A `200`, `503`, or network failure keeps Studio locked;
+the recovery view contains no person, organization, membership, or workspace
+data. Failure to verify also offers a retry.
+
+**Completar cierre** posts `reason=recovery` to
+`POST /studio/v1/auth/logout`. The browser does not clear the ended record
+before the API deletes the cookie and begins hosted logout. After the redirect,
+the user must explicitly select **Entrar a Studio**. Logout remains idempotent when
+the cookie is absent or the local session was already revoked. Manual logout,
+inactivity, account switching, recovery, cross-tab synchronization, reload, and
+browser Back must preserve a tab-scoped pending invitation token.
 
 ## Password recovery and webhook
 
@@ -96,17 +131,38 @@ configuration or Studio authentication changes:
    membership, or onboarding content may become visible.
 10. Simulate unavailable local session persistence. Confirm the opaque cookie is
     still deleted and Studio returns with the recoverable partial-close notice.
-11. With zero active memberships, choose **Wait for an invitation** and confirm
+11. Create a legacy local `ended` record while its cookie is still valid.
+    Confirm **Tu sesión está protegida** is visible, the protected workspace is
+    absent from the DOM, and **Completar cierre** posts `reason=recovery` before
+    returning to the normal access landing.
+12. Repeat with an already absent server session. A `401` must open the normal
+    access landing without a blank or recovery screen.
+13. Make session verification return `503` and then fail at the network layer.
+    Recovery must remain visible, no protected child may be mounted, and retry
+    must work when the API becomes available.
+14. Repeat manual logout, inactivity, recovery, and account switching with a
+    pending team invitation. Confirm its tab-scoped token survives every flow
+    and is never copied to local storage, a URL, or a log.
+15. With zero active memberships, choose **Wait for an invitation** and confirm
    that no organization, membership, or professional profile is created.
-12. Add one active membership externally and use **Check again**; Studio must
+16. Add one active membership externally and use **Check again**; Studio must
     enter that workspace. Repeat with multiple memberships and confirm the
     organization selector appears.
-13. Open two independent Studio sessions, request password recovery through
+17. Open two independent Studio sessions, request password recovery through
     AuthKit, and complete the change. The next request from both prior sessions
     must return `401`.
-14. Sign in again after the password change and confirm that this newer session
+18. Sign in again after the password change and confirm that this newer session
     remains valid. Replay the same webhook delivery and confirm no additional
     revocation or receipt is created.
+19. Open a Studio team invitation in a fresh tab and confirm the fragment is
+    removed before rendering. Complete AuthKit sign-in and verify the callback
+    returns to the invitation rather than the normal workspace router.
+20. Try the invitation with an unverified email and with a different verified
+    account. Neither may decide it or reveal the destination. Sign out, use the
+    invited verified account, and confirm the tab-scoped token survives.
+21. Repeat with an account that has no active person. Complete personal
+    activation, confirm activation did not accept the invitation, then accept
+    it explicitly and verify the token is cleared.
 
 Do not record test addresses, names, tokens, session identifiers, or provider
 responses in screenshots, logs, or release evidence.
@@ -118,7 +174,7 @@ The API emits structured, log-derived counters with closed dimensions:
 | Counter                          | Dimensions                         |
 | -------------------------------- | ---------------------------------- |
 | `studio.auth.callback`           | `outcome`; closed failure `reason` |
-| `studio.auth.logout`             | `trigger`; closed `outcome`        |
+| `studio.auth.logout`             | `trigger` (`manual`, `inactivity`, or `recovery`); closed `outcome` |
 | `studio.registration.incomplete` | None                               |
 | `studio.membership.destination`  | `zero`, `one`, or `multiple`       |
 | `identity.password_reset.webhook` | `processed`, `replayed`, `account-absent`, `ignored`, `invalid`, or `failed` |
@@ -131,7 +187,8 @@ Alert on every `studio.auth.logout` event with `outcome=partial`. The browser is
 already safe because its opaque cookie and rendered content are cleared, but a
 partial result means the local revocation or hosted redirect could not be fully
 confirmed and requires operational review. There is no automatic retry worker
-in this delivery.
+in this delivery. Route `trigger=recovery,outcome=partial` to an explicit alert
+and review the frequency of `trigger=recovery` after deployment.
 
 Alert on sustained `identity.password_reset.webhook` outcomes of `invalid` and
 on every `failed` delivery. A `failed` response intentionally remains retryable;
@@ -145,6 +202,10 @@ WorkOS endpoint and obtain its signing secret; configure
 `password_reset.succeeded`; then execute the sandbox release gate. To roll back,
 disable the WorkOS endpoint first. The receipt migration remains in place and is
 not reversed.
+
+Safe logout recovery itself requires no migration, dependency, feature flag, or
+environment variable. Deploy its API contract and handler before Studio so the
+browser can send `reason=recovery` as soon as the recovery screen is available.
 
 ## Deferred boundaries
 

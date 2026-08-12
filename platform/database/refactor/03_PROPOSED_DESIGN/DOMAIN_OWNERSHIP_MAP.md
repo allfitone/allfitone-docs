@@ -44,7 +44,7 @@ Space y Studio no son dueños ni dominios de datos. Son consumidores de los mism
 
 Identidad mantiene la existencia canónica de una persona dentro de Allfit y la vincula, sin confundirlas, con sus credenciales externas, elegibilidad adulta, perfiles personales y profesionales, y onboarding.
 
-También custodia el sobre de invitación previo al registro. La invitación permite iniciar desde Studio un flujo dirigido a un contacto, pero no crea una persona ni reemplaza el registro personal.
+También custodia el sobre de invitación previo al registro. La invitación permite iniciar desde Studio un flujo dirigido a un contacto, pero no crea una persona ni reemplaza el registro personal. El propósito fija la superficie: staff se consulta y decide en Studio; clientes, relaciones, programas y scopes se consultan y deciden en Space.
 
 ### 3.2 Qué pertenece a Identidad
 
@@ -98,7 +98,7 @@ Esto implica:
 | Proyección actual del perfil | Selección reproducible de afirmaciones para un contexto concreto | Regla versionada de Identidad; no reemplaza las afirmaciones |
 | Perfil profesional | Presentación y capacidades profesionales personales, separadas de membresías organizacionales | Identidad |
 | Verificación | Evaluación de una credencial profesional concreta por `A11/verify_professional_credentials`, con registro oficial/emisor, evidencia mínima y vigencia | Identidad bajo ADR-026 |
-| Invitación | Sobre temporal emitido desde Studio hacia un email o celular, sin `person_id` obligatorio | Identidad para seguridad y ciclo de vida; organización para finalidad y autoría |
+| Invitación | Sobre temporal emitido desde Studio hacia un contacto, sin `person_id` obligatorio; staff V1 usa email y enlace exclusivo de Studio | Identidad para seguridad y ciclo de vida; organización para finalidad y autoría; la superficie se deriva del propósito |
 | Intención de invitación | Propuesta tipada de membresía, relación o programa que el destinatario decide independientemente | Identidad para la decisión; dominio destino para la entidad materializada |
 
 Los nombres anteriores son conceptuales. Por ejemplo, “afirmación de perfil” no autoriza una tabla EAV universal ni un JSON abierto; los valores deben permanecer tipados y separados por sensibilidad.

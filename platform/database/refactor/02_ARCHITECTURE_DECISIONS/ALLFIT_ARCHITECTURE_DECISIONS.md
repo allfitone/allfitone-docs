@@ -42,7 +42,7 @@ Cada sección conserva su contexto, decisión, invariantes, consecuencias y prue
 
 ---
 
-## ADR-001 — Registro directo en Space e invitaciones opcionales desde Studio
+## ADR-001 — Registro directo e invitaciones separadas por superficie
 
 **Estado:** en revisión<br>
 **Fecha:** 18 de julio de 2026
@@ -57,11 +57,11 @@ Existen tres entradas personales al mismo flujo de identidad:
 
 1. **Registro directo en Space:** la persona inicia personalmente el registro mediante WorkOS AuthKit, acredita elegibilidad adulta, acepta términos y completa onboarding sin invitación.
 2. **Registro directo desde Studio:** la persona inicia personalmente el registro mediante la aplicación WorkOS de Studio y completa el mismo onboarding canónico desde la superficie Studio antes de crear u operar una organización.
-3. **Invitación opcional desde Studio:** Studio emite una invitación por email o celular; la persona se registra o inicia sesión por sí misma y decide sus intenciones.
+3. **Invitación opcional emitida desde Studio:** la organización propone un vínculo y la persona se registra o inicia sesión por sí misma. Una invitación de equipo se entrega por email y se consulta y decide exclusivamente en Studio; una invitación de cliente se consulta y decide en Space.
 
 La invitación no es requisito para crear una cuenta o activar el Fitness ID. El registro directo, se presente desde Space o Studio, crea únicamente persona, cuenta y evidencia propia del onboarding; no crea organización, membresía, relación profesional, asignación ni grants de servicio.
 
-Allfit Studio **solo puede emitir invitaciones por email o celular** para iniciar propuestas hacia otra persona. La activación disponible en la interfaz de Studio es autoservicio del titular autenticado y no concede a la organización facultad alguna para activarlo a él o a terceros.
+Allfit Studio solo puede iniciar propuestas hacia otra persona mediante una invitación. El canal V1 de equipo es exclusivamente email; otros canales no se infieren ni se habilitan por compartir el modelo con invitaciones de cliente. La activación disponible en Studio es autoservicio del titular autenticado y no concede a la organización facultad alguna para activarlo a él o a terceros.
 
 Studio nunca puede:
 
@@ -72,18 +72,18 @@ Studio nunca puede:
 - crear una membresía o relación efectiva antes de la aceptación;
 - asignar de forma efectiva un programa a alguien que todavía no se ha registrado.
 
-Cuando el proceso se origina en Studio, antes de la aceptación existe únicamente una invitación, no una persona provisional. La persona y cuenta se materializan cuando su titular verifica el contacto, acredita elegibilidad y completa personalmente el onboarding. En el registro directo de Space no existe invitación ni debe crearse una artificial.
+Antes de la aceptación existe únicamente una invitación, no una persona provisional. La persona y cuenta se materializan cuando su titular verifica el contacto, acredita elegibilidad y completa personalmente el onboarding. La activación puede asociar el hash de la invitación para conservar continuidad, pero nunca la acepta automáticamente. En el registro directo de Space no existe invitación ni debe crearse una artificial.
 
 ### Invariantes
 
 1. Space permite registro directo sin invitación, organización o relación profesional.
 2. Una invitación no es una persona ni una cuenta.
-3. El email/celular de una invitación no se usa para crear automáticamente un usuario de WorkOS.
+3. El destino de una invitación no se usa para crear automáticamente un usuario de WorkOS.
 4. Solo el titular que controla el contacto puede iniciar/completar el registro o autenticación mediante AuthKit.
-5. Si la invitación usa email, el email verificado por WorkOS debe coincidir con el destino normalizado. Si usa celular, la aceptación exige una prueba de control separada y aprobada; el token de AuthKit no prueba control del teléfono.
+5. Si la invitación usa email, el email verificado por WorkOS debe coincidir exactamente con el destino normalizado. Un email no verificado no puede decidir.
 6. Una invitación no concede permisos ni acceso a datos.
 7. La aceptación materializa únicamente las intenciones que la persona acepta.
-8. Una persona ya registrada en Space acepta la invitación con su identidad existente; no se crea otra.
+8. Una persona ya registrada en Allfit acepta la invitación con su identidad existente; no se crea otra.
 9. El registro directo no materializa intenciones, membresías, relaciones, asignaciones o grants inexistentes.
 10. Ambos caminos producen el mismo tipo de persona, cuenta y Fitness ID canónicos.
 11. El flujo completo es idempotente, transaccional y auditable.
@@ -111,16 +111,16 @@ sequenceDiagram
 sequenceDiagram
     participant Studio as "Allfit Studio"
     participant Inv as "Servicio de invitaciones"
-    participant P as "Persona invitada"
+    participant P as "Persona invitada en Studio o Space"
     participant Auth as "WorkOS AuthKit"
     participant DB as "Dominio Allfit"
 
-    Studio->>Inv: Invitar email/celular + propósito
+    Studio->>Inv: Invitar + propósito tipado
     Inv->>DB: Guardar invitación y token hasheado
-    Inv-->>P: Enviar enlace/OTP
+    Inv-->>P: Enviar enlace a la superficie del propósito
     P->>Auth: Iniciar personalmente registro/autenticación
     Auth-->>P: Verificar email
-    P->>DB: Completar onboarding y decidir cada intención
+    P->>DB: Completar onboarding si aplica y decidir
     DB->>DB: Validar token, contacto, vigencia e idempotencia
     DB->>DB: Crear/vincular persona y materializar solo intenciones aceptadas
     DB-->>P: Registro completado
@@ -133,7 +133,7 @@ sequenceDiagram
 - `id`;
 - `organization_id`;
 - `invited_by_person_id`;
-- `channel`: `email` o `phone`;
+- `channel`: `email` en invitaciones de equipo V1; otros canales solo cuando el propósito los apruebe explícitamente;
 - destino normalizado y protegido;
 - `token_hash`, nunca el token plano;
 - propósito/tipo de invitación;
@@ -1089,6 +1089,16 @@ Términos y política de privacidad, cada `data_grant`, contratos comerciales, c
 
 Las invitaciones de staff y clientes no se mezclan. Una invitación puede completarse parcialmente; `completed` significa que la persona decidió las intenciones presentadas, no que las aceptó todas.
 
+| Propósito | Superficie de consulta y decisión | Regla V1 |
+| --- | --- | --- |
+| `staff_invitation` | Studio | Una intención de membresía; email verificado coincidente; nunca materializa entidades de cliente. |
+| `client_invitation` | Space | Relación, programa y scopes presentados por separado; nunca materializa membresías o roles de equipo. |
+
+El enlace de staff usa `https://studio.allfit.one/invitations#token=…`. El token
+se retira del navegador antes de renderizar, se conserva solo durante la pestaña
+y llega a la API exclusivamente en el cuerpo JSON de un `POST`. No aparece en
+paths, query strings, logs o referrers.
+
 ### Modelo y estados
 
 ```text
@@ -1124,6 +1134,9 @@ Las referencias vinculantes no viven únicamente en JSONB. El modelo lógico deb
 7. Cada materialización es transaccional, idempotente y auditable.
 8. Los reintentos concurrentes producen como máximo una membresía, relación o asignación por intención.
 9. No existe una operación `accept_all` que evite mostrar y registrar decisiones separadas.
+10. La resolución pública nunca devuelve el destino y trata inválida, vencida, revocada y consumida como el mismo `404`.
+11. Una decisión de staff exige el email verificado exacto del destinatario y no crea perfil de cliente, relación, scope o grant.
+12. Aceptar y revocar bloquean la misma invitación; gana la primera transacción confirmada.
 
 ### Consecuencias
 
