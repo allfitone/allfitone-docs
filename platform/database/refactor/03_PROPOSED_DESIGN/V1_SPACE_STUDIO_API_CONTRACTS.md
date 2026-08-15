@@ -72,7 +72,7 @@ Toda operación de Studio que toque datos de una persona cuelga de `/organizatio
 
 `{orgId}` no se resuelve desde el token ni desde una preferencia guardada. Está en la ruta, aparece en los logs y en el `ACCESS_EVENT`, y se valida contra una membresía vigente dentro de la transacción.
 
-Las rutas personales `GET /studio/v1/me` y `GET /studio/v1/me/memberships`, el catálogo `GET /studio/v1/organization-types` y la activación propia mediante `/studio/v1/onboarding-attempts` no reciben una organización. Las rutas de onboarding aceptan una cuenta autenticada sin persona; el resto exige una persona activa.
+Las rutas personales `GET /studio/v1/me`, `GET /studio/v1/me/memberships` y `GET /studio/v1/entry-context`, el catálogo `GET /studio/v1/organization-types` y la activación propia mediante `/studio/v1/onboarding-attempts` no reciben una organización. `entry-context` y las rutas de onboarding aceptan una cuenta autenticada sin persona; el resto exige una persona activa.
 
 ## 3. Convenciones
 
@@ -312,6 +312,7 @@ Sujeto: la cuenta o persona autenticada en las rutas personales y de onboarding;
 | `POST` | `/me/professional-credentials` | `OP-IDN-029` |
 | `POST` | `/me/professional-credentials/{credentialId}/revisions` | `OP-IDN-030` |
 | `POST` | `/me/professional-credentials/{credentialId}/retirement` | `OP-IDN-031` |
+| `GET` | `/entry-context` | `OP-ORG-020` |
 | `GET` | `/me/memberships` | `OP-ORG-014` |
 | `GET` | `/organization-types` | `OP-ORG-019` |
 | `POST` | `/organizations` | `OP-ORG-001` |
@@ -319,6 +320,26 @@ Sujeto: la cuenta o persona autenticada en las rutas personales y de onboarding;
 | `POST` · `PATCH` | `/organizations/{orgId}/sites[/{siteId}]` | `OP-ORG-003` · `OP-ORG-004` |
 | `POST` | `/organizations/{orgId}/closure` | `OP-ORG-012` |
 | `GET` | `/organizations/{orgId}/roles` | `OP-ORG-017` |
+
+`GET /studio/v1/entry-context` devuelve el siguiente contrato cerrado:
+
+```ts
+interface StudioEntryContext {
+  authenticated: true
+  registration_status: 'complete' | 'incomplete'
+  identity: {
+    name: string | null
+    email: string | null
+  }
+  memberships: StudioMembership[]
+}
+```
+
+Resuelve la sesión una sola vez. Para `complete`, consulta las membresías una sola
+vez; para `incomplete`, devuelve `memberships: []`. Siempre responde
+`Cache-Control: private, no-store`, no expone tokens ni identificadores internos
+de cuenta o persona y conserva los errores `401`, `403` y `503` de las rutas de
+sesión existentes.
 
 ### 5.2 Staff y membresías
 

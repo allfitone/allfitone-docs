@@ -147,6 +147,27 @@ including a closed organization, and confirm that another person cannot request
 the same context. `/studio/v1/me/memberships` remains active-only and continues to
 govern onboarding and workspace routing.
 
+## Studio latency rollout
+
+Studio's API runs in `pdx1`, beside the Oregon PostgreSQL project. Deploy the
+additive `identity.resolve_actor_registration(uuid)` function before the API
+that calls it; an API rollback leaves the unused function in place. The function
+is `SECURITY INVOKER`, keeps actor settings transaction-local and does not replace
+RLS or the authorized-read ritual.
+
+Deploy API before Studio in one release window. Confirm `x-vercel-id` starts with
+`pdx1`, then exercise `/session`, `/entry-context`, `/me/memberships`, organization
+memberships, invitations and roles with a technical organization containing no
+fitness or health data. Normal requests target p95 at 500 ms and p99 at 800 ms;
+requests that refresh through WorkOS are measured separately. A normal request
+above one second emits the closed `studio.http.slow_request` signal. Roll back
+immediately for any authorization, content-exposure, functional or 5xx regression.
+Run `bun run measure:studio-latency` with `STUDIO_API_URL`, the complete technical
+account cookie in `STUDIO_SESSION_COOKIE`, `STUDIO_TECHNICAL_ORGANIZATION_ID` and
+`STUDIO_EXPECTED_VERCEL_REGION=pdx1` for the post-deployment run.
+The command never prints the cookie and exits nonzero when a normal endpoint
+misses the 500/800/1000 ms acceptance thresholds.
+
 ## Password-reset webhook rollout
 
 The WorkOS endpoint is `{API_PUBLIC_URL}/webhooks/workos` and subscribes only to
