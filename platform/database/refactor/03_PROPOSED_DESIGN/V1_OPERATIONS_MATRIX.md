@@ -870,6 +870,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | `OP-ORG-017` | Consultar catálogo de roles y capacidades | Consulta | `A3`–`A6` |
 | `OP-ORG-018` | Crear una organización y entregarla a su dueño | Comando | `A10` |
 | `OP-ORG-019` | Consultar catálogo de tipos de organización | Consulta | `A2` |
+| `OP-ORG-020` | Resolver el contexto de entrada de Studio | Consulta | `A1`, `A2` |
 
 ---
 
@@ -1109,6 +1110,23 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Devuelve únicamente los tipos activos `professional_practice`, `gym` y `studio`. `professional_practice` se presenta como “Profesional independiente”. `academy` y `clinic` permanecen gobernados pero inactivos hasta que un caso real V1 sea aprobado. El cliente nunca inventa ni persiste tipos libres |
 | **Falla cerrada** | Sin persona activa, rechazo |
+
+#### `OP-ORG-020` — Resolver el contexto de entrada de Studio
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /studio/v1/entry-context` |
+| **Actor** | `A1`, `A2` |
+| **Filtros obligatorios** | Cuenta autenticada resuelta primero mediante RLS. Si existe persona, debe estar activa y sus membresías se leen bajo su contexto RLS |
+| **Transacción** | La resolución account/person ocurre en una sentencia; la consulta de membresías ocurre una vez para una persona completa |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Sin paginación; mismo orden que `OP-ORG-014` |
+| **Offline / concurrencia** | `Cache-Control: private, no-store`. El snapshot de cliente por 30 segundos solo optimiza presentación y nunca autoriza otra operación |
+| **Información sensible** | Nombre y email verificado de la cuenta; organizaciones y roles propios. No expone tokens ni identificadores internos de account/person |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Una cuenta sin persona recibe `incomplete` y una lista vacía. Una persona activa recibe `complete` y sus membresías. La proyección de cliente nunca sustituye la autorización PostgreSQL de otra operación |
+| **Falla cerrada** | Sin sesión o referencia irresoluble: `401`; persona cerrada: `403`; dependencia o configuración fallida: `503` |
 
 #### `OP-ORG-015` — Listar membresías de la organización
 

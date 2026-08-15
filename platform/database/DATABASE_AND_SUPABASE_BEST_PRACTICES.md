@@ -56,6 +56,10 @@ unique and descriptions are ASCII `lower_snake_case`.
 - Every table containing business or personal data enables and forces RLS.
 - Policies use transaction-local actor context set by the API. Supabase-specific
   `auth.uid()`, `anon`, `authenticated` and direct-client patterns are forbidden.
+- A narrow `SECURITY INVOKER` function may coalesce sequential actor-context and
+  RLS reads into one database statement. It must preserve the same account-first,
+  person-second checks, use transaction-local settings and have explicit runtime
+  grants; a `SECURITY DEFINER` session projection is not authorization evidence.
 - Privileges follow least privilege. Public receives no implicit table or
   function access, and `SECURITY DEFINER` functions use a fixed safe
   `search_path`.
