@@ -155,10 +155,12 @@ that calls it; an API rollback leaves the unused function in place. The function
 is `SECURITY INVOKER`, keeps actor settings transaction-local and does not replace
 RLS or the authorized-read ritual.
 
-Deploy API before Studio in one release window. Confirm `x-vercel-id` starts with
-`pdx1`, then exercise `/session`, `/entry-context`, `/me/memberships`, organization
-memberships, invitations and roles with a technical organization containing no
-fitness or health data. Normal requests target p95 at 500 ms and p99 at 800 ms;
+Deploy API before Studio in one release window. Confirm the final region segment
+before the request identifier in `x-vercel-id` is `pdx1`; preceding segments are
+edge ingress regions. Then exercise `/session`, `/entry-context`,
+`/me/memberships`, organization memberships, invitations and roles with a
+technical organization containing no fitness or health data. Normal requests
+target p95 at 500 ms and p99 at 800 ms;
 requests that refresh through WorkOS are measured separately. A normal request
 above one second emits the closed `studio.http.slow_request` signal. Roll back
 immediately for any authorization, content-exposure, functional or 5xx regression.
