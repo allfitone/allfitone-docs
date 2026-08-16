@@ -1,7 +1,7 @@
 # Contrato OpenAPI de la primera rebanada vertical V1
 
-**Versión de revisión:** 9<br>
-**Fecha:** 11 de agosto de 2026<br>
+**Versión de revisión:** 10<br>
+**Fecha:** 16 de agosto de 2026<br>
 **Fase:** 3 — Contrato ejecutable previo a Fase 5<br>
 **Estado:** aprobado; contrato, tipos generados y gate de rutas sincronizados<br>
 **Fuente canónica:** [`allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml)<br>
@@ -24,10 +24,11 @@ Los P1/P2 contractuales de Nutrición quedan resueltos en esta revisión: el con
 
 ## 2. Alcance implementable
 
-El manifiesto ejecutable vigente contiene cuarenta y cinco operaciones HTTP
-sobre cuarenta y una rutas. La tabla siguiente conserva los hitos originales y
-añade el ciclo completo de invitaciones de equipo; el YAML y el manifiesto
-generado son el inventario exhaustivo.
+El manifiesto ejecutable vigente contiene cincuenta y siete operaciones HTTP
+sobre cincuenta y tres rutas y trece tags. La tabla siguiente conserva los hitos
+contractuales principales; el YAML y el manifiesto generado son el único
+inventario exhaustivo. Los conteos se derivan del OpenAPI en cada validación y no
+son constantes de la automatización.
 
 | Paso | Método y ruta | Operación | Request | Response | Caché |
 | --- | --- | --- | --- | --- | --- |
@@ -154,7 +155,7 @@ El YAML inicial reúne Space y Studio para validar el flujo de extremo a extremo
 | --- | --- |
 | `T-API-01` | El archivo parsea como OpenAPI 3.1.0 y todas las referencias locales resuelven. |
 | `T-API-02` | Cada `operationId` es único, cada operación declara un `x-allfit-operation` válido y toda ruta Hono está cubierta por OpenAPI o por una exclusión vigente; ninguna exclusión queda obsoleta. |
-| `T-API-03` | Las cuarenta y cinco operaciones y cuarenta y una rutas estables del manifiesto vigente están presentes; no falta ningún paso ejecutable. |
+| `T-API-03` | Las cincuenta y siete operaciones y cincuenta y tres rutas estables del manifiesto vigente están presentes; no falta ningún paso ejecutable. |
 | `T-API-04` | Requests, responses y ejemplos validan contra esquemas cerrados. |
 | `T-API-05` | Todo comando exige `Idempotency-Key` y `Command-Id`; resultados/finalización exigen `If-Match`. |
 | `T-API-06` | Cada operación y respuesta declara su política de caché; los errores nunca son cacheables. |
@@ -196,5 +197,5 @@ Los tres P1 y los tres P2 de Nutrición dejan de ser bloqueos contractuales y el
 ciclo de invitaciones de equipo queda contract-first dentro de Studio. La sesión
 opaca conserva el email verificado solo del lado servidor; el token no aparece
 en URLs de API y los tipos/manifiesto se regeneran desde el YAML. El inventario
-vigente queda en 41 paths/45 operaciones con dos exclusiones operativas
+vigente queda en 53 paths/57 operaciones con dos exclusiones operativas
 auditables.

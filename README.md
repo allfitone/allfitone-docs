@@ -22,6 +22,7 @@ New products use an additional `products/<slug>/` directory.
 
 - [Telemetry policy](platform/observability/TELEMETRY_POLICY.md)
 - [Platform documentation](platform/README.md)
+- [Postman runbook](platform/api/POSTMAN_RUNBOOK.md)
 - [Data and database](platform/database/README.md)
 - [Database and Supabase best practices](platform/database/DATABASE_AND_SUPABASE_BEST_PRACTICES.md)
 - [Database operations](platform/database/OPERATIONS.md)
