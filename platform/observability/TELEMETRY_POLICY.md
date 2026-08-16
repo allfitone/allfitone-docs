@@ -40,7 +40,14 @@ project, project token and pseudonym key; data must not be copied or merged.
   decision.
 - Client SDK code, the remote gate request and event delivery must not run before
   consent. The gate is `GET /{surface}/v1/telemetry-config`, cached for five
-  minutes and fail-closed.
+  minutes and fail-closed. Each refresh first stops capture, then waits at most
+  five seconds for a valid response. A disabled gate, timeout, invalid response
+  or error stops and opts out the SDK, cancels pending initialization and
+  schedules another check after five minutes while consent remains effective.
+- Client events are never queued. Events produced while the gate is unknown or
+  disabled are discarded and cannot be delivered after a later re-enable.
+  Consent withdrawal, logout and identity changes invalidate in-flight gate and
+  SDK work so a late response cannot reactivate capture.
 
 ## Approved event catalogue
 
@@ -121,6 +128,9 @@ the product remains available because every adapter absorbs provider failures.
 
 ## Privacy notice
 
-The client control must link or otherwise make available the effective privacy
-notice before production gates are enabled. PostHog US is recorded as the
-telemetry processor in [the telemetry privacy notice](../privacy/TELEMETRY_PRIVACY_NOTICE.md).
+The public, indexable notice is
+[https://www.allfit.one/privacy/analytics](https://www.allfit.one/privacy/analytics).
+It must be deployed and verified before any production gate is enabled. Every
+client Privacy control links to that URL. PostHog US is recorded as the
+telemetry processor in the public notice and in
+[the repository notice](../privacy/TELEMETRY_PRIVACY_NOTICE.md).

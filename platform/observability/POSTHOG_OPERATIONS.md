@@ -34,6 +34,12 @@ Server-only variables:
 | `ANALYTICS_BACKOFFICE_CLIENT_ENABLED` | Remote Backoffice gate |
 | `ANALYTICS_SPACE_CLIENT_ENABLED` | Remote Space gate |
 
+Keys, pseudonyms and gates are exposed only when the resolved runtime
+environment is production and the corresponding flag is exactly `true`.
+`VERCEL_ENV` takes precedence over `NODE_ENV`, so `VERCEL_ENV=preview` remains
+preview even when `NODE_ENV=production`. Invalid environment, key, host or flag
+configuration is fail-closed.
+
 Public build variables use the current environment's project token:
 
 | Surface | Variables |
@@ -134,20 +140,31 @@ server gate is active. Enable it only after the first successful
 
 ## Release sequence
 
-1. Keep all server and client gates disabled during provider configuration.
-2. Validate code, contracts, sanitizer tests, E2E and production builds.
-3. Use only PII-free synthetic events for provider and Slack smoke tests.
-4. Confirm dashboards, immediate Slack destinations and Insight alerts.
-5. Grant consent on a synthetic Studio device, enable Studio, and confirm there
-   is no SDK request before consent.
-6. Enable production in order: API and worker, Studio, Backoffice, then Space
-   through EAS.
-7. Observe web/server for 30 minutes and the mobile release for 24 hours.
+1. Keep every server and client gate disabled during provider configuration.
+2. Deploy the landing first and verify that
+   [the public analytics notice](https://www.allfit.one/privacy/analytics) is
+   indexable, bilingual, linked from the footer and reachable from every client
+   Privacy control.
+3. Deploy the synchronized policy and runbook, then deploy the telemetry code
+   with every gate still disabled.
+4. Validate code, contracts, sanitizer tests, E2E and production builds. Use
+   only PII-free synthetic events for provider and Slack smoke tests.
+5. Confirm dashboards, immediate Slack destinations and Insight alerts.
+6. Enable API and worker first. Verify permitted events and sanitized
+   operational logs in PostHog US.
+7. Grant consent on a synthetic Studio device, enable Studio and confirm there
+   is no SDK or gate request before consent. Enable Backoffice and then Space
+   through EAS, validating each surface before continuing.
+8. Close each remote gate once and verify capture stops within five minutes.
+   Events produced while closed must not appear after the gate reopens.
+9. Observe web/server for 30 minutes and the mobile release for 24 hours.
 
 The production project currently reports 12-month event retention. The target
 is 90 days; record this as a provider-plan exception until the project setting
 can enforce the target.
 
 At any privacy regression, disable the remote gate and live-discard the affected
-events. At a functional regression, disable telemetry without reverting the
-additive API contracts.
+events. The client runtime stops capture at the next refresh, at most five
+minutes after a successful gate response, and fails closed immediately on a
+failed refresh. At a functional regression, disable telemetry without reverting
+the additive API contracts.

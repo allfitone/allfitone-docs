@@ -4,6 +4,9 @@
 
 **Status:** effective when the production telemetry gates are enabled
 
+**Public notice:**
+[https://www.allfit.one/privacy/analytics](https://www.allfit.one/privacy/analytics)
+
 Allfit One may collect optional product-use and performance telemetry after a
 person chooses **Allow analytics** on a device. Declining does not restrict any
 feature, and the decision can be changed at any time from the Privacy control.
@@ -25,9 +28,11 @@ target retention of 30 days. Non-production telemetry is currently disabled.
 Where the contracted plan cannot enforce the target, Allfit One records the
 provider-plan exception and uses the shortest available retention.
 
-A person may withdraw consent on the device and may request deletion through
-the normal Allfit One privacy channel. Withdrawal stops future client capture;
-deletion covers every retained pseudonym key version in the applicable
+A person may withdraw consent on the device and may request deletion at
+`hello@allfitone.com`. Withdrawal immediately disables the client runtime. No
+event is queued while the remote gate is unknown or disabled, and a late gate or
+SDK response cannot reactivate capture after withdrawal, logout or an identity
+change. Deletion covers every retained pseudonym key version in the applicable
 environments.
 
 The detailed controls are defined in the
