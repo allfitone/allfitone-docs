@@ -1,7 +1,7 @@
 # Matriz de operaciones V1
 
-**Versión de revisión:** 5
-**Fecha:** 3 de agosto de 2026
+**Versión de revisión:** 6
+**Fecha:** 15 de agosto de 2026
 **Fase:** 3 — Definir operaciones, seguridad y contratos
 **Estado:** acceso Backoffice recertificado con ADR-028; resto de P0 pendiente
 **Depende de:** [`ALLFIT_ARCHITECTURE_DECISIONS.md`](../02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md), [`ALLFIT_DOMAIN_GLOSSARY.md`](./ALLFIT_DOMAIN_GLOSSARY.md), [`V1_DATABASE_SCOPE.md`](./V1_DATABASE_SCOPE.md), [`DOMAIN_OWNERSHIP_MAP.md`](./DOMAIN_OWNERSHIP_MAP.md), [`V1_CONCEPTUAL_ERD.md`](./V1_CONCEPTUAL_ERD.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
@@ -202,9 +202,9 @@ Toda sesión conserva la zona horaria de la persona en el momento del hecho. La 
 | Ejecución | 13 | 7 | 20 |
 | Nutrición | 8 | 5 | 13 |
 | Pagos | 16 | 7 | 23 |
-| Sistema | 10 | 0 | 10 |
+| Sistema | 10 | 1 | 11 |
 | Soporte | 6 | 5 | 11 |
-| **Total** | **127** | **66** | **193** |
+| **Total** | **127** | **67** | **194** |
 
 Algunas fichas cubren dos identificadores cuando la operación es simétrica —crear y editar un borrador, listar y consultar el detalle—. En esos casos el encabezado nombra ambos y el contenido aplica a los dos.
 
@@ -3079,9 +3079,9 @@ Reglas que gobiernan todo el dominio:
 
 ### 7.8 Procesos de sistema
 
-Operaciones sin actor humano. Todas se ejecutan con credencial propia y **grants mínimos**: ningún worker usa un rol universal ni hereda los permisos de un usuario.
+Operaciones de plataforma. Los comandos sin actor humano se ejecutan con credencial propia y **grants mínimos**: ningún worker usa un rol universal ni hereda los permisos de un usuario. Las consultas públicas de configuración no aceptan identidad ni datos de dominio.
 
-Regla que gobierna todo el dominio: un worker es **idempotente y auditable**. Reejecutarlo converge al mismo estado y deja evidencia de lo que hizo.
+Regla que gobierna todo el dominio: un worker es **idempotente y auditable**. Reejecutarlo converge al mismo estado y deja evidencia de lo que hizo. Una consulta pública falla cerrada y devuelve solo configuración no sensible.
 
 | ID | Operación | Disparador |
 | --- | --- | --- |
@@ -3095,6 +3095,7 @@ Regla que gobierna todo el dominio: un worker es **idempotente y auditable**. Re
 | `OP-SYS-008` | Resolver una solicitud de supresión | Evento + programado |
 | `OP-SYS-009` | Reaplicar disposiciones tras una restauración | Manual + evento |
 | `OP-SYS-010` | Recalcular derivados invalidados | Evento |
+| `OP-SYS-011` | Consultar configuración pública de telemetría | Solicitud cliente |
 
 ---
 
@@ -3267,6 +3268,23 @@ Regla que gobierna todo el dominio: un worker es **idempotente y auditable**. Re
 | **Evento de dominio** | `execution.derived_recomputed.v1` |
 | **Reglas** | Los derivados no se editan a mano jamás. Un input denegado por ocultación queda **fuera** del cálculo, y el derivado resultante lo refleja |
 | **Falla cerrada** | Un derivado que no puede recalcularse permanece invalidado y ausente, nunca aproximado |
+
+#### `OP-SYS-011` — Consultar configuración pública de telemetría
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /{surface}/v1/telemetry-config`, donde `surface` es `studio`, `space` o `backoffice` |
+| **Actor** | `A0` |
+| **Filtros obligatorios** | Superficie cerrada de la ruta; no acepta sujeto, identificadores ni parámetros |
+| **Transacción** | Ninguna; lee solo configuración de despliegue |
+| **Idempotencia** | Natural; respuesta cacheable durante cinco minutos |
+| **Paginación y orden** | N/A |
+| **Offline / concurrencia** | Ante ausencia, error o configuración inválida el cliente no inicializa telemetría |
+| **Información sensible** | Ninguna |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Devuelve únicamente `enabled` y `notice_version = analytics-v1`; no autentica, no recibe cookies y no expone claves, ambiente ni proveedor |
+| **Falla cerrada** | Cualquier fallo equivale a `enabled = false` en el cliente |
 
 ### 7.9 Soporte de plataforma
 
