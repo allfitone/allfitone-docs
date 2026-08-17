@@ -1,8 +1,8 @@
 # Matriz de integridad cruzada V1
 
 **Estado:** aprobada para implementación de Fase 5<br>
-**Fecha:** 28 de julio de 2026
-**Alcance:** invariantes que cruzan persona, organización, membresía, relación, asignación, planificación, ejecución, nutrición y privacidad
+**Fecha:** 28 de julio de 2026; ampliada el 17 de agosto de 2026
+**Alcance:** invariantes que cruzan persona, organización, membresía, relación, asignación, planificación, ejecución, nutrición y privacidad; incluye transición organizacional gobernada
 
 ## 1. Propósito
 
@@ -88,7 +88,7 @@ Todas las columnas de una clave portadora son `NOT NULL`. Una referencia opciona
 | `IX-20` | `correction_proposals` | Proponente y target corresponden al sujeto de la propuesta | FK `(proposer_assignment_id, person_id)` + constraint trigger diferible `execution.enforce_correction_subject_ct` que resuelve el único target tipado |
 | `IX-21` | `revision_events` | El target y `executed_session_id`, cuando aplica, pertenecen al mismo sujeto | Añadir `subject_person_id`; constraint trigger diferible `execution.enforce_revision_target_ct`; FK compuesta directa para target de ejecución |
 | `IX-22` | targets de `planned_steps` | La tabla tipada coincide con la familia efectiva del paso | Constraint trigger diferible `planning.enforce_target_family_ct` en las cuatro tablas de targets; resuelve `COALESCE(step.activity_type_id, template.activity_type_id)` contra el contrato publicado |
-| `IX-23` | `access_events` permitidos | Sujeto, relación, grant, caso histórico y modo describen el mismo acceso | Única entrada `privacy.log_access_event` con la firma de la matriz física de RLS, `INSERT` directo revocado y trigger `BEFORE INSERT privacy.enforce_access_event_context_tg` sobre la tabla particionada |
+| `IX-23` | `access_events` permitidos | Exactamente uno de persona u organización es sujeto y el modo/contexto describe ese acceso | `CHECK num_nonnulls(subject_person_id,subject_organization_id)=1`; única entrada `privacy.log_access_event` y trigger `BEFORE INSERT privacy.enforce_access_event_context_tg`. Para persona valida relación/grant/caso/scope; para organización exige modo `organization_operational`, actor membership activo del mismo tenant y de `actor_person_id`, recurso `organizations.organization_context` y relación/grant/caso/scope nulos |
 | `IX-24` | `identity.invitations` | La membresía emisora pertenece a la organización que invita | Sustituir autor suelto por `issued_by_membership_id`; FK `(issued_by_membership_id, organization_id) → organization_memberships(id, organization_id)` |
 | `IX-25` | `organization_events.actor_membership_id` | El actor organizacional pertenece a la organización del evento | FK compuesta opcional `(actor_membership_id, organization_id) → organization_memberships(id, organization_id)` |
 | `IX-26` | `disposition_cases` / ítems / eventos | Solicitud, caso y target —incluidas comida o línea de objetivos nutricionales— pertenecen al mismo sujeto; evento referencia ítem real y su UUID solo puede vivir en un mes | FK `(erasure_request_id,subject_person_id)`; `subject_person_id` + FK al caso; targets tipados a `nutrition.meals`/`goal_sets`; trigger `privacy.enforce_disposition_target_subject_ct`; evento con FK dura, entrada `privacy.log_disposition_event` y check UUIDv7/tiempo |
@@ -110,6 +110,7 @@ Todas las columnas de una clave portadora son `NOT NULL`. Una referencia opciona
 | `IX-42` | `platform_duty_assignments` | Un deber pertenece a una persona con rol base vigente, modo derivado, AAL2 y máximo 90 días; nadie se autoasigna | Trigger diferible valida rol base al activar; catálogo cerrado deriva `actor_mode`; checks de tiempo/AAL/actor; unique parcial `(person_id,duty_code)`; sin `DELETE` runtime |
 | `IX-43` | `break_glass_approvals` | Cada aprobador usa su propio deber A12 vigente, es distinto de solicitante/sujeto y no repite decisión | FK a `platform_duty_assignments`; `UNIQUE(request_id,approver_person_id)`; trigger bajo lock valida actor, modo, vigencia y conflictos antes de insertar |
 | `IX-44` | revisión de `break_glass_requests` | Revisor A12 es distinto del solicitante y de todos los aprobadores y conserva la asignación de deber exacta | `reviewed_by_duty_assignment_id` FK; constraint trigger diferible valida persona/deber/conflictos y forma terminal de revisión |
+| `IX-45` | actualización de `organizations.type_code` | El tipo solo cambia por una transición activa y gobernada; incorporar equipo no modifica el tipo | Tabla `organizations.organization_type_transitions` con FKs a ambos tipos y trigger `organizations.enforce_type_transition_tg` sobre `organizations`; `UPDATE(type_code)` directo revocado y función cerrada valida old/new bajo lock |
 
 ## 5. Formas normativas
 

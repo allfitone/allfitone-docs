@@ -741,8 +741,8 @@ Duplica persona, programa, calendario, privacidad y ejecución; dificulta entren
 
 ## ADR-004 — Operación profesional siempre dentro de una organización
 
-**Estado:** en revisión<br>
-**Fecha:** 18 de julio de 2026
+**Estado:** aceptada para V1<br>
+**Fecha:** 18 de julio de 2026; ratificada el 17 de agosto de 2026
 
 ### Contexto
 
@@ -906,8 +906,8 @@ La persona necesita continuidad de su historial y la organización necesita pres
 
 ## ADR-006 — Evolución de práctica unipersonal a equipo sin cambiar de organización
 
-**Estado:** en revisión<br>
-**Fecha:** 18 de julio de 2026
+**Estado:** aceptada para V1<br>
+**Fecha:** 18 de julio de 2026; ratificada el 17 de agosto de 2026
 
 ### Contexto
 
@@ -1168,8 +1168,8 @@ Las referencias vinculantes no viven únicamente en JSONB. El modelo lógico deb
 
 ## ADR-009 — Versionado independiente e inmutable de plantillas de sesión
 
-**Estado:** en revisión<br>
-**Fecha:** 18 de julio de 2026
+**Estado:** aceptada para V1<br>
+**Fecha:** 18 de julio de 2026; ratificada el 17 de agosto de 2026
 
 ### Contexto
 
@@ -1900,8 +1900,8 @@ La extracción se realiza por bounded context/dominio —por ejemplo booking, co
 
 ## ADR-015 — Consentimiento a la parte responsable con acceso por profesionales asignados
 
-**Estado:** en revisión<br>
-**Fecha:** 20 de julio de 2026
+**Estado:** aceptada para V1<br>
+**Fecha:** 20 de julio de 2026; ratificada el 17 de agosto de 2026
 
 ### Contexto
 
@@ -2493,8 +2493,8 @@ Esto no autoriza una tabla EAV universal ni un JSON de perfil abierto. Los valor
 
 ## ADR-019 — Desacoplar y pausar asignaciones al terminar una relación
 
-**Estado:** en revisión<br>
-**Fecha:** 20 de julio de 2026
+**Estado:** aceptada para V1<br>
+**Fecha:** 20 de julio de 2026; ratificada el 17 de agosto de 2026
 
 ### Contexto
 
@@ -2745,8 +2745,8 @@ Los nombres físicos se decidirán en el modelo lógico. No se persiste una visi
 
 ## ADR-021 — Capacidades diferidas sin modelo físico especulativo en V1
 
-**Estado:** en revisión<br>
-**Fecha:** 20 de julio de 2026
+**Estado:** aceptada para V1<br>
+**Fecha:** 20 de julio de 2026; ratificada el 17 de agosto de 2026
 
 ### Contexto
 

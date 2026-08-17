@@ -100,23 +100,23 @@ refactor/
 | Database Refactor Phases | Ordenar el trabajo y sus gates de calidad | Borrador ejecutable |
 | Mapa de dominios y ownership | Asignar conceptos, fuentes de verdad, acceso y ciclo de vida por dominio | Aprobado y recertificado — Fase 2 |
 | ERD conceptual V1 | Representar entidades, cardinalidades y recorridos compartidos sin duplicación por producto | Aprobado como gate de Fase 2 |
-| Matriz de operaciones V1 | Enumerar toda lectura y escritura con actor, filtros, transacción, idempotencia y evento | 184 operaciones; Backoffice opción B propagada, resto de P0 pendiente |
+| Matriz de operaciones V1 | Enumerar toda lectura y escritura con actor, filtros, transacción, idempotencia y evento | 194 operaciones; AFO-39 ratificado, implementación por rebanada pendiente |
 | Matriz de seguridad y RLS V1 | Fijar condición de fila, grants, proyecciones, índices y pruebas por recurso | Backoffice opción B propagada, resto de P0 pendiente |
 | Matriz de trazabilidad física de RLS V1 | Compilar cada ruta de autorización a columnas, joins, funciones, índices y pruebas exactos | 28 rutas físicas; resto de P0 pendiente |
 | Contratos de API de Space, Studio y Backoffice | Definir superficies, endpoints, field-sets por scope, funciones internas y eventos | Superficie Backoffice fijada; detalle de capacidades `NEW-*` pendiente |
-| Contrato OpenAPI de la primera rebanada V1 | Fijar 22 paths, 25 operaciones, DTOs, ejemplos, caché y gate contract-first | Aprobado; sesión Studio y Nutrición contractuales |
+| Contrato OpenAPI de la primera rebanada V1 | Fijar 41 paths, 45 operaciones, DTOs, ejemplos, caché y gate contract-first | Aprobado; gate documental AFO-39 pendiente del PR BACK |
 | Gobernanza de verificadores y break-glass V1 | Fijar catálogo, evidencia, conflictos, quorum, expiración, revisión y abuso | Recertificada con ADR-028 y separación de deberes |
 | Matriz de degradación y recuperación | Fijar aislamiento, fallo cerrado, límites, observabilidad y SLO/RTO/RPO | Aprobado — Fase 3 |
 | Contrato de idempotencia durable V1 | Separar replay HTTP, identidad durable, concurrencia, expiración y disposición | Aprobado — resolución de P0-08 |
 | Estándar de modelado PostgreSQL | Fijar convenciones físicas: nombres, schemas, IDs, tipos, constraints, índices | Aprobado — Fase 4 |
-| ERD lógico V1 | Traducir nueve dominios conceptuales a 121 tablas físicas en once schemas | Sesión técnica Studio, bloqueo causal y perfil profesional normalizado incorporados |
-| Diccionario de datos V1 | Ficha de quince campos por cada una de las 121 tablas | 121 fichas únicas verificadas |
+| ERD lógico V1 | Traducir nueve dominios conceptuales a 127 tablas físicas en once schemas | Inventario recertificado con transiciones organizacionales y límites de invitación |
+| Diccionario de datos V1 | Ficha de quince campos por cada una de las 127 tablas | 127 fichas únicas verificadas |
 | Catálogo de objetos físicos y contratos JSONB V1 | Fijar inventario, enums compartidos, nombres, documentos JSONB y particiones | Aprobado — resolución de P0-07 |
 | Matriz de integridad cruzada V1 | Fijar claves portadoras, FKs compuestas, triggers guardianes y pruebas negativas | Aprobada — resolución de P0-05 |
 | Revisión de preparación para Fase 5 | Consolidar bloqueos, contradicciones y criterios GO/NO-GO antes del DDL | Histórica; su GO fue supersedido por la revisión P0 |
 | Modificaciones por rebanada en Fase 5 | Fuente de verdad para cerrar cada P0 antes del DDL que lo consume | **GO condicionado por rebanada**; no se autoriza generar la baseline completa por adelantado |
 
-Dimensión actual: **9 dominios conceptuales, 11 schemas físicos, 121 tablas, 7 scopes, 193 operaciones inventariadas, 29 rutas físicas RLS y una primera rebanada OpenAPI de 22 paths/25 operaciones**.
+Dimensión actual: **214 HU, 9 dominios conceptuales, 11 schemas físicos, 127 tablas, 7 scopes, 194 operaciones inventariadas, 29 rutas físicas RLS y un OpenAPI vigente de 41 paths/45 operaciones**. Las rutas de AFO-39 permanecen como gate documental y solo incrementarán el manifiesto cuando el PR BACK edite el YAML canónico y regenere sus tipos.
 
 ## Decisiones acordadas
 

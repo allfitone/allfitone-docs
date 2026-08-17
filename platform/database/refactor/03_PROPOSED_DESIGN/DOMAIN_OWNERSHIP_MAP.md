@@ -2,7 +2,7 @@
 
 **Estado:** aprobado y recertificado<br>
 **Fecha de inicio:** 20 de julio de 2026<br>
-**Recertificación:** 28 de julio de 2026 — incorpora Nutrición V1<br>
+**Recertificación:** 17 de agosto de 2026 — incorpora contratos públicos de cierre y transferencia organizacional<br>
 **Fase:** entregable incremental de Fase 2 — dominios, ownership y flujo de datos<br>
 **Cobertura actual:** todos los dominios iniciales de V1<br>
 **Fuentes normativas internas:** `ALLFIT_ARCHITECTURE_DECISIONS.md`, `ALLFIT_DOMAIN_GLOSSARY.md`, `V1_DATABASE_SCOPE.md` y `DATABASE_REFACTOR_PHASES.md`.
@@ -417,14 +417,23 @@ flowchart TD
 
 1. Añadir o retirar integrantes no cambia el tipo.
 2. Una transición real de actividad se ejecuta mediante comando explícito.
-3. Se conservan valor anterior/nuevo, actor, motivo y fecha efectiva.
-4. El cambio no crea otra organización ni migra su identidad.
+3. La transición debe estar activa en `organizations.organization_type_transitions`; inicialmente solo se admiten `professional_practice → gym` y `professional_practice → studio`.
+4. Se conservan valor anterior/nuevo, actor, motivo y fecha efectiva.
+5. El `PATCH` de autoservicio solo modifica `display_name`, `legal_name` y `type_code`; datos de la parte responsable, identidad, estado y timestamps son inmutables por esa vía.
+6. El cambio no crea otra organización ni migra su identidad.
+
+#### Transferencia de propiedad
+
+1. Solo el owner vigente inicia la transferencia a otra membresía activa de la misma organización.
+2. Organizaciones bloquea el agregado, ambas membresías y sus roles owner; cierra el anterior y abre el destino en una transacción.
+3. El constraint diferible confirma exactamente un owner activo al commit.
+4. El owner anterior conserva membresía y roles no-owner; no recibe un rol residual implícito.
 
 #### Cierre de organización
 
 1. El estado deja de permitir nuevas operaciones.
-2. Membresías, roles y capacidades pierden efectividad mediante un flujo coordinado.
-3. Las relaciones se terminan en Relaciones; sus grants pasan a `frozen` o `revoked` según el evento aplicable, y las asignaciones se desacoplan según su política.
+2. `organizations.close_organization(...)` coordina una sola transacción y llama contratos públicos estrechos de Relaciones, Privacidad, Planificación, Ejecución y Nutrición.
+3. Las relaciones se terminan en Relaciones; Privacidad aplica grants y disposición; Planificación desacopla asignaciones; Ejecución cancela propuestas de corrección pendientes y Nutrición cancela propuestas nutricionales pendientes. Ningún dominio escribe tablas ajenas.
 4. La organización conserva activos propios y evidencia mínima permitida, pero no acceso ordinario al Fitness ID.
 5. Cada categoría inicia su disposición y cualquier hold permanece acotado, documentado y sin reactivar permisos.
 
@@ -436,9 +445,30 @@ flowchart TD
 | Relaciones | Organización activa y profesionales con membresía/capacidad vigentes | Relaciones y asignaciones profesionales que requieren contexto organizacional | Membresía no crea relación; la asignación a un cliente vive en Relaciones |
 | Privacidad | Organización operativa y actor real para evaluar acceso | Grants, parte responsable aceptada, scope, propósito y vigencia | Organización o rol por sí solos nunca conceden acceso al Fitness ID |
 | Planificación | Organización y actor de origen válidos | Referencias a programas, plantillas y asignaciones de la organización | Organizaciones no copia contenido ni versiones de entrenamiento |
-| Ejecución | Contexto organizacional y membresía/capacidad efectivas | Autoría/contexto de capturas profesionales | Capacidad no permite sobrescribir datos ni evita las reglas de procedencia |
+| Ejecución | Contexto organizacional y membresía/capacidad efectivas | Autoría/contexto de capturas profesionales y cancelación de propuestas al cierre | Capacidad no permite sobrescribir datos ni evita las reglas de procedencia; Organizaciones no escribe propuestas |
+| Nutrición | Contexto organizacional y autoridad de guía | Propuestas nutricionales que deben cancelarse al cierre | Nutrición conserva ownership de metas, propuestas y decisiones |
 | Autorización y auditoría | Estado, membresía, roles, capacidades y vigencia | Eventos de acceso y decisiones de seguridad | Permisos sensibles fallan cerrados y registran persona actora, no solo organización |
 | Disposición | Categoría, sujeto organizacional y eventos de cierre | Políticas, plazos, holds y confirmaciones | Un hold conserva evidencia acotada, nunca capacidad operativa |
+
+Para `OP-ORG-008`, Organizaciones llama
+`relationships.end_assignments_for_membership(...)` solo al retirar `coach`;
+retirar `admin` o `staff` preserva asignaciones si `coach` sigue vigente. Para
+`OP-ORG-009/010` la llamada es incondicional. Para `OP-ORG-012`, el
+coordinador llama `relationships.terminate_for_organization(...)`,
+`privacy.apply_organization_closure(...)`,
+`planning.detach_for_organization_closure(...)`,
+`execution.cancel_proposals_for_organization_closure(...)` y
+`nutrition.cancel_proposals_for_organization_closure(...)` con un instante
+efectivo y command ID comunes. Son contratos públicos de dominio, no permiso
+para DML cross-schema. Si cualquiera falla, PostgreSQL revierte también los
+efectos ya aplicados por los contratos anteriores.
+
+Cada contrato destino es `SECURITY DEFINER`, pertenece al schema/owner lógico
+de ese dominio, fija `search_path = pg_catalog` y califica objetos. `PUBLIC` y
+`allfit_api` no reciben `EXECUTE`; solo el coordinador `organizations.*`, que
+corre como `allfit_owner`, puede invocarlo. Organizaciones y API mantienen cero
+DML directo sobre tablas de Relaciones, Privacidad, Planificación, Ejecución o
+Nutrición.
 
 ### 4.11 Fórmula de acceso profesional
 
@@ -498,19 +528,15 @@ Organizaciones solo responde las tres primeras dimensiones. Relaciones y Privaci
 | Sede cierra | Sale de operación y los hechos históricos conservan la referencia necesaria |
 | Organización cierra | Se bloquean operaciones y accesos; personas e historial siguen sus dominios y políticas propias |
 
-### 4.14 Decisiones diferidas al modelo lógico
+### 4.14 Decisiones cerradas y extensiones futuras
 
-Estas decisiones deberán cerrarse sin alterar los límites anteriores:
+La baseline cierra nombres físicos, roles/capacidades V1, owner único,
+transferencia, transiciones iniciales, versionado optimista y coordinación de
+cierre. Continúan como extensiones futuras, sin modelo especulativo:
 
-- nombres físicos y constraints para organización, sede, membresía, rol y capacidad;
-- catálogo V1 exacto de roles y capacidades, y si admite roles personalizados desde la baseline;
-- mecanismo físico para exigir exactamente un owner activo por organización activa; la cardinalidad y la exclusión de `owner` de la gestión genérica ya están resueltas, mientras el autoservicio de transferencia sigue diferido;
-- representación tipada de persona natural o jurídica responsable y sus datos legales mínimos;
-- transiciones permitidas entre tipos y estados organizacionales;
 - jerarquía, alcance por sede o delegación de roles, si existe un caso V1 real;
-- estrategia de versionado y evaluación efectiva de roles/capacidades;
 - políticas exactas de cierre, restauración, retención y anonimización por categoría;
-- índices, RLS, comandos idempotentes y resolución de concurrencia.
+- nuevos tipos o transiciones organizacionales distintos de los aprobados.
 
 No se pueden resolver creando raíces distintas para coach y gimnasio, una bandera permanente de independencia, clientes como staff, permisos implícitos por rol o placeholders para booking, commerce o marketplace.
 
@@ -4018,7 +4044,7 @@ Un programa creado por el fundador bajo la organización puede seguir siendo act
 | Miembro pertenece también a un gimnasio | Usa el mismo `person_id`/perfil con membresías, clientes y permisos separados |
 | Conteo vuelve a una sola membresía | La práctica sigue siendo la misma; no reactiva un modo o tipo “independiente” |
 
-La cardinalidad está resuelta: toda organización activa tiene exactamente una membresía activa con rol `owner`, y la gestión genérica no puede otorgarlo, retirarlo ni terminar esa membresía. El autoservicio de transferencia y los límites comerciales permanecen diferidos; un cambio excepcional de owner debe ser controlado por Allfit, atómico y mantener exactamente uno al confirmar, sin convertir tamaño, plan SaaS o rol en identidad organizacional.
+La cardinalidad está resuelta: toda organización activa tiene exactamente una membresía activa con rol `owner`, y la gestión genérica no puede otorgarlo, retirarlo ni terminar esa membresía. El autoservicio owner-only transfiere la propiedad a una membresía activa bajo locks y mantiene exactamente uno al confirmar; tamaño, plan SaaS o rol nunca se convierten en identidad organizacional.
 
 #### Ciclo de vida y disposición
 

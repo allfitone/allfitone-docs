@@ -1,11 +1,16 @@
 # Historias de usuario — Allfit Studio
 
-**Estado:** borrador para revisión conjunta<br>
-**Fecha:** 30 de julio de 2026<br>
+**Estado:** alcance BETA ratificado; implementación en curso<br>
+**Fecha:** 30 de julio de 2026; alcance ratificado el 17 de agosto de 2026<br>
 **Producto:** la aplicación del profesional y la organización. Web.
 
 Este documento es **autocontenido**: no hay que abrir ningún otro archivo para
 entenderlo ni para construir a partir de él.
+
+Las 86 historias forman el alcance BETA comprometido para el **31 de agosto de
+2026**. El compromiso de alcance no afirma implementación: una historia cuenta
+como completa solo cuando sus entregables BACK y FRONT están verificados y
+fusionados en `main`. El despliegue de la BETA queda fuera de este compromiso.
 
 ---
 
@@ -344,10 +349,12 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 
 **Criterios**
 
-1. Todo cambio queda registrado con el valor anterior y el nuevo.
-2. Cambiar el tipo de organización solo es posible si la transición está permitida.
-3. Incorporar personal **no** cambia el tipo automáticamente.
-4. Si dos personas editan a la vez, una recibe un aviso de conflicto en lugar de perder su cambio en silencio.
+1. El `PATCH` es cerrado: solo permite modificar `display_name`, `legal_name` y `type_code`.
+2. `responsible_party`, `id`, `status`, timestamps, `purpose` y `responsible_party_schema_version` son inmutables en autoservicio.
+3. Todo cambio queda registrado con el valor anterior y el nuevo.
+4. Cambiar el tipo de organización solo es posible si la transición está publicada en `organization_type_transitions`. Inicialmente solo se admiten `professional_practice → gym` y `professional_practice → studio`.
+5. Incorporar personal **no** cambia el tipo automáticamente.
+6. Toda lectura devuelve una revisión y un ETag fuerte `"organization:{id}:r{revision}"`. El `PATCH` exige `If-Match`: si falta devuelve `428`; si la revisión quedó atrás devuelve `409 stale-draft` sin perder cambios en silencio.
 
 ### HU-STUDIO-009 — Registrar una sede
 
@@ -362,6 +369,7 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 1. Una sede es información de ubicación básica.
 2. Una sede **no** representa recursos reservables, capacidad, clases ni inventario.
 3. Una sede **no** delimita permisos: no existe alcance de rol por sede en V1.
+4. La sede expone `revision_number` y el ETag fuerte `"organization-site:{id}:r{revision}"` para sus escrituras posteriores.
 
 ### HU-STUDIO-010 — Actualizar o desactivar una sede
 
@@ -375,6 +383,7 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 
 1. Desactivar una sede no afecta relaciones, asignaciones ni historial.
 2. El cambio queda registrado.
+3. Editar o desactivar exige el `If-Match` de la sede; si falta devuelve `428` y si quedó atrás devuelve `409 stale-draft`.
 
 ### HU-STUDIO-011 — Consultar la organización
 
@@ -402,10 +411,8 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 1. El destinatario debe tener una membresía activa en el gimnasio.
 2. La transferencia es atómica: al confirmar sigue existiendo exactamente un propietario activo, sin estados observables con cero o dos propietarios.
 3. La transferencia es el único flujo que puede cambiar qué membresía tiene el rol de propietario.
-
-> **Fuera de la primera versión.** Se retoma cuando aparezca el primer caso
-> real. Mientras tanto, si un gimnasio necesita cambiar de dueño, lo resuelve el
-> equipo de Allfit directamente.
+4. Se bloquean la organización, las membresías involucradas y sus roles `owner`; se cierra el rol anterior y se abre el nuevo dentro de una sola transacción.
+5. El propietario anterior conserva su membresía activa y cualquier rol no `owner`. Si no conserva otro rol, queda sin capacidades hasta una asignación explícita o su renuncia mediante HU-STUDIO-022; no recibe un rol residual implícito.
 
 ### HU-STUDIO-013 — Cerrar la organización
 
@@ -421,6 +428,8 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 2. Cerrar **no elimina** el Fitness ID de nadie ni las sesiones de ninguna persona.
 3. La organización conserva solo evidencia mínima, con una finalidad y un plazo; conservar no es mantener acceso cotidiano.
 4. Si alguna terminación no se puede completar, no se cierra nada: no existe un cierre a medias.
+5. El cierre se coordina en una sola transacción PostgreSQL mediante contratos públicos estrechos de Organizaciones, Relaciones, Privacidad, Planificación, Ejecución y Nutrición. Ejecución cancela propuestas de corrección pendientes y Nutrición cancela propuestas nutricionales pendientes. Ningún dominio escribe directamente tablas de otro dominio.
+6. Si falla cualquier contrato público, también se revierten las cancelaciones y el estado organizacional: no queda un cierre parcial.
 
 ---
 
@@ -567,7 +576,8 @@ La resolución y decisión se realizan en Studio mediante `HU-STUDIO-085` y
 
 1. Esta operación no permite retirar el rol de propietario; solo una transferencia de propiedad puede cambiarlo.
 2. Al retirar el rol de coach, sus asignaciones sobre relaciones dejan de tener efecto: el permiso de la persona sobrevive, pero ese profesional deja de poder ejercerlo.
-3. La pérdida de acceso es inmediata, sin ventana de gracia.
+3. Retirar administrador o staff no cierra asignaciones profesionales cuando la membresía conserva el rol coach vigente.
+4. La pérdida de acceso es inmediata, sin ventana de gracia.
 
 ### HU-STUDIO-021 — Dar de baja a un integrante
 
@@ -586,7 +596,7 @@ La resolución y decisión se realizan en Studio mediante `HU-STUDIO-085` y
 
 ### HU-STUDIO-022 — Renunciar a mi membresía
 
-**Como** coach o staff
+**Como** integrante con membresía activa que no es owner
 **quiero** renunciar a mi membresía
 **para** dejar de trabajar en esta organización.
 
@@ -595,8 +605,9 @@ La resolución y decisión se realizan en Studio mediante `HU-STUDIO-085` y
 **Criterios**
 
 1. Un propietario no puede renunciar sin transferir la propiedad antes.
-2. Al renunciar, las relaciones que atendía quedan sin profesional responsable y se notifica a la administración.
-3. Mi autoría sobre lo que registré se conserva.
+2. Puedo renunciar aunque ya no conserve ningún rol; basta que la membresía propia siga activa y no sea owner.
+3. Al renunciar, todas mis asignaciones efectivas se cierran y se notifica a la administración.
+4. Mi autoría sobre lo que registré se conserva.
 
 ---
 

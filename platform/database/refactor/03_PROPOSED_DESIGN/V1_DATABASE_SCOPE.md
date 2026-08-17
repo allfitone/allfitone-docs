@@ -2,13 +2,18 @@
 
 **Estado:** aprobado; acceso Backoffice recertificado por ADR-028 y topología por ADR-029<br>
 **Fecha de consolidación:** 20 de julio de 2026<br>
-**Recertificaciones:** 3 de agosto de 2026 · Backoffice; 5 de agosto de 2026 · monorepo<br>
+**Recertificaciones:** 3 de agosto de 2026 · Backoffice; 5 de agosto de 2026 · monorepo; 17 de agosto de 2026 · alcance BETA Studio 86/86<br>
 **Fase:** entregable de Fase 1 — lenguaje y alcance<br>
 **Fuentes normativas internas:** `ALLFIT_ARCHITECTURE_DECISIONS.md`, `ALLFIT_DOMAIN_GLOSSARY.md` y `DATABASE_REFACTOR_PHASES.md`.
 
 ## 1. Propósito
 
 Este documento define la frontera funcional y de datos de la primera baseline de base de datos para el ecosistema Allfit One, consumida por Studio, Space y Backoffice.
+
+Las 86 HU de Studio están incluidas en el alcance BETA comprometido para el 31
+de agosto de 2026. Esta inclusión no afirma implementación: una HU se completa
+solo con BACK y FRONT verificados y fusionados en `main`; el despliegue no forma
+parte del compromiso.
 
 Responde:
 
@@ -160,6 +165,9 @@ V1 usa una raíz organizacional común y mantiene activos inicialmente estos tip
 `academy` y `clinic` permanecen gobernados pero inactivos hasta que exista un caso real V1 aprobado. El catálogo de onboarding no los devuelve y la creación de organizaciones los rechaza mientras permanezcan inactivos.
 
 El tipo describe la actividad principal, no el tamaño.
+Las transiciones explícitas viven en `organizations.organization_type_transitions`.
+El catálogo inicial permite únicamente `professional_practice → gym` y
+`professional_practice → studio`; incorporar equipo nunca cambia `type_code`.
 
 ### 6.3 Práctica inicialmente unipersonal
 
@@ -168,7 +176,8 @@ El onboarding `solo_professional` crea una organización `professional_practice`
 - La organización puede incorporar staff y otros profesionales sin cambiar de identidad.
 - El número de integrantes se deriva de membresías activas.
 - Toda organización activa tiene exactamente una membresía activa con rol `owner`; esa membresía puede acumular otros roles compatibles.
-- `owner` no se concede ni se revoca mediante la gestión genérica de roles. El autoservicio de transferencia está diferido de V1 y cualquier cambio excepcional debe ejecutarse de forma controlada y atómica por Allfit.
+- `owner` no se concede ni se revoca mediante la gestión genérica de roles. La transferencia V1 es owner-only, exige una membresía destino activa y cambia ambas vigencias bajo locks en una transacción que confirma exactamente un owner.
+- El owner anterior conserva su membresía y roles no `owner`; no recibe un rol residual implícito y puede renunciar después mediante el flujo propio.
 - No existe un tipo permanente `independent_professional` ni un `is_independent` que gobierne permisos.
 - Una organización operativa no implica por sí sola una persona jurídica.
 
@@ -183,6 +192,13 @@ Incluidos:
 - asignación efectiva de profesionales a relaciones;
 - suplencias acotadas en el tiempo y aceptadas por la persona;
 - historial de reasignaciones.
+
+El cierre de una organización es un comando coordinado en una sola transacción
+PostgreSQL. Organizaciones llama contratos públicos estrechos de Relaciones,
+Privacidad, Planificación, Ejecución y Nutrición; Ejecución cancela propuestas
+de corrección pendientes y Nutrición cancela propuestas nutricionales
+pendientes. Cada dominio escribe solo sus tablas y cualquier fallo revierte el
+cierre completo.
 
 Las membresías comerciales de clientes no forman parte de V1.
 

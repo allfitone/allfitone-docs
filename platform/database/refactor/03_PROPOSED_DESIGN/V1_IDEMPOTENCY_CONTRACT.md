@@ -1,7 +1,7 @@
 # Contrato de idempotencia durable V1
 
-**Fecha:** 28 de julio de 2026<br>
-**Estado:** aprobado y recertificado con Nutrición V1<br>
+**Fecha:** 28 de julio de 2026; recertificado el 17 de agosto de 2026<br>
+**Estado:** aprobado y recertificado con AFO-39<br>
 **Deriva de:** [ADR-025](../02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md), [`V1_OPERATIONS_MATRIX.md`](./V1_OPERATIONS_MATRIX.md), [`V1_DEGRADATION_AND_RECOVERY_MATRIX.md`](./V1_DEGRADATION_AND_RECOVERY_MATRIX.md), [`V1_SPACE_STUDIO_API_CONTRACTS.md`](./V1_SPACE_STUDIO_API_CONTRACTS.md), [`V1_DATA_DICTIONARY.md`](./V1_DATA_DICTIONARY.md)
 
 ---
@@ -158,6 +158,10 @@ Solo se persisten como `rejected_final` errores determinísticos que el mismo co
 | `OP-IDN-005` | `revision_events.id = command_id`, append-only |
 | `OP-IDN-006` | `body_progress_records.id = command_id`, UUIDv7 del dispositivo |
 | `OP-IDN-008` | `health_context_claims.id = command_id`, UUIDv7 del dispositivo |
+| `OP-ORG-002`, `OP-ORG-004` | receipt durable + `If-Match` sobre `revision_number`; una revisión obsoleta no reemplaza datos de organización o sede |
+| `OP-ORG-007` | receipt durable + `Command-Id` + único de rol vigente; un replay posterior a revocar el rol o expirar el replay HTTP devuelve el resultado original y nunca vuelve a concederlo |
+| `OP-ORG-008/009/010/012` | receipt durable + locks del agregado + contratos públicos interdominio; ningún efecto parcial sobre roles, membresías, asignaciones o cierre |
+| `OP-ORG-011` | receipt durable + lock de organización/membresías/roles + constraint de owner único; el replay conserva el mismo owner resultante |
 | `OP-EXE-001`, `OP-EXE-004` | `executed_sessions.id = command_id`, UUIDv7 del dispositivo |
 | `OP-EXE-002`, `OP-EXE-003`, `OP-EXE-006` | receipt durable + lock de `executed_sessions` + transición de estado convergente |
 | `OP-EXE-005` | receipt durable + `If-Match` sobre `executed_sessions.revision_number`; un draft obsoleto no reemplaza resultados nuevos |
@@ -217,6 +221,10 @@ No es un caché de la respuesta de dominio. El endpoint reconstruye una proyecci
 | `T-IDEM-08` | Disponer el agregado y reintentar devuelve `410` sin recrearlo. |
 | `T-IDEM-09` | La respuesta y el tombstone no contienen PII ni payload de dominio. |
 | `T-IDEM-10` | Cada comando idempotente de la matriz tiene `Command-Id` y convergencia; `OP-SUP-003` conserva auditoría por lectura sin replay. |
+| `T-ORG-IDEM-01` | Ejecutar `OP-ORG-007`, revocar el rol y repetir el `Command-Id` tras expirar el TTL devuelve el receipt durable original sin reabrir la vigencia ni producir otro evento. |
+| `T-ORG-IDEM-02` | Reintentar actualización de organización o sede no duplica eventos ni incrementa dos veces la revisión. |
+| `T-ORG-IDEM-03` | Dos transferencias concurrentes confirman como máximo una y siempre dejan exactamente un owner; replay no invierte la transferencia. |
+| `T-ORG-IDEM-04` | Un fallo en cualquier contrato público de cierre, baja o renuncia revierte idempotencia y todos los efectos de dominio; el retry puede ejecutar una vez. |
 | `T-NUT-IDEM-01` | Crear offline y reenviar el mismo `OP-NUT-001` produce una comida, un conjunto de hijos y un evento. |
 | `T-NUT-IDEM-02` | Reintentar el adjunto diferido de foto no duplica medios; un `If-Match` obsoleto no reemplaza la foto vigente. |
 | `T-NUT-IDEM-03` | Dos revisiones concurrentes serializan por `revision_number`; la perdedora devuelve `409` sin cambios parciales. |

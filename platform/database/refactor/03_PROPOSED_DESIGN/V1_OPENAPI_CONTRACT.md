@@ -1,9 +1,9 @@
 # Contrato OpenAPI de la primera rebanada vertical V1
 
-**Versión de revisión:** 9<br>
-**Fecha:** 11 de agosto de 2026<br>
+**Versión de revisión:** 10<br>
+**Fecha:** 17 de agosto de 2026<br>
 **Fase:** 3 — Contrato ejecutable previo a Fase 5<br>
-**Estado:** aprobado; contrato, tipos generados y gate de rutas sincronizados<br>
+**Estado:** manifiesto vigente sincronizado; rutas AFO-39 aprobadas documentalmente y pendientes del PR BACK<br>
 **Fuente canónica:** [`allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml)<br>
 **Deriva de:** [`V1_OPERATIONS_MATRIX.md`](./V1_OPERATIONS_MATRIX.md), [`V1_SPACE_STUDIO_API_CONTRACTS.md`](./V1_SPACE_STUDIO_API_CONTRACTS.md), [`V1_IDEMPOTENCY_CONTRACT.md`](./V1_IDEMPOTENCY_CONTRACT.md) y [`V1_DEGRADATION_AND_RECOVERY_MATRIX.md`](./V1_DEGRADATION_AND_RECOVERY_MATRIX.md)
 
@@ -60,6 +60,32 @@ generado son el inventario exhaustivo.
 
 La lectura Studio posterior a la revocación reutiliza las operaciones GET correspondientes y, salvo la excepción de medios, responde `403 scope-required`; la revocación no crea operaciones adicionales. `OP-NUT-013` es la excepción cerrada: ante recurso inexistente o cualquier autorización no efectiva responde siempre el mismo `404` sin bytes para no revelar la existencia de la foto.
 
+### 2.1 Gate AFO-39 pendiente del PR de código
+
+AFO-39 aprueba para el próximo cambio contract-first estas rutas de Studio; aún
+no forman parte de las 45 operaciones/41 paths del manifiesto ejecutable vigente
+y no se declaran sincronizadas con el YAML o los tipos generados:
+
+| Método y ruta | Operación | Request/headers | Respuesta mínima |
+| --- | --- | --- | --- |
+| `GET/PATCH /studio/v1/organizations/{organizationId}` | `OP-ORG-013/002` | `cookieAuth`; GET sin body; PATCH cerrado + `Origin` + headers de comando + `If-Match` | proyección cerrada con `revision_number` + ETag; sin responsible party/contacto |
+| `POST /studio/v1/organizations/{organizationId}/sites` | `OP-ORG-003` | `cookieAuth` + `Origin` + sede cerrada + headers de comando | sede con revisión + ETag |
+| `PATCH /studio/v1/organizations/{organizationId}/sites/{siteId}` | `OP-ORG-004` | `cookieAuth` + `Origin` + cambio cerrado + headers de comando + `If-Match` | sede con nueva revisión + ETag |
+| `POST /studio/v1/organizations/{organizationId}/memberships/{membershipId}/roles` | `OP-ORG-007` | `cookieAuth` + `Origin` + `{role_code}` + headers de comando | rol y `valid_from` |
+| `DELETE /studio/v1/organizations/{organizationId}/memberships/{membershipId}/roles/{roleCode}` | `OP-ORG-008` | `cookieAuth` + `Origin` + headers de comando; sin body | rol y `valid_to` |
+| `POST /studio/v1/organizations/{organizationId}/memberships/{membershipId}/termination` | `OP-ORG-009` | `cookieAuth` + `Origin` + objeto vacío cerrado + headers de comando | membresía terminada + `ended_at` |
+| `POST /studio/v1/organizations/{organizationId}/me/membership/resignation` | `OP-ORG-010` | `cookieAuth` + `Origin` + objeto vacío cerrado + headers de comando | renuncia + `ended_at` |
+| `POST /studio/v1/organizations/{organizationId}/ownership-transfers` | `OP-ORG-011` | `cookieAuth` + `Origin` + `target_membership_id` + headers de comando | owner nuevo/anterior + `transferred_at` |
+| `POST /studio/v1/organizations/{organizationId}/closure` | `OP-ORG-012` | `cookieAuth` + `Origin` + objeto vacío cerrado + headers de comando | cierre confirmado sin estado parcial |
+
+Cada operación declara objetos cerrados, errores comunes más `404` uniforme para
+recurso ajeno/inexistente y `Cache-Control: no-store`; los comandos exigen ambos
+headers de idempotencia. El PR BACK debe editar el OpenAPI canónico del
+repositorio de código, validarlo, regenerar DTOs y manifiesto y actualizar los
+conteos de este documento. Este cambio documental no edita YAML ni tipos
+generados: hasta entonces estas filas son un gate aprobado, no evidencia de
+implementación.
+
 ## 3. Reglas transversales cerradas
 
 ### 3.1 Identidad e idempotencia
@@ -88,13 +114,16 @@ Las operaciones técnicas `OP-IDN-025`, `OP-IDN-026` y `OP-IDN-028` no crean una
 
 ### 3.2 Concurrencia
 
-`OP-EXE-005` y `OP-EXE-006` exigen un `If-Match` fuerte con formato:
+`OP-EXE-005`, `OP-EXE-006`, `OP-ORG-002` y `OP-ORG-004` exigen un
+`If-Match` fuerte. Los formatos aprobados son:
 
 ```text
 "execution:{executionId}:r{revision_number}"
+"organization:{organizationId}:r{revision_number}"
+"organization-site:{siteId}:r{revision_number}"
 ```
 
-Falta del header → `428 precondition-required`. Revisión obsoleta → `409 stale-draft`. Cada escritura exitosa incrementa `revision_number` y devuelve el nuevo `ETag`.
+Falta del header → `428 precondition-required`. Revisión obsoleta → `409 stale-draft`. Cada escritura exitosa incrementa `revision_number` y devuelve el nuevo `ETag` fuerte.
 
 ### 3.3 Caché
 
@@ -166,6 +195,9 @@ El YAML inicial reúne Space y Studio para validar el flujo de extremo a extremo
 | `T-INV-API-01` | El token de staff solo aparece en el cuerpo de `POST`; no existe en path o query y resolver nunca devuelve contacto. |
 | `T-INV-API-02` | Resolver, decidir, listar y revocar declaran CORS exacto, `no-store`, `no-referrer`, estados terminales indistinguibles y `429` con `Retry-After`. |
 | `T-INV-API-03` | Decisión y revocación exigen ambos headers de comando; la decisión solo admite el email verificado exacto y sus DTOs no mezclan entidades de cliente. |
+| `T-ORG-API-01` | El PR BACK añade `OP-ORG-007..010` con objetos cerrados, `cookieAuth`, `Origin` exacto y ambos headers de comando; ningún ejemplo usa bearer. |
+| `T-ORG-API-02` | Membresía/rol de otro tenant y recurso inexistente producen el mismo `404`; owner/rol inválido no revelan IDs ajenos. |
+| `T-ORG-API-03` | `OP-ORG-013` devuelve solo organización/sedes aprobadas, trata dirección domiciliaria como posible PII, incluye revisión/ETag y `private, no-store`, y omite responsible party/contacto. Registra sujeto organización con modo/recurso cerrados; otro tenant recibe `404` y un fallo de auditoría no retorna body. |
 
 ### 5.1 Verificaciones nutricionales
 
