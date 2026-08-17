@@ -1,7 +1,7 @@
 # ERD lógico V1 — modelo físico de PostgreSQL
 
-**Versión de revisión:** 5
-**Fecha:** 6 de agosto de 2026
+**Versión de revisión:** 6
+**Fecha:** 17 de agosto de 2026
 **Fase:** 4 — Modelo lógico y diccionario de datos
 **Estado:** Backoffice opción B recertificada; resto de P0 pendiente
 **Deriva de:** [`V1_CONCEPTUAL_ERD.md`](./V1_CONCEPTUAL_ERD.md), [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md), [`V1_IDEMPOTENCY_CONTRACT.md`](./V1_IDEMPOTENCY_CONTRACT.md), [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md), [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
@@ -14,7 +14,7 @@ Cada tabla aplica las convenciones de [`POSTGRES_MODELING_STANDARD.md`](./POSTGR
 
 ## 2. Del concepto a la tabla
 
-El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **122 tablas de dominio** en once schemas. A las 115 tablas recertificadas tras ADR-028 se suman `identity.access_sessions`, almacenamiento técnico requerido por la sesión opaca de Studio; `identity.password_reset_receipts`, receipt idempotente de recuperación; `planning.service_access_blocks`, bloqueo causal sin snapshot; y cuatro tablas netas para normalizar especialidades, tipos de credencial y credenciales profesionales. Enums, vistas, funciones y particiones hijas no cuentan como tablas adicionales.
+El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **127 tablas de dominio** en once schemas. El inventario vigente incluye las tres tablas AAL2, `organizations.organization_type_transitions` y `system.invitation_rate_windows`, que ya tenía ficha individual pero estaba omitida del resumen. Enums, vistas, funciones y particiones hijas no cuentan como tablas adicionales.
 
 | Entidad conceptual | Tablas físicas | Por qué se expande |
 | --- | --- | --- |
@@ -29,8 +29,8 @@ El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **122 tab
 
 | Schema | Tablas | Nº |
 | --- | --- | --- |
-| `identity` | `people`, `access_accounts`, `access_sessions`, `password_reset_receipts`, `onboarding_attempts`, `eligibility_evidence`, `profile_attributes`, `fitness_profile_claims`, `body_progress_records`, `health_context_claims`, `professional_profiles`, `professional_profile_specialties`, `professional_credentials`, `professional_credential_verifications`, `invitations`, `invitation_intents`, `notification_preferences` | 17 |
-| `organizations` | `organizations`, `organization_types`, `organization_sites`, `organization_memberships`, `organization_roles`, `organization_capabilities`, `role_capabilities`, `membership_roles`, `organization_events`, `membership_events` | 10 |
+| `identity` | `people`, `access_accounts`, `access_sessions`, `access_account_mfa_factors`, `backoffice_authentication_attempts`, `mfa_factor_recovery_events`, `password_reset_receipts`, `onboarding_attempts`, `eligibility_evidence`, `profile_attributes`, `fitness_profile_claims`, `body_progress_records`, `health_context_claims`, `professional_profiles`, `professional_profile_specialties`, `professional_credentials`, `professional_credential_verifications`, `invitations`, `invitation_intents`, `notification_preferences` | 20 |
+| `organizations` | `organizations`, `organization_types`, `organization_type_transitions`, `organization_sites`, `organization_memberships`, `organization_roles`, `organization_capabilities`, `role_capabilities`, `membership_roles`, `organization_events`, `membership_events` | 11 |
 | `relationships` | `service_relationships`, `responsible_party_snapshots`, `relationship_professional_assignments`, `professional_assignment_events`, `relationship_events`, `relationship_termination_requests` | 6 |
 | `privacy` | `data_classifications`, `scope_definitions`, `scope_resource_rules`, `consent_events`, `invitation_scope_options`, `data_grants`, `session_visibility_denials`, `historical_access_cases`, `access_events`, `retention_policies`, `erasure_requests`, `disposition_cases`, `disposition_items`, `disposition_events`, `legal_holds`, `hold_applications` | 16 |
 | `catalog` | `disciplines`, `activity_types`, `activity_type_aliases`, `movements`, `movement_aliases`, `movement_variants`, `equipment`, `movement_equipment`, `units`, `result_contracts`, `activity_type_result_contracts`, `contract_fixtures`, `professional_specialties`, `professional_credential_types` | 14 |
@@ -38,11 +38,11 @@ El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **122 tab
 | `execution` | `executed_sessions`, `planned_session_executions`, `session_segments`, `strength_sets`, `endurance_laps`, `interval_results`, `round_results`, `mobility_results`, `metric_samples`, `professional_observations`, `correction_proposals`, `revision_events`, `result_validation_events`, `derived_results` | 14 |
 | `nutrition` | `nutrient_definitions`, `meals`, `meal_items`, `meal_nutrient_values`, `goal_sets`, `goal_versions`, `goal_targets`, `goal_decisions` | 8 |
 | `payments` | `gateway_connections`, `organization_plans`, `plan_versions`, `plan_subscriptions`, `payment_records`, `subscription_events`, `platform_plans`, `platform_plan_versions`, `platform_features`, `platform_plan_features`, `platform_subscriptions`, `organization_premium_entitlements` | 12 |
-| `system` | `outbox_events`, `idempotency_keys`, `job_runs` | 3 |
+| `system` | `outbox_events`, `idempotency_keys`, `job_runs`, `invitation_rate_windows` | 4 |
 | `support` | `platform_role_assignments`, `platform_duty_assignments`, `break_glass_requests`, `break_glass_approvals`, `break_glass_events` | 5 |
-| **Total** | | **122** |
+| **Total** | | **127** |
 
-Nota: el total anterior era 111. La opción B agrega `support.platform_duty_assignments`, `support.break_glass_requests`, `support.break_glass_approvals` y `support.break_glass_events`; la sesión opaca agrega `identity.access_sessions`; la recuperación agrega `identity.password_reset_receipts`; el bloqueo causal agrega `planning.service_access_blocks`; y la normalización del perfil profesional agrega dos tablas netas en Identidad y dos en Catálogo. No se convierten vistas, funciones ni tipos enumerados en tablas.
+Nota: el total anterior del ERD era 122. La recertificación incorpora las tres tablas AAL2 que ya estaban en el diccionario, el catálogo de transiciones de AFO-39 y `system.invitation_rate_windows`, cuya ficha ya existía pero faltaba en el inventario resumido. No se introducen modelos para capacidades diferidas ni se convierten vistas, funciones o tipos enumerados en tablas.
 
 ## 4. Tipos enumerados nativos
 
@@ -68,7 +68,7 @@ Estados de máquina y clasificaciones cerradas y estables. Se declaran una vez y
 | `consent_decision` | `privacy` | `granted`, `rejected`, `revoked` |
 | `historical_access_purpose` | `privacy` | `service_dispute`, `legal_or_regulatory_obligation`, `customer_support_request`, `security_investigation`, `authorized_quality_review` |
 | `historical_case_status` | `privacy` | `open`, `closed`, `expired` |
-| `access_mode` | `privacy` | `live`, `frozen`, `break_glass` |
+| `access_mode` | `privacy` | `live`, `frozen`, `break_glass`, `organization_operational` |
 | `disposition_action` | `privacy` | `delete`, `anonymize`, `retain_restricted` |
 | `disposition_status` | `privacy` | `pending`, `executed`, `suspended` |
 | `content_scope` | `catalog` | `global`, `organization`, `person` |
@@ -136,6 +136,8 @@ erDiagram
 ```mermaid
 erDiagram
     organization_types ||--o{ organizations : "type_code"
+    organization_types ||--o{ organization_type_transitions : "from_type_code"
+    organization_types ||--o{ organization_type_transitions : "to_type_code"
     organizations ||--o{ organization_sites : "organization_id"
     organizations ||--|{ organization_memberships : "organization_id"
     people ||--o{ organization_memberships : "person_id"
@@ -149,9 +151,10 @@ erDiagram
 
 | Tabla | PK | Claves e invariantes notables |
 | --- | --- | --- |
-| `organizations` | `id` | `type_code`; identidad estable al crecer a equipo |
+| `organizations` | `id` | `type_code`, `revision_number`; identidad estable al crecer a equipo; ETag optimista |
 | `organization_types` | `id` | `UNIQUE code`; catálogo gobernado |
-| `organization_sites` | `id` | `organization_id`; informativa, no delimita permisos |
+| `organization_type_transitions` | `(from_type_code,to_type_code)` | catálogo gobernado; inicialmente práctica → gimnasio/estudio |
+| `organization_sites` | `id` | `organization_id`, `revision_number`; informativa, no delimita permisos |
 | `organization_memberships` | `id` | `organization_id`, `person_id`, `status`; no da acceso al Fitness ID |
 | `organization_roles` | `id` | `UNIQUE code`; catálogo cerrado: owner/admin/coach/staff |
 | `organization_capabilities` | `id` | `UNIQUE code`; catálogo de capacidades |
@@ -204,6 +207,8 @@ erDiagram
     organization_memberships ||--o{ historical_access_cases : "authorized_membership_id"
     historical_access_cases ||--o{ access_events : "historical_access_case_id"
     data_grants ||--o{ access_events : "data_grant_id"
+    people o|--o{ access_events : "subject_person_id"
+    organizations o|--o{ access_events : "subject_organization_id"
     people ||--o{ session_visibility_denials : "person_id"
     people ||--o{ erasure_requests : "person_id"
     retention_policies ||--o{ disposition_items : "retention_policy_id"
@@ -223,7 +228,7 @@ erDiagram
 | `data_grants` | `id` | FKs compuestas con relación, definición y consentimiento prueban persona, organización, scope y versión exacta; único no revocado por `(relationship_id,scope_code)`; estado/cortes gobernados por trigger (`IX-07`) |
 | `session_visibility_denials` | `id` | ejecución y relación pertenecen a `person_id`; `UNIQUE (executed_session_id, relationship_id)` (`IX-08`) |
 | `historical_access_cases` | `id` | relación y membresías de la organización exacta por FK; elegibilidad temporal por trigger; `expires_at <= opened_at + 24h` (`IX-09/10`) |
-| `access_events` | `(id, occurred_at)` | **particionada por rango mensual**; actor humano obligatorio; entrada única `privacy.log_access_event`; base visible solo al sujeto; A10/A12 usan superficies restringidas; retención 24 meses |
+| `access_events` | `(id, occurred_at)` | **particionada por rango mensual**; XOR persona/organización sujeto; actor humano obligatorio; organización exige membership activo y contexto operacional cerrado; entrada única `privacy.log_access_event`; `v_my_access_events` conserva solo sujeto persona; retención 24 meses (`IX-23`) |
 | `retention_policies` | `id` | `UNIQUE (data_classification_code, jurisdiction, version_number)`; congelada |
 | `erasure_requests` | `id` | `person_id`, alcance |
 | `disposition_cases` | `id` | `subject_person_id`; solicitud opcional del mismo sujeto por FK compuesta (`IX-26`) |
@@ -401,6 +406,7 @@ erDiagram
 | `outbox_events` | `id` | tipo, agregado, payload `jsonb` sin datos sensibles; orden por agregado |
 | `idempotency_keys` | `id` | unique de transporte y `Command-Id` scoped; response 24 h + tombstone durable; `processing` no puede confirmar |
 | `job_runs` | `id` | worker, ciclo, resultado; idempotencia de jobs |
+| `invitation_rate_windows` | `(scope,scope_hash)` | ventanas durables por actor, organización y destinatario hasheado; nunca email/IP en claro |
 | `platform_role_assignments` | `id` | rol base de entrada; no concede deber; sin autoasignación ni último admin revocado |
 | `platform_duty_assignments` | `id` | persona/deber/vigencia/AAL; máximo 90 días; historial sin `DELETE`; autoridad transaccional |
 | `break_glass_requests` | `id` | `A10`, sujeto, categorías, propósito/caso, tier, quorum y duración inmutables; pendiente 30 min, ventana 30/15 min |
@@ -460,7 +466,7 @@ La regla estructural: `identity.people` y las raíces de autenticación no depen
 
 ### 14.1 Integridad de identidad y tenant
 
-Los 44 invariantes `IX-01..44` cierran los cruces entre persona, organización, membresía, relación, planificación, ejecución, privacidad, nutrición, pagos y soporte. Se materializan con las claves portadoras necesarias, FKs compuestas, constraint triggers y entradas cerradas de auditoría. El DDL no puede degradarlos a validaciones de API o RLS.
+Los 45 invariantes `IX-01..45` cierran los cruces entre persona, organización, membresía, relación, planificación, ejecución, privacidad, nutrición, pagos y soporte. Se materializan con las claves portadoras necesarias, FKs compuestas, constraint triggers y entradas cerradas de auditoría. El DDL no puede degradarlos a validaciones de API o RLS.
 
 Cada invariante tiene una prueba negativa `T-INT-*` ejecutada con `BYPASSRLS`; por tanto, el éxito de la suite demuestra integridad estructural y no solo el comportamiento de una policy.
 
@@ -484,7 +490,7 @@ Cada invariante tiene una prueba negativa `T-INT-*` ejecutada con `BYPASSRLS`; p
 
 ## 16. Resolución física
 
-Columnas, nullability, índices, retención y eventos están en las 122 fichas individuales. Nombres, enums compartidos, JSONB y las dos tablas particionadas están cerrados en `V1_PHYSICAL_OBJECT_CATALOG.md`; ninguna de esas decisiones se reserva al DDL.
+Columnas, nullability, índices, retención y eventos están en las 127 fichas individuales. Nombres, enums compartidos, JSONB y las dos tablas particionadas están cerrados en `V1_PHYSICAL_OBJECT_CATALOG.md`; ninguna de esas decisiones se reserva al DDL.
 
 ## 17. Estado de salida
 

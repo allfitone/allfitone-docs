@@ -1,9 +1,9 @@
 # Matriz de operaciones V1
 
-**Versión de revisión:** 6
-**Fecha:** 15 de agosto de 2026
+**Versión de revisión:** 7
+**Fecha:** 17 de agosto de 2026
 **Fase:** 3 — Definir operaciones, seguridad y contratos
-**Estado:** acceso Backoffice recertificado con ADR-028; resto de P0 pendiente
+**Estado:** AFO-39 ratifica alcance BETA Studio; implementación por rebanada pendiente
 **Depende de:** [`ALLFIT_ARCHITECTURE_DECISIONS.md`](../02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md), [`ALLFIT_DOMAIN_GLOSSARY.md`](./ALLFIT_DOMAIN_GLOSSARY.md), [`V1_DATABASE_SCOPE.md`](./V1_DATABASE_SCOPE.md), [`DOMAIN_OWNERSHIP_MAP.md`](./DOMAIN_OWNERSHIP_MAP.md), [`V1_CONCEPTUAL_ERD.md`](./V1_CONCEPTUAL_ERD.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
 
 ## 1. Propósito
@@ -64,7 +64,7 @@ Un actor no es un rol ni un permiso: es el sujeto autenticado desde el que se ev
 | `A2` Persona | `PERSON` activa con Fitness ID. Sujeto de Space | No |
 | `A3` Profesional coach | `PERSON` con `PROFESSIONAL_PROFILE` que opera mediante `ORGANIZATION_MEMBERSHIP` vigente con rol `coach` | No |
 | `A4` Admin de organización | Membresía vigente con rol `admin` | No |
-| `A5` Owner de organización | La única membresía activa de la organización con rol `owner`. Puede cerrar la organización; la transferencia en autoservicio está diferida de V1 | No |
+| `A5` Owner de organización | La única membresía activa de la organización con rol `owner`. Puede transferir la propiedad y cerrar la organización mediante comandos atómicos V1 | No |
 | `A6` Staff | Membresía vigente con rol `staff`. Gestiona invitaciones y directorio; nunca datos fitness | No |
 | `A7` Profesional suplente | `A3` con una suplencia aceptada por la persona y vigente dentro de una relación | No |
 | `A8` Backend | La API actuando en nombre de un actor humano. No es un actor autónomo: siempre porta un sujeto | N/A |
@@ -861,7 +861,8 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | `OP-ORG-007` | Asignar rol a una membresía | Comando | `A4`, `A5` |
 | `OP-ORG-008` | Retirar rol de una membresía | Comando | `A4`, `A5` |
 | `OP-ORG-009` | Terminar una membresía | Comando | `A4`, `A5` |
-| `OP-ORG-010` | Renunciar a una membresía propia | Comando | `A3`, `A6` |
+| `OP-ORG-010` | Renunciar a una membresía propia | Comando | `A2` con membresía propia activa no-owner |
+| `OP-ORG-011` | Transferir propiedad | Comando | `A5` |
 | `OP-ORG-012` | Cerrar la organización | Comando | `A5` |
 | `OP-ORG-013` | Consultar la organización | Consulta | `A3`–`A6` |
 | `OP-ORG-014` | Listar mis membresías | Consulta | `A2` |
@@ -882,7 +883,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Superficie** | `POST /studio/v1/organizations` |
 | **Actor** | `A2` — cualquier persona activa |
 | **Filtros obligatorios** | Persona activa. El tipo solicitado pertenece al catálogo gobernado de `ORGANIZATION_TYPE` |
-| **Transacción** | Una sola: crear `ORGANIZATION`, crear `ORGANIZATION_MEMBERSHIP` para el creador, asignarle `MEMBERSHIP_ROLE` = `owner` y registrar el `ORGANIZATION_EVENT` de alta. Solo confirma si el constraint diferible verifica exactamente un `owner` activo |
+| **Transacción** | `organizations.create_organization(...)` crea `ORGANIZATION`, la membresía inicial, el rol `owner` y los eventos; solo confirma si el constraint diferible verifica exactamente un `owner` activo |
 | **Idempotencia** | `Idempotency-Key`. Un reintento devuelve la organización creada, nunca una segunda |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
@@ -899,13 +900,13 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Superficie** | `PATCH /studio/v1/organizations/{orgId}` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | Membresía vigente en `{orgId}` con capacidad de administración |
-| **Transacción** | Actualizar la organización y registrar `ORGANIZATION_EVENT` con before/after |
-| **Idempotencia** | `Idempotency-Key`. Un `PATCH` sin cambios efectivos no genera evento |
+| **Transacción** | `organizations.update_organization(...)` bloquea el agregado, valida revisión/transición, actualiza solo `display_name`, `legal_name` o `type_code`, incrementa `revision_number` y registra `ORGANIZATION_EVENT` con before/after |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`. Un `PATCH` sin cambios efectivos no genera evento ni incrementa la revisión |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada. Escrituras concurrentes se resuelven por versión optimista; la perdedora recibe `409` |
-| **Información sensible** | Datos de la parte responsable |
+| **Offline / concurrencia** | Exige `If-Match: "organization:{id}:r{revision}"`. Si falta devuelve `428 precondition-required`; si quedó atrás, `409 stale-draft`. El éxito incrementa `revision_number` y devuelve el nuevo ETag fuerte |
+| **Información sensible** | `legal_name` puede ser `identity_pii`; el comando no lee ni escribe el JSON de la parte responsable |
 | **Evento de dominio** | `organization.updated.v1` |
-| **Reglas** | Cambiar el tipo organizacional exige que la transición esté permitida por el catálogo. Incorporar personal **no** cambia el tipo automáticamente |
+| **Reglas** | El `PATCH` es cerrado. `responsible_party`, `id`, `status`, timestamps, `purpose` y `responsible_party_schema_version` son inmutables en autoservicio. Cambiar `type_code` exige una fila activa en `organization_type_transitions`; inicialmente solo existen `professional_practice → gym` y `professional_practice → studio`. Incorporar personal **no** cambia el tipo automáticamente |
 | **Falla cerrada** | Transición de tipo no permitida, rechazo |
 
 #### `OP-ORG-003` — Crear sede
@@ -916,11 +917,11 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/sites` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | Membresía vigente con capacidad de administración |
-| **Transacción** | Crear `ORGANIZATION_SITE` |
-| **Idempotencia** | `Idempotency-Key` |
+| **Transacción** | `organizations.create_site(...)` crea `ORGANIZATION_SITE` con `revision_number = 0` y su evento contractual |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id` |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
-| **Información sensible** | Ubicación del negocio. No es dato personal |
+| **Offline / concurrencia** | Falla cerrada; devuelve `ETag: "organization-site:{id}:r0"` |
+| **Información sensible** | `address` puede ser `identity_pii` si la sede de una práctica profesional coincide con un domicilio |
 | **Evento de dominio** | `organization.site_created.v1` |
 | **Reglas** | Una sede es información básica de ubicación. **No** representa recursos reservables, capacidad, clases ni inventario, y **no** delimita permisos: el alcance de rol por sede queda fuera de V1 |
 | **Falla cerrada** | — |
@@ -933,11 +934,11 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Superficie** | `PATCH /studio/v1/organizations/{orgId}/sites/{siteId}` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | La sede pertenece a `{orgId}`; membresía vigente con capacidad de administración |
-| **Transacción** | Actualizar la sede y registrar el evento |
-| **Idempotencia** | `Idempotency-Key` |
+| **Transacción** | `organizations.update_site(...)` bloquea la sede, valida revisión/tenant, actualiza campos cerrados, incrementa `revision_number` y registra el evento |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; converge |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada; versión optimista |
-| **Información sensible** | Ninguna categoría personal |
+| **Offline / concurrencia** | Exige `If-Match: "organization-site:{id}:r{revision}"`; faltante `428 precondition-required`, obsoleto `409 stale-draft`; el éxito devuelve el nuevo ETag fuerte |
+| **Información sensible** | `address` puede ser `identity_pii`; actualizar o desactivar no reduce su protección ni retención |
 | **Evento de dominio** | `organization.site_updated.v1` |
 | **Reglas** | Desactivar una sede no afecta relaciones, asignaciones ni historial: la sede es informativa |
 | **Falla cerrada** | — |
@@ -984,8 +985,8 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/memberships/{id}/roles` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | La membresía pertenece a `{orgId}` y está vigente. El rol solicitado es `admin`, `coach` o `staff`; `owner` se rechaza |
-| **Transacción** | Crear `MEMBERSHIP_ROLE` con vigencia y registrar `MEMBERSHIP_EVENT` |
-| **Idempotencia** | `Idempotency-Key`. Asignar un rol ya vigente no lo duplica |
+| **Transacción** | `organizations.grant_membership_role(...)` crea la vigencia, registra `MEMBERSHIP_EVENT` y persiste el receipt durable bajo el mismo commit |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`. Asignar un rol ya vigente no lo duplica; el replay durable devuelve el receipt original incluso después de revocar el rol o expirar el replay HTTP |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Nunca se confirma un cambio de permisos desde caché o read model atrasado |
 | **Información sensible** | Ninguna categoría personal |
@@ -1001,13 +1002,13 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Superficie** | `DELETE /studio/v1/organizations/{orgId}/memberships/{id}/roles/{roleCode}` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | La membresía pertenece a `{orgId}`; el rol está vigente y no es `owner` |
-| **Transacción** | Cerrar la vigencia del `MEMBERSHIP_ROLE`, registrar el evento y **reevaluar en la misma transacción** las asignaciones profesionales que dependían de ese rol |
-| **Idempotencia** | `Idempotency-Key`; converge |
+| **Transacción** | `organizations.revoke_membership_role(...)` cierra la vigencia y registra el evento. Solo cuando `role_code=coach` llama `relationships.end_assignments_for_membership(...)` dentro de la misma transacción; Organizaciones no escribe tablas de Relaciones |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; converge |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Ninguna categoría personal |
 | **Evento de dominio** | `organization.role_revoked.v1` |
-| **Reglas** | La gestión genérica nunca retira `owner`. Retirar `coach` deja inefectivas sus asignaciones profesionales: el grant sobrevive, pero ese actor deja de poder ejercerlo. La invalidación es inmediata, sin ventana de caché |
+| **Reglas** | La gestión genérica nunca retira `owner`. Retirar `coach` deja inefectivas sus asignaciones profesionales: el grant sobrevive, pero ese actor deja de poder ejercerlo. Retirar `admin` o `staff` preserva las asignaciones si `coach` sigue vigente. La invalidación es inmediata, sin ventana de caché |
 | **Falla cerrada** | Intento de retirar `owner`, rechazo |
 
 #### `OP-ORG-009` — Terminar una membresía
@@ -1018,8 +1019,8 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/memberships/{id}/termination` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | La membresía pertenece a `{orgId}` y está vigente |
-| **Transacción** | Una sola: cerrar la membresía, cerrar sus roles, cerrar todas sus `RELATIONSHIP_PROFESSIONAL_ASSIGNMENT` efectivas y registrar los eventos correspondientes |
-| **Idempotencia** | `Idempotency-Key`; converge |
+| **Transacción** | `organizations.terminate_membership(...)` cierra la membresía/roles, registra eventos y llama incondicionalmente `relationships.end_assignments_for_membership(...)`. Cada dominio escribe únicamente sus tablas |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; converge |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Ninguna categoría personal, pero afecta quién puede leer datos de terceros |
@@ -1033,16 +1034,33 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | --- | --- |
 | **Tipo** | Comando |
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/me/membership/resignation` |
-| **Actor** | `A3`, `A6` |
+| **Actor** | `A2` — sujeto autenticado con membresía propia activa no-owner; no requiere un rol residual |
 | **Filtros obligatorios** | La membresía es la del sujeto autenticado y está vigente |
-| **Transacción** | Idéntica a `OP-ORG-009` |
-| **Idempotencia** | `Idempotency-Key`; converge |
+| **Transacción** | `organizations.resign_membership(...)` resuelve la membresía desde la persona del contexto y ejecuta la misma baja coordinada de `OP-ORG-009` |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; converge |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Ninguna categoría personal |
 | **Evento de dominio** | `organization.membership_resigned.v1` |
-| **Reglas** | Un `owner` no puede renunciar sin transferir ownership antes. La renuncia deja las relaciones sin profesional asignado y notifica a la administración de la organización |
+| **Reglas** | Un `owner` no puede renunciar sin transferir ownership antes. Cualquier persona con membresía propia activa no-owner puede renunciar aunque no conserve roles. La renuncia cierra incondicionalmente sus asignaciones efectivas y notifica a la administración de la organización |
 | **Falla cerrada** | Membresía con rol `owner`, rechazo |
+
+#### `OP-ORG-011` — Transferir propiedad
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/ownership-transfers` |
+| **Actor** | `A5` — `owner` vigente de `{orgId}` |
+| **Filtros obligatorios** | `target_membership_id` pertenece a `{orgId}`, está activa y no es la membresía owner actual |
+| **Transacción** | `organizations.transfer_ownership(...)` bloquea en orden la organización, ambas membresías y sus filas de rol `owner`; cierra el rol anterior, abre el destino, registra `ORGANIZATION_EVENT` y ambos `MEMBERSHIP_EVENT`, y confirma solo si `organizations.enforce_exactly_one_active_owner_ct` observa exactamente uno |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; el replay devuelve el mismo owner resultante y nunca vuelve a intercambiar roles |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Transferencias concurrentes serializan por el lock de organización; la perdedora relee o recibe conflicto sin estado parcial |
+| **Información sensible** | Ninguna categoría personal; cambia la máxima autoridad organizacional |
+| **Evento de dominio** | `organization.ownership_transferred.v1` |
+| **Reglas** | El owner anterior conserva membresía activa y roles no `owner`. Si no tiene otro rol queda sin capacidades hasta asignación explícita o `OP-ORG-010`; no se asigna un rol residual implícito |
+| **Falla cerrada** | Actor no owner, destino inactivo/ajeno, organización no activa o imposibilidad de conservar exactamente un owner: rollback completo |
 
 #### `OP-ORG-012` — Cerrar la organización
 
@@ -1052,14 +1070,14 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/closure` |
 | **Actor** | `A5` |
 | **Filtros obligatorios** | Membresía `owner` vigente |
-| **Transacción** | Una sola: terminar todas las relaciones de servicio activas con su efecto completo (congelar grants, cerrar periodos de gestión, desacoplar asignaciones), cerrar membresías, cerrar la organización y abrir el `DISPOSITION_CASE` correspondiente |
-| **Idempotencia** | `Idempotency-Key`; converge |
+| **Transacción** | `organizations.close_organization(...)` coordina una sola transacción PostgreSQL y llama, en orden estable, los contratos públicos `relationships.terminate_for_organization(...)`, `privacy.apply_organization_closure(...)`, `planning.detach_for_organization_closure(...)`, `execution.cancel_proposals_for_organization_closure(...)` y `nutrition.cancel_proposals_for_organization_closure(...)`; después cierra membresías y organización. Ningún dominio escribe directamente tablas de otro |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; converge |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Afecta el acceso a todas las categorías concedidas a esta organización |
 | **Evento de dominio** | `organization.closed.v1`, más un `relationship.terminated.v1` por relación |
-| **Reglas** | Cerrar no elimina el Fitness ID de nadie ni las ejecuciones de las personas. La organización conserva únicamente evidencia bilateral mínima bajo finalidad, acceso restringido y plazo; retener no es mantener acceso ordinario |
-| **Falla cerrada** | Si alguna terminación no puede completarse, la transacción entera se revierte |
+| **Reglas** | Los contratos públicos son estrechos y reciben `organization_id`, un instante efectivo único y el command ID; cada dominio conserva ownership de sus invariantes. Ejecución cancela propuestas de corrección pendientes y Nutrición cancela propuestas nutricionales pendientes. Cerrar no elimina el Fitness ID ni ejecuciones. La organización conserva únicamente evidencia bilateral mínima bajo finalidad, acceso restringido y plazo; retener no es mantener acceso ordinario |
+| **Falla cerrada** | Si cualquier contrato de Relaciones, Privacidad, Planificación, Ejecución o Nutrición falla, la transacción entera se revierte |
 
 #### `OP-ORG-013` — Consultar la organización
 
@@ -1069,14 +1087,14 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Superficie** | `GET /studio/v1/organizations/{orgId}` |
 | **Actor** | `A3`–`A6` |
 | **Filtros obligatorios** | Membresía vigente en `{orgId}` |
-| **Transacción** | Ninguna |
+| **Transacción** | Una sola transacción resuelve cuenta/persona, fija contexto con `SET LOCAL`, consulta la proyección cerrada y registra `privacy.log_access_event` antes de devolver contenido; si la auditoría falla, no retorna la proyección |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Cacheable para presentación |
-| **Información sensible** | Ninguna categoría personal |
+| **Offline / concurrencia** | `Cache-Control: private, no-store`; devuelve `revision_number` y `ETag: "organization:{id}:r{revision}"` fuerte |
+| **Información sensible** | `legal_name` y `organization_sites.address` pueden ser `identity_pii`; excluye el JSON de `responsible_party`, identificadores legales y contacto |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Una organización nunca es legible por miembros de otra |
-| **Falla cerrada** | Sin membresía, misma respuesta que "no existe" |
+| **Reglas** | Proyección cerrada: `id`, `display_name`, `legal_name`, `type_code`, `status`, `revision_number` y contexto mínimo de sedes (`id`, `name`, `address`, `status`, `revision_number`). Una organización nunca es legible por miembros de otra |
+| **Falla cerrada** | Sin membresía, misma respuesta `404` que "no existe"; antes de devolver registra sujeto organización, modo `organization_operational` y recurso `organizations.organization_context`; un fallo de `ACCESS_EVENT` revierte la lectura |
 
 #### `OP-ORG-014` — Listar mis membresías
 

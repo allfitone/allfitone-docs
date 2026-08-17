@@ -18,7 +18,7 @@ La revisión parte de:
 - los entregables vigentes de Fases 1 a 4;
 - el estado declarado en [PHASE_5_READINESS_REVIEW.md](./PHASE_5_READINESS_REVIEW.md).
 
-Este documento autoriza iniciar Fase 5 únicamente mediante rebanadas verticales que hayan cerrado su propio gate. No autoriza generar de una vez las 121 tablas documentadas, crear placeholders ni implementar una HU mientras alguno de los P0 que consume siga abierto.
+Este documento autoriza iniciar Fase 5 únicamente mediante rebanadas verticales que hayan cerrado su propio gate. No autoriza generar de una vez las 127 tablas documentadas, crear placeholders ni implementar una HU mientras alguno de los P0 que consume siga abierto.
 
 ## 2. Veredicto
 
@@ -30,13 +30,13 @@ La inspección reproducible del estado actual arroja:
 
 | Dimensión | Estado declarado por el `GO` | Estado documental actual |
 | --- | ---: | ---: |
-| Historias de usuario | No forman parte de las fuentes de la revisión | 211 |
+| Historias de usuario | No forman parte de las fuentes de la revisión | 214 |
 | Schemas físicos | 10 | 11 |
-| Tablas con ficha en el diccionario | 99 | 120 tras opción B, sesión opaca, bloqueo causal y perfil profesional normalizado |
-| Operaciones únicas `OP-*` | 150 | 184 tras completar `OP-SUP-*` |
+| Tablas con ficha en el diccionario | 99 | 127 tras recertificar el inventario vigente |
+| Operaciones únicas `OP-*` | 150 | 194 tras AFO-39 |
 | IDs/rangos de prueba explícitos en la matriz RLS | 186 | 216 tras añadir deberes, no resurrección comercial y concurrencia causal |
 | Rutas físicas `PR-*` | 27 | 29, incluida `PR-29` para suspensión/reactivación causal |
-| Operaciones en el OpenAPI canónico | 21 | 21, ninguna de identidad, organizaciones, pagos o Backoffice |
+| Operaciones en el OpenAPI canónico | 21 | 45 sobre 41 paths; el gate AFO-39 aún no incrementa el YAML vigente |
 | Objetos `allfitone/packages/db` | esperados en Fase 5 | CLI fijada e infraestructura local inicializada bajo `packages/db/supabase`; aún no existen migraciones de dominio, tablas Allfit, tipos generados ni pruebas SQL ejecutables |
 
 El número final de tablas no debe fijarse antes de implementar las rebanadas que las justifican. El inventario instalado será consecuencia acumulativa de HU aprobadas, no una meta que obligue a crear tablas todavía innecesarias.
@@ -68,7 +68,7 @@ HU
 
 No se exige una operación de servidor para navegación, presentación o estado puramente local, pero la ausencia debe quedar justificada.
 
-La propuesta de clasificación y la matriz completa de 211 HU están en
+La propuesta de clasificación y la matriz completa de 214 HU están en
 [V1_HU_DATABASE_TRACEABILITY_MATRIX.md](../03_PROPOSED_DESIGN/V1_HU_DATABASE_TRACEABILITY_MATRIX.md).
 El documento registra las decisiones de alcance aprobadas y las brechas de trazabilidad técnica que todavía impiden cerrar este P0.
 
@@ -713,7 +713,7 @@ Cada flujo debe probar concurrencia, timeout después de commit, replay con body
 
 ### 16.1 Integridad
 
-La matriz actual llega a `IX-44` y el plan de Fase 5 ordena implementar `IX-01..44`; cualquier invariante nueva debe ampliar ambos sin perder ni renumerar las existentes.
+La matriz actual llega a `IX-45` y el plan de Fase 5 ordena implementar `IX-01..45`; cualquier invariante nueva debe ampliar ambos sin perder ni renumerar las existentes.
 
 Añadir invariantes para:
 
@@ -762,7 +762,7 @@ Cada ruta declara columnas, joins, helper, proyección, índice y prueba exactos
 
 ## 17. Contratos HTTP y de jobs
 
-El OpenAPI canónico actual contiene 25 operaciones e incorpora la sesión de identidad Studio; aún no cubre el resto de Identidad, Organizaciones, Pagos o Backoffice. Antes del primer handler de cada nueva rebanada:
+El OpenAPI canónico actual contiene 45 operaciones sobre 41 paths. AFO-39 aprueba documentalmente el siguiente gate de Organizaciones/equipo, pero esas rutas no cuentan como ejecutables hasta que el PR BACK actualice el YAML y regenere tipos. Antes del primer handler de cada nueva rebanada:
 
 - añadir su `x-allfit-operation`;
 - cerrar request, response, errores, headers e idempotencia;
@@ -865,7 +865,7 @@ Las secciones siguientes son el checklist para cerrar la **baseline V1 completa*
 
 ### Alcance
 
-- [ ] Las 211 HU tienen estado de alcance aprobado.
+- [x] Las 214 HU tienen estado de alcance aprobado.
 - [ ] Cada HU con efecto de datos tiene trazabilidad completa.
 - [ ] Las capacidades diferidas no generan DDL especulativo.
 

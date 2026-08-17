@@ -75,7 +75,8 @@ Autorización, consentimiento, capacidad y —cuando entre en alcance— dinero.
 | --- | --- |
 | `OP-IDN-009` decidir scopes de la invitación, `OP-PRV-005` revocar | Un consentimiento confirmado desde caché es un consentimiento inventado |
 | `OP-REL-002/003/007/008` asignaciones y terminaciones | Determinan quién lee datos de quién |
-| `OP-ORG-007/008/009/011` roles, membresías, ownership | Cambian permisos |
+| `OP-ORG-007/008/009/010/011/012` roles, membresías, ownership y cierre | Cambian permisos o revocan de forma coordinada acceso y propuestas |
+| `OP-ORG-013` proyección organizacional | Exige contexto y `ACCESS_EVENT` en la misma transacción; si auditar falla no retorna contenido |
 | `OP-REL-005` decidir suplencia | Habilita un actor nuevo |
 | `OP-IDN-003` activar persona | Crea la raíz de identidad |
 | `OP-IDN-009` decidir intenciones | Materializa vínculos |
@@ -322,8 +323,8 @@ Alimentan la suite de la Fase 6. Los diez primeros son los escenarios exigidos p
 | `D-24` | A10 intenta aprobar; A12 ejercer; actor escribir, pedir categoría prohibida o usar ventana ajena | Falla cerrada; cierra ventanas, suspende deber y abre incidente cuando ADR-026 lo clasifica crítico |
 | `D-25` | No existe quorum o revisor A12 independiente | La solicitud/capacidad permanece cerrada; nunca se reduce quorum ni se habilita autoaprobación |
 | `D-26` | Restauración anterior al cierre/expiración break-glass | Se reaplica el cierre antes de abrir tráfico; solo el `A10` solicitante podría ejercer una ventana todavía vigente |
-| `D-27` | Escritura viola `IX-01..44` o un guardián diferido falla al `COMMIT` | Se revierte comando, outbox y auditoría; no se degrada a validación de API |
-| `D-28` | Base restaurada sin una clave, FK o trigger de la matriz de integridad | El verificador de catálogo bloquea apertura de tráfico hasta que `IX-01..44` estén completos |
+| `D-27` | Escritura viola `IX-01..45` o un guardián diferido falla al `COMMIT` | Se revierte comando, outbox y auditoría; no se degrada a validación de API |
+| `D-28` | Base restaurada sin una clave, FK o trigger de la matriz de integridad | El verificador de catálogo bloquea apertura de tráfico hasta que `IX-01..45` estén completos |
 | `D-29` | Una policy, vista o función restaurada referencia una columna inexistente o pierde un join de `PR-01..29` | El verificador `T-PHY-01` bloquea migración y apertura de tráfico; nunca se desactiva RLS para recuperar servicio |
 | `D-30` | Falta un índice de autorización declarado por `PR-01..29` | El verificador `T-PHY-07` bloquea el release; no se acepta el riesgo de convertir una policy en scan horizontal bajo carga |
 | `D-31` | Inventario, nombre físico o contrato JSONB difiere del catálogo P0-07 | `T-SCHEMA-01..04` bloquea migración/release; no se acepta el payload relajando el check |

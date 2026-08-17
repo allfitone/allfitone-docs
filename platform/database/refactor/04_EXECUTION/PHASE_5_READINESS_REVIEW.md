@@ -8,6 +8,7 @@
 **Nota del 3 de agosto de 2026:** las menciones a Cognito conservan la dependencia evaluada históricamente el 28 de julio. ADR-002 las supersede con WorkOS AuthKit y `DB-P5-019` exige recertificar autenticación antes de implementar.<br>
 **Nota del 5 de agosto de 2026:** ADR-029 consolidó API, worker y clientes en el monorepo `allfitone`. La fuente canónica OpenAPI se trasladó a `packages/contracts/openapi` y esta documentación dejó de duplicar el YAML. Los escenarios de CI, fronteras y despliegue del ADR deben ejecutarse antes de convertir este estado en GO firme.<br>
 **Nota del 6 de agosto de 2026:** `allfitone/packages/db` ya fija la Supabase CLI e inicializa la estructura oficial bajo `packages/db/supabase`, con PostgreSQL local reconstruible y servicios no utilizados desactivados. Las migraciones de dominio, tipos generados y pruebas SQL continúan como entregables futuros.<br>
+**Nota del 17 de agosto de 2026:** AFO-39 recertifica las dimensiones vigentes en 214 HU, 127 tablas, 194 operaciones y OpenAPI ejecutable de 41 paths/45 operaciones. Los conteos fechados en la tabla de decisiones permanecen como evidencia histórica de su revisión original.<br>
 **Progreso P0:** 8 de 8 bloqueos resueltos; 0 activos<br>
 **Progreso P1:** P1-01, P1-02 y los tres hallazgos P1 de Nutrición resueltos; P1-03..07 pendientes según sus hitos<br>
 **Alcance:** consistencia y preparación de las Fases 1 a 4 antes de traducir el diseño a migraciones, seeds, RLS, funciones y contratos ejecutables.
@@ -37,9 +38,9 @@ El actor, predicado y superficie de lectura histórica quedaron resueltos el 23 
 Fase 2 quedó recertificada el 28 de julio de 2026 con Nutrición como noveno dominio conceptual, además de `staff`, titular/suplente, Soporte y separación de deberes `A10/A12`.
 La integridad cross-table quedó recertificada mediante ADR-024/027 y una matriz de 35 invariantes con mecanismo y prueba negativa exactos.
 El drift físico de RLS quedó cerrado mediante 27 rutas operación→policy→índice→prueba, contratos separados para grants `active`/`frozen`, siete pruebas físicas `T-PHY-*` y cuatro `T-NUT-PHY-*`.
-El inventario y diccionario físico contienen 121 tablas con ficha individual; `identity.access_sessions` materializa la sesión técnica de Studio, `planning.service_access_blocks` la suspensión causal sin snapshots y el perfil profesional usa especialidades, tipos de credencial y credenciales normalizadas.
+El inventario y diccionario físico vigentes contienen 127 tablas con ficha individual; incluyen las transiciones organizacionales gobernadas y `system.invitation_rate_windows`.
 La idempotencia durable quedó cerrada el 26 de julio de 2026 separando replay HTTP de 24 h y `Command-Id`, con scope calculado, tombstone mínimo, concurrencia transaccional y diez pruebas `T-IDEM-*`.
-El contrato HTTP contiene OpenAPI 3.1 con 22 paths, 25 operaciones, DTOs cerrados, cookie opaca Studio, ejemplos, caché, URL firmada Space, proxy autenticado Studio, once verificaciones `T-API-*` y catorce `T-NUT-API-*`.
+El contrato HTTP ejecutable vigente contiene OpenAPI 3.1 con 41 paths, 45 operaciones, DTOs cerrados, cookie opaca Studio, ejemplos, caché, URL firmada Space y proxy autenticado Studio. AFO-39 agrega un gate documental que todavía no se cuenta como YAML implementado.
 La gobernanza de verificación y break-glass quedó recertificada con `nutrition_guidance` estándar, `nutrition_intake` restringida y `nutrition_media` prohibida, además de catálogo mínimo, evidencia permitida, conflictos, deberes de 90 días, quorum por sensibilidad, revisión independiente y respuesta ante abuso.
 
 ### Reevaluación consolidada
@@ -48,11 +49,11 @@ La gobernanza de verificación y break-glass quedó recertificada con `nutrition
 | --- | --- | --- |
 | Aprobación de diseño | Fases 1, 2, 3 y 4 aprobadas | Cumple |
 | Bloqueos críticos | 8 de 8 P0 resueltos; 0 activos | Cumple |
-| Inventario físico | 121 tablas en ERD, diccionario y catálogo, sin diferencias | Cumple |
-| Fichas físicas | 120 de 120 completas | Cumple |
+| Inventario físico | 127 tablas en ERD, diccionario y catálogo, sin diferencias | Cumple |
+| Fichas físicas | 127 de 127 completas | Cumple |
 | Seguridad RLS | 186 pruebas funcionales/RLS: 73 positivas y 113 negativas | Cumple |
 | Trazabilidad física | 27 rutas `PR-*`; cada `OP-NUT-001..013` aparece una vez con pruebas semánticamente correspondientes | Cumple |
-| Primera rebanada | 22 paths/25 operaciones en OpenAPI y gate contract-first | Cumple |
+| Primera rebanada | 41 paths/45 operaciones en OpenAPI; gate AFO-39 pendiente del PR BACK | Cumple para el manifiesto vigente |
 | Autoría pública nutricional | `NutritionGoalAuthor` obligatorio y cerrado publica solo `kind` y `person_id`; coincide con `origin` y permanece estable en live/frozen | Cumple |
 | Break-glass nutricional | Guidance estándar, intake restringida, mezcla con intake restringida y media prohibida/no persistible | Cumple |
 
@@ -98,24 +99,25 @@ La revisión utiliza como fuentes:
 | **P1** | Puede resolverse dentro de Fase 5, pero bloquea su cierre, staging o validación integral | Debe tener owner, decisión y criterio de aceptación antes de comenzar |
 | **P2** | Trazabilidad, mantenimiento o evidencia | No bloquea por sí solo, pero incrementa drift y costo de revisión |
 
-## 5. Dimensión actual del diseño
+## 5. Dimensión vigente del diseño — 17 de agosto de 2026
 
 | Elemento | Magnitud |
 | --- | ---: |
+| Historias de usuario | 214 |
 | Dominios conceptuales principales | 9 |
 | Schemas físicos propuestos | 11 |
 | ADR consolidados | 29 |
 | Escenarios transversales de Fase 2 | 18 |
-| Operaciones V1 inventariadas | 193 |
-| Tablas físicas declaradas | 120 |
-| Fichas físicas individuales | 120 |
+| Operaciones V1 inventariadas | 194 |
+| Tablas físicas declaradas | 127 |
+| Fichas físicas individuales | 127 |
 | Contratos JSONB registrados | 20 |
 | Pruebas RLS documentadas | 186 |
-| Rutas físicas de autorización | 27 |
+| Rutas físicas de autorización | 29 |
 | Pruebas de idempotencia durable | 10 generales + 6 nutricionales |
 | Superficies HTTP | 3 |
 | Scopes V1 | 7 |
-| OpenAPI de primera rebanada | 22 paths / 25 operaciones |
+| OpenAPI ejecutable vigente | 41 paths / 45 operaciones |
 
 Estas cifras no demuestran por sí solas sobrearquitectura. Sí demuestran que un error normativo se propaga sobre una superficie amplia. Por ello, la consistencia previa al DDL tiene un valor especialmente alto.
 
@@ -671,7 +673,7 @@ Una regla derivada debe enlazar a la fuente, no volver a presentarse como decisi
 | Grant efectivo | Una versión congelada | Unique permitía versiones efectivas paralelas | **Resuelto — único parcial `(relationship_id,scope_code)` para `active/frozen`** |
 | Índice de grant | RLS usa `scope_code` | La columna estaba ausente | **Resuelto — denormalización protegida por FK `(scope_definition_id,scope_code)`** |
 | Consent event | RLS usa org/scope | La ficha no los contenía | **Resuelto — evento porta la tupla exacta y el grant la referencia por FK compuesta** |
-| Integridad tenant/persona | Constraints en PostgreSQL | Varias reglas dependían solo de API/RLS | **Resuelto — ADR-024/027, `IX-01..44`, FKs compuestas y triggers guardianes** |
+| Integridad tenant/persona | Constraints en PostgreSQL | Varias reglas dependían solo de API/RLS | **Resuelto — ADR-024/027, `IX-01..45`, FKs compuestas y triggers guardianes** |
 | Idempotencia offline | Borrador durable | Registro de replay duraba 24 h | **Resuelto — `Command-Id`, tombstone durable, scope y `T-IDEM-01..10`** |
 | Diccionario completo | 99 fichas exactas | Había tablas agrupadas, Nutrición ausente y JSON pendiente | **Resuelto — fichas individuales + catálogo físico/JSONB** |
 | Toda referencia tiene FK | Estándar lo exige | Auditoría/outbox usan referencias lógicas | **Resuelto para P0-05 — `access_events` protegido por `IX-23`; `outbox.aggregate_id` es sobre opaco no autoritativo escrito solo por función tipada** |
@@ -859,7 +861,7 @@ Para la baseline revisada el 28 de julio, la Fase 5 quedó en **GO** y satisfizo
 - [x] Las propuestas se ordenan por columnas físicas `(created_at DESC,id DESC)`.
 - [x] Una respuesta profesional no admite `rationale` ausente, nulo, vacío ni mayor de 2000 caracteres.
 - [x] `OP-NUT-013` conserva `404` indistinguible tras revocación; el `403 scope-required` general no se aplica al proxy de foto.
-- [x] ERD, diccionario y catálogo coinciden en 121 tablas; OpenAPI coincide en 22 paths/25 operaciones.
+- [x] ERD, diccionario y catálogo coinciden en 127 tablas; el OpenAPI ejecutable vigente coincide en 41 paths/45 operaciones.
 - [x] No existe artefacto de migración, compatibilidad o datos de Factory Fitness.
 
 ## 15. Criterio de cierre de Fase 5
@@ -894,25 +896,25 @@ Comenzar Fase 5 no equivale a aprobarla. Su cierre requiere además:
 
 | Documento | Acción |
 | --- | --- |
-| `README.md` | Dimensiones vigentes 9/11/121/7/193/22/25 reflejadas |
+| `README.md` | Dimensiones vigentes 214 HU, 9 dominios, 11 schemas, 127 tablas, 7 scopes, 194 operaciones y OpenAPI 41/45 reflejadas |
 | `ALLFIT_ARCHITECTURE_DECISIONS.md` | ADR-027 incorpora Nutrición; ADR-026 conserva gobernanza de verificación/break-glass; todavía formalizar rol legal |
 | `ALLFIT_DOMAIN_GLOSSARY.md` | Comida, objetivo nutricional, guía y foto definidos; terminación, caso histórico y edad alineados |
 | `V1_DATABASE_SCOPE.md` | Nutrición no clínica incluida y legado Factory Fitness excluido |
 | `DOMAIN_OWNERSHIP_MAP.md` | Nueve dominios y escenarios nutricionales recertificados |
 | `V1_CONCEPTUAL_ERD.md` | Ocho entidades nutricionales y sus interacciones recertificadas |
-| `V1_OPERATIONS_MATRIX.md` | 193 operaciones, incluidas `OP-NUT-001..013`, `OP-IDN-025..031` y `OP-CAT-013..014`, alineadas con autoridad y ciclo de vida |
+| `V1_OPERATIONS_MATRIX.md` | 194 operaciones, incluida `OP-ORG-011`, alineadas con autoridad y ciclo de vida |
 | `V1_RLS_MATRIX.md` | 186 casos, incluidos 24 `T-NUT-RLS-*`, scopes/media/frozen alineados |
 | `V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md` | `PR-24..27`, asociaciones exactas `OP-NUT`→prueba y `T-NUT-PHY-01..04` incorporados |
-| `V1_SPACE_STUDIO_API_CONTRACTS.md` | Primera rebanada alineada con OpenAPI, 25 operaciones, `If-Match`, sesión Studio, ejemplos y gate contract-first |
-| `V1_OPENAPI_CONTRACT.md` + `allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml` | Contexto normativo y fuente ejecutable canónica de 22 paths/25 operaciones, sesión Studio, DTOs, autoría mínima, ejemplos, caché, URL firmada Space, proxy Studio y pruebas API |
+| `V1_SPACE_STUDIO_API_CONTRACTS.md` | Manifiesto vigente de 45 operaciones más gate documental AFO-39, `If-Match`, sesión Studio, ejemplos y contract-first |
+| `V1_OPENAPI_CONTRACT.md` + `allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml` | Contexto normativo y fuente ejecutable canónica de 41 paths/45 operaciones; rutas AFO-39 pendientes del PR BACK |
 | `V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md` | Fuente normativa de catálogo, categorías nutricionales, evidencia, conflictos, deberes, quorum, expiración, revisión y abuso |
 | `V1_DEGRADATION_AND_RECOVERY_MATRIX.md` | Alertas/suspensión/revisión break-glass alineadas; todavía aprobar objetivos y aclarar encolar versus entregar notificaciones |
 | `V1_IDEMPOTENCY_CONTRACT.md` | Scope, receipt, retención, concurrencia, disposición y `T-NUT-IDEM-01..06` incorporados |
 | `POSTGRES_MODELING_STANDARD.md` | Diez schemas, FKs, claves portadoras, triggers diferibles, greenfield e identidad durable definidos |
-| `V1_LOGICAL_ERD.md` | Conteo 120, schema `nutrition`, sesión técnica, bloqueo causal, perfil profesional normalizado, tipos e idempotencia recertificados |
-| `V1_DATA_DICTIONARY.md` | 121 fichas, incluidas `identity.access_sessions`, `planning.service_access_blocks` y el perfil profesional normalizado |
+| `V1_LOGICAL_ERD.md` | Conteo vigente de 127 tablas recertificado |
+| `V1_DATA_DICTIONARY.md` | 127 fichas, incluidas `organization_type_transitions` e `invitation_rate_windows` |
 | `V1_PHYSICAL_OBJECT_CATALOG.md` | Nueva fuente normativa de inventario, objetos, JSONB, particiones y `T-SCHEMA-*` |
-| `V1_CROSS_TABLE_INTEGRITY_MATRIX.md` | `IX-01..44`, incluidos invariantes nutricionales, comerciales y de soporte, recertificados |
+| `V1_CROSS_TABLE_INTEGRITY_MATRIX.md` | `IX-01..45`, incluidos invariantes nutricionales, comerciales, de soporte y transición organizacional, recertificados |
 | `DATABASE_REFACTOR_PHASES.md` | Orden DDL, fixtures, flujo nutricional y suites `T-NUT-*` incorporados |
 | `01_CURRENT_STATE/*` | Evidencia histórica únicamente; no es fuente de migración ni de datos |
 

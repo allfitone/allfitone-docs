@@ -3,7 +3,7 @@
 ## Visión del sistema operativo para profesionales y organizaciones fitness
 
 > **Estado del documento:** visión de producto alineada con la baseline técnica documentada en `platform/database/refactor`.<br>
-> **Actualización de alcance:** 9 de agosto de 2026; incorpora nutrición no clínica y la rebanada limitada de planes de pago aprobadas para V1.
+> **Actualización de alcance:** 17 de agosto de 2026; las 86 HU de Studio integran el alcance BETA comprometido para el 31 de agosto de 2026.
 
 Este documento describe la dirección completa de Allfit Studio. No reemplaza las decisiones de arquitectura, el glosario, el alcance V1 ni el modelo conceptual del refactor.
 
@@ -14,6 +14,11 @@ Cuando una capacidad de esta visión todavía no pertenece a V1, se indica expre
 3. [V1_DATABASE_SCOPE.md](../../platform/database/refactor/03_PROPOSED_DESIGN/V1_DATABASE_SCOPE.md).
 4. [DOMAIN_OWNERSHIP_MAP.md](../../platform/database/refactor/03_PROPOSED_DESIGN/DOMAIN_OWNERSHIP_MAP.md).
 5. [V1_CONCEPTUAL_ERD.md](../../platform/database/refactor/03_PROPOSED_DESIGN/V1_CONCEPTUAL_ERD.md).
+
+El alcance BETA 86/86 es un compromiso de producto, no una declaración de
+implementación. Una HU solo se considera completa cuando BACK y FRONT están
+verificados y fusionados en `main`; el despliegue de la BETA no forma parte del
+compromiso del 31 de agosto.
 
 El panel administrativo existente de Factory Fitness se utiliza únicamente como evidencia funcional para la experiencia administrativa: dashboard, clientes, agenda, catálogo, planes, equipo, permisos, sedes, analítica, CRM y monetización. No se trasladan automáticamente su modelo de datos, sus nombres, sus permisos ni su alcance a la nueva baseline.
 
@@ -187,7 +192,7 @@ El perfil profesional sigue perteneciendo a la persona, pero completarlo no es p
 
 La organización puede incorporar después asistentes, administradores u otros profesionales sin cambiar de identidad ni migrar a otro tipo de cuenta.
 
-Toda organización activa conserva exactamente una membresía activa con rol `owner`. Esa membresía puede tener además roles compatibles, pero `owner` queda fuera de la asignación y revocación genéricas de roles. Cambiarla exige una transferencia atómica; como el autoservicio está diferido de V1, cualquier caso excepcional lo resuelve el equipo de Allfit mediante una operación controlada.
+Toda organización activa conserva exactamente una membresía activa con rol `owner`. Esa membresía puede tener además roles compatibles, pero `owner` queda fuera de la asignación y revocación genéricas de roles. La transferencia de propiedad es un comando V1 exclusivo del owner: exige una membresía destino activa, bloquea organización, membresías y roles involucrados, y cambia ambos roles en una sola transacción. El owner anterior conserva su membresía y roles no `owner`; el sistema no le inventa un rol residual.
 
 “Independiente” describe una etapa operativa, no un tipo permanente de profesional.
 
@@ -202,6 +207,9 @@ El catálogo activo inicial permite crear:
 Academias, boxes, centros de alto rendimiento, clínicas y otras operaciones permanecen inactivos hasta que exista un caso real aprobado y una rebanada vertical que lo soporte. No aparecen en el selector inicial.
 
 El tipo representa la actividad principal, no el tamaño de la organización.
+Incorporar equipo nunca cambia `type_code`. El cambio explícito de actividad usa
+un catálogo gobernado y comienza únicamente con las transiciones
+`professional_practice → gym` y `professional_practice → studio`.
 
 ### Varias organizaciones
 

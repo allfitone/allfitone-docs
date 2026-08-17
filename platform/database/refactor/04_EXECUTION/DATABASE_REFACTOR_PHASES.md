@@ -536,7 +536,7 @@ allfitone/packages/db/
 
 La lista siguiente describe el resultado acumulado de Fase 5. Cada rebanada ejecuta sólo los pasos que necesita y deja la base reconstruible antes de continuar:
 
-1. Validar las 22 rutas y 25 operaciones de `allfit-v1.openapi.yaml` con `T-API-01..11` y `T-NUT-API-01..14`; generar sus DTOs antes del primer handler.
+1. Validar las 41 rutas y 45 operaciones vigentes de `allfit-v1.openapi.yaml` con `T-API-01..11`, `T-INV-API-*` y `T-NUT-API-01..14`; generar sus DTOs antes del primer handler. Las rutas AFO-39 se suman solo cuando el PR BACK actualice el YAML.
 2. Crear de forma aditiva los schemas y extensiones necesarios para la rebanada.
 3. Crear tipos/catálogos compartidos.
 4. Crear definiciones versionadas de scope y sus field-sets revisables.
@@ -636,10 +636,10 @@ La lista siguiente describe el resultado acumulado de Fase 5. Cada rebanada ejec
 - Generar SQL inicial por dependencias.
 - Revisar migrations generadas por `db diff`.
 - Detectar FKs sin índice.
-- comparar constraints instalados contra `IX-01..44`;
+- comparar constraints instalados contra `IX-01..45`;
 - Detectar tablas sin RLS.
 - comparar policies, vistas, funciones e índices instalados contra `PR-01..29`;
-- comparar las 121 fichas y nombres determinísticos contra `pg_catalog`;
+- comparar las 127 fichas y nombres determinísticos contra `pg_catalog`;
 - generar fixtures positivos/negativos para cada contrato JSONB V1;
 - detectar funciones `security definer` inseguras;
 - generar seed idempotente y tipos.

@@ -1,23 +1,30 @@
 # Matriz de alcance y trazabilidad HU → base de datos para V1
 
-**Versión:** 1<br>
-**Fecha:** 3 de agosto de 2026<br>
-**Estado:** clasificación de alcance aprobada; trazabilidad técnica pendiente<br>
+**Versión:** 2<br>
+**Fecha:** 3 de agosto de 2026; ampliada y ratificada el 17 de agosto de 2026<br>
+**Estado:** alcance BETA de Studio ratificado; trazabilidad e implementación por rebanada pendientes<br>
 **P0 relacionado:** `DB-P5-001`<br>
 **Gate:** por rebanada antes de su migración; global antes de cerrar la baseline V1
 
 ## 1. Resultado
 
-Se inventariaron y clasificaron las **212 historias reales**: 33 de Backoffice, 84 de Allfit Studio y 95 de Allfit Space. La propuesta deja **192** como `included_v1`, **3** como `client_only_v1` y **17** como `deferred`. No se propone ninguna HU como `rejected`.
+Se inventariaron y clasificaron las **214 historias reales**: 33 de Backoffice, 86 de Allfit Studio y 95 de Allfit Space. La baseline deja **205** como `included_v1`, **3** como `client_only_v1` y **6** como `deferred`. No se propone ninguna HU como `rejected`.
 
-Producto aprobó el 3 de agosto de 2026 las 27 decisiones de alcance: 7 HU `después` incluidas, 17 diferidas y 3 de cliente. El P0 `DB-P5-001` continúa abierto sólo por la trazabilidad técnica pendiente: sustituir capacidades `NEW-*`, asignar rutas `PR-*` y cerrar objetos, contratos e invariantes.
+Producto aprobó el 3 de agosto de 2026 las 27 decisiones de alcance entonces vigentes: 7 HU `después` incluidas, 17 diferidas y 3 de cliente. AFO-39 no reescribe ese hecho histórico: el 17 de agosto de 2026 supersedió la clasificación de once HU de Studio, que pasan de `deferred` a `included_v1`, y ratificó las 86 HU de Studio como alcance BETA comprometido para el 31 de agosto de 2026.
+
+Este compromiso no afirma que las 86 HU estén implementadas. Una HU cuenta como completa solo cuando sus entregables BACK y FRONT están verificados y fusionados en `main`; el despliegue de la BETA queda fuera del compromiso. El PR de código del paquete BACK de Organización y equipo continúa como gate pendiente y deberá enlazarse aquí cuando exista.
 
 | Fuente | HU reales | Imprescindible | Importante | Después |
 | --- | ---: | ---: | ---: | ---: |
 | Backoffice | 33 | 17 | 14 | 2 |
-| Allfit Studio | 84 | 42 | 27 | 15 |
+| Allfit Studio | 86 | 44 | 27 | 15 |
 | Allfit Space | 95 | 50 | 38 | 7 |
-| **Total** | **212** | **109** | **79** | **24** |
+| **Total** | **214** | **111** | **79** | **24** |
+
+| Fuente | `included_v1` | `client_only_v1` | `deferred` |
+| --- | ---: | ---: | ---: |
+| Allfit Studio | 85 | 1 | 0 |
+| **Global** | **205** | **3** | **6** |
 
 ## 2. Reglas de clasificación
 
@@ -41,29 +48,27 @@ Producto aprobó el 3 de agosto de 2026 las 27 decisiones de alcance: 7 HU `desp
 | `HU-SP-035 — Pedir que se eliminen mis datos` | Ya forma parte de obligaciones de retención, privacidad, evidencia o conservación de historial del diseño vigente. | `DB-P5-014` |
 | `HU-SP-036 — Seguir el estado de mi solicitud de eliminación` | Ya forma parte de obligaciones de retención, privacidad, evidencia o conservación de historial del diseño vigente. | `DB-P5-014` |
 
-### 3.2 HU diferidas
+### 3.2 Reclasificación ratificada por AFO-39
+
+Las siguientes HU conservan su prioridad `después`, pero forman parte del alcance
+BETA de Studio desde el 17 de agosto de 2026: `HU-STUDIO-010`,
+`HU-STUDIO-012`, `HU-STUDIO-022`, `HU-STUDIO-031`, `HU-STUDIO-033`,
+`HU-STUDIO-039`, `HU-STUDIO-040`, `HU-STUDIO-043`, `HU-STUDIO-065`,
+`HU-STUDIO-066` y `HU-STUDIO-076`. Sus filas de trazabilidad definen la entrega
+mínima; ninguna se considera implementada por esta reclasificación.
+
+### 3.3 HU diferidas
 
 | HU | Consecuencia obligatoria en la base V1 |
 | --- | --- |
 | `HU-BO-017 — Cancelar la relación con un gimnasio` | No crear cierre de plataforma distinto del cierre gobernado por dueño; reevaluar con política legal. |
-| `HU-STUDIO-010 — Actualizar o desactivar una sede` | No incluir `OP-ORG-004` ni una transición de desactivación de sede; conservar sólo los objetos de sede consumidos por otras HU. |
-| `HU-STUDIO-012 — Transferir la propiedad del gimnasio` | No incluir `OP-ORG-011`, ruta ni función de autoservicio. Un constraint diferible exige exactamente un owner activo por organización activa; cualquier cambio excepcional se ejecuta mediante una operación controlada y atómica de Allfit. |
-| `HU-STUDIO-022 — Renunciar a mi membresía` | No incluir `OP-ORG-010` ni la transición de autorrenuncia; las bajas administrativas siguen cubiertas por las HU incluidas. |
-| `HU-STUDIO-031 — Ver las suplencias de una relación` | No crear una vista, índice o consulta dedicada al historial de suplencias; conservar las asignaciones requeridas por otros flujos. |
-| `HU-STUDIO-033 — Solicitar la terminación de una relación` | Eliminar del alcance V1 la solicitud de terminación por coach y OP-REL-009 si no tiene otro consumidor. |
-| `HU-STUDIO-039 — Partir de una versión publicada` | No incluir la operación de derivación ni un enlace de procedencia exclusivo; conservar el versionado requerido por publicación. |
-| `HU-STUDIO-040 — Retirar una versión de plantilla` | No incluir `OP-PLN-005` ni el estado/transición de retiro; las versiones publicadas siguen siendo inmutables. |
-| `HU-STUDIO-043 — Retirar una versión de programa` | No incluir `OP-PLN-009` ni el estado/transición de retiro; las asignaciones vigentes permanecen intactas. |
-| `HU-STUDIO-065 — Actualizar un movimiento propio` | No incluir `OP-CAT-002` ni actualización de movimientos propios; conservar su snapshot histórico cuando sea consumido por otras HU. |
-| `HU-STUDIO-066 — Archivar un movimiento propio` | No incluir `OP-CAT-003` ni estado/transición de archivo; no borrar referencias utilizadas por contenido o historial. |
-| `HU-STUDIO-076 — Retirar una versión de plan` | No incluir `OP-PAY-005` ni estado/transición de retiro de versión; las suscripciones existentes se conservan. |
 | `HU-SP-045 — Partir de una versión anterior` | No incluir la operación de derivación ni un enlace de procedencia exclusivo; conservar el versionado personal requerido por publicación. |
 | `HU-SP-046 — Retirar una versión de mi plantilla` | No incluir `OP-PLN-005` ni el estado/transición de retiro para plantillas personales. |
 | `HU-SP-049 — Retirar una versión de mi programa` | No incluir `OP-PLN-009` ni el estado/transición de retiro para programas personales. |
 | `HU-SP-075 — Publicar mis entrenamientos en Apple Health o Health Connect` | No crear preferencia ni job de exportación a Health en V1. |
 | `HU-SP-093 — Buscar en mi historial` | No crear índices ni contrato específico de búsqueda de historial. |
 
-### 3.3 HU exclusivas de cliente
+### 3.4 HU exclusivas de cliente
 
 | HU | Justificación de no persistencia |
 | --- | --- |
@@ -71,11 +76,11 @@ Producto aprobó el 3 de agosto de 2026 las 27 decisiones de alcance: 7 HU `desp
 | `HU-SP-090 — Moverme por la aplicación` | Navegación de producto; no representa estado de negocio. |
 | `HU-SP-092 — Saber cuándo estoy sin conexión` | Indicador offline local; la cola/sincronización se cubre en HU-SP-064. |
 
-### 3.4 Cierre de dependencias
+### 3.5 Cierre de dependencias
 
-El grafo explícito de Studio contiene sus 84 HU, 105 dependencias directas y 2 raíces. La validación automática confirma que no tiene IDs desconocidos, filas duplicadas, autorreferencias ni ciclos, y que ninguna HU `included_v1` o `client_only_v1` depende de una HU `deferred`.
+El grafo explícito de Studio contiene sus 86 HU, 108 dependencias directas y 2 raíces. La validación automática confirma que no tiene IDs desconocidos, filas duplicadas, autorreferencias ni ciclos, y que ninguna HU `included_v1` o `client_only_v1` depende de una HU `deferred`.
 
-Esta conclusión queda limitada a Studio: Backoffice y Space todavía no publican un grafo equivalente, por lo que no se afirma un cierre global de dependencias para las 212 HU. `npm run check:dependencies` vuelve a calcular el resultado de Studio y falla si cambia una historia, arista o clasificación sin mantener el corte V1.
+Esta conclusión queda limitada a Studio: Backoffice y Space todavía no publican un grafo equivalente, por lo que no se afirma un cierre global de dependencias para las 214 HU. `npm run check:dependencies` vuelve a calcular el resultado de Studio y falla si cambia una historia, arista o clasificación sin mantener el corte V1.
 
 ## 4. Matriz completa de trazabilidad
 
@@ -128,21 +133,21 @@ Lectura de columnas:
 | `HU-STUDIO-005 — Completar mi perfil profesional` | `imprescindible` | `included_v1` | `OP-IDN-010 + OP-IDN-017 + OP-IDN-029..031 + OP-CAT-013..014` | `identity.professional_profiles`, `professional_profile_specialties`, `professional_credentials`, `professional_credential_verifications`; `catalog.professional_specialties`, `professional_credential_types` | PR-002 + PR-003 + PR-014; ownership personal, código gobernado, revisión inmutable, versión exacta, aislamiento organizacional, tenant y reintento | Perfil portátil; años derivados desde inicio de práctica; declarar no verifica; evidencia interna no sale en proyecciones. |
 | `HU-STUDIO-006 — Ver en qué gimnasios trabajo` | `imprescindible` | `included_v1` | `OP-ORG-014` | organization: organizaciones, sedes, membresías e invitaciones | PR-005; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-004/005/006. |
 | `HU-STUDIO-007 — Crear mi organización` | `imprescindible` | `included_v1` | `OP-ORG-001` | organization: organizaciones, sedes, membresías e invitaciones | PR-005; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-004/005/006. |
-| `HU-STUDIO-008 — Actualizar los datos de la organización` | `imprescindible` | `included_v1` | `OP-ORG-002` | organization: organizaciones, sedes, membresías e invitaciones | PR-005; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-004/005/006. |
-| `HU-STUDIO-009 — Registrar una sede` | `importante` | `included_v1` | `OP-ORG-003` | organization: organizaciones, sedes, membresías e invitaciones | PR-005; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-004/005/006. |
-| `HU-STUDIO-010 — Actualizar o desactivar una sede` | `después` | `deferred` | `OP-ORG-004` | Sin objetos V1 | N/A V1; probar ausencia de DDL, permisos y rutas | No incluir `OP-ORG-004` ni una transición de desactivación de sede; conservar sólo los objetos de sede consumidos por otras HU. |
-| `HU-STUDIO-011 — Consultar la organización` | `imprescindible` | `included_v1` | `OP-ORG-013` | organization: organizaciones, sedes, membresías e invitaciones | PR-005; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-004/005/006. |
-| `HU-STUDIO-012 — Transferir la propiedad del gimnasio` | `después` | `deferred` | Sin operación V1 | Sin objetos V1 adicionales | N/A V1; probar ausencia de función, permiso y ruta de autoservicio; probar cardinalidad 1 al confirmar | Un constraint diferible exige exactamente un owner activo por organización activa; cualquier cambio excepcional se ejecuta mediante una operación controlada y atómica de Allfit. |
-| `HU-STUDIO-013 — Cerrar la organización` | `después` | `included_v1` | `OP-ORG-012` | organization: organizaciones, sedes, membresías e invitaciones | PR-005; positivo, denegación, tenant y reintento | Excepción “después” incluida por retención, privacidad o historial inmutable; recertificar en DB-P5-004/005/006. |
+| `HU-STUDIO-008 — Actualizar los datos de la organización` | `imprescindible` | `included_v1` | `OP-ORG-002`; PATCH cerrado + ETag/`If-Match` | `organizations.organizations`, `organization_type_transitions`, `organization_events`, idempotencia | PR-005; allow admin/owner, deny member/tenant/campo inmutable; `IX-45`, 428/409, IDEM y concurrencia | Implementación y PR BACK pendientes. Solo `display_name`, `legal_name`, `type_code`; dos transiciones iniciales y equipo no cambia tipo. |
+| `HU-STUDIO-009 — Registrar una sede` | `importante` | `included_v1` | `OP-ORG-003`; `POST /studio/v1/organizations/{orgId}/sites` | `organizations.organization_sites`, `organization_events`, idempotencia | PR-005; allow admin/owner, deny member/tenant; IDEM; dirección potencialmente `identity_pii`; devuelve revisión/ETag | Implementación y PR BACK pendientes; sede informativa, no reservable ni frontera de permisos. |
+| `HU-STUDIO-010 — Actualizar o desactivar una sede` | `después` | `included_v1` | `OP-ORG-004`; `PATCH /studio/v1/organizations/{orgId}/sites/{siteId}` | `organizations.organization_sites`, `organization_events`, idempotencia | PR-005; allow admin/owner, deny member/otro tenant; dirección potencialmente `identity_pii`; `If-Match` 428/409; IDEM y concurrencia | AFO-39 la incorpora a BETA. Implementación y PR BACK pendientes; desactivar preserva relaciones, asignaciones e historial. |
+| `HU-STUDIO-011 — Consultar la organización` | `imprescindible` | `included_v1` | `OP-ORG-013`; `GET /studio/v1/organizations/{orgId}` | proyección cerrada de organización/sedes + `privacy.access_events` con sujeto organización | PR-005/PR-012; miembro del tenant; deny/no-enumeration; audit-before-read modo/recurso cerrados; dirección potencialmente `identity_pii`; revisión/ETag + no-store | Implementación y PR BACK pendientes; excluye responsible party/contacto y el fallo de auditoría no retorna contenido. |
+| `HU-STUDIO-012 — Transferir la propiedad del gimnasio` | `después` | `included_v1` | `OP-ORG-011`; `POST /studio/v1/organizations/{orgId}/ownership-transfers` | `organizations.organizations`, `organization_memberships`, `membership_roles`, `organization_events`, `membership_events`, idempotencia | PR-005; owner-only; destino activo mismo tenant; deny admin/otro tenant/inactivo; locks, exactamente un owner al commit, IDEM y carreras | AFO-39 incorpora autoservicio a BETA. Implementación y PR BACK pendientes; el owner anterior conserva membresía/roles no-owner y no recibe rol implícito. |
+| `HU-STUDIO-013 — Cerrar la organización` | `después` | `included_v1` | `OP-ORG-012`; coordinador PostgreSQL y contratos públicos interdominio | `organizations.*`; Relaciones, Privacidad, Planificación, Ejecución y Nutrición conservan ownership de sus objetos | PR-005; owner-only, tenant, cancelación de propuestas, rollback por fallo de cada contrato, IDEM y cierre concurrente | Implementación y PR BACK pendientes. Una transacción llama funciones públicas estrechas; ningún dominio escribe tablas ajenas. |
 | `HU-STUDIO-014 — Invitar a alguien al equipo` | `imprescindible` | `included_v1` | `OP-ORG-005` | `identity.invitations`, `identity.invitation_intents`; capacidad `invite`; outbox transaccional; contadores SHA-256 | `T-IDN-TEAM-INVITATION-01/02` + concurrencia; denegación, DML directo, límites y no-PII | Emisión y entrega email implementadas con gates separados; enlace exclusivo de Studio. |
 | `HU-STUDIO-015 — Revocar una invitación` | `imprescindible` | `included_v1` | `OP-ORG-006` | `identity.revoke_staff_invitation`; invitación, intención, idempotencia y outbox | `T-IDN-TEAM-INVITATION-02` + carrera aceptación/revocación | Implementada; bloqueo transaccional sobre la invitación y revocación convergente. |
 | `HU-STUDIO-016 — Ver las invitaciones emitidas` | `imprescindible` | `included_v1` | `OP-ORG-016` | `identity.list_staff_invitations`; índice `(organization_id, created_at DESC, id DESC)` | `T-IDN-TEAM-INVITATION-02`; capacidad, tenant, filtro y cursor | Implementada con contacto completo solo para actores autorizados y respuesta `no-store`. |
 | `HU-STUDIO-017 — Ver el equipo de la organización` | `imprescindible` | `included_v1` | `OP-ORG-015` | organization: organizaciones, sedes, membresías e invitaciones | PR-005; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-004/005/006. |
 | `HU-STUDIO-018 — Conocer los roles y lo que permite cada uno` | `importante` | `included_v1` | `OP-ORG-017` | organization: organizaciones, sedes, membresías e invitaciones | PR-005; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-004/005/006. |
-| `HU-STUDIO-019 — Asignar un rol` | `imprescindible` | `included_v1` | `OP-ORG-007` | organization: organizaciones, sedes, membresías e invitaciones | PR-005; positivo, denegación de `owner`, tenant y reintento | La operación genérica solo admite `admin`, `coach` y `staff`. |
-| `HU-STUDIO-020 — Retirar un rol` | `imprescindible` | `included_v1` | `OP-ORG-008` | organization: organizaciones, sedes, membresías e invitaciones | PR-005; positivo, denegación de `owner`, tenant y reintento | La operación genérica no puede cerrar la vigencia de `owner`. |
-| `HU-STUDIO-021 — Dar de baja a un integrante` | `imprescindible` | `included_v1` | `OP-ORG-009` | organization: organizaciones, sedes, membresías e invitaciones | PR-005; positivo, denegación de membresía `owner`, tenant y reintento | Una membresía con `owner` no se termina antes de una transferencia válida. |
-| `HU-STUDIO-022 — Renunciar a mi membresía` | `después` | `deferred` | `OP-ORG-010` | Sin objetos V1 | N/A V1; probar ausencia de DDL, permisos y rutas | No incluir `OP-ORG-010` ni la transición de autorrenuncia; las bajas administrativas siguen cubiertas por las HU incluidas. |
+| `HU-STUDIO-019 — Asignar un rol` | `imprescindible` | `included_v1` | `OP-ORG-007` | `organizations.organization_memberships`, `membership_roles`, `membership_events`, receipt durable | PR-005; allow admin/owner, deny `owner`/tenant; IDEM; replay tras revocación/TTL no reotorga | Implementación y PR BACK pendientes. La operación genérica solo admite `admin`, `coach` y `staff` y no concede datos personales. |
+| `HU-STUDIO-020 — Retirar un rol` | `imprescindible` | `included_v1` | `OP-ORG-008`; contrato público condicional para invalidar asignaciones | `organizations.membership_roles`, `membership_events`; `relationships.relationship_professional_assignments` permanece en Relaciones | PR-005; allow admin/owner, deny `owner`/tenant; IDEM; solo retirar `coach` invalida asignaciones; fixture multirrol | Implementación y PR BACK pendientes. Retirar admin/staff preserva asignaciones si coach continúa vigente. |
+| `HU-STUDIO-021 — Dar de baja a un integrante` | `imprescindible` | `included_v1` | `OP-ORG-009`; contratos públicos de membresía y asignaciones | `organizations.organization_memberships`, `membership_roles`, eventos; asignaciones en Relaciones | PR-005; allow admin/owner, deny owner/tenant; IDEM; rollback si no se cierran asignaciones | Implementación y PR BACK pendientes. Conserva autoría; la relación de servicio sigue activa y queda sin profesional. |
+| `HU-STUDIO-022 — Renunciar a mi membresía` | `después` | `included_v1` | `OP-ORG-010`; `POST /studio/v1/organizations/{orgId}/me/membership/resignation` | `organizations.organization_memberships`, `membership_roles`, `membership_events`; asignaciones en Relaciones | PR-005; self con membresía activa no-owner, incluso sin rol residual; deny owner/tenant; IDEM; rollback y cierre incondicional de asignaciones | AFO-39 la incorpora a BETA. Implementación y PR BACK pendientes; conserva autoría y notifica a administración. |
 | `HU-STUDIO-023 — Invitar a una persona como cliente` | `imprescindible` | `included_v1` | `OP-REL-001` | identity: invitación/intención; privacy: opciones de scope; relationship: relación propuesta | PR-004 + PR-008; scopes fijados al emitir, sin solicitud posterior, tenant y reintento | La invitación transporta las opciones que la persona decidirá con la relación. |
 | `HU-STUDIO-024 — Ver el directorio de personas` | `imprescindible` | `included_v1` | `OP-REL-010` | relationship: relaciones, asignaciones y terminaciones | PR-006; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-STUDIO-025 — Consultar el estado de una relación` | `imprescindible` | `included_v1` | `OP-REL-011` | relationship: relaciones, asignaciones y terminaciones | PR-006; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
@@ -151,19 +156,19 @@ Lectura de columnas:
 | `HU-STUDIO-028 — Cambiar el profesional responsable` | `imprescindible` | `included_v1` | `OP-REL-003` | relationship: relaciones, asignaciones y terminaciones | PR-006; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-STUDIO-029 — Proponer una suplencia` | `importante` | `included_v1` | `OP-REL-004` | relationship: relaciones, asignaciones y terminaciones | PR-006; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-STUDIO-030 — Terminar una suplencia` | `importante` | `included_v1` | `OP-REL-006` | relationship: relaciones, asignaciones y terminaciones | PR-006; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
-| `HU-STUDIO-031 — Ver las suplencias de una relación` | `después` | `deferred` | `OP-REL-013` | Sin objetos V1 | N/A V1; probar ausencia de DDL, permisos y rutas | No crear una vista, índice o consulta dedicada al historial de suplencias; conservar las asignaciones requeridas por otros flujos. |
+| `HU-STUDIO-031 — Ver las suplencias de una relación` | `después` | `included_v1` | `OP-REL-013` | `relationships.relationship_professional_assignments`, `professional_assignment_events` | PR-006; actor del tenant con capacidad; deny otro tenant/no miembro; N/A IDEM; vigentes e históricas sin reactivar acceso | AFO-39 la incorpora a BETA. Implementación y PR BACK pendientes; una suplencia vencida solo aparece como historia. |
 | `HU-STUDIO-032 — Terminar una relación` | `imprescindible` | `included_v1` | `OP-REL-008` | relationship: relaciones, asignaciones y terminaciones | PR-006; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
-| `HU-STUDIO-033 — Solicitar la terminación de una relación` | `después` | `deferred` | `OP-REL-009` | Sin objetos V1 | N/A V1; probar ausencia de DDL, permisos y rutas | Eliminar del alcance V1 la solicitud de terminación por coach y OP-REL-009 si no tiene otro consumidor. |
+| `HU-STUDIO-033 — Solicitar la terminación de una relación` | `después` | `included_v1` | `OP-REL-009` | `relationships.relationship_termination_requests`, eventos, idempotencia | PR-006; coach responsable sin poder de terminación; deny admin/owner/tenant/persona; unique pending, IDEM | AFO-39 la incorpora a BETA. Implementación y PR BACK pendientes; solicitar no cambia relación, grants ni asignaciones. |
 | `HU-STUDIO-034 — Saber qué abarca cada categoría de información` | `importante` | `included_v1` | `OP-PRV-012` | privacy: grants, ocultamiento, acceso y evidencia | PR-007; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-STUDIO-035 — Ver qué nos autorizó cada persona` | `imprescindible` | `included_v1` | `OP-PRV-014` | privacy: grants, ocultamiento, acceso y evidencia | PR-008; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-STUDIO-036 — Crear una plantilla de sesión` | `imprescindible` | `included_v1` | `OP-PLN-001` | planning: programas, sesiones y asignaciones | PR-016; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-STUDIO-037 — Editar el borrador de una plantilla` | `imprescindible` | `included_v1` | `OP-PLN-002` | planning: programas, sesiones y asignaciones | PR-016; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-STUDIO-038 — Publicar una versión de plantilla` | `imprescindible` | `included_v1` | `OP-PLN-003` | planning: programas, sesiones y asignaciones | PR-016; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
-| `HU-STUDIO-039 — Partir de una versión publicada` | `después` | `deferred` | `OP-PLN-004` | Sin objetos V1 | N/A V1; probar ausencia de DDL, permisos y rutas | No incluir la operación de derivación ni un enlace de procedencia exclusivo; conservar el versionado requerido por publicación. |
-| `HU-STUDIO-040 — Retirar una versión de plantilla` | `después` | `deferred` | `OP-PLN-005` | Sin objetos V1 | N/A V1; probar ausencia de DDL, permisos y rutas | No incluir `OP-PLN-005` ni el estado/transición de retiro; las versiones publicadas siguen siendo inmutables. |
+| `HU-STUDIO-039 — Partir de una versión publicada` | `después` | `included_v1` | `OP-PLN-004` | `planning.session_template_versions`, `session_template_drafts`, procedencia `derived_from_version_id`, idempotencia | PR-016; capacidad y misma organización; deny versión ajena/borrador; IDEM y publicación concurrente | AFO-39 la incorpora a BETA. Implementación y PR BACK pendientes; conserva versión fuente exacta. |
+| `HU-STUDIO-040 — Retirar una versión de plantilla` | `después` | `included_v1` | `OP-PLN-005` | `planning.session_template_versions`, eventos/idempotencia | PR-016; admin/owner del tenant; deny ajeno; IDEM; carrera con nueva composición | AFO-39 la incorpora a BETA. Implementación y PR BACK pendientes; preserva programas publicados, asignaciones y sesiones históricas. |
 | `HU-STUDIO-041 — Crear y editar un programa` | `imprescindible` | `included_v1` | `OP-PLN-006 + OP-PLN-007` | planning: programas, sesiones y asignaciones | PR-016; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-STUDIO-042 — Publicar una versión de programa` | `imprescindible` | `included_v1` | `OP-PLN-008` | planning: programas, sesiones y asignaciones | PR-016; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
-| `HU-STUDIO-043 — Retirar una versión de programa` | `después` | `deferred` | `OP-PLN-009` | Sin objetos V1 | N/A V1; probar ausencia de DDL, permisos y rutas | No incluir `OP-PLN-009` ni el estado/transición de retiro; las asignaciones vigentes permanecen intactas. |
+| `HU-STUDIO-043 — Retirar una versión de programa` | `después` | `included_v1` | `OP-PLN-009` | `planning.program_versions`, `program_assignments`, sesiones materializadas, idempotencia | PR-016; admin/owner del tenant; deny ajeno; IDEM; carrera con asignación | AFO-39 la incorpora a BETA. Implementación y PR BACK pendientes; impide asignaciones nuevas sin alterar las vigentes. |
 | `HU-STUDIO-044 — Ver el contenido de la organización` | `imprescindible` | `included_v1` | `OP-PLN-019 + OP-PLN-020` | planning: programas, sesiones y asignaciones | PR-016; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-STUDIO-045 — Consultar una versión publicada` | `importante` | `included_v1` | `OP-PLN-021` | planning: programas, sesiones y asignaciones | PR-016; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-STUDIO-046 — Asignar un programa a una persona` | `imprescindible` | `included_v1` | `OP-PLN-010` | planning: programas, sesiones y asignaciones | PR-017; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
@@ -185,8 +190,8 @@ Lectura de columnas:
 | `HU-STUDIO-062 — Consultar el historial congelado` | `después` | `included_v1` | `OP-PRV-020` | privacy: grants, ocultamiento, acceso y evidencia | PR-010; positivo, denegación, tenant y reintento | Excepción “después” incluida por retención, privacidad o historial inmutable; recertificar en DB-P5-014. |
 | `HU-STUDIO-063 — Cerrar el caso de acceso` | `después` | `included_v1` | `OP-PRV-019` | privacy: grants, ocultamiento, acceso y evidencia | PR-010; positivo, denegación, tenant y reintento | Excepción “después” incluida por retención, privacidad o historial inmutable; recertificar en DB-P5-014. |
 | `HU-STUDIO-064 — Crear un movimiento propio` | `importante` | `included_v1` | `OP-CAT-001` | catalog: contenido, versiones y publicación | PR-015; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
-| `HU-STUDIO-065 — Actualizar un movimiento propio` | `después` | `deferred` | `OP-CAT-002` | Sin objetos V1 | N/A V1; probar ausencia de DDL, permisos y rutas | No incluir `OP-CAT-002` ni actualización de movimientos propios; conservar su snapshot histórico cuando sea consumido por otras HU. |
-| `HU-STUDIO-066 — Archivar un movimiento propio` | `después` | `deferred` | `OP-CAT-003` | Sin objetos V1 | N/A V1; probar ausencia de DDL, permisos y rutas | No incluir `OP-CAT-003` ni estado/transición de archivo; no borrar referencias utilizadas por contenido o historial. |
+| `HU-STUDIO-065 — Actualizar un movimiento propio` | `después` | `included_v1` | `OP-CAT-002` | `catalog.movements`, `movement_aliases`, snapshots versionados consumidores, idempotencia | PR-015; capacidad y owner organization; deny global/otro tenant; `If-Match`, IDEM y concurrencia | AFO-39 la incorpora a BETA. Implementación y PR BACK pendientes; el historial conserva el significado capturado. |
+| `HU-STUDIO-066 — Archivar un movimiento propio` | `después` | `included_v1` | `OP-CAT-003` | `catalog.movements`, referencias desde versiones/sesiones, idempotencia | PR-015; admin/owner del tenant; deny global/otro tenant; IDEM; referencias históricas siguen resolviendo | AFO-39 la incorpora a BETA. Implementación y PR BACK pendientes; archivar no borra ni rompe referencias. |
 | `HU-STUDIO-067 — Buscar movimientos incluyendo los nuestros` | `importante` | `included_v1` | `OP-CAT-009 + OP-CAT-010` | catalog: contenido, versiones y publicación | PR-014; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-STUDIO-068 — Ver las comidas que la persona autorizó` | `importante` | `included_v1` | `OP-NUT-009` | nutrition: planes, registros y seguimiento | PR-025; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-STUDIO-069 — Ver los resúmenes nutricionales autorizados` | `importante` | `included_v1` | `OP-NUT-010` | nutrition: planes, registros y seguimiento | PR-025; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
@@ -196,7 +201,7 @@ Lectura de columnas:
 | `HU-STUDIO-073 — Conectar nuestra cuenta de cobro` | `imprescindible` | `included_v1` | `OP-PAY-001` | payments: cuentas, suscripciones, cobros y entitlements | PR pendiente; positivo, denegación, tenant y reintento | DB-P5-014: operación existente sin ruta PR física completa. |
 | `HU-STUDIO-074 — Crear un plan` | `imprescindible` | `included_v1` | `OP-PAY-002 + OP-PAY-003` | payments: cuentas, suscripciones, cobros y entitlements | PR pendiente; positivo, denegación, tenant y reintento | DB-P5-014: operación existente sin ruta PR física completa. |
 | `HU-STUDIO-075 — Publicar una versión de plan` | `imprescindible` | `included_v1` | `OP-PAY-004` | payments: cuentas, suscripciones, cobros y entitlements | PR pendiente; positivo, denegación, tenant y reintento | DB-P5-014: operación existente sin ruta PR física completa. |
-| `HU-STUDIO-076 — Retirar una versión de plan` | `después` | `deferred` | `OP-PAY-005` | Sin objetos V1 | N/A V1; probar ausencia de DDL, permisos y rutas | No incluir `OP-PAY-005` ni estado/transición de retiro de versión; las suscripciones existentes se conservan. |
+| `HU-STUDIO-076 — Retirar una versión de plan` | `después` | `included_v1` | `OP-PAY-005` | `payments.plan_versions`, `plan_subscriptions`, registros/eventos e idempotencia | PR pendiente explícito; `manage_billing` admin/owner, deny coach/tenant; IDEM; carrera con suscripción | AFO-39 la incorpora a BETA. Implementación y PR BACK pendientes; bloquea altas nuevas sin cambiar suscripciones existentes. |
 | `HU-STUDIO-077 — Ver nuestros planes` | `imprescindible` | `included_v1` | `OP-PAY-006` | payments: cuentas, suscripciones, cobros y entitlements | PR pendiente; positivo, denegación, tenant y reintento | DB-P5-014: operación existente sin ruta PR física completa. |
 | `HU-STUDIO-078 — Ver quién está suscrito y quién debe` | `imprescindible` | `included_v1` | `OP-PAY-007` | payments: cuentas, suscripciones, cobros y entitlements | PR pendiente; positivo, denegación, tenant y reintento | DB-P5-014: operación existente sin ruta PR física completa. |
 | `HU-STUDIO-079 — Suspender o reactivar a mano` | `importante` | `included_v1` | `OP-PAY-008 + OP-PAY-009` | `payments.plan_subscriptions/subscription_events` + `planning.service_access_blocks` | `PR-29`; `T-PAY-7/8/11..14`, tenant, idempotencia y `T-PHY-08` | Semántica cerrada: reactivar elimina la causa exacta, recalcula estado vigente y no restaura grants, relación, membresía, asignación o sesiones. La ruta física permanece en `DB-P5-014`. |
@@ -327,10 +332,10 @@ Los pasos se ejecutan primero sobre la rebanada seleccionada y se acumulan hasta
 
 Para una rebanada: todas sus HU incluidas deben tener operación definitiva, objeto, autorización, contrato, invariantes y pruebas, sin depender de una HU diferida. Los checks siguientes corresponden al cierre global de V1:
 
-- [x] Existen exactamente 211 filas HU y no hay identificadores duplicados.
+- [x] Existen exactamente 214 filas HU y no hay identificadores duplicados.
 - [x] Cada HU tiene un estado de alcance propuesto.
 - [x] No hay dependencia explícita incluida → diferida.
-- [x] Producto aprobó las 27 decisiones de excepción.
+- [x] Producto aprobó las 27 decisiones históricas del 3 de agosto y AFO-39 supersedió once clasificaciones el 17 de agosto.
 - [ ] No queda ningún `NEW-*` dentro de `included_v1`.
 - [ ] No queda ninguna ruta `PR pendiente` dentro de `included_v1`.
 - [ ] Toda HU incluida tiene objeto propietario, contrato e invariantes confirmados.
