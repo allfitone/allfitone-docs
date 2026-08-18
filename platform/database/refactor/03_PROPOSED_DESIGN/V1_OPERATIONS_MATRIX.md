@@ -246,6 +246,11 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-026` | Completar callback y crear sesión Studio | Comando | `A0` → `A1`, `A2` |
 | `OP-IDN-027` | Consultar la sesión actual de Studio | Consulta | `A1`, `A2` |
 | `OP-IDN-028` | Cerrar la sesión actual de Studio | Comando | `A1`, `A2` |
+| `OP-IDN-029` | Crear cuenta de Space y enviar código de verificación | Comando | `A0` |
+| `OP-IDN-030` | Verificar el código y emitir la primera sesión de Space | Comando | `A0` → `A1` |
+| `OP-IDN-031` | Iniciar sesión en Space | Comando | `A0` → `A1`, `A2` |
+| `OP-IDN-032` | Renovar la sesión de Space | Comando | `A1`, `A2` |
+| `OP-IDN-033` | Pedir el restablecimiento de contraseña de Space | Comando | `A0` |
 
 ---
 
@@ -254,7 +259,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/onboarding-attempts` |
+| **Superficie** | `POST /space/v1/onboarding-attempts` y `POST /studio/v1/onboarding-attempts` |
 | **Actor** | `A1` — usuario WorkOS válido sin persona vinculada |
 | **Filtros obligatorios** | `ACCESS_ACCOUNT` derivado de `(issuer, subject)` del token verificado; la cuenta no debe tener ya una `PERSON` vinculada |
 | **Transacción** | Crear `ONBOARDING_ATTEMPT` y vincularlo a la cuenta externa. Si el flujo viene de una invitación, congelar el token de referencia sin materializar ninguna intención |
@@ -263,7 +268,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Offline / concurrencia** | No admite `draft_local`: sin estado autoritativo no hay onboarding. Dos peticiones concurrentes convergen al mismo intento |
 | **Información sensible** | Ninguna categoría fitness. Identificadores de cuenta y, si existe, token de invitación |
 | **Evento de dominio** | `identity.onboarding_attempt_started.v1` |
-| **Reglas** | No crea `PERSON`, perfil, relación, grant ni membresía. No marca la invitación como aceptada. Un intento tiene vencimiento propio |
+| **Reglas** | No crea `PERSON`, perfil, relación, grant ni membresía. No marca la invitación como aceptada. Un intento tiene vencimiento propio. **El profesional que entra por Studio usa esta misma operación**: una persona es una persona, y su Fitness ID no depende de la superficie por la que llegó. Dos superficies, una sola operación y una sola transacción; lo que cambia es la proyección |
 | **Falla cerrada** | Sin token verificable, sin respuesta |
 
 #### `OP-IDN-002` — Registrar evidencia de elegibilidad adulta
@@ -271,7 +276,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/eligibility-evidence` |
+| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/eligibility-evidence` y su equivalente en `/studio/v1` |
 | **Actor** | `A1`, dueño del intento |
 | **Filtros obligatorios** | El intento pertenece a la cuenta autenticada y está abierto |
 | **Transacción** | Crear `ELIGIBILITY_EVIDENCE` aplicando la **versión vigente** de la política adulta y congelarla en la evidencia |
@@ -288,7 +293,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/completion` |
+| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/completion` y su equivalente en `/studio/v1` |
 | **Actor** | `A1`, dueño del intento |
 | **Filtros obligatorios** | Intento abierto, propio, con `ELIGIBILITY_EVIDENCE` en estado `pass` vigente, y con aceptación de términos registrada |
 | **Transacción** | Una sola: crear `PERSON`, vincular `ACCESS_ACCOUNT` a esa persona, cerrar el `ONBOARDING_ATTEMPT` como `activated` y, si el intento porta una invitación, marcarla como reclamable por esa persona **sin** materializar intenciones |
@@ -297,7 +302,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Offline / concurrencia** | Falla cerrada. Dos peticiones concurrentes producen una sola persona: la unicidad se resuelve en la base, no en el cliente |
 | **Información sensible** | Datos identificativos básicos |
 | **Evento de dominio** | `identity.person_activated.v1` |
-| **Reglas** | Es el **único** camino que crea una `PERSON`. Studio no lo puede invocar en nombre de nadie. Si la cuenta ya tenía persona (invitación posterior sobre alguien ya registrado en Space), reutiliza el mismo `person_id` y no duplica el Fitness ID |
+| **Reglas** | Es el **único** camino que crea una `PERSON`. Si la cuenta ya tenía persona (invitación posterior sobre alguien ya registrado en Space), reutiliza el mismo `person_id` y no duplica el Fitness ID. El profesional se activa por `/studio/v1` con esta misma operación, **para sí mismo**: la prohibición es que una organización o un profesional la invoque **en nombre de otra persona**, no que un profesional se active a sí mismo |
 | **Falla cerrada** | Sin elegibilidad `pass` no hay persona, aunque la invitación exista y esté vigente |
 
 #### `OP-IDN-004` — Declarar afirmación de perfil
@@ -708,6 +713,91 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Cookie host-only, `Path=/studio/v1`, sin `Max-Age`; su borrado usa el mismo path |
 | **Falla cerrada** | Origen distinto: `403 forbidden` sin tocar la sesión |
+
+#### `OP-IDN-029` — Crear cuenta de Space y enviar código de verificación
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/auth/registrations` |
+| **Actor** | `A0` — anónimo. Space usa login headless: la app nunca habla con el proveedor |
+| **Filtros obligatorios** | Correo con forma válida y contraseña que cumpla la política: mínimo 8 caracteres con una minúscula, una mayúscula y un dígito |
+| **Transacción** | Ninguna en PostgreSQL. Crea la credencial en el proveedor y pide el envío del código. No crea `PERSON`, ni perfil, ni `ACCESS_ACCOUNT` |
+| **Idempotencia** | Sin `Idempotency-Key`: no se guarda nada de nuestro lado, así que no hay resultado que reproducir. Un reintento reenvía el código, y ese costo lo absorbe el límite de intentos |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Sin conexión no hay registro |
+| **Información sensible** | Correo y contraseña. La contraseña nunca se registra ni se devuelve |
+| **Evento de dominio** | Ninguno todavía; la persona no existe en el dominio |
+| **Reglas** | **La respuesta no puede revelar si el correo ya tiene cuenta.** Éxito y «ya registrado» son indistinguibles: mismo estado, mismo cuerpo, misma expiración. Por eso responde `202` y nunca `201` ni `409` |
+| **Falla cerrada** | Proveedor caído: `503`, sin crear nada |
+
+#### `OP-IDN-030` — Verificar el código y emitir la primera sesión de Space
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/auth/registrations/verification` |
+| **Actor** | `A0` → `A1` |
+| **Filtros obligatorios** | Código de seis dígitos vigente para ese correo |
+| **Transacción** | Marca el correo verificado en el proveedor y autentica, devolviendo tokens. Sigue sin crear `PERSON`: el `ACCESS_ACCOUNT` se deriva en la primera operación autenticada |
+| **Idempotencia** | El código se consume al redimirlo; reintentar con el mismo código falla como inválido |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada |
+| **Información sensible** | Tokens de sesión. Nunca se registran |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Una sola respuesta para código erróneo, contraseña errónea y correo desconocido. **Límite de intentos obligatorio**: un código de seis dígitos se agota por fuerza bruta en minutos |
+| **Falla cerrada** | Cualquier duda deja la cuenta sin verificar |
+
+#### `OP-IDN-031` — Iniciar sesión en Space
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/auth/sessions` |
+| **Actor** | `A0` → `A1` si no completó registro, `A2` si ya tiene `PERSON` |
+| **Filtros obligatorios** | Correo y contraseña. El token se emite para la Application de Space y no opera contra otra superficie |
+| **Transacción** | Ninguna en PostgreSQL. Autentica contra el proveedor y devuelve tokens |
+| **Idempotencia** | No aplica: cada inicio de sesión emite su propia sesión |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Varias sesiones simultáneas del mismo Fitness ID son válidas |
+| **Información sensible** | Credenciales y tokens. Ninguno se registra |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | **Un intento fallido no dice si falló el correo o la contraseña** (HU-SP-002 criterio 2). Un correo sin verificar recibe la misma respuesta que uno inexistente. **Límite de intentos obligatorio** |
+| **Falla cerrada** | Sin credenciales válidas no se emite token, aunque la cuenta exista |
+
+#### `OP-IDN-032` — Renovar la sesión de Space
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/auth/sessions/refresh` |
+| **Actor** | `A1`, `A2`, portador de un token de refresco vigente |
+| **Filtros obligatorios** | Token de refresco emitido para la Application de Space |
+| **Transacción** | Ninguna en PostgreSQL. Cambia el token de refresco por un par nuevo |
+| **Idempotencia** | El proveedor rota el token de refresco: reusar el anterior falla, que es lo que detecta un robo |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Sin conexión la app conserva la sesión guardada pero no puede renovarla |
+| **Información sensible** | Tokens. Nunca se registran |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Es lo que sostiene HU-SP-002 criterio 4, que la sesión se mantiene entre aperturas. Un refresco rechazado obliga a iniciar sesión otra vez, nunca a un acceso degradado |
+| **Falla cerrada** | Token inválido o de otra superficie: `401`, sin emitir nada |
+
+#### `OP-IDN-033` — Pedir el restablecimiento de contraseña de Space
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/auth/password-resets` |
+| **Actor** | `A0` — anónimo, por definición: quien olvidó su contraseña no puede autenticarse |
+| **Filtros obligatorios** | Correo con forma válida. Nada más: comprobar si existe sería el propio dato que no se puede revelar |
+| **Transacción** | Ninguna en PostgreSQL. El proveedor emite el token y envía el correo; la URL secreta nunca llega hasta nosotros |
+| **Idempotencia** | Sin `Idempotency-Key`: no se guarda nada de nuestro lado. Repetir envía otro enlace, y el anterior sigue siendo válido hasta su vencimiento |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Sin conexión no hay envío |
+| **Información sensible** | Correo. El token y su URL nunca se registran ni se devuelven |
+| **Evento de dominio** | Ninguno al pedirlo. El cambio efectivo llega después como webhook del proveedor y lo procesa `identity.process_password_reset_succeeded` |
+| **Reglas** | **Responde `202` siempre**, exista o no la cuenta y esté o no el proveedor en pie: HU-SP-004 criterio 2. Un fallo del proveedor tampoco es público, porque distinguirlo delataría igualmente qué direcciones existen. **Límite de intentos obligatorio**: sin él, este endpoint envía correos a cualquier dirección que le pidan |
+| **Falla cerrada** | Cualquier error se traga y se responde `202`; nada se crea |
 
 ### 7.2 Organizaciones
 
