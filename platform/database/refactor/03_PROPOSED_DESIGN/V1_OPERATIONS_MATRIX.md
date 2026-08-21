@@ -261,6 +261,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-041` | Renovar la sesión de Space | Comando | `A1`, `A2` |
 | `OP-IDN-042` | Pedir el restablecimiento de contraseña de Space | Comando | `A0` |
 | `OP-IDN-043` | Declarar la identidad del onboarding y reservar el nombre de usuario | Comando | `A1` |
+| `OP-IDN-044` | Consultar el intento de onboarding abierto | Consulta | `A1` |
 
 ---
 
@@ -892,13 +893,13 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Superficie** | `POST /space/v1/auth/sessions` |
 | **Actor** | `A0` → `A1` si no completó registro, `A2` si ya tiene `PERSON` |
 | **Filtros obligatorios** | Correo y contraseña. El token se emite para la Application de Space y no opera contra otra superficie |
-| **Transacción** | Ninguna en PostgreSQL. Autentica contra el proveedor y devuelve tokens, más el correo verificado de la credencial y el nombre que el proveedor tenga |
+| **Transacción** | Ninguna en PostgreSQL. Autentica contra el proveedor y devuelve tokens |
 | **Idempotencia** | No aplica: cada inicio de sesión emite su propia sesión |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Varias sesiones simultáneas del mismo Fitness ID son válidas |
 | **Información sensible** | Credenciales y tokens. Ninguno se registra |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | **Un intento fallido no dice si falló el correo o la contraseña** (HU-SP-002 criterio 2). Un correo sin verificar recibe la misma respuesta que uno inexistente. **Límite de intentos obligatorio**. La respuesta lleva el correo verificado porque `OP-IDN-043` tiene que mostrarlo sin poder editarlo: es el correo de quien acaba de autenticarse, así que devolverlo no revela nada que no supiera |
+| **Reglas** | **Un intento fallido no dice si falló el correo o la contraseña** (HU-SP-002 criterio 2). Un correo sin verificar recibe la misma respuesta que uno inexistente. **Límite de intentos obligatorio**. **El correo verificado no viaja en la respuesta**: es server-only y `OP-IDN-043` lo muestra desde lo que la app guardó al iniciar sesión |
 | **Falla cerrada** | Sin credenciales válidas no se emite token, aunque la cuenta exista |
 
 #### `OP-IDN-041` — Renovar la sesión de Space
@@ -909,13 +910,13 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Superficie** | `POST /space/v1/auth/sessions/refresh` |
 | **Actor** | `A1`, `A2`, portador de un token de refresco vigente |
 | **Filtros obligatorios** | Token de refresco emitido para la Application de Space |
-| **Transacción** | Ninguna en PostgreSQL. Cambia el token de refresco por un par nuevo, y devuelve con ellos el correo verificado y el nombre que tenga el proveedor |
+| **Transacción** | Ninguna en PostgreSQL. Cambia el token de refresco por un par nuevo |
 | **Idempotencia** | El proveedor rota el token de refresco: reusar el anterior falla, que es lo que detecta un robo |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Sin conexión la app conserva la sesión guardada pero no puede renovarla |
 | **Información sensible** | Tokens. Nunca se registran |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Es lo que sostiene HU-SP-002 criterio 4, que la sesión se mantiene entre aperturas. Un refresco rechazado obliga a iniciar sesión otra vez, nunca a un acceso degradado. Devuelve el mismo contacto que `OP-IDN-040` para que una sesión restaurada llegue al onboarding sabiendo el correo; **no devuelve identidad de analítica**, que es cosa distinta y sí depende de un inicio de sesión |
+| **Reglas** | Es lo que sostiene HU-SP-002 criterio 4, que la sesión se mantiene entre aperturas. Un refresco rechazado obliga a iniciar sesión otra vez, nunca a un acceso degradado. No devuelve contacto ni identidad de analítica: una sesión restaurada retoma el onboarding leyendo `OP-IDN-044` |
 | **Falla cerrada** | Token inválido o de otra superficie: `401`, sin emitir nada |
 
 #### `OP-IDN-042` — Pedir el restablecimiento de contraseña de Space
@@ -951,6 +952,23 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | `identity.onboarding_identity_declared.v1` |
 | **Reglas** | No crea `PERSON`: eso sigue siendo exclusivo de `OP-IDN-003`, que lee de aquí. **El correo no se acepta como entrada**: es el de la credencial y cambiarlo es `OP-IDN-021`, con su propia verificación. **No existe consulta de disponibilidad de usuario**, y es deliberado: un «ya está en uso» delata que alguien existe, igual que lo haría en el correo. Lo que lo hace tolerable es que solo se comprueba dentro de este comando autenticado, nunca como consulta pública. **Límite de intentos obligatorio**: sin él, este endpoint permite recorrer el espacio de nombres de usuario |
 | **Falla cerrada** | Sin intento abierto y propio, nada se escribe. Usuario en uso, `conflict`, y la identidad anterior del intento no se toca |
+
+#### `OP-IDN-044` — Consultar el intento de onboarding abierto
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/onboarding-attempts/current` |
+| **Actor** | `A1`, dueño del intento |
+| **Filtros obligatorios** | Solo el intento abierto de la cuenta autenticada. Una cuenta nunca ve el intento de otra |
+| **Transacción** | Lectura. Devuelve el intento y la identidad que ya se declaró sobre él |
+| **Idempotencia** | No aplica |
+| **Paginación y orden** | No aplica. Hay a lo sumo un intento abierto por cuenta |
+| **Offline / concurrencia** | Sin conexión no se puede retomar: el estado autoritativo del onboarding vive en el servidor |
+| **Información sensible** | Datos identificativos básicos. **No devuelve contacto**: el correo verificado es server-only y la app ya tiene el que usó para entrar |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Es lo que sostiene HU-SP-015 criterio 3 y HU-SP-098 criterio 5: volver retoma donde iba en vez de empezar de nuevo. Una cuenta sin intento abierto —incluida una persona ya activada— recibe `null`, no un error: no haber empezado no es un fallo. Lo ausente viaja como `null` y nunca omitido, para que la app no tenga que adivinar si un paso se saltó o si el campo no llegó |
+| **Falla cerrada** | Sin token verificable, sin respuesta |
 
 ### 7.2 Organizaciones
 
