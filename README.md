@@ -20,6 +20,7 @@ New products use an additional `products/<slug>/` directory.
 
 ## Shared platform
 
+- [Telemetry policy](platform/observability/TELEMETRY_POLICY.md)
 - [Platform documentation](platform/README.md)
 - [Data and database](platform/database/README.md)
 - [Database and Supabase best practices](platform/database/DATABASE_AND_SUPABASE_BEST_PRACTICES.md)

@@ -536,7 +536,7 @@ allfitone/packages/db/
 
 La lista siguiente describe el resultado acumulado de Fase 5. Cada rebanada ejecuta sólo los pasos que necesita y deja la base reconstruible antes de continuar:
 
-1. Validar las 22 rutas y 25 operaciones de `allfit-v1.openapi.yaml` con `T-API-01..11` y `T-NUT-API-01..14`; generar sus DTOs antes del primer handler.
+1. Validar las 41 rutas y 45 operaciones vigentes de `allfit-v1.openapi.yaml` con `T-API-01..11`, `T-INV-API-*` y `T-NUT-API-01..14`; generar sus DTOs antes del primer handler. Las rutas AFO-39 se suman solo cuando el PR BACK actualice el YAML.
 2. Crear de forma aditiva los schemas y extensiones necesarios para la rebanada.
 3. Crear tipos/catálogos compartidos.
 4. Crear definiciones versionadas de scope y sus field-sets revisables.
@@ -636,10 +636,10 @@ La lista siguiente describe el resultado acumulado de Fase 5. Cada rebanada ejec
 - Generar SQL inicial por dependencias.
 - Revisar migrations generadas por `db diff`.
 - Detectar FKs sin índice.
-- comparar constraints instalados contra `IX-01..35`;
+- comparar constraints instalados contra `IX-01..45`;
 - Detectar tablas sin RLS.
-- comparar policies, vistas, funciones e índices instalados contra `PR-01..28`;
-- comparar las 115 fichas y nombres determinísticos contra `pg_catalog`;
+- comparar policies, vistas, funciones e índices instalados contra `PR-01..29`;
+- comparar las 127 fichas y nombres determinísticos contra `pg_catalog`;
 - generar fixtures positivos/negativos para cada contrato JSONB V1;
 - detectar funciones `security definer` inseguras;
 - generar seed idempotente y tipos.
@@ -670,8 +670,8 @@ Probar que el diseño funciona desde los productos involucrados en cada rebanada
 
 - una persona no puede leer información privada de otra;
 - una organización no puede referenciar datos privados de otra;
-- las siete pruebas `T-PHY-*` y cuatro `T-NUT-PHY-*` demuestran compilación física, grants, transiciones, live/frozen, scopes, privilegios, índices y planes de autorización;
-- las seis pruebas `T-SCHEMA-*` demuestran inventario 115, objetos nombrados, contracts JSONB y unicidad/mantenimiento particionado;
+- las ocho pruebas `T-PHY-*` y cuatro `T-NUT-PHY-*` demuestran compilación física, grants, transiciones, no resurrección comercial, live/frozen, scopes, privilegios, índices y planes de autorización;
+- las seis pruebas `T-SCHEMA-*` demuestran inventario 120, objetos nombrados, contracts JSONB y unicidad/mantenimiento particionado;
 - las diez pruebas `T-IDEM-*` y seis `T-NUT-IDEM-*` demuestran scope, concurrencia, captura offline, foto diferida, doble decisión, crash, disposición y minimización;
 - las nueve pruebas `T-API-*` y catorce `T-NUT-API-*` demuestran contrato OpenAPI resoluble, operación trazable, ejemplos válidos, headers obligatorios, caché, redacción, agregados, autoría mínima, URL firmada Space, proxy autenticado Studio y DTOs sin drift;
 - las seis pruebas `T-VG-*` y doce `T-BGG-*` demuestran verificación acotada, conflictos, deberes temporales, quorum, expiración, auditoría y suspensión por abuso;

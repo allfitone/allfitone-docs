@@ -1,14 +1,14 @@
 # Diccionario de datos V1
 
-**Versión de revisión:** 6
-**Fecha:** 6 de agosto de 2026
+**Versión de revisión:** 8
+**Fecha:** 17 de agosto de 2026
 **Fase:** 4 — Modelo lógico y diccionario de datos
-**Estado:** 116 fichas; sesión técnica de Studio materializada
+**Estado:** 127 fichas; AFO-39 agrega transiciones organizacionales gobernadas y recertifica el inventario
 **Deriva de:** [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md), [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md), [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
 
 ## 1. Propósito
 
-La ficha obligatoria de cada una de las **116 tablas físicas** de V1. A las 115 recertificadas tras ADR-028 se suma `identity.access_sessions`, consumida por la sesión opaca de Studio. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
+La ficha obligatoria de cada una de las **127 tablas físicas** de V1. El inventario vigente incluye `organizations.organization_type_transitions` y `system.invitation_rate_windows`; `identity.access_sessions` conserva evidencia por superficie sin confiar en claims. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
 
 Cada ficha responde los quince campos exigidos por [`DATABASE_REFACTOR_PHASES.md` §Fase 4](../04_EXECUTION/DATABASE_REFACTOR_PHASES.md). El diccionario, el ERD lógico y el SQL de Fase 5 deben coincidir; cualquier divergencia es un defecto que se corrige aquí antes de escribir la migración.
 
@@ -24,7 +24,7 @@ Para no repetir lo que el [estándar](./POSTGRES_MODELING_STANDARD.md) ya fija, 
 - **Contexto RLS:** toda tabla de dominio tiene `FORCE ROW LEVEL SECURITY`; las condiciones exactas están en [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md) y aquí se resume la policy.
 - **`allfit_owner`** posee los objetos; **`allfit_api`** es el rol de runtime; los workers y soporte tienen los suyos.
 - **Clasificación del dato** usa las categorías: `operational` (no personal), `identity_pii`, `training`, `body`, `health`, `nutrition`, `audit`.
-- **Integridad cruzada:** las claves portadoras, FKs compuestas y triggers `IX-01..35` de [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md) son obligatorios aunque una ficha resuma el mecanismo.
+- **Integridad cruzada:** las claves portadoras, FKs compuestas y triggers `IX-01..45` de [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md) son obligatorios aunque una ficha resuma el mecanismo.
 - **Trazabilidad RLS:** toda expresión “vía”, “hereda” o “relación visible” se expande en [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md) a joins, columnas, proyección, índice y pruebas exactos.
 - **Objetos y JSONB:** los nombres físicos, enums compartidos, contratos JSONB y particiones se rigen por [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md); no se difieren a la migración.
 - **Idempotencia:** scope, receipts, PKs offline, expiración, disposición y concurrencia se rigen por [`V1_IDEMPOTENCY_CONTRACT.md`](./V1_IDEMPOTENCY_CONTRACT.md).
@@ -38,15 +38,15 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 | Schema | Tablas | Sección |
 | --- | --- | --- |
-| `identity` | 14 | §4 |
-| `organizations` | 10 | §5 |
+| `identity` | 20 | §4 |
+| `organizations` | 11 | §5 |
 | `relationships` | 6 | §6 |
 | `privacy` | 16 | §7 |
-| `catalog` | 12 | §8 |
-| `planning` | 16 | §9 |
+| `catalog` | 14 | §8 |
+| `planning` | 17 | §9 |
 | `execution` | 14 | §10 |
 | `nutrition` | 8 | §10A |
-| `system` | 3 | §11 |
+| `system` | 4 | §11 |
 | `payments` | 12 | §13 |
 | `support` | 5 | §12 |
 
@@ -87,27 +87,81 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 ### 4.2.1 `identity.access_sessions`
 
 - **Propósito:** almacenamiento técnico de sesiones opacas de navegador; no representa una persona ni concede acceso de dominio por sí solo.
-- **Dominio / fuente de verdad:** Identidad para persistencia local; WorkOS continúa gobernando la duración máxima de la sesión alojada.
+- **Dominio / fuente de verdad:** Identidad para persistencia y evidencia local; WorkOS gobierna el `sid`, sus tokens y la verificación externa.
 - **Clasificación:** `identity_pii` y secreto operativo.
-- **Columnas:** `id uuid` UUIDv7 · `access_account_id uuid` · `provider_session_id text` (`sid`) · `surface identity.access_session_surface` (`studio`) · `token_hash bytea` (SHA-256, 32 bytes) · `token_ciphertext text` (access y refresh tokens cifrados) · `access_token_expires_at timestamptz` · `token_version integer` · `revoked_at timestamptz` (nullable).
+- **Columnas:** `id uuid` UUIDv7 · `access_account_id uuid` · `provider_session_id text` (`sid`) · `surface identity.access_session_surface` (`studio`, `backoffice`) · `token_hash bytea` (SHA-256, 32 bytes) · `token_ciphertext text` (access y refresh tokens cifrados) · `access_token_expires_at timestamptz` · `token_version integer` · `assurance_level smallint` · `authentication_method text` (nullable para compatibilidad Studio) · `assurance_verified_at timestamptz` (nullable) · `last_activity_at timestamptz` (nullable) · `absolute_expires_at timestamptz` (nullable) · `revoked_at timestamptz` (nullable).
 - **FKs y borrado:** `access_account_id → identity.access_accounts(id) ON DELETE RESTRICT`.
-- **Uniques y checks:** `UNIQUE (surface, provider_session_id)`; `UNIQUE token_hash`; hash de 32 bytes; versión positiva; ciphertext versionado. La cookie sin hash y los tokens en texto plano están prohibidos.
+- **Uniques y checks:** `UNIQUE (surface, provider_session_id)`; `UNIQUE token_hash`; hash de 32 bytes; versión positiva; ciphertext versionado. Toda fila Backoffice exige AAL2, `password_totp`, evidencia, actividad y vencimiento absoluto; Studio conserva AAL1 compatible. La cookie sin hash y los tokens en texto plano están prohibidos.
 - **Actores:** ninguna lectura o escritura directa desde runtime. Solo funciones `SECURITY DEFINER` estrechas concedidas a `allfit_api` crean, cargan, rotan por compare-and-swap y revocan.
 - **RLS:** habilitada y forzada, sin policies de acceso directo para runtime.
-- **Consultas:** por `token_hash + surface`; reemplazo por `surface + provider_session_id`; sesiones activas por cuenta.
+- **Consultas:** por `token_hash + surface`; reemplazo por `surface + provider_session_id`; sesiones activas por cuenta. La carga Backoffice revalida persona, rol, AAL2, quince minutos de inactividad y ocho horas absolutas, y actualiza actividad dentro de la función cerrada.
 - **Índices:** uniques anteriores; `(access_account_id)`; parcial `(access_account_id, surface) WHERE revoked_at IS NULL`.
 - **Retención:** hasta revocación y purga operativa; cambiar `SESSION_ENCRYPTION_KEY` invalida los ciphertext existentes y fuerza reautenticación.
 - **Eventos:** ninguno de dominio.
+
+### 4.2.2 `identity.password_reset_receipts`
+
+- **Propósito:** receipt técnico e idempotente de `password_reset.succeeded`; confirma en una transacción el evento consumido y la revocación de sesiones locales anteriores.
+- **Dominio / fuente de verdad:** Identidad para el efecto local; WorkOS conserva la fuente de verdad del cambio de contraseña y sus sesiones alojadas.
+- **Clasificación:** metadato operativo de identidad; no almacena payload, firma, email, subject, token ni identificador del reset.
+- **Columnas:** `id uuid` UUIDv7 · `provider text` (`workos`) · `issuer text` · `provider_event_id text` · `occurred_at timestamptz` · `access_account_id uuid` (nullable) · `result identity.password_reset_receipt_result` (nullable solo dentro de la transacción) · `revoked_session_count integer` · `received_at timestamptz` · `processed_at timestamptz` (nullable solo mientras se procesa).
+- **FKs y borrado:** `access_account_id → identity.access_accounts(id) ON DELETE RESTRICT`; queda nulo si el subject firmado no tiene cuenta local.
+- **Uniques y checks:** `UNIQUE (provider, issuer, provider_event_id)`; proveedor cerrado a `workos`; issuer y evento no vacíos; conteo no negativo; resultado y fecha de procesamiento aparecen juntos.
+- **Actores:** ninguna lectura ni escritura directa desde runtime. `allfit_api` solo ejecuta `identity.process_password_reset_succeeded`; `PUBLIC` no ejecuta la función.
+- **RLS:** habilitada y forzada, con policy exclusiva de `allfit_owner`.
+- **Consultas:** reconocimiento de replay por `(provider, issuer, provider_event_id)`; asociación opcional por `access_account_id`.
+- **Índices:** unique anterior; parcial por `access_account_id WHERE access_account_id IS NOT NULL`.
+- **Retención:** al menos durante la ventana completa de reintentos del proveedor; cualquier purga posterior requiere una política operativa explícita y no forma parte de HU-STUDIO-003.
+- **Eventos:** ninguno de dominio; es evidencia técnica de consumo, no outbox.
+
+### 4.2.3 `identity.access_account_mfa_factors`
+
+- **Propósito:** vínculo local del factor TOTP persistido por cuenta; permite revalidar y revocar sin almacenar el secreto compartido.
+- **Dominio / fuente de verdad:** Identidad conserva estado y asociación; WorkOS conserva y verifica el factor.
+- **Clasificación:** secreto operativo restringido; `provider_factor_id` nunca sale de funciones cerradas.
+- **Columnas:** `id uuid` UUIDv7 · `access_account_id uuid` · `provider text` (`workos`) · `provider_factor_id text` · `factor_kind text` (`totp`) · `status identity.mfa_factor_status` (`pending`, `active`, `revoked`, `superseded`) · `verified_at`, `revoked_at`, `superseded_at` nullable · timestamps.
+- **FKs y borrado:** `access_account_id → identity.access_accounts(id) RESTRICT`; sin cascadas.
+- **Uniques y checks:** unique `(provider, provider_factor_id)` y unique parcial `(access_account_id, factor_kind) WHERE status IN ('pending','active')`; forma temporal exacta por estado. Una cuenta no tiene dos TOTP actuales.
+- **Actores / RLS:** `FORCE RLS`; sin DML o SELECT para `allfit_api`. Sólo funciones cerradas de login, expiración, recuperación y revocación.
+- **Consultas / índices:** factor actual por cuenta y estado; limpieza por eventos de outbox.
+- **Retención:** el factor activo se conserva tras password reset; revocación/supersesión conserva evidencia hasta la política de seguridad aplicable.
+- **Eventos:** solicitudes de limpieza externa sin factor ID en payload público.
+
+### 4.2.4 `identity.backoffice_authentication_attempts`
+
+- **Propósito:** ceremonia temporal entre password correcto y TOTP verificado; nunca constituye una sesión.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** altamente sensible y temporal.
+- **Columnas:** `id uuid` · cuenta/factor · `provider_session_id`, `provider_challenge_id` · `attempt_token_hash bytea` · `secret_ciphertext text` nullable · vencimiento del access token · estado (`pending_enrollment`, `pending_challenge`, `completed`, `failed`, `expired`) · `invalid_code_count` 0..5 · `verification_idempotency_key`, `verification_command_id`, `completed_session_id` nullable · `expires_at`, `terminal_at`, timestamps.
+- **FKs y borrado:** cuenta, factor y sesión completada usan `RESTRICT`.
+- **Uniques y checks:** token, `sid` y challenge únicos; máximo un intento abierto por cuenta; hash de 32 bytes; secreto `v1.*` sólo mientras está abierto; toda fila terminal elimina ciphertext y fija `terminal_at`.
+- **Actores / RLS:** `FORCE RLS`; sin acceso directo runtime. Las funciones bloquean cuenta, factor, intento, rol y sesión; la primera transacción confirmada gana frente a revocación.
+- **Consultas / índices:** hash de cookie; expiración por `(expires_at,id)`; command binding antes de consumir el challenge externo.
+- **Retención:** diez minutos abierta; el worker expira en lotes y elimina secretos. Sólo queda evidencia mínima terminal.
+- **Eventos:** limpieza de `sid` y factor pendiente mediante outbox.
+
+### 4.2.5 `identity.mfa_factor_recovery_events`
+
+- **Propósito:** evidencia inmutable de la ceremonia de recuperación por autenticador perdido.
+- **Dominio / fuente de verdad:** Identidad/seguridad de plataforma.
+- **Clasificación:** `restricted`; la referencia de ceremonia no contiene PII.
+- **Columnas:** `id uuid` · `factor_id` · `subject_person_id` · `requested_by_person_id` · `approved_by_person_id` · `reason_code='lost_authenticator'` · `ceremony_reference` · `occurred_at`.
+- **FKs y borrado:** factor y tres personas con `RESTRICT`; solicitante, aprobador y sujeto deben ser distintos.
+- **Uniques y checks:** razón cerrada, referencia no vacía; fila append-only.
+- **Actores / RLS:** sólo `allfit_migrator` mediante workflow protegido; `FORCE RLS`, sin runtime DML.
+- **Consultas / índices:** historia por `(factor_id, occurred_at DESC, id DESC)`.
+- **Retención:** evidencia durable de seguridad; no se elimina en runtime.
+- **Eventos:** la misma transacción solicita revocar sesiones/intentos y eliminar el factor externo.
 
 ### 4.3 `identity.onboarding_attempts`
 
 - **Propósito:** flujo previo a activar una persona; puede terminar sin crearla.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `identity_pii`.
-- **Columnas:** `id` · `account_id uuid` · `person_id uuid` (nullable) · `status identity.onboarding_status` · `invitation_token_hash text` (nullable) · `terms_accepted_at timestamptz` · `expires_at timestamptz`.
+- **Columnas:** `id` · `account_id uuid` · `person_id uuid` (nullable) · `status identity.onboarding_status` · `invitation_token_hash text` (nullable, SHA-256 en hexadecimal) · `terms_version text` (nullable) · `terms_accepted_at timestamptz` (nullable) · `privacy_notice_version text` (nullable) · `privacy_notice_accepted_at timestamptz` (nullable) · `expires_at timestamptz`.
 - **FKs y borrado:** `account_id → access_accounts(id) RESTRICT`; `person_id → people(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE parcial (account_id) WHERE status='open'` (un intento abierto por cuenta).
-- **Actores:** la propia cuenta lee/escribe; worker de privacidad dispone.
+- **Actores:** la propia cuenta lee; los cambios ocurren mediante funciones gobernadas; worker de privacidad dispone. Asociar el hash de una invitación conserva continuidad de navegación y nunca acepta la intención.
 - **RLS:** `account_id = app.actor_account_id`.
 - **Consultas:** por `account_id` y estado abierto.
 - **Índices:** parcial de intento abierto por cuenta.
@@ -118,7 +172,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 - **Propósito:** aplicación versionada de la política de mayoría de edad, congelada en la evidencia.
 - **Dominio / fuente de verdad:** Identidad.
-- **Clasificación:** `identity_pii` (puede incluir fecha de nacimiento o su equivalente).
+- **Clasificación:** `identity_pii` (declaración explícita de mayoría de edad y snapshot versionado de la política; no incluye fecha de nacimiento).
 - **Columnas:** `id` · `onboarding_attempt_id uuid` · `result identity.eligibility_result` · `policy_version integer` · `policy_snapshot_schema_version smallint` (`1`) · `policy_snapshot jsonb` · `evaluated_at timestamptz`.
 - **FKs y borrado:** `onboarding_attempt_id → onboarding_attempts(id) ON DELETE CASCADE`.
 - **Uniques y checks:** `CHECK (result in ('pass','fail','review_required','unknown'))`.
@@ -126,7 +180,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **RLS:** hereda del intento (`account_id`).
 - **Consultas:** por `onboarding_attempt_id`; última evidencia `pass`.
 - **Índices:** `(onboarding_attempt_id, evaluated_at desc)`.
-- **Retención:** se minimiza tras la activación: no se conserva la fecha de nacimiento completa solo para esta finalidad.
+- **Retención:** se conserva el resultado y el snapshot versionado necesarios para trazabilidad; esta política no recopila fecha de nacimiento.
 - **Eventos:** `identity.eligibility_evaluated.v1`.
 
 ### 4.5 `identity.profile_attributes`
@@ -189,72 +243,94 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Retención:** categoría `health`; disposición por su política.
 - **Eventos:** `identity.health_context_declared.v1`.
 
-### 4.9 `identity.profile_verifications`
-
-- **Propósito:** verificación de **una** afirmación concreta; no marca otras ni el perfil completo.
-- **Dominio / fuente de verdad:** Identidad.
-- **Clasificación:** hereda del atributo verificado.
-- **Columnas:** `id` · `claim_id uuid` · `verifier_person_id uuid` · `policy_code text` · `method text` (`official_registry_lookup`, `issuer_confirmation`) · `credential_type_code text` (incluye `nutrition_professional`) · `source_authority text` · `source_jurisdiction text` · `source_reference text` · `source_status text` · `source_checked_at timestamptz` · `source_valid_to timestamptz` (nullable) · `evidence_fingerprint bytea` · `result text` (`verified`, `rejected`, `unverifiable`, `revoked`) · `decided_at timestamptz` · `valid_from timestamptz` (nullable) · `valid_to timestamptz` (nullable) · `supersedes_verification_id uuid` (nullable) · `revoked_at timestamptz` (nullable).
-- **FKs y borrado:** `claim_id → fitness_profile_claims(id) RESTRICT`; `verifier_person_id → people(id) RESTRICT`; `supersedes_verification_id → profile_verifications(id) RESTRICT`.
-- **Uniques y checks:** `valid_to` obligatorio cuando `result='verified'`; nunca supera `decided_at + interval '12 months'` ni `source_valid_to` cuando la fuente publica vencimiento; `source_checked_at <= decided_at`; una función cerrada valida credencial profesional, fuente/método, AAL2, deber vigente y conflictos antes de insertar. Append-only.
-- **Actores:** solo `A11/verify_professional_credentials` escribe; la persona y el profesional autorizado leen el estado según scope, nunca evidencia adicional.
-- **RLS:** hereda el scope del atributo del claim.
-- **Consultas:** por `claim_id`.
-- **Índices:** `claim_id`.
-- **Retención:** con la afirmación verificada.
-- **Eventos:** `identity.claim_verified.v1`, `identity.claim_verification_revoked.v1`.
-- **Gobernanza:** ADR-026 y `T-VG-01..06`; solo credenciales profesionales y evidencia minimizada.
-
-### 4.10 `identity.professional_profiles`
+### 4.9 `identity.professional_profiles`
 
 - **Propósito:** presentación profesional; pertenece a la persona y sobrevive al cambio de organización.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `identity_pii` (no fitness).
-- **Columnas:** `id` · `person_id uuid` · `headline text` · `bio text` · `credentials_schema_version smallint` (`1`, nullable junto a payload) · `credentials jsonb` (nullable).
+- **Columnas:** `id uuid` · `person_id uuid` · `headline text` · `bio text` · `practice_started_year smallint` · `created_at timestamptz` · `updated_at timestamptz`.
 - **FKs y borrado:** `person_id → people(id) RESTRICT`.
-- **Uniques y checks:** `UNIQUE person_id`.
-- **Actores:** la persona (dueña); miembros de la misma organización leen.
-- **RLS:** `access_control.is_self(person_id)` **OR** membresía vigente compartida en `access_control.org()`.
+- **Uniques y checks:** `UNIQUE person_id`; `headline` normalizado y no vacío, máximo 120 caracteres; `bio` máximo 2.000; `practice_started_year` entre 1900 y 2100, y `OP-IDN-010` rechaza años posteriores al actual.
+- **Actores:** la persona crea y actualiza; integrantes de una organización compartida consumen una proyección cerrada de solo lectura.
+- **RLS:** escritura solo con `access_control.is_self(person_id)`; lectura directa propia. La lectura organizacional ocurre mediante una proyección que exige membresía vigente compartida en `access_control.org()`.
 - **Consultas:** por `person_id`; por miembros de organización.
 - **Índices:** único `person_id`.
 - **Retención:** con la persona.
 - **Eventos:** `identity.professional_profile_updated.v1`.
 
-### 4.11 `identity.invitations`
+### 4.10 `identity.professional_profile_specialties`
+
+- **Propósito:** especialidades gobernadas que la persona declara para su perfil profesional.
+- **Dominio / fuente de verdad:** Identidad para la declaración; Catálogo para el significado del código.
+- **Clasificación:** `identity_pii` (no fitness sensible).
+- **Columnas:** `professional_profile_id uuid` · `specialty_code text` · `declared_at timestamptz`.
+- **FKs y borrado:** `professional_profile_id → professional_profiles(id) ON DELETE CASCADE`; `specialty_code → catalog.professional_specialties(code) RESTRICT`.
+- **Uniques y checks:** `PRIMARY KEY (professional_profile_id, specialty_code)`; `OP-IDN-010` solo acepta códigos publicados y exige al menos uno para completar el perfil.
+- **Actores y RLS:** hereda ownership y proyección de `professional_profiles`; una organización nunca escribe la relación.
+- **Consultas / índices:** PK anterior; índice inverso `(specialty_code, professional_profile_id)`.
+- **Retención:** con el perfil.
+- **Eventos:** incluidos en `identity.professional_profile_updated.v1`.
+
+### 4.11 `identity.professional_credentials`
+
+- **Propósito:** credencial profesional declarada con identidad estable; no implica verificación.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `identity_pii`.
+- **Columnas:** `id uuid` · `professional_profile_id uuid` · `credential_type_code text` · `issuer text` · `name text` · `identifier text` (nullable) · `issued_on date` (nullable) · `expires_on date` (nullable) · `verification_url text` (nullable) · `status text` (`active`, `retired`) · `supersedes_credential_id uuid` (nullable) · `created_at timestamptz` · `retired_at timestamptz` (nullable).
+- **FKs y borrado:** `professional_profile_id → professional_profiles(id) RESTRICT`; `credential_type_code → catalog.professional_credential_types(code) RESTRICT`; `supersedes_credential_id → professional_credentials(id) RESTRICT`.
+- **Uniques y checks:** fechas coherentes; URL HTTPS; retiro consistente con `retired_at`; una revisión debe pertenecer al mismo perfil y no puede formar ciclos. Los campos materiales son inmutables: corregir crea otra fila y retira la anterior.
+- **Actores:** la persona declara, revisa o retira mediante funciones cerradas. Organizaciones y verificadores no modifican la declaración.
+- **RLS:** lectura y comandos propios; consumidores organizacionales solo reciben la proyección permitida. Sin `DELETE` ni `UPDATE` material desde runtime.
+- **Consultas / índices:** `(professional_profile_id, status)`; `(supersedes_credential_id)`.
+- **Retención:** con la persona y las verificaciones asociadas.
+- **Eventos:** `identity.professional_credential_declared.v1`, `identity.professional_credential_revised.v1`, `identity.professional_credential_retired.v1`.
+
+### 4.12 `identity.professional_credential_verifications`
+
+- **Propósito:** verificación de **una versión exacta** de credencial profesional; no marca otras credenciales ni el perfil completo.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `identity_pii`; la evidencia interna permanece restringida.
+- **Columnas:** `id uuid` · `professional_credential_id uuid` · `verifier_person_id uuid` · `policy_code text` · `method text` (`official_registry_lookup`, `issuer_confirmation`) · `source_authority text` · `source_jurisdiction text` · `source_reference text` · `source_status text` · `source_checked_at timestamptz` · `source_valid_to timestamptz` (nullable) · `evidence_fingerprint bytea` · `result text` (`verified`, `rejected`, `unverifiable`, `revoked`) · `decided_at timestamptz` · `valid_from timestamptz` (nullable) · `valid_to timestamptz` (nullable) · `supersedes_verification_id uuid` (nullable) · `revoked_at timestamptz` (nullable).
+- **FKs y borrado:** `professional_credential_id → professional_credentials(id) RESTRICT`; `verifier_person_id → people(id) RESTRICT`; `supersedes_verification_id → professional_credential_verifications(id) RESTRICT`.
+- **Uniques y checks:** `valid_to` obligatorio cuando `result='verified'`; nunca supera `decided_at + interval '12 months'` ni `source_valid_to` cuando la fuente publica vencimiento; `source_checked_at <= decided_at`; una función cerrada valida credencial, fuente/método, AAL2, deber vigente y conflictos antes de insertar. Append-only.
+- **Actores:** solo `A11/verify_professional_credentials` escribe. La persona y consumidores autorizados reciben estado, vigencia y tipo mediante proyecciones; nunca fingerprint ni referencia interna.
+- **RLS:** sin DML directo de runtime. Lectura de estado mediante funciones o proyecciones cerradas; la evidencia interna queda restringida a su finalidad.
+- **Consultas / índices:** `(professional_credential_id, decided_at desc)`; verificaciones vigentes por credencial.
+- **Retención:** con la credencial verificada.
+- **Eventos:** `identity.professional_credential_verified.v1`, `identity.professional_credential_verification_revoked.v1`.
+- **Gobernanza:** ADR-026 y `T-VG-01..06`; solo credenciales profesionales y evidencia minimizada.
+
+### 4.13 `identity.invitations`
 
 - **Propósito:** sobre temporal de entrega y seguridad; no crea persona provisional.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `identity_pii` (contacto del invitado).
-- **Columnas:** `id` · `organization_id uuid` · `issued_by_membership_id uuid` · `channel text` (`email`, `sms`) · `contact text` · `token_hash text` · `responsible_party_snapshot_schema_version smallint` (`1`) · `responsible_party_snapshot jsonb` · `status identity.invitation_status` · `expires_at timestamptz`.
+- **Columnas:** `id` · `organization_id uuid` · `issued_by_membership_id uuid` · `channel text` (`email`) · `contact citext` · `token_hash bytea` · `token_key_version smallint` · `proposal_hash bytea` · `responsible_party_schema_version smallint` (`1`) · `responsible_party jsonb` · `status identity.invitation_status` (`pending`, `completed`, `revoked`, `expired`) · `expires_at timestamptz` · `created_at` · `updated_at`.
 - **FKs y borrado:** `(issued_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`. **Sin** FK a persona destino (`IX-24`).
-- **Uniques y checks:** `UNIQUE token_hash`.
-- **Actores:** la organización (crea, revoca); el invitado por token; worker de expiración.
-- **RLS:** token exacto vigente para el invitado; `organization_id = access_control.org()` con capacidad de invitar.
-- **Consultas:** por `token_hash`; por `(organization_id, status)`.
-- **Índices:** único `token_hash`; `(organization_id, status)`.
+- **Uniques y checks:** `UNIQUE token_hash`; único parcial `(organization_id, proposal_hash) WHERE status='pending'`; hashes de 32 bytes. El token se deriva por HMAC con clave versionada, nunca se guarda en claro ni en el outbox.
+- **Actores:** la organización emite, lista y revoca; el invitado resuelve y decide; el worker expira por lotes. Todos operan mediante funciones cerradas.
+- **RLS:** `FORCE ROW LEVEL SECURITY`; todo DML directo está revocado a `allfit_api`. Entradas cerradas: `issue_staff_invitation`, `resolve_staff_invitation`, `decide_staff_invitation`, `list_staff_invitations`, `revoke_staff_invitation` y `expire_staff_invitations`.
+- **Consultas:** por `token_hash`; por organización/estado y cursor de emisión; por expiración pendiente.
+- **Índices:** único `token_hash`; único parcial de propuesta pendiente; `(organization_id, status, expires_at DESC)`; `(organization_id, created_at DESC, id DESC)`.
 - **Retención:** conserva evidencia; se purga tras plazo largo.
 - **Eventos:** `organization.staff_invited.v1` / `relationship.client_invited.v1`, `identity.invitation_revoked.v1`, `identity.invitation_expired.v1`.
 
-### 4.12 `identity.invitation_intents`
+### 4.14 `identity.invitation_intents`
 
-- **Propósito:** propuesta tipada decidida de forma independiente; materializa ≤1 destino.
+- **Propósito:** propuesta tipada decidida de forma independiente; materializa ≤1 destino. Una intención `service_relationship` agrupa las opciones de scope que la persona decide en la misma confirmación, sin convertirlas en una aceptación global.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `operational`.
-- **Columnas:** `id` · `invitation_id uuid` · `kind identity.intent_kind` · `status identity.intent_status` · `proposed_role_code text` (nullable) · `program_version_id uuid` (nullable) · `decided_at timestamptz` (nullable) · `materialized_target_id uuid` (nullable).
-- **FKs y borrado:** `invitation_id → invitations(id) ON DELETE CASCADE`; `program_version_id → planning.program_versions(id) RESTRICT`.
-- **Uniques y checks:** `CHECK` según `kind` (una intención de programa exige `program_version_id`).
-- **Actores:** la persona decide; la organización crea.
-- **RLS:** hereda de la invitación.
+- **Columnas:** `id` · `invitation_id uuid` · `kind identity.invitation_intent_kind` (`membership` en el corte físico) · `status identity.invitation_intent_status` (`pending`, `accepted`, `rejected`, `revoked`, `expired`) · `proposed_role_code text` · `materialized_membership_id uuid` (nullable) · `decided_at timestamptz` (nullable) · `created_at` · `updated_at`.
+- **FKs y borrado:** `invitation_id → invitations(id) ON DELETE CASCADE`; `proposed_role_code → organization_roles(code) RESTRICT`; `materialized_membership_id → organization_memberships(id) RESTRICT`.
+- **Uniques y checks:** una intención por `(invitation_id, kind)`; aceptar exige `materialized_membership_id`, los demás terminales lo prohíben.
+- **Actores:** la persona decide; la organización crea y revoca; el worker expira. El corte staff entra solo mediante funciones cerradas y no materializa dominios de cliente.
+- **RLS:** igual que la invitación: runtime sin DML directo.
 - **Consultas:** por `invitation_id`.
 - **Índices:** `invitation_id`.
 - **Retención:** con la invitación.
 - **Eventos:** `identity.invitation_intent_decided.v1`.
 
----
-
-## 5. Schema `organizations`
-
-### 4.13 `identity.notification_preferences`
+### 4.15 `identity.notification_preferences`
 
 - **Propósito:** qué canales acepta la persona para cada categoría de notificación. Es el dato contra el cual `OP-SYS-002` evalúa su filtro obligatorio de "preferencia vigente para ese canal", que hoy no tiene dónde consultarse.
 - **Dominio / fuente de verdad:** Identidad.
@@ -271,20 +347,22 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 ---
 
+## 5. Schema `organizations`
+
 ### 5.1 `organizations.organizations`
 
 - **Propósito:** frontera estable de operación, autoría y permisos; conserva su `id` al crecer a equipo.
 - **Dominio / fuente de verdad:** Organizaciones.
-- **Clasificación:** `operational` (con datos de la parte responsable).
-- **Columnas:** `id` · `type_code text` · `legal_name text` (nullable) · `display_name text` · `status text` (`active`, `closed`) · `responsible_party_schema_version smallint` (`1`) · `responsible_party jsonb`.
+- **Clasificación:** `operational`; `legal_name` puede ser `identity_pii` y el JSON `responsible_party` contiene identidad/contacto restringido.
+- **Columnas:** `id uuid` · `type_code text` · `legal_name text` (nullable) · `display_name text` · `status text` (`active`, `closed`) · `responsible_party_schema_version smallint` (`1`) · `responsible_party jsonb` · `revision_number bigint` (`0`) · `created_at timestamptz` · `updated_at timestamptz`.
 - **FKs y borrado:** `type_code → organization_types(code) RESTRICT`.
-- **Uniques y checks:** `CHECK (status in ('active','closed'))`.
-- **Actores:** miembros leen; admin/owner escriben.
-- **RLS:** `access_control.has_membership(id)`.
+- **Uniques y checks:** `CHECK (status in ('active','closed'))`; `revision_number >= 0`. El cambio de `type_code` exige una transición activa en `organization_type_transitions`.
+- **Actores:** miembros leen una proyección cerrada; admin/owner llaman `organizations.update_organization` para modificar por autoservicio solo `display_name`, `legal_name` y `type_code`. `responsible_party`, su `purpose`/schema version, `id`, `status` y timestamps no son editables por `OP-ORG-002`.
+- **RLS:** la función `organizations.read_organization` aplica `access_control.has_membership(id)` y devuelve columnas cerradas. `allfit_api` no recibe `SELECT` ni DML sobre la tabla base y escribe únicamente por funciones cerradas.
 - **Consultas:** por `id`; por membresía del actor.
 - **Índices:** PK.
 - **Retención:** el cierre termina relaciones y abre disposición; conserva activos propios.
-- **Eventos:** `organization.created.v1`, `organization.updated.v1`, `organization.closed.v1`.
+- **Eventos:** `organization.created.v1`, `organization.updated.v1`, `organization.ownership_transferred.v1`, `organization.closed.v1`.
 
 ### 5.2 `organizations.organization_types`
 
@@ -301,19 +379,34 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Retención:** permanente.
 - **Eventos:** ninguno.
 
+### 5.2.1 `organizations.organization_type_transitions`
+
+- **Propósito:** catálogo gobernado de cambios de actividad principal admitidos por `OP-ORG-002`.
+- **Dominio / fuente de verdad:** Organizaciones (catálogo).
+- **Clasificación:** `operational`.
+- **Columnas:** `from_type_code text` · `to_type_code text` · `status text` (`active`, `inactive`) · `created_at timestamptz`.
+- **FKs y borrado:** ambos códigos → `organization_types(code) RESTRICT`.
+- **Uniques y checks:** PK `(from_type_code, to_type_code)`; códigos distintos; V1 publica únicamente `professional_practice → gym` y `professional_practice → studio`.
+- **Actores:** lectura autenticada; escritura solo migraciones/gobernanza de plataforma.
+- **RLS:** lectura abierta; sin DML de runtime.
+- **Consultas:** por `(from_type_code, to_type_code, status)`.
+- **Índices:** PK; `(from_type_code, status)`.
+- **Retención:** permanente; desactivar preserva evidencia histórica.
+- **Eventos:** ninguno propio; el cambio efectivo produce `organization.updated.v1`.
+
 ### 5.3 `organizations.organization_sites`
 
 - **Propósito:** sede física básica; informativa, no reservable ni delimitadora de permisos.
 - **Dominio / fuente de verdad:** Organizaciones.
-- **Clasificación:** `operational`.
-- **Columnas:** `id` · `organization_id uuid` · `name text` · `address text` (nullable) · `status text` (`active`, `inactive`).
+- **Clasificación:** `operational`; `address` puede ser `identity_pii` cuando una práctica profesional opera desde el domicilio de la persona.
+- **Columnas:** `id uuid` · `organization_id uuid` · `name text` · `address text` (nullable) · `status text` (`active`, `inactive`) · `revision_number bigint` (`0`) · `created_at timestamptz` · `updated_at timestamptz`.
 - **FKs y borrado:** `organization_id → organizations(id) ON DELETE CASCADE`.
-- **Uniques y checks:** —.
-- **Actores:** admin/owner escriben; miembros leen.
-- **RLS:** `access_control.has_membership(organization_id)`.
+- **Uniques y checks:** `revision_number >= 0`.
+- **Actores:** admin/owner llaman `organizations.create_site`/`organizations.update_site`; miembros leen dentro de la proyección organizacional cerrada.
+- **RLS:** lectura solo dentro de `organizations.read_organization` bajo `access_control.has_membership(organization_id)`; sin `SELECT` base ni DML directo de runtime.
 - **Consultas:** por `organization_id`.
 - **Índices:** `organization_id`.
-- **Retención:** con la organización.
+- **Retención:** con la organización; una dirección domiciliaria sigue la disposición aplicable a `identity_pii` y no se copia al evento de acceso.
 - **Eventos:** `organization.site_created.v1`, `organization.site_updated.v1`.
 
 ### 5.4 `organizations.organization_memberships`
@@ -324,8 +417,8 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Columnas:** `id` · `organization_id uuid` · `person_id uuid` · `status organizations.membership_status` · `joined_at timestamptz` · `ended_at timestamptz` (nullable).
 - **FKs y borrado:** `organization_id → organizations(id) RESTRICT`; `person_id → identity.people(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE parcial (organization_id, person_id) WHERE status <> 'terminated'`; claves portadoras `UNIQUE (id,organization_id)` y `UNIQUE (id,organization_id,person_id)`.
-- **Actores:** admin/owner gestionan; la persona renuncia; staff y coach leen el directorio.
-- **RLS:** `organization_id = access_control.org()` con membresía vigente, **OR** `person_id = access_control.person()`.
+- **Actores:** admin/owner gestionan mediante `organizations.terminate_membership`; la persona usa `organizations.resign_membership` aunque no conserve roles; staff y coach leen el directorio. Un owner solo sale después de `OP-ORG-011`.
+- **RLS:** lectura por `organization_id = access_control.org()` con membresía vigente, **OR** `person_id = access_control.person()`; sin DML directo de runtime.
 - **Consultas:** `(organization_id, status)`, `(person_id, status)`.
 - **Índices:** ambos compuestos anteriores.
 - **Retención:** conserva historial; no se borra.
@@ -383,9 +476,9 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Clasificación:** `operational`.
 - **Columnas:** `id` · `membership_id uuid` · `role_code text` · `valid_from timestamptz` · `valid_to timestamptz` (nullable).
 - **FKs y borrado:** `membership_id → organization_memberships(id) ON DELETE CASCADE`; `role_code → organization_roles(code) RESTRICT`.
-- **Uniques y checks:** `UNIQUE parcial (membership_id, role_code) WHERE valid_to is null`. Trigger de protección del último `owner`.
-- **Actores:** admin/owner; solo owner otorga owner.
-- **RLS:** vía la membresía (`organization_id = access_control.org()` con capacidad).
+- **Uniques y checks:** `UNIQUE parcial (membership_id, role_code) WHERE valid_to is null`. El constraint trigger diferible `organizations.enforce_exactly_one_active_owner_ct` comprueba al confirmar que toda organización activa tenga exactamente una membresía activa con un `membership_role owner` vigente. Se evalúa ante altas, bajas o cambios de vigencia/estado en organización, membresía y rol; rechaza tanto cero como más de un `owner`, pero permite que una transferencia controlada cambie ambas vigencias dentro de una sola transacción.
+- **Actores:** admin/owner gestionan `admin`, `coach` y `staff` mediante `organizations.grant_membership_role`/`organizations.revoke_membership_role`; el runtime genérico no puede crear ni cerrar `owner`. Solo `organizations.transfer_ownership(...)`, ejecutada por el owner vigente, cambia ambas vigencias bajo locks y confirma exactamente uno.
+- **RLS:** lectura vía la membresía; `allfit_api` no recibe DML directo.
 - **Consultas:** `(membership_id, valid_to)`.
 - **Índices:** `(membership_id, role_code, valid_from, valid_to)`.
 - **Retención:** conserva historial.
@@ -393,17 +486,17 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 ### 5.9 `organizations.organization_events`
 
-- **Propósito:** historia append-only de altas, cambios, cierre.
+- **Propósito:** historia append-only de altas, cambios, transferencia de propiedad y cierre.
 - **Dominio / fuente de verdad:** Organizaciones.
-- **Clasificación:** `audit`.
+- **Clasificación:** `audit`; snapshots de `legal_name` o `address` domiciliaria heredan además tratamiento `identity_pii`.
 - **Columnas:** `id` · `organization_id uuid` · `event_type text` · `snapshot_schema_version smallint` (`1`) · `before jsonb` (nullable) · `after jsonb` (nullable) · `actor_membership_id uuid` (nullable).
 - **FKs y borrado:** `organization_id → organizations(id) ON DELETE CASCADE`; FK compuesta opcional `(actor_membership_id, organization_id) → organization_memberships(id, organization_id) RESTRICT` (`IX-25`).
-- **Uniques y checks:** append-only: `UPDATE`/`DELETE` revocados.
-- **Actores:** `allfit_api` inserta; admin/owner leen.
+- **Uniques y checks:** append-only: `INSERT` directo, `UPDATE` y `DELETE` revocados al runtime. El snapshot v1 admite datos organizacionales, sede (`site_id`, `name`, `address`, `status`, `revision_number`) o transferencia (`previous_owner_membership_id`, `owner_membership_id`) según `event_type`; claves adicionales o combinaciones ajenas se rechazan.
+- **Actores:** las funciones cerradas del agregado insertan; admin/owner leen.
 - **RLS:** hereda de la organización.
 - **Consultas:** `(organization_id, created_at desc)`.
 - **Índices:** `(organization_id, created_at desc)`.
-- **Retención:** auditoría.
+- **Retención:** evidencia de auditoría bajo finalidad/plazo; una dirección domiciliaria sigue la política de `identity_pii` y no se conserva indefinidamente por ser sede.
 - **Eventos:** ninguno propio.
 
 ### 5.10 `organizations.membership_events`
@@ -411,10 +504,10 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** historia append-only de la membresía y sus roles.
 - **Dominio / fuente de verdad:** Organizaciones.
 - **Clasificación:** `audit`.
-- **Columnas:** `id` · `membership_id uuid` · `event_type text` · `snapshot_schema_version smallint` (`1`) · `before jsonb` (nullable) · `after jsonb` (nullable).
+- **Columnas:** `id` · `membership_id uuid` · `event_type text` · `snapshot_schema_version smallint` (`1`) · `before jsonb` (nullable) · `after jsonb` (nullable) · `created_at timestamptz`.
 - **FKs y borrado:** `membership_id → organization_memberships(id) ON DELETE CASCADE`.
-- **Uniques y checks:** append-only.
-- **Actores:** `allfit_api` inserta; admin/owner y la propia persona leen.
+- **Uniques y checks:** append-only; un único `organization.membership_created.v1` por membresía; versión de snapshot `1`; al menos uno de `before` o `after` presente. El snapshot admite contexto de membresía y, según `event_type`, `role_code`, `valid_from` y `valid_to`; cambios de rol y transferencia exigen la forma exacta before/after.
+- **Actores:** los comandos gobernados de `allfit_api` provocan la inserción mediante un trigger cerrado; no existe DML directo de runtime. Admin/owner y la propia persona leen.
 - **RLS:** hereda de la membresía.
 - **Consultas:** `(membership_id, created_at desc)`.
 - **Índices:** `(membership_id, created_at desc)`.
@@ -571,8 +664,8 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** decisión de consentimiento con el snapshot exacto presentado; append-only.
 - **Dominio / fuente de verdad:** Privacidad.
 - **Clasificación:** `audit`.
-- **Columnas:** `id` · `person_id uuid` · `relationship_id uuid` · `organization_id uuid` · `scope_definition_id uuid` · `scope_code text` · `decision privacy.consent_decision` · `presented_snapshot_schema_version smallint` (`1`) · `presented_snapshot jsonb` · `decided_at timestamptz`.
-- **FKs y borrado:** `(relationship_id, person_id, organization_id) → relationships.service_relationships(id, person_id, organization_id) RESTRICT`; `(scope_definition_id, scope_code) → scope_definitions(id, scope_code) RESTRICT` (`IX-05`).
+- **Columnas:** `id` · `person_id uuid` · `relationship_id uuid` · `organization_id uuid` · `invitation_scope_option_id uuid` · `scope_definition_id uuid` · `scope_code text` · `decision privacy.consent_decision` · `presented_snapshot_schema_version smallint` (`1`) · `presented_snapshot jsonb` · `decided_at timestamptz`.
+- **FKs y borrado:** `(relationship_id, person_id, organization_id) → relationships.service_relationships(id, person_id, organization_id) RESTRICT`; `(invitation_scope_option_id, scope_definition_id, scope_code) → invitation_scope_options(id, scope_definition_id, scope_code) RESTRICT`; `(scope_definition_id, scope_code) → scope_definitions(id, scope_code) RESTRICT` (`IX-05`).
 - **Uniques y checks:** clave portadora `UNIQUE (id, person_id, relationship_id, organization_id, scope_definition_id, scope_code)`; append-only.
 - **Actores:** la persona decide; la organización ve estado.
 - **RLS:** `person_id = access_control.person()` **OR** (`relationship` de `access_control.org()`).
@@ -581,20 +674,20 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Retención:** evidencia; auditoría.
 - **Eventos:** `privacy.grant_created.v1`, `privacy.grant_rejected.v1`, `privacy.grant_revoked.v1`.
 
-### 7.5 `privacy.grant_requests`
+### 7.5 `privacy.invitation_scope_options`
 
-- **Propósito:** solicitud de un scope por la organización, pendiente de decisión de la persona.
+- **Propósito:** scopes, nivel y finalidad que se presentan junto con una intención `service_relationship`; no conceden acceso por existir y no pueden crearse para una relación ya activa.
 - **Dominio / fuente de verdad:** Privacidad.
-- **Clasificación:** `operational`.
-- **Columnas:** `id` · `relationship_id uuid` · `organization_id uuid` · `scope_definition_id uuid` · `scope_code text` · `requested_level privacy.access_level` · `purpose text` · `status text` (`pending`, `withdrawn`, `granted`, `rejected`) · `requested_by_membership_id uuid`.
-- **FKs y borrado:** `(relationship_id, organization_id) → relationships.service_relationships(id, organization_id) RESTRICT`; `(requested_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`; `(scope_definition_id, scope_code) → scope_definitions(id, scope_code) RESTRICT` (`IX-06`).
-- **Uniques y checks:** `UNIQUE parcial (relationship_id, scope_code) WHERE status='pending'`.
-- **Actores:** la organización solicita/retira; la persona decide.
-- **RLS:** `person_id` de la relación = `access_control.person()`, **OR** organización de la relación.
-- **Consultas:** `(relationship_id, status)`, `(organization_id, status)`.
-- **Índices:** ambos compuestos + único parcial pendiente `(relationship_id, scope_code) WHERE status='pending'`.
-- **Retención:** conserva evidencia de lo solicitado.
-- **Eventos:** `privacy.grant_requested.v1`, `privacy.grant_request_withdrawn.v1`.
+- **Clasificación:** `operational` hasta la decisión; la evidencia definitiva queda en `consent_events`.
+- **Columnas:** `id` · `invitation_intent_id uuid` · `scope_definition_id uuid` · `scope_code text` · `offered_access_level privacy.access_level` · `purpose text` · `presented_snapshot_schema_version smallint` (`1`) · `presented_snapshot jsonb` · `decision privacy.consent_decision` (nullable mientras la invitación no se decide) · `decided_at timestamptz` (nullable).
+- **FKs y borrado:** `invitation_intent_id → identity.invitation_intents(id) ON DELETE CASCADE`; `(scope_definition_id, scope_code) → scope_definitions(id, scope_code) RESTRICT` (`IX-06`).
+- **Uniques y checks:** `UNIQUE (invitation_intent_id, scope_code)`; clave portadora `UNIQUE (id, scope_definition_id, scope_code)`; `CHECK ((decision is null) = (decided_at is null))`. El constraint trigger `privacy.enforce_invitation_scope_option_ct` exige que el padre sea una intención `service_relationship`, que su invitación pertenezca a la organización que emitió la propuesta y que ninguna opción cambie después de decidirse.
+- **Actores:** la organización las fija al emitir la invitación; la persona decide todas las opciones dentro de `identity.decide_invitation_intent`. No existe `INSERT` o `UPDATE` desde una relación activa ni una ruta Studio para volver a pedirlas.
+- **RLS:** hereda el acceso de la invitación y su intención; DML directo revocado.
+- **Consultas:** por `invitation_intent_id`.
+- **Índices:** único `(invitation_intent_id, scope_code)`.
+- **Retención:** con la invitación; `consent_events` conserva la evidencia inmutable de la decisión materializada.
+- **Eventos:** ninguno propio; la confirmación produce `privacy.grant_created.v1` o `privacy.grant_rejected.v1` por opción.
 
 ### 7.6 `privacy.data_grants`
 
@@ -604,7 +697,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Columnas:** `id` · `person_id uuid` · `relationship_id uuid` · `organization_id uuid` · `scope_definition_id uuid` · `scope_code text` · `consent_event_id uuid` · `access_level privacy.access_level` · `purpose text` · `status privacy.grant_status` · `granted_at timestamptz` · `frozen_at timestamptz` (nullable) · `revoked_at timestamptz` (nullable) · `last_reviewed_at timestamptz` (nullable).
 - **FKs y borrado:** `(relationship_id, person_id, organization_id) → relationships.service_relationships(id, person_id, organization_id) RESTRICT`; `(scope_definition_id, scope_code) → scope_definitions(id, scope_code) RESTRICT`; `(consent_event_id, person_id, relationship_id, organization_id, scope_definition_id, scope_code) → consent_events(id, person_id, relationship_id, organization_id, scope_definition_id, scope_code) RESTRICT` (`IX-07`). `DELETE` revocado.
 - **Uniques y checks:** `UNIQUE parcial (relationship_id, scope_code) WHERE status IN ('active','frozen')` — como máximo un grant no revocado de cada scope, aunque existan versiones distintas. `CHECK` de estado: `active` exige ambos cortes `NULL`; `frozen` exige `frozen_at NOT NULL` y `revoked_at NULL`; `revoked` exige `revoked_at NOT NULL` y puede conservar `frozen_at`. Trigger `privacy.enforce_data_grant_transition_tg` prohíbe `frozen/revoked → active`, `revoked → frozen` y modificar un corte ya fijado.
-- **Actores:** la persona concede/revoca; el profesional asignado y admin/owner leen el estado mientras la relación está activa. `privacy.grant_consent` inserta; `privacy.revoke_grant` actualiza `status, revoked_at`; `relationships.terminate_relationship` actualiza `status, frozen_at`. La lectura histórica solo se ejerce mediante un `historical_access_case` válido y `access_control.can_read_frozen`.
+- **Actores:** la persona concede dentro de `identity.decide_invitation_intent` y revoca después; el profesional asignado y admin/owner leen el estado mientras la relación está activa. La función de decisión inserta; `privacy.revoke_grant` actualiza `status, revoked_at`; `relationships.terminate_relationship` actualiza `status, frozen_at`. La lectura histórica solo se ejerce mediante un `historical_access_case` válido y `access_control.can_read_frozen`.
 - **RLS:** `person_id = access_control.person()` **OR** organización de la relación.
 - **Estados y su efecto en la lectura:**
 
@@ -652,17 +745,17 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 ### 7.9 `privacy.access_events`
 
-- **Propósito:** registro de toda lectura de datos de una persona bajo grant; el actor humano es obligatorio.
+- **Propósito:** registro de toda lectura autorizada de una persona o de la proyección operativa cerrada de una organización; el actor humano es obligatorio.
 - **Dominio / fuente de verdad:** Privacidad.
 - **Clasificación:** `audit`.
-- **Columnas:** `id uuid` · `occurred_at timestamptz` (**clave de partición derivada del UUIDv7**) · `subject_person_id uuid` · `actor_person_id uuid` · `actor_membership_id uuid` (nullable) · `relationship_id uuid` (nullable) · `data_grant_id uuid` (nullable) · `historical_access_case_id uuid` (nullable) · `scope_code text` (nullable) · `scope_version integer` (nullable) · `purpose text` · `access_mode privacy.access_mode` · `resource text` · `request_id uuid` · `result text` (`allowed`, `denied`).
-- **FKs y borrado:** `subject_person_id` y `actor_person_id` con FK `RESTRICT` a `identity.people`; las referencias de alto volumen a relación, grant y caso se validan en la entrada cerrada, no con FK dura sobre cada partición.
-- **Uniques y checks:** PK `(id,occurred_at)`; rango mensual; `access_events_id_partition_time_chk` exige UUIDv7 y `occurred_at=extensions.uuid_v7_timestamp(id)`, lo que hace global la unicidad local. Actor humano obligatorio; frozen permitido exige caso/relación/grant. `privacy.log_access_event` es la única entrada y `privacy.enforce_access_event_context_tg` valida `IX-23`.
+- **Columnas:** `id uuid` · `occurred_at timestamptz` (**clave de partición derivada del UUIDv7**) · `subject_person_id uuid` (nullable) · `subject_organization_id uuid` (nullable) · `actor_person_id uuid` · `actor_membership_id uuid` (nullable) · `relationship_id uuid` (nullable) · `data_grant_id uuid` (nullable) · `historical_access_case_id uuid` (nullable) · `scope_code text` (nullable) · `scope_version integer` (nullable) · `purpose text` · `access_mode privacy.access_mode` (`live`, `frozen`, `break_glass`, `organization_operational`) · `resource text` · `request_id uuid` · `result text` (`allowed`, `denied`).
+- **FKs y borrado:** `subject_person_id` y `actor_person_id` → `identity.people(id) RESTRICT`; `subject_organization_id → organizations.organizations(id) RESTRICT`. Las referencias de alto volumen a relación, grant y caso se validan en la entrada cerrada, no con FK dura sobre cada partición.
+- **Uniques y checks:** PK `(id,occurred_at)`; `CHECK (num_nonnulls(subject_person_id,subject_organization_id)=1)`; rango mensual; `access_events_id_partition_time_chk` exige UUIDv7 y `occurred_at=extensions.uuid_v7_timestamp(id)`. Actor humano obligatorio. La rama personal conserva sus reglas live/frozen/break-glass. La rama organización exige `access_mode='organization_operational'`, `actor_membership_id` activo del mismo tenant y de `actor_person_id`, `resource='organizations.organization_context'` y relación/grant/caso/scope/version nulos. `privacy.log_access_event` es la única entrada y `privacy.enforce_access_event_context_tg` valida `IX-23`.
 - **Actores:** la persona consulta las suyas mediante `privacy.v_my_access_events`; `A12` audita metadatos break-glass mediante `support.list_break_glass_audit_events`; `A10` consulta sus ejercicios en `support.break_glass_events`, no esta tabla. `privacy.log_access_event` inserta en la misma transacción de la lectura.
-- **RLS:** en la tabla base, `SELECT` solo cuando `subject_person_id = access_control.person()`; `INSERT` directo revocado. Ninguna organización, `A10` o `A12` recibe `SELECT` directo.
-- **Consultas:** `(subject_person_id, occurred_at desc)`.
-- **Índices:** `(subject_person_id, occurred_at desc)` por partición.
-- **Retención:** **24 meses**; la purga es `DROP` de partición.
+- **RLS:** en la tabla base, `SELECT` solo cuando `subject_person_id = access_control.person()`; `privacy.v_my_access_events` nunca incluye sujetos organización. `INSERT` directo revocado. Ninguna organización, `A10` o `A12` recibe `SELECT` directo.
+- **Consultas:** `(subject_person_id, occurred_at desc)` para la persona; `(subject_organization_id, occurred_at desc)` solo para investigación restringida de plataforma.
+- **Índices:** ambos compuestos anteriores por partición.
+- **Retención:** **24 meses** para ambas ramas; la purga es `DROP` de partición. La dirección potencialmente `identity_pii` nunca se copia al evento: solo se registra el código de recurso cerrado.
 - **Eventos:** ninguno propio (es el registro, no un hecho de negocio).
 
 ### 7.10 `privacy.retention_policies`
@@ -944,6 +1037,32 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Retención:** se elimina con el contrato no publicado; fixtures de contratos publicados se conservan permanentemente para reproducibilidad.
 - **Eventos:** ninguno.
 
+### 8.13 `catalog.professional_specialties`
+
+- **Propósito:** catálogo global gobernado de especialidades que una persona puede declarar en su perfil profesional.
+- **Dominio / fuente de verdad:** Catálogo.
+- **Clasificación:** `operational`.
+- **Columnas:** `code text` · `name text` · `description text` (nullable) · `status catalog.publication_status` · `display_order integer`.
+- **Uniques y checks:** `PRIMARY KEY code`; nombre no vacío; orden no negativo.
+- **Actores:** lectura autenticada de publicados; escritura solo `A11/curate_global_catalog`.
+- **RLS:** autenticados leen `status='published'`; runtime de producto no escribe.
+- **Consultas / índices:** `(status, display_order, code)`.
+- **Retención:** permanente; deprecar evita nuevas selecciones y conserva referencias existentes.
+- **Eventos:** ninguno.
+
+### 8.14 `catalog.professional_credential_types`
+
+- **Propósito:** catálogo global gobernado de tipos de credencial que una persona puede declarar en su perfil profesional.
+- **Dominio / fuente de verdad:** Catálogo.
+- **Clasificación:** `operational`.
+- **Columnas:** `code text` · `name text` · `description text` (nullable) · `status catalog.publication_status` · `display_order integer`.
+- **Uniques y checks:** `PRIMARY KEY code`; nombre no vacío; orden no negativo.
+- **Actores:** lectura autenticada de publicados; escritura solo `A11/curate_global_catalog`.
+- **RLS:** autenticados leen `status='published'`; runtime de producto no escribe.
+- **Consultas / índices:** `(status, display_order, code)`.
+- **Retención:** permanente; deprecar evita nuevas declaraciones y conserva referencias existentes.
+- **Eventos:** ninguno.
+
 ---
 
 ## 9. Schema `planning`
@@ -1172,7 +1291,21 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Retención:** con la asignación.
 - **Eventos:** `planning.session_rescheduled.v1`.
 
-Nota de conteo: `planning` tiene 16 tablas y 16 fichas; §9.5–9.8 son cuatro tablas físicas independientes.
+### 9.17 `planning.service_access_blocks`
+
+- **Propósito:** representar una causa reversible que hace inefectiva la contribución profesional y/o las sesiones futuras sin mutar sus fuentes de verdad. Es un bloqueo causal, **no** un snapshot del estado que deberá restaurarse.
+- **Dominio / fuente de verdad:** Planificación conserva el bloqueo operativo; Pagos u Organizaciones conservan la transición que lo origina.
+- **Clasificación:** `operational` con causa comercial restringida.
+- **Columnas:** `id uuid` · `person_id uuid` · `organization_id uuid` · `relationship_id uuid` (nullable) · `subscription_id uuid` (nullable) · `organization_event_id uuid` (nullable) · `source_kind text` (`subscription_suspension`, `organization_suspension`) · `blocks_future_sessions boolean` · `blocks_professional_contribution boolean` · `started_at timestamptz` · `ended_at timestamptz` (nullable) · `created_by_kind identity.actor_kind` · `created_by_membership_id uuid` (nullable).
+- **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `(relationship_id, person_id, organization_id) → relationships.service_relationships(id, person_id, organization_id) RESTRICT` cuando se declara relación; `(subscription_id, person_id, organization_id) → payments.plan_subscriptions(id, person_id, organization_id) RESTRICT`; `organization_event_id → organizations.organization_events(id) RESTRICT`; `(created_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`. `planning.enforce_service_access_block_source_ct` valida que el evento organizacional pertenezca al mismo tenant y sea una suspensión.
+- **Uniques y checks:** `UNIQUE (subscription_id) WHERE ended_at IS NULL AND subscription_id IS NOT NULL`; `UNIQUE (organization_event_id, person_id) WHERE ended_at IS NULL AND organization_event_id IS NOT NULL`; `CHECK (num_nonnulls(subscription_id, organization_event_id) = 1)` y correspondencia exhaustiva con `source_kind`; `CHECK (ended_at IS NULL OR ended_at >= started_at)`; al menos uno de los dos flags es verdadero. Una fila cerrada no se reabre ni cambia de fuente.
+- **Actores:** solo funciones cerradas de suspensión/reactivación de Pagos u Organizaciones insertan o fijan `ended_at`; no hay DML directo de runtime. Cerrar exige lock de la fuente y cierra una sola fila coincidente.
+- **RLS:** la persona ve sus bloqueos y `admin`/`owner` con la capacidad correspondiente ven los de su organización. Un coach no lee la causa comercial: las proyecciones cerradas solo consumen `access_control.has_service_block(...)` para denegar contribución o proyectar agenda efectiva.
+- **Consultas / índices:** `(person_id, ended_at)`, `(organization_id, ended_at)`, `(relationship_id, ended_at)` y el unique parcial de fuente abierta.
+- **Retención:** se conserva como evidencia del periodo bloqueado junto con el evento causal; su cierre no altera ni revive grants, relaciones, membresías, asignaciones o sesiones.
+- **Eventos:** ninguno propio; la transición causal emite el evento de suscripción u organización correspondiente.
+
+Nota de conteo: `planning` tiene 17 tablas y 17 fichas; §9.5–9.8 son cuatro tablas físicas independientes.
 
 ---
 
@@ -1459,7 +1592,7 @@ Nota de conteo: `planning` tiene 16 tablas y 16 fichas; §9.5–9.8 son cuatro t
 - **Dominio / fuente de verdad:** Nutrición.
 - **Clasificación:** `nutrition`.
 - **Columnas:** `id uuid` (**Command-Id en `OP-NUT-007/012`**) · `goal_set_id uuid` · `person_id uuid` · `version_number integer` · `origin nutrition.goal_origin` · `status nutrition.goal_status` · `rationale text` (nullable solo para `self`; obligatorio para `professional`) · `author_person_id uuid` · `author_membership_id uuid` (nullable) · `author_assignment_id uuid` (nullable) · `origin_relationship_id uuid` (nullable) · `origin_organization_id uuid` (nullable) · `credential_verification_id uuid` (nullable) · `created_at timestamptz` · `activated_at timestamptz` (nullable) · `cancelled_at timestamptz` (nullable).
-- **FKs y borrado:** `(goal_set_id,person_id) → goal_sets(id,person_id) RESTRICT`; `author_person_id → identity.people(id) RESTRICT`; para origen profesional: `(origin_relationship_id,person_id,origin_organization_id) → relationships.service_relationships(id,person_id,organization_id) RESTRICT`, `(author_membership_id,origin_organization_id,author_person_id) → organizations.organization_memberships(id,organization_id,person_id) RESTRICT` y `(author_assignment_id,origin_relationship_id,person_id,origin_organization_id,author_membership_id) → relationships.relationship_professional_assignments(id,relationship_id,person_id,organization_id,membership_id) RESTRICT`; `credential_verification_id → identity.profile_verifications(id) RESTRICT`; clave portadora `UNIQUE(id,person_id)` (`IX-30`).
+- **FKs y borrado:** `(goal_set_id,person_id) → goal_sets(id,person_id) RESTRICT`; `author_person_id → identity.people(id) RESTRICT`; para origen profesional: `(origin_relationship_id,person_id,origin_organization_id) → relationships.service_relationships(id,person_id,organization_id) RESTRICT`, `(author_membership_id,origin_organization_id,author_person_id) → organizations.organization_memberships(id,organization_id,person_id) RESTRICT` y `(author_assignment_id,origin_relationship_id,person_id,origin_organization_id,author_membership_id) → relationships.relationship_professional_assignments(id,relationship_id,person_id,organization_id,membership_id) RESTRICT`; `credential_verification_id → identity.professional_credential_verifications(id) RESTRICT`; clave portadora `UNIQUE(id,person_id)` (`IX-30`).
 - **Uniques y checks:** `UNIQUE(goal_set_id,version_number)`; activo único por set; pendiente profesional único por `(goal_set_id,origin_relationship_id)`; shape `self` sin contexto profesional y `professional` con contexto completo más `NULLIF(btrim(rationale),'') IS NOT NULL` y longitud máxima 2000; contenido inmutable, transición solo por funciones.
 - **Actores:** persona publica self y decide; profesional elegible propone; ningún actor actualiza contenido.
 - **RLS:** self por goal set; live/frozen profesional solo por proyecciones.
@@ -1543,6 +1676,18 @@ Nota de conteo: `planning` tiene 16 tablas y 16 fichas; §9.5–9.8 son cuatro t
 - **Consultas / índices:** `(job_name, started_at desc)`; único `(job_name, cycle_key)`.
 - **Retención:** auditoría operativa.
 - **Eventos:** ninguno.
+
+### 11.4 `system.invitation_rate_windows`
+
+- **Propósito:** aplicar límites de emisión/entrega sin persistir el destinatario ni la IP.
+- **Dominio / fuente de verdad:** Sistema; contador operativo temporal.
+- **Clasificación:** `operational` minimizado.
+- **Columnas:** `scope text` (`actor_hour`, `organization_day`, `destination_day`) · `scope_hash bytea` · `window_started_at timestamptz` · `attempt_count integer` · `expires_at timestamptz` · `updated_at timestamptz`.
+- **Uniques y checks:** PK `(scope, scope_hash)`; hash SHA-256 de 32 bytes; contador positivo; expiración no superior a siete días de retención operacional.
+- **Actores / RLS:** solo `allfit_owner` mediante `system.consume_invitation_rate_window`; sin grants de tabla para `allfit_api` y sin IP en la base de aplicación.
+- **Consultas / índices:** la PK resuelve cada ventana; el worker elimina por `expires_at` durante la expiración de invitaciones.
+- **Retención:** máximo siete días.
+- **Eventos:** ninguno; el límite produce métrica sin PII y respuesta `429` con `Retry-After`.
 
 ---
 
@@ -1684,7 +1829,7 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 - **Columnas:** `id` · `person_id uuid` · `organization_id uuid` · `plan_version_id uuid` · `status payments.subscription_status` (`active`, `suspended`, `ended`) · `external_subscription_ref text` (nullable) · `current_period_end date` (nullable) · `started_at timestamptz` · `suspended_at timestamptz` (nullable) · `ended_at timestamptz` (nullable) · `ended_by_kind identity.actor_kind` (nullable) · `ended_by_membership_id uuid` (nullable).
 - **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `(plan_version_id, organization_id) → plan_versions(id, organization_id) RESTRICT` (`IX-38`); `(ended_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`; clave portadora `UNIQUE (id, person_id, organization_id)`.
 - **Uniques y checks:** `UNIQUE (person_id, organization_id) WHERE status <> 'ended'`; `CHECK ((status = 'suspended') = (suspended_at IS NOT NULL))`; `CHECK ((status = 'ended') = (ended_at IS NOT NULL))`; **`CHECK (status <> 'ended' OR ended_by_kind IS NOT NULL)`** — nada termina sin un actor humano, y el worker de pagos no puede escribir `ended` porque no tiene actor humano que declarar.
-- **Actores:** la persona se suscribe y cancela; `admin`/`owner` suspenden, reactivan y terminan; el worker de pagos solo transiciona entre `active` y `suspended`.
+- **Actores:** la persona se suscribe y cancela; `admin`/`owner` suspenden, reactivan y terminan; el worker de pagos solo transiciona entre `active` y `suspended`. Suspender y reactivar se ejecutan mediante funciones cerradas que abren o cierran el `planning.service_access_blocks` exacto bajo lock (`IX-40`); ninguna transición restaura filas de otros dominios.
 - **RLS:** `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** `access_control.has_capability(organization_id,'manage_billing')`). Un `coach` **no** lee esta tabla: el estado de pago de su cliente no es asunto suyo.
 - **Consultas / índices:** `(person_id, status)`, `(organization_id, status)`.
 - **Retención:** con la persona; la anonimización rompe el vínculo y conserva el agregado de la organización.
@@ -1826,18 +1971,18 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 
 | Schema | Tablas fichadas |
 | --- | --- |
-| `identity` | 14 |
-| `organizations` | 10 |
+| `identity` | 20 |
+| `organizations` | 11 |
 | `relationships` | 6 |
 | `privacy` | 16 |
-| `catalog` | 12 |
-| `planning` | 16 |
+| `catalog` | 14 |
+| `planning` | 17 |
 | `execution` | 14 |
 | `nutrition` | 8 |
 | `payments` | 12 |
-| `system` | 3 |
+| `system` | 4 |
 | `support` | 5 |
-| **Total** | **116** |
+| **Total** | **127** |
 
 ### 14.2 Invariantes transversales confirmadas por el diccionario
 
@@ -1868,7 +2013,7 @@ P0-07 cerró objetos/JSONB/particiones y P0-08 cerró receipts, PKs offline y re
 
 Entregable principal de detalle de la Fase 4, complementado por el catálogo de objetos físicos. Se considera completo cuando la revisión confirme que:
 
-1. las 116 tablas tienen ficha completa en sus quince campos;
+1. las 127 tablas tienen ficha completa en sus quince campos;
 2. el diccionario, el ERD lógico y las cardinalidades coinciden;
 3. cada tabla tiene responsabilidad clara, integridad y justificación en operaciones reales;
 4. ninguna tabla podría no existir sin romper una operación de la matriz;

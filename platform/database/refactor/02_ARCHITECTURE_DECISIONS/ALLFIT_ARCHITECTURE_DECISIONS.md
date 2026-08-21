@@ -42,7 +42,7 @@ Cada sección conserva su contexto, decisión, invariantes, consecuencias y prue
 
 ---
 
-## ADR-001 — Registro directo en Space e invitaciones opcionales desde Studio
+## ADR-001 — Registro directo e invitaciones separadas por superficie
 
 **Estado:** en revisión<br>
 **Fecha:** 18 de julio de 2026
@@ -53,14 +53,15 @@ Allfit Space debe permitir que cualquier persona elegible se registre y use su F
 
 ### Decisión
 
-Existen dos entradas al mismo flujo de identidad:
+Existen tres entradas personales al mismo flujo de identidad:
 
 1. **Registro directo en Space:** la persona inicia personalmente el registro mediante WorkOS AuthKit, acredita elegibilidad adulta, acepta términos y completa onboarding sin invitación.
-2. **Invitación opcional desde Studio:** Studio emite una invitación por email o celular; la persona se registra o inicia sesión por sí misma y decide sus intenciones.
+2. **Registro directo desde Studio:** la persona inicia personalmente el registro mediante la aplicación WorkOS de Studio y completa el mismo onboarding canónico desde la superficie Studio antes de crear u operar una organización.
+3. **Invitación opcional emitida desde Studio:** la organización propone un vínculo y la persona se registra o inicia sesión por sí misma. Una invitación de equipo se entrega por email y se consulta y decide exclusivamente en Studio; una invitación de cliente se consulta y decide en Space.
 
-La invitación no es requisito para crear una cuenta, activar el Fitness ID o usar las funciones personales de Space. El registro directo crea únicamente persona, cuenta, perfil inicial y evidencia propia del onboarding; no crea organización, membresía, relación profesional, asignación ni grants de servicio.
+La invitación no es requisito para crear una cuenta o activar el Fitness ID. El registro directo, se presente desde Space o Studio, crea únicamente persona, cuenta y evidencia propia del onboarding; no crea organización, membresía, relación profesional, asignación ni grants de servicio.
 
-Allfit Studio **solo puede emitir invitaciones por email o celular** para iniciar propuestas hacia otra persona.
+Allfit Studio solo puede iniciar propuestas hacia otra persona mediante una invitación. El canal V1 de equipo es exclusivamente email; otros canales no se infieren ni se habilitan por compartir el modelo con invitaciones de cliente. La activación disponible en Studio es autoservicio del titular autenticado y no concede a la organización facultad alguna para activarlo a él o a terceros.
 
 Studio nunca puede:
 
@@ -71,18 +72,18 @@ Studio nunca puede:
 - crear una membresía o relación efectiva antes de la aceptación;
 - asignar de forma efectiva un programa a alguien que todavía no se ha registrado.
 
-Cuando el proceso se origina en Studio, antes de la aceptación existe únicamente una invitación, no una persona provisional. La persona y cuenta se materializan cuando su titular verifica el contacto, acredita elegibilidad y completa personalmente el onboarding. En el registro directo de Space no existe invitación ni debe crearse una artificial.
+Antes de la aceptación existe únicamente una invitación, no una persona provisional. La persona y cuenta se materializan cuando su titular verifica el contacto, acredita elegibilidad y completa personalmente el onboarding. La activación puede asociar el hash de la invitación para conservar continuidad, pero nunca la acepta automáticamente. En el registro directo de Space no existe invitación ni debe crearse una artificial.
 
 ### Invariantes
 
 1. Space permite registro directo sin invitación, organización o relación profesional.
 2. Una invitación no es una persona ni una cuenta.
-3. El email/celular de una invitación no se usa para crear automáticamente un usuario de WorkOS.
+3. El destino de una invitación no se usa para crear automáticamente un usuario de WorkOS.
 4. Solo el titular que controla el contacto puede iniciar/completar el registro o autenticación mediante AuthKit.
-5. Si la invitación usa email, el email verificado por WorkOS debe coincidir con el destino normalizado. Si usa celular, la aceptación exige una prueba de control separada y aprobada; el token de AuthKit no prueba control del teléfono.
+5. Si la invitación usa email, el email verificado por WorkOS debe coincidir exactamente con el destino normalizado. Un email no verificado no puede decidir.
 6. Una invitación no concede permisos ni acceso a datos.
 7. La aceptación materializa únicamente las intenciones que la persona acepta.
-8. Una persona ya registrada en Space acepta la invitación con su identidad existente; no se crea otra.
+8. Una persona ya registrada en Allfit acepta la invitación con su identidad existente; no se crea otra.
 9. El registro directo no materializa intenciones, membresías, relaciones, asignaciones o grants inexistentes.
 10. Ambos caminos producen el mismo tipo de persona, cuenta y Fitness ID canónicos.
 11. El flujo completo es idempotente, transaccional y auditable.
@@ -110,16 +111,16 @@ sequenceDiagram
 sequenceDiagram
     participant Studio as "Allfit Studio"
     participant Inv as "Servicio de invitaciones"
-    participant P as "Persona invitada"
+    participant P as "Persona invitada en Studio o Space"
     participant Auth as "WorkOS AuthKit"
     participant DB as "Dominio Allfit"
 
-    Studio->>Inv: Invitar email/celular + propósito
+    Studio->>Inv: Invitar + propósito tipado
     Inv->>DB: Guardar invitación y token hasheado
-    Inv-->>P: Enviar enlace/OTP
+    Inv-->>P: Enviar enlace a la superficie del propósito
     P->>Auth: Iniciar personalmente registro/autenticación
     Auth-->>P: Verificar email
-    P->>DB: Completar onboarding y decidir cada intención
+    P->>DB: Completar onboarding si aplica y decidir
     DB->>DB: Validar token, contacto, vigencia e idempotencia
     DB->>DB: Crear/vincular persona y materializar solo intenciones aceptadas
     DB-->>P: Registro completado
@@ -132,7 +133,7 @@ sequenceDiagram
 - `id`;
 - `organization_id`;
 - `invited_by_person_id`;
-- `channel`: `email` o `phone`;
+- `channel`: `email` en invitaciones de equipo V1; otros canales solo cuando el propósito los apruebe explícitamente;
 - destino normalizado y protegido;
 - `token_hash`, nunca el token plano;
 - propósito/tipo de invitación;
@@ -221,7 +222,7 @@ AuthKit verifica email como identidad primaria. La ruta de invitación por celul
 ## ADR-002 — WorkOS AuthKit para autenticación y Supabase únicamente como PostgreSQL
 
 **Estado:** aceptada para V1<br>
-**Fecha:** 3 de agosto de 2026<br>
+**Fecha:** 3 de agosto de 2026; ampliada el 12 de agosto de 2026<br>
 **Supersedida parcialmente por:** ADR-029 sustituye únicamente la separación física de los repositorios de producto; conserva Applications, deployables, identidad y superficies independientes
 
 ### Contexto
@@ -740,8 +741,8 @@ Duplica persona, programa, calendario, privacidad y ejecución; dificulta entren
 
 ## ADR-004 — Operación profesional siempre dentro de una organización
 
-**Estado:** en revisión<br>
-**Fecha:** 18 de julio de 2026
+**Estado:** aceptada para V1<br>
+**Fecha:** 18 de julio de 2026; ratificada el 17 de agosto de 2026
 
 ### Contexto
 
@@ -759,7 +760,7 @@ Modelar al “coach independiente” y al “gimnasio” como raíces incompatib
 - Cada operación profesional debe registrar tanto el actor profesional como la organización bajo la cual actuó.
 - La oferta comercial tiene siempre una organización vendedora, aunque públicamente destaque el perfil de una persona profesional.
 
-Tipos estables como `professional_practice`, `gym`, `studio`, `academy` o `clinic` describen la clase principal de operación; no crean modelos raíz separados. `solo_professional` no es un tipo de organización, sino una modalidad de onboarding.
+Los tipos activos iniciales `professional_practice`, `gym` y `studio` describen la clase principal de operación; no crean modelos raíz separados. `academy` y `clinic` permanecen gobernados pero inactivos hasta que exista un caso real aprobado. `solo_professional` no es un tipo de organización, sino una modalidad de onboarding.
 
 ### Invariantes
 
@@ -905,8 +906,8 @@ La persona necesita continuidad de su historial y la organización necesita pres
 
 ## ADR-006 — Evolución de práctica unipersonal a equipo sin cambiar de organización
 
-**Estado:** en revisión<br>
-**Fecha:** 18 de julio de 2026
+**Estado:** aceptada para V1<br>
+**Fecha:** 18 de julio de 2026; ratificada el 17 de agosto de 2026
 
 ### Contexto
 
@@ -920,7 +921,7 @@ El tamaño actual del equipo y la clase de operación son dimensiones diferentes
 - `solo_professional` describe la modalidad de onboarding y procedencia inicial; no limita la evolución posterior ni gobierna autorización.
 - La condición unipersonal se deriva de las membresías activas y no se persiste como `is_independent` o tipo permanente.
 - La práctica puede incorporar staff y otros profesionales conservando el mismo `organization_id`, clientes, relaciones, programas, productos, pagos, suscripción y auditoría.
-- El tipo principal de organización describe su operación —práctica profesional, gimnasio, estudio, academia o clínica—, no el número de integrantes.
+- El tipo principal de organización describe su operación —inicialmente práctica profesional, gimnasio o estudio—, no el número de integrantes. Academia y clínica permanecen como tipos inactivos hasta que exista un caso real aprobado.
 - Añadir miembros no cambia `organization_kind`. Un cambio real de actividad principal requiere una transición explícita y auditada, no una migración de identidad.
 - Cada relación de servicio conserva la organización y el profesional responsable. Una reasignación cambia al responsable mediante historial efectivo, sin reemplazar la procedencia anterior.
 - Los límites comerciales o de SaaS pueden depender del número de miembros, sedes o capacidades, sin alterar la identidad de la organización.
@@ -1088,6 +1089,16 @@ Términos y política de privacidad, cada `data_grant`, contratos comerciales, c
 
 Las invitaciones de staff y clientes no se mezclan. Una invitación puede completarse parcialmente; `completed` significa que la persona decidió las intenciones presentadas, no que las aceptó todas.
 
+| Propósito | Superficie de consulta y decisión | Regla V1 |
+| --- | --- | --- |
+| `staff_invitation` | Studio | Una intención de membresía; email verificado coincidente; nunca materializa entidades de cliente. |
+| `client_invitation` | Space | Relación, programa y scopes presentados por separado; nunca materializa membresías o roles de equipo. |
+
+El enlace de staff usa `https://studio.allfit.one/invitations#token=…`. El token
+se retira del navegador antes de renderizar, se conserva solo durante la pestaña
+y llega a la API exclusivamente en el cuerpo JSON de un `POST`. No aparece en
+paths, query strings, logs o referrers.
+
 ### Modelo y estados
 
 ```text
@@ -1123,6 +1134,9 @@ Las referencias vinculantes no viven únicamente en JSONB. El modelo lógico deb
 7. Cada materialización es transaccional, idempotente y auditable.
 8. Los reintentos concurrentes producen como máximo una membresía, relación o asignación por intención.
 9. No existe una operación `accept_all` que evite mostrar y registrar decisiones separadas.
+10. La resolución pública nunca devuelve el destino y trata inválida, vencida, revocada y consumida como el mismo `404`.
+11. Una decisión de staff exige el email verificado exacto del destinatario y no crea perfil de cliente, relación, scope o grant.
+12. Aceptar y revocar bloquean la misma invitación; gana la primera transacción confirmada.
 
 ### Consecuencias
 
@@ -1154,8 +1168,8 @@ Las referencias vinculantes no viven únicamente en JSONB. El modelo lógico deb
 
 ## ADR-009 — Versionado independiente e inmutable de plantillas de sesión
 
-**Estado:** en revisión<br>
-**Fecha:** 18 de julio de 2026
+**Estado:** aceptada para V1<br>
+**Fecha:** 18 de julio de 2026; ratificada el 17 de agosto de 2026
 
 ### Contexto
 
@@ -1886,8 +1900,8 @@ La extracción se realiza por bounded context/dominio —por ejemplo booking, co
 
 ## ADR-015 — Consentimiento a la parte responsable con acceso por profesionales asignados
 
-**Estado:** en revisión<br>
-**Fecha:** 20 de julio de 2026
+**Estado:** aceptada para V1<br>
+**Fecha:** 20 de julio de 2026; ratificada el 17 de agosto de 2026
 
 ### Contexto
 
@@ -2479,8 +2493,8 @@ Esto no autoriza una tabla EAV universal ni un JSON de perfil abierto. Los valor
 
 ## ADR-019 — Desacoplar y pausar asignaciones al terminar una relación
 
-**Estado:** en revisión<br>
-**Fecha:** 20 de julio de 2026
+**Estado:** aceptada para V1<br>
+**Fecha:** 20 de julio de 2026; ratificada el 17 de agosto de 2026
 
 ### Contexto
 
@@ -2731,8 +2745,8 @@ Los nombres físicos se decidirán en el modelo lógico. No se persiste una visi
 
 ## ADR-021 — Capacidades diferidas sin modelo físico especulativo en V1
 
-**Estado:** en revisión<br>
-**Fecha:** 20 de julio de 2026
+**Estado:** aceptada para V1<br>
+**Fecha:** 20 de julio de 2026; ratificada el 17 de agosto de 2026
 
 ### Contexto
 
@@ -3336,11 +3350,11 @@ Dejar esas decisiones a un claim, role o permission de WorkOS, un procedimiento 
 
 ### Decisión
 
-1. V1 solo verifica afirmaciones de **credenciales profesionales**. WorkOS verifica el email de autenticación; la prueba de control de celular pertenece al contrato separado de identidad. La mayoría de edad continúa como declaración de elegibilidad; identidad documental, salud, biometría, afiliación comercial y perfil completo no reciben estado `authority_verified`.
+1. V1 solo verifica versiones exactas de **credenciales profesionales** normalizadas. WorkOS verifica el email de autenticación; la prueba de control de celular pertenece al contrato separado de identidad. La mayoría de edad continúa como declaración de elegibilidad; identidad documental, salud, biometría, afiliación comercial y perfil completo no reciben estado `authority_verified`.
 2. `A11` es el actor de plataforma, pero verificar exige el deber separado `verify_professional_credentials`, AAL2 y una asignación interna vigente. Tener `curate_catalog` no concede verificación.
 3. Solo se admiten `official_registry_lookup` e `issuer_confirmation`. No se copian documentos: se conserva autoridad, referencia mínima, instante, resultado, fingerprint y versión de política.
-4. La verificación exige `valid_to`, con máximo de doce meses y nunca posterior al vencimiento publicado por la autoridad. Renovar, revocar o apelar crea otro evento; no reescribe la afirmación.
-5. El verificador no puede ser el sujeto, autor/capturador de la afirmación, miembro activo de una organización compartida con el sujeto, profesional asignado suyo ni decisor de la apelación que revisa. Un conflicto o evidencia ambigua falla cerrado como `unverifiable`.
+4. La verificación exige `valid_to`, con máximo de doce meses y nunca posterior al vencimiento publicado por la autoridad. Renovar, revocar o apelar crea otro evento; no reescribe la credencial declarada ni transfiere autoridad a una revisión posterior de ella.
+5. El verificador no puede ser el sujeto, declarante/revisor de la credencial, miembro activo de una organización compartida con el sujeto, profesional asignado suyo ni decisor de la apelación que revisa. Un conflicto o evidencia ambigua falla cerrado como `unverifiable`.
 6. Los deberes `A10`, `A11` verificador y `A12` se provisionan fuera de roles organizacionales, vencen como máximo a los 90 días y requieren recertificación por seguridad/privacidad. Revocarlos corta inmediatamente nuevas decisiones y cierra ventanas break-glass abiertas del `A10` afectado.
 7. Break-glass usa cinco propósitos cerrados, referencia obligatoria a un caso, AAL2, sujeto exacto, categorías concretas y alcance inmutable. No existe `other`, acceso a “toda la cuenta” ni extensión de una ventana.
 8. `relationship_training`, `prior_training_history` y `nutrition_guidance` requieren una aprobación `A12` y duran como máximo 30 minutos. `body_progress`, `health_context` y `nutrition_intake` requieren **dos aprobaciones de A12 distintos** y duran como máximo 15 minutos. Una solicitud mixta hereda el quorum y plazo más restrictivos.
@@ -3354,7 +3368,7 @@ Dejar esas decisiones a un claim, role o permission de WorkOS, un procedimiento 
 ### Invariantes
 
 1. Ninguna credencial de catálogo, grupo del cliente o rol de gimnasio concede por sí solo autoridad de verificación o break-glass.
-2. Una verificación cubre una afirmación, método, fuente y vigencia exactos.
+2. Una verificación cubre una versión de credencial, método, fuente y vigencia exactos.
 3. Evidencia ambigua o conflicto de interés nunca produce `verified`.
 4. La máxima sensibilidad exige dos aprobadores distintos y una ventana de máximo 15 minutos.
 5. Un rechazo cierra la solicitud; aprobaciones parciales no conceden acceso.
@@ -3385,7 +3399,7 @@ Dejar esas decisiones a un claim, role o permission de WorkOS, un procedimiento 
 1. Un curador sin `verify_professional_credentials` no registra verificaciones.
 2. Una consulta de registro oficial válida verifica una sola credencial y vence dentro de doce meses.
 3. Un documento subido, una declaración de edad o evidencia ambigua no producen `authority_verified`.
-4. El sujeto, autor, profesional asignado o miembro de una organización compartida no verifica la afirmación.
+4. El sujeto, declarante/revisor, profesional asignado o miembro de una organización compartida no verifica la credencial.
 5. Una categoría estándar abre con un A12; una restringida permanece cerrada hasta dos aprobaciones distintas.
 6. Un rechazo, solicitud vencida o deber expirado impiden abrir o ejercer.
 7. La ventana restringida vence a los 15 minutos aunque el job no haya corrido.
@@ -3482,6 +3496,13 @@ Las HU de Backoffice declaraban un único `allfit_admin` con acceso ordinario a 
 14. Ningún runtime usa owner, superuser o `BYPASSRLS`; el rol de conexión de soporte sólo ejecuta funciones/proyecciones cerradas.
 15. Backoffice usa un WorkOS Application propia dentro del WorkOS environment compartido y la API sólo acepta ese `client_id` en `/backoffice/v1`. Los WorkOS Applications de Space u Studio no obtienen acceso por compartir `sub` o `person_id`.
 16. El bootstrap inicial y una recuperación por pérdida total de autoridad no son endpoints. Una ceremonia operativa con aprobación de dos personas usa temporalmente `allfit_migrator` para insertar, en una sola transacción, al menos dos roles base y sus deberes `manage_platform_access` cruzados: cada destinatario tiene como otorgante a la otra persona. El pipeline deshabilita esa credencial al terminar y conserva evidencia; no hay seed ni excepción de autoasignación.
+17. Backoffice V1 autentica correo + contraseña y TOTP mediante las APIs independientes de WorkOS. Hosted AuthKit no participa en el login y el MFA global del environment permanece desactivado para esta superficie.
+18. La API sólo crea la sesión Backoffice después de confirmar el challenge TOTP y revalidar persona activa, rol base, factor y carrera de revocación. PostgreSQL materializa `assurance_level=2`, `authentication_method='password_totp'` y `assurance_verified_at` para el `sid` exacto; ningún claim permite inferirlos.
+19. La sesión Backoffice es host-only, dura ocho horas como máximo y quince minutos sin actividad. Retirar el rol, recuperar el factor o cambiar la contraseña revoca sesiones e intentos; el worker reintenta revocaciones externas con outbox y dead letter.
+20. Una cuenta conserva como máximo un TOTP activo. QR, clave manual, tokens y challenge se cifran sólo mientras el intento está abierto; PostgreSQL conserva el factor ID requerido por WorkOS y únicamente hashes de cookies opacas.
+21. El reset de contraseña usa `createPasswordReset` con la Application Backoffice. WorkOS envía el correo y sirve la página en `*.authkit.app`; la API descarta URL y token y responde uniformemente. `auth.allfit.one` queda diferido como branding/configuración.
+22. Contraseña + TOTP es la evidencia AAL2 interna de V1, pero no es resistente al phishing. No se declarará equivalencia integral con una oferta AAL2 moderna hasta adoptar WebAuthn/passkeys.
+23. El bootstrap y la recuperación TOTP se ejecutan únicamente mediante workflows protegidos con credencial `allfit_migrator`, dos personas, evidencia durable y deshabilitación de la credencial al terminar. No existen endpoints equivalentes.
 
 ### Invariantes
 

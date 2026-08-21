@@ -1,8 +1,8 @@
 # Catálogo de objetos físicos y contratos JSONB V1
 
-**Fecha:** 3 de agosto de 2026
+**Fecha:** 17 de agosto de 2026
 **Fase:** 4 — cierre de especificación física
-**Estado:** inventario de 116 tablas; sesión técnica de Studio materializada
+**Estado:** inventario recertificado de 127 tablas
 **Deriva de:** [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`V1_DATA_DICTIONARY.md`](./V1_DATA_DICTIONARY.md)
 
 ## 1. Propósito
@@ -15,26 +15,26 @@ Este catálogo cierra las decisiones que no pueden dejarse a quien escriba la pr
 - forma, versión y validación de cada JSONB;
 - identidad global y mantenimiento de tablas particionadas.
 
-No sustituye las fichas de las 116 tablas. Fija las reglas mecánicas que todas consumen.
+No sustituye las fichas de las 127 tablas. Fija las reglas mecánicas que todas consumen.
 
 ## 2. Inventario recertificado
 
 | Schema | Tablas |
 | --- | ---: |
-| `identity` | 14 |
-| `organizations` | 10 |
+| `identity` | 20 |
+| `organizations` | 11 |
 | `relationships` | 6 |
 | `privacy` | 16 |
-| `catalog` | 12 |
-| `planning` | 16 |
+| `catalog` | 14 |
+| `planning` | 17 |
 | `execution` | 14 |
 | `nutrition` | 8 |
 | `payments` | 12 |
-| `system` | 3 |
+| `system` | 4 |
 | `support` | 5 |
-| **Total** | **116** |
+| **Total** | **127** |
 
-El conteo se obtiene de 116 fichas de tabla en el diccionario, incluida `identity.access_sessions` como almacenamiento técnico de sesión. Incluye cuatro targets, cinco resultados tipados, ocho tablas nutricionales y las cinco tablas de soporte de ADR-028 como tablas independientes. Excluye:
+El conteo se obtiene de 127 fichas únicas del diccionario. Incluye `identity.access_sessions` como sesión técnica multi-superficie; `identity.password_reset_receipts`; `identity.access_account_mfa_factors`, `identity.backoffice_authentication_attempts` e `identity.mfa_factor_recovery_events`; `organizations.organization_type_transitions`; `planning.service_access_blocks`; `system.invitation_rate_windows`; y las tablas normalizadas de especialidades, tipos de credencial y credenciales profesionales. Incluye cuatro targets, cinco resultados tipados, ocho tablas nutricionales y las cinco tablas de soporte de ADR-028 como tablas independientes. Excluye:
 
 - enums;
 - vistas y funciones;
@@ -53,6 +53,9 @@ Un enum existe una sola vez en el schema indicado. Una columna de otro schema us
 | --- | --- |
 | `identity.actor_kind` | todos los dominios que registran actor |
 | `identity.access_session_surface` | `identity.access_sessions` |
+| `identity.password_reset_receipt_result` | `identity.password_reset_receipts` |
+| `identity.mfa_factor_status` | `identity.access_account_mfa_factors` |
+| `identity.backoffice_authentication_attempt_status` | `identity.backoffice_authentication_attempts` |
 | `identity.provenance` | ejecución y perfil |
 | `privacy.access_level` | relaciones, planificación y ejecución |
 | `catalog.content_scope` | catálogo |
@@ -87,8 +90,8 @@ Reglas adicionales:
 1. `<columnas>` conserva el orden del DDL y omite `DESC`.
 2. Una tabla tiene como máximo una policy por comando; las alternativas de actor se combinan dentro de ella.
 3. Si el nombre excede 63 bytes, se conserva un prefijo de 54 bytes y se añade `_` + los primeros 8 hex de `sha256(nombre_completo)`. El script generador y el verificador usan la misma función.
-4. Los índices obligatorios son los de las fichas y `PR-01..27`; no se crean índices “por si acaso”.
-5. Los triggers guardianes `IX-01..35`, `privacy.enforce_data_grant_transition_tg`, los validadores JSONB y los de partición conservan los nombres publicados, no los regeneran.
+4. Los índices obligatorios son los de las fichas y `PR-01..29`; no se crean índices “por si acaso”.
+5. Los triggers guardianes `IX-01..45`, `privacy.enforce_data_grant_transition_tg`, los validadores JSONB y los de partición conservan los nombres publicados, no los regeneran.
 
 ## 5. Contrato transversal JSONB
 
@@ -120,11 +123,10 @@ Cada tabla instala un `CHECK` llamado `<table>_<json_column>_contract_chk`. Los 
 | Tabla/columna | Código de contrato V1 | Forma cerrada | Validación adicional |
 | --- | --- | --- | --- |
 | `eligibility_evidence.policy_snapshot` | `identity.eligibility_policy_snapshot` | objeto: `policy_code`, `minimum_age`, `jurisdiction`, `evidence_kind`, `evaluated_result`; opcional `birth_year` | `minimum_age=18`; nunca documento ni fecha de nacimiento completa |
-| `professional_profiles.credentials` | `identity.professional_credentials` | array máximo 100; cada objeto: `credential_type`, `issuer`, `name`; opcionales `identifier`, `issued_on`, `expires_on`, `verification_url` | fechas ISO y URL HTTPS |
 | `identity.invitations.responsible_party_snapshot` | `identity.responsible_party_snapshot` | objeto: `organization_id`, `party_kind`, `party_name`, `purpose`, `captured_at` | organization coincide con la fila |
 | `organizations.responsible_party` | `organizations.responsible_party` | objeto: `party_kind`, `party_name`, `purpose`; opcionales `legal_identifier`, `contact` | `party_kind` natural/legal |
-| `organization_events.before/after` | `audit.organization_event_snapshot` | subset de `type_code`, `legal_name`, `display_name`, `status`, `responsible_party_*` | validator recibe `event_type`; before/after no pueden ser ambos nulos |
-| `membership_events.before/after` | `audit.membership_event_snapshot` | subset de `organization_id`, `person_id`, `status` | validator por `event_type` |
+| `organization_events.before/after` | `audit.organization_event_snapshot` | unión cerrada: organización (`type_code`, `legal_name`, `display_name`, `status`, `revision_number`), sede (`site_id`, `name`, `address`, `status`, `revision_number`) o transferencia (`previous_owner_membership_id`, `owner_membership_id`) | validator recibe `event_type`; `legal_name/address` pueden ser `identity_pii` y siguen su retención; no admite `responsible_party`, contacto ni identificador legal; transferencia exige ambos owner IDs y sede exige `site_id` |
+| `membership_events.before/after` | `audit.membership_event_snapshot` | objeto cerrado con contexto (`organization_id`, `person_id`, `status`) y, según evento, `role_code`, `valid_from`, `valid_to` | validator por `event_type`; grant/revoke exige rol/vigencia y transferencia exige cambios owner coherentes en ambos eventos |
 | `professional_assignment_events.before/after` | `audit.professional_assignment_snapshot` | subset de contexto, membership, kind, status, vigencias y aceptación | validator por `event_type` |
 | `relationship_events.detail` | `relationships.relationship_event_detail` | objeto con `reason_code`, `declared_by_side`, `effective_at`; `reason_text` opcional | claves permitidas dependen de `event_type` |
 | `consent_events.presented_snapshot` | `privacy.consent_presented_snapshot` | objeto: scope/version, nivel, propósito, parte responsable y array cerrado de resource/field/action | debe coincidir con definición, solicitud y relación |
@@ -184,10 +186,12 @@ La migración inicial crea el mes actual más tres meses futuros. Una escritura 
 
 | ID | Demostración |
 | --- | --- |
-| `T-SCHEMA-01` | ERD, diccionario e inventario reportan exactamente 116 tablas y el diccionario contiene 116 fichas únicas. |
+| `T-SCHEMA-01` | ERD, diccionario e inventario reportan exactamente 127 tablas y el diccionario contiene 127 fichas únicas. |
 | `T-SCHEMA-02` | Cada tabla/columna/FK/check/índice de las fichas se compara con `pg_catalog`; falta o nombre distinto falla CI. |
 | `T-SCHEMA-03` | Cada tabla con RLS tiene exactamente las policies esperadas por comando y ninguna policy extra permisiva. |
 | `T-SCHEMA-04` | Cada JSONB acepta fixtures V1 válidos y rechaza versión, claves, tipos y campos adicionales inválidos. |
+| `T-SCHEMA-04A` | Fixtures positivos cubren sede creada/actualizada, transferencia con ambos owner IDs, rol concedido/revocado y vigencias before/after. |
+| `T-SCHEMA-04B` | Fixtures negativos rechazan sede sin `site_id`, transferencia sin uno de los owner IDs, rol sin `role_code`/vigencia, contacto/`responsible_party`, UUID o timestamp inválido y claves adicionales. |
 | `T-SCHEMA-05` | El mismo UUIDv7 no puede insertarse en dos particiones; timestamp forjado y UUID no-v7 se rechazan. |
 | `T-SCHEMA-06` | El job de particiones es idempotente, replica índices y mantiene al menos 90 días de cobertura. |
 

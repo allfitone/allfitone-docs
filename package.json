@@ -2,7 +2,8 @@
   "name": "allfitone-docs",
   "private": true,
   "scripts": {
-    "check": "npm run check:markdown && npm run check:links",
+    "check": "npm run check:markdown && npm run check:links && npm run check:dependencies",
+    "check:dependencies": "node scripts/check-story-dependencies.mjs",
     "check:links": "node scripts/check-links.mjs",
     "check:markdown": "markdownlint-cli2 \"**/*.md\" \"#node_modules\""
   },

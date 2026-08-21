@@ -13,12 +13,12 @@ Este documento consolida las modificaciones de diseño de base de datos que debe
 La revisión parte de:
 
 - las 94 historias de [Allfit Space](../../../../products/space/USER_STORIES.md);
-- las 84 historias de [Allfit Studio](../../../../products/studio/USER_STORIES.md);
+- las 86 historias de [Allfit Studio](../../../../products/studio/USER_STORIES.md);
 - las 33 historias de [Allfit Backoffice](../../../../products/backoffice/USER_STORIES.md);
 - los entregables vigentes de Fases 1 a 4;
 - el estado declarado en [PHASE_5_READINESS_REVIEW.md](./PHASE_5_READINESS_REVIEW.md).
 
-Este documento autoriza iniciar Fase 5 únicamente mediante rebanadas verticales que hayan cerrado su propio gate. No autoriza generar de una vez las 116 tablas documentadas, crear placeholders ni implementar una HU mientras alguno de los P0 que consume siga abierto.
+Este documento autoriza iniciar Fase 5 únicamente mediante rebanadas verticales que hayan cerrado su propio gate. No autoriza generar de una vez las 127 tablas documentadas, crear placeholders ni implementar una HU mientras alguno de los P0 que consume siga abierto.
 
 ## 2. Veredicto
 
@@ -30,13 +30,13 @@ La inspección reproducible del estado actual arroja:
 
 | Dimensión | Estado declarado por el `GO` | Estado documental actual |
 | --- | ---: | ---: |
-| Historias de usuario | No forman parte de las fuentes de la revisión | 211 |
+| Historias de usuario | No forman parte de las fuentes de la revisión | 214 |
 | Schemas físicos | 10 | 11 |
-| Tablas con ficha en el diccionario | 99 | 115 tras aprobar opción B |
-| Operaciones únicas `OP-*` | 150 | 184 tras completar `OP-SUP-*` |
-| IDs/rangos de prueba explícitos en la matriz RLS | 186 | 211 tras añadir `T-DUTY-01..08` y `T-ROLE-6` |
-| Rutas físicas `PR-*` | 27 | 28, ninguna para pagos |
-| Operaciones en el OpenAPI canónico | 21 | 21, ninguna de identidad, organizaciones, pagos o Backoffice |
+| Tablas con ficha en el diccionario | 99 | 127 tras recertificar el inventario vigente |
+| Operaciones únicas `OP-*` | 150 | 194 tras AFO-39 |
+| IDs/rangos de prueba explícitos en la matriz RLS | 186 | 216 tras añadir deberes, no resurrección comercial y concurrencia causal |
+| Rutas físicas `PR-*` | 27 | 29, incluida `PR-29` para suspensión/reactivación causal |
+| Operaciones en el OpenAPI canónico | 21 | 45 sobre 41 paths; el gate AFO-39 aún no incrementa el YAML vigente |
 | Objetos `allfitone/packages/db` | esperados en Fase 5 | CLI fijada e infraestructura local inicializada bajo `packages/db/supabase`; aún no existen migraciones de dominio, tablas Allfit, tipos generados ni pruebas SQL ejecutables |
 
 El número final de tablas no debe fijarse antes de implementar las rebanadas que las justifican. El inventario instalado será consecuencia acumulativa de HU aprobadas, no una meta que obligue a crear tablas todavía innecesarias.
@@ -68,7 +68,7 @@ HU
 
 No se exige una operación de servidor para navegación, presentación o estado puramente local, pero la ausencia debe quedar justificada.
 
-La propuesta de clasificación y la matriz completa de 211 HU están en
+La propuesta de clasificación y la matriz completa de 214 HU están en
 [V1_HU_DATABASE_TRACEABILITY_MATRIX.md](../03_PROPOSED_DESIGN/V1_HU_DATABASE_TRACEABILITY_MATRIX.md).
 El documento registra las decisiones de alcance aprobadas y las brechas de trazabilidad técnica que todavía impiden cerrar este P0.
 
@@ -91,7 +91,7 @@ El documento registra las decisiones de alcance aprobadas y las brechas de traza
 | `DB-P5-013` | P0 | Tipar referencias de perfil a catálogos | Pendiente |
 | `DB-P5-014` | P0 | Recompilar integridad, RLS e idempotencia | Pendiente |
 | `DB-P5-015` | P0 | Cerrar retención y anonimización física | Pendiente legal/producto |
-| `DB-P5-019` | P0 | Recertificar AuthKit, PKCE, claims y evidencia AAL2 | Pendiente antes de autenticación o Backoffice sensible |
+| `DB-P5-019` | P0 | Recertificar AuthKit, PKCE, claims y evidencia AAL2 | Cerrado para Backoffice V1; pendientes WebAuthn/passkeys y recertificación de otras superficies |
 | `DB-P5-016` | P1 | Sustentar búsquedas y métricas de Backoffice | Pendiente |
 | `DB-P5-017` | P1 | Cerrar eventos, outbox, entregas y DLQ | Pendiente |
 | `DB-P5-018` | P1 | Completar contratos y OpenAPI | Pendiente |
@@ -124,7 +124,9 @@ El diseño de Fases 1–4 sigue siendo referencia y mapa de riesgos, pero deja d
 - binding de invitaciones por email al email verificado por WorkOS y decisión explícita para celular; AuthKit no prueba por sí solo control del teléfono;
 - evidencia verificable de MFA/step-up para establecer `aal2`, incluida la ruta SSO; `auth_time` solo prueba frescura y no basta por sí mismo.
 
-Hasta cerrar el último punto, cualquier operación que exija AAL2 permanece bloqueada y falla cerrada.
+Para Backoffice V1 el último punto se cierra con contraseña + challenge TOTP de la API MFA componible de WorkOS y evidencia local ligada al `sid`: `identity.access_sessions` sólo admite `surface='backoffice'` con `assurance_level=2`, `authentication_method='password_totp'` y `assurance_verified_at`. Cada operación futura revalida rol, deber, vigencia y AAL dentro de la transacción. No se confía en `authenticationMethod`, `auth_time`, roles, permisos u organizaciones del token.
+
+Esta evidencia no es resistente al phishing y no se declara equivalencia integral con una oferta AAL2 moderna hasta incorporar WebAuthn/passkeys. El MFA global de Hosted AuthKit permanece desactivado para Backoffice; SSO, OAuth, Magic Auth, SMS y passkeys siguen fuera de esta fase. `auth.allfit.one` queda diferido: el reset alojado usa `*.authkit.app` y añadir dominio propio después no migra contratos ni sesiones. Las operaciones AAL2 de otras superficies continúan fallando cerradas hasta su recertificación específica.
 
 ## 5. Identidad, contacto y recuperación
 
@@ -209,7 +211,7 @@ Columnas mínimas:
 
 ### 6.1 Problema
 
-`HU-BO-021` exige una cola de verificaciones pendientes, el título declarado, la fuente que debe consultarse, renovación y resultado. `identity.profile_verifications` modela el resultado terminal, pero no la solicitud pendiente ni su ciclo de trabajo.
+`HU-BO-021` exige una cola de verificaciones pendientes, la versión exacta de la credencial declarada, la fuente que debe consultarse, renovación y resultado. `identity.professional_credential_verifications` modela el resultado terminal, pero no la solicitud pendiente ni su ciclo de trabajo.
 
 ### 6.2 Modificación requerida
 
@@ -218,7 +220,7 @@ Añadir `identity.credential_verification_requests` o una entidad equivalente.
 Columnas mínimas:
 
 - `id`;
-- `claim_id`;
+- `professional_credential_id`;
 - `credential_type_code`;
 - `requested_by_person_id`;
 - `status`: `pending`, `in_review`, `verified`, `unverifiable`, `rejected`, `cancelled`, `expired`, `appealed`;
@@ -228,12 +230,12 @@ Columnas mínimas:
 - `supersedes_request_id` para renovación o apelación;
 - `created_at`.
 
-Modificar `identity.profile_verifications` para referenciar la solicitud que resolvió.
+Modificar `identity.professional_credential_verifications` para referenciar la solicitud que resolvió.
 
 ### 6.3 Invariantes
 
 - Una credencial puede tener solo una revisión vigente del mismo propósito.
-- El resultado es append-only y no modifica la afirmación original.
+- El resultado es append-only y no modifica la versión declarada de la credencial.
 - No se guardan documentos; solo fuente, método, referencia y fingerprint mínimo.
 - `verified` siempre tiene `valid_to` de máximo 12 meses.
 - Una incompatibilidad posterior abre otra solicitud, no reescribe el resultado anterior.
@@ -410,7 +412,7 @@ Modificar `organizations.organization_events`:
 - conserve historial, relación y grants;
 - permita al coach seguir leyendo lo autorizado;
 - bloquee nuevas asignaciones, reprogramaciones, prescripciones, observaciones y correcciones;
-- reactive exactamente el estado anterior cuando el pago se confirme.
+- al confirmar el pago, cierre únicamente el bloqueo comercial que causó esa suspensión y recalcule el estado efectivo vigente.
 
 Actualizar masivamente `planned_sessions.status='paused'` no es suficiente: no distingue la causa, mezcla terminación con falta de pago y no permite reanudar únicamente lo que esa suspensión pausó.
 
@@ -426,12 +428,12 @@ Añadir una entidad de bloqueo reversible. Nombre recomendado:
 - `relationship_id` nullable;
 - `subscription_id` nullable;
 - `source_kind`: `subscription_suspension`, `organization_suspension`;
-- `source_id`;
+- `organization_event_id` nullable;
 - `blocks_future_sessions boolean`;
 - `blocks_professional_contribution boolean`;
 - `started_at`, `ended_at`;
 - `created_by_kind`;
-- unique parcial por fuente mientras está abierto.
+- unique parcial por `subscription_id` y otro por `organization_event_id` mientras están abiertos; `CHECK` exige exactamente una fuente tipada según `source_kind`.
 
 La alternativa de no crear tabla solo es válida si una vista/predicado puede reconstruir históricamente cada periodo desde eventos de suscripción y organización sin ambigüedad. La decisión debe quedar escrita y probada.
 
@@ -443,6 +445,8 @@ La alternativa de no crear tabla solo es válida si una vista/predicado puede re
 - Una asignación conserva `lifecycle='active'`; no pasa a `detached_pending_choice`.
 - Reactivar cierra únicamente el bloqueo de la suscripción correspondiente.
 - Dos fuentes simultáneas —por ejemplo pago y suspensión de organización— deben cerrarse por separado; terminar una no abre mientras la otra siga vigente.
+- El bloqueo no guarda snapshots de grants, relaciones, membresías, asignaciones ni sesiones. Cerrarlo nunca escribe esas entidades: las vuelve a consultar en su estado actual.
+- La reactivación se serializa con terminación de suscripción o relación, revocación de grants, cambios de asignación y otros bloqueos; ante una transición concurrente incompatible falla cerrada y se reintenta desde estado fresco.
 
 ### 10.4 Pruebas
 
@@ -450,9 +454,12 @@ La alternativa de no crear tabla solo es válida si una vista/predicado puede re
 - Coach lee pero no escribe.
 - Persona continúa entrenamiento autónomo y nutrición propia.
 - Sesiones futuras aparecen pausadas; las completadas no cambian.
-- Reactivar recupera contribución sin nuevo consentimiento.
+- Reactivar recupera contribución sin nuevo consentimiento **solo si** el grant, la relación, la membresía y la asignación siguen vigentes.
 - Cerrar un bloqueo no elimina otro vigente.
 - Terminar la relación durante una suspensión aplica la terminación completa y no se revierte al recibir un pago posterior.
+- Revocar un grant o cambiar la asignación/membresía durante la suspensión permanece efectivo después del pago.
+- Una sesión cancelada, iniciada o pasada durante la suspensión no reaparece como futura disponible.
+- Una reactivación concurrente con terminación, revocación u otro bloqueo converge sin restaurar estado anterior.
 
 ## 11. Pagos y Allfit Premium
 
@@ -706,7 +713,7 @@ Cada flujo debe probar concurrencia, timeout después de commit, replay con body
 
 ### 16.1 Integridad
 
-La matriz actual llega a `IX-41`, mientras el plan de Fase 5 todavía ordena implementar `IX-01..35`. Debe renumerarse o ampliar el gate sin perder ninguna invariante.
+La matriz actual llega a `IX-45` y el plan de Fase 5 ordena implementar `IX-01..45`; cualquier invariante nueva debe ampliar ambos sin perder ni renumerar las existentes.
 
 Añadir invariantes para:
 
@@ -755,7 +762,7 @@ Cada ruta declara columnas, joins, helper, proyección, índice y prueba exactos
 
 ## 17. Contratos HTTP y de jobs
 
-El OpenAPI canónico actual contiene 25 operaciones e incorpora la sesión de identidad Studio; aún no cubre el resto de Identidad, Organizaciones, Pagos o Backoffice. Antes del primer handler de cada nueva rebanada:
+El OpenAPI canónico actual contiene 45 operaciones sobre 41 paths. AFO-39 aprueba documentalmente el siguiente gate de Organizaciones/equipo, pero esas rutas no cuentan como ejecutables hasta que el PR BACK actualice el YAML y regenere tipos. Antes del primer handler de cada nueva rebanada:
 
 - añadir su `x-allfit-operation`;
 - cerrar request, response, errores, headers e idempotencia;
@@ -802,7 +809,7 @@ Además de los fixtures existentes, Fase 5 debe preparar:
 - coach que conserva lectura y pierde contribución;
 - sesiones futuras efectivamente pausadas;
 - entrenamiento autónomo intacto;
-- reactivación exacta;
+- cierre exacto de la causa sin resurrección de estado;
 - terminación durante suspensión.
 
 ### Avisos y preferencias
@@ -858,7 +865,7 @@ Las secciones siguientes son el checklist para cerrar la **baseline V1 completa*
 
 ### Alcance
 
-- [ ] Las 211 HU tienen estado de alcance aprobado.
+- [x] Las 214 HU tienen estado de alcance aprobado.
 - [ ] Cada HU con efecto de datos tiene trazabilidad completa.
 - [ ] Las capacidades diferidas no generan DDL especulativo.
 

@@ -1,7 +1,7 @@
 # ERD lógico V1 — modelo físico de PostgreSQL
 
-**Versión de revisión:** 5
-**Fecha:** 6 de agosto de 2026
+**Versión de revisión:** 6
+**Fecha:** 17 de agosto de 2026
 **Fase:** 4 — Modelo lógico y diccionario de datos
 **Estado:** Backoffice opción B recertificada; resto de P0 pendiente
 **Deriva de:** [`V1_CONCEPTUAL_ERD.md`](./V1_CONCEPTUAL_ERD.md), [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md), [`V1_IDEMPOTENCY_CONTRACT.md`](./V1_IDEMPOTENCY_CONTRACT.md), [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md), [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
@@ -14,7 +14,7 @@ Cada tabla aplica las convenciones de [`POSTGRES_MODELING_STANDARD.md`](./POSTGR
 
 ## 2. Del concepto a la tabla
 
-El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **116 tablas de dominio** en once schemas. A las 115 tablas recertificadas tras ADR-028 se suma `identity.access_sessions`, almacenamiento técnico requerido por la sesión opaca de Studio. Enums, vistas, funciones y particiones hijas no cuentan como tablas adicionales.
+El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **127 tablas de dominio** en once schemas. El inventario vigente incluye las tres tablas AAL2, `organizations.organization_type_transitions` y `system.invitation_rate_windows`, que ya tenía ficha individual pero estaba omitida del resumen. Enums, vistas, funciones y particiones hijas no cuentan como tablas adicionales.
 
 | Entidad conceptual | Tablas físicas | Por qué se expande |
 | --- | --- | --- |
@@ -29,20 +29,20 @@ El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **116 tab
 
 | Schema | Tablas | Nº |
 | --- | --- | --- |
-| `identity` | `people`, `access_accounts`, `onboarding_attempts`, `eligibility_evidence`, `profile_attributes`, `fitness_profile_claims`, `body_progress_records`, `health_context_claims`, `profile_verifications`, `professional_profiles`, `invitations`, `invitation_intents`, `notification_preferences` | 13 |
-| `organizations` | `organizations`, `organization_types`, `organization_sites`, `organization_memberships`, `organization_roles`, `organization_capabilities`, `role_capabilities`, `membership_roles`, `organization_events`, `membership_events` | 10 |
+| `identity` | `people`, `access_accounts`, `access_sessions`, `access_account_mfa_factors`, `backoffice_authentication_attempts`, `mfa_factor_recovery_events`, `password_reset_receipts`, `onboarding_attempts`, `eligibility_evidence`, `profile_attributes`, `fitness_profile_claims`, `body_progress_records`, `health_context_claims`, `professional_profiles`, `professional_profile_specialties`, `professional_credentials`, `professional_credential_verifications`, `invitations`, `invitation_intents`, `notification_preferences` | 20 |
+| `organizations` | `organizations`, `organization_types`, `organization_type_transitions`, `organization_sites`, `organization_memberships`, `organization_roles`, `organization_capabilities`, `role_capabilities`, `membership_roles`, `organization_events`, `membership_events` | 11 |
 | `relationships` | `service_relationships`, `responsible_party_snapshots`, `relationship_professional_assignments`, `professional_assignment_events`, `relationship_events`, `relationship_termination_requests` | 6 |
-| `privacy` | `data_classifications`, `scope_definitions`, `scope_resource_rules`, `consent_events`, `grant_requests`, `data_grants`, `session_visibility_denials`, `historical_access_cases`, `access_events`, `retention_policies`, `erasure_requests`, `disposition_cases`, `disposition_items`, `disposition_events`, `legal_holds`, `hold_applications` | 16 |
-| `catalog` | `disciplines`, `activity_types`, `activity_type_aliases`, `movements`, `movement_aliases`, `movement_variants`, `equipment`, `movement_equipment`, `units`, `result_contracts`, `activity_type_result_contracts`, `contract_fixtures` | 12 |
-| `planning` | `session_templates`, `session_template_drafts`, `session_template_versions`, `planned_steps`, `strength_targets`, `endurance_targets`, `interval_targets`, `mobility_targets`, `programs`, `program_drafts`, `program_versions`, `program_version_sessions`, `program_assignments`, `assignment_management_periods`, `prescription_revisions`, `planned_sessions` | 16 |
+| `privacy` | `data_classifications`, `scope_definitions`, `scope_resource_rules`, `consent_events`, `invitation_scope_options`, `data_grants`, `session_visibility_denials`, `historical_access_cases`, `access_events`, `retention_policies`, `erasure_requests`, `disposition_cases`, `disposition_items`, `disposition_events`, `legal_holds`, `hold_applications` | 16 |
+| `catalog` | `disciplines`, `activity_types`, `activity_type_aliases`, `movements`, `movement_aliases`, `movement_variants`, `equipment`, `movement_equipment`, `units`, `result_contracts`, `activity_type_result_contracts`, `contract_fixtures`, `professional_specialties`, `professional_credential_types` | 14 |
+| `planning` | `session_templates`, `session_template_drafts`, `session_template_versions`, `planned_steps`, `strength_targets`, `endurance_targets`, `interval_targets`, `mobility_targets`, `programs`, `program_drafts`, `program_versions`, `program_version_sessions`, `program_assignments`, `assignment_management_periods`, `prescription_revisions`, `planned_sessions`, `service_access_blocks` | 17 |
 | `execution` | `executed_sessions`, `planned_session_executions`, `session_segments`, `strength_sets`, `endurance_laps`, `interval_results`, `round_results`, `mobility_results`, `metric_samples`, `professional_observations`, `correction_proposals`, `revision_events`, `result_validation_events`, `derived_results` | 14 |
 | `nutrition` | `nutrient_definitions`, `meals`, `meal_items`, `meal_nutrient_values`, `goal_sets`, `goal_versions`, `goal_targets`, `goal_decisions` | 8 |
 | `payments` | `gateway_connections`, `organization_plans`, `plan_versions`, `plan_subscriptions`, `payment_records`, `subscription_events`, `platform_plans`, `platform_plan_versions`, `platform_features`, `platform_plan_features`, `platform_subscriptions`, `organization_premium_entitlements` | 12 |
-| `system` | `outbox_events`, `idempotency_keys`, `job_runs` | 3 |
+| `system` | `outbox_events`, `idempotency_keys`, `job_runs`, `invitation_rate_windows` | 4 |
 | `support` | `platform_role_assignments`, `platform_duty_assignments`, `break_glass_requests`, `break_glass_approvals`, `break_glass_events` | 5 |
-| **Total** | | **115** |
+| **Total** | | **127** |
 
-Nota: el total anterior era 111. La opción B agrega exclusivamente `support.platform_duty_assignments`, `support.break_glass_requests`, `support.break_glass_approvals` y `support.break_glass_events`; no convierte vistas, funciones ni tipos enumerados en tablas.
+Nota: el total anterior del ERD era 122. La recertificación incorpora las tres tablas AAL2 que ya estaban en el diccionario, el catálogo de transiciones de AFO-39 y `system.invitation_rate_windows`, cuya ficha ya existía pero faltaba en el inventario resumido. No se introducen modelos para capacidades diferidas ni se convierten vistas, funciones o tipos enumerados en tablas.
 
 ## 4. Tipos enumerados nativos
 
@@ -52,6 +52,7 @@ Estados de máquina y clasificaciones cerradas y estables. Se declaran una vez y
 | --- | --- | --- |
 | `actor_kind` | `identity` | `anonymous`, `account`, `person`, `professional`, `worker`, `support` |
 | `access_session_surface` | `identity` | `studio` |
+| `password_reset_receipt_result` | `identity` | `processed`, `account_absent` |
 | `provenance` | `identity` | `person_declared`, `professional_observation`, `device_observed`, `system_inferred`, `authority_verified` |
 | `onboarding_status` | `identity` | `open`, `activated`, `expired`, `abandoned` |
 | `eligibility_result` | `identity` | `pass`, `fail`, `review_required`, `unknown` |
@@ -67,7 +68,7 @@ Estados de máquina y clasificaciones cerradas y estables. Se declaran una vez y
 | `consent_decision` | `privacy` | `granted`, `rejected`, `revoked` |
 | `historical_access_purpose` | `privacy` | `service_dispute`, `legal_or_regulatory_obligation`, `customer_support_request`, `security_investigation`, `authorized_quality_review` |
 | `historical_case_status` | `privacy` | `open`, `closed`, `expired` |
-| `access_mode` | `privacy` | `live`, `frozen`, `break_glass` |
+| `access_mode` | `privacy` | `live`, `frozen`, `break_glass`, `organization_operational` |
 | `disposition_action` | `privacy` | `delete`, `anonymize`, `retain_restricted` |
 | `disposition_status` | `privacy` | `pending`, `executed`, `suspended` |
 | `content_scope` | `catalog` | `global`, `organization`, `person` |
@@ -92,6 +93,7 @@ Estados de máquina y clasificaciones cerradas y estables. Se declaran una vez y
 erDiagram
     people ||--o{ access_accounts : "person_id"
     access_accounts ||--o{ access_sessions : "access_account_id"
+    access_accounts ||--o{ password_reset_receipts : "access_account_id (nullable)"
     people ||--o{ onboarding_attempts : "person_id (nullable)"
     access_accounts ||--o{ onboarding_attempts : "account_id"
     onboarding_attempts ||--|{ eligibility_evidence : "onboarding_attempt_id"
@@ -99,8 +101,12 @@ erDiagram
     people ||--o{ fitness_profile_claims : "person_id"
     people ||--o{ body_progress_records : "person_id"
     people ||--o{ health_context_claims : "person_id"
-    fitness_profile_claims ||--o{ profile_verifications : "claim_id"
     people ||--o| professional_profiles : "person_id"
+    professional_profiles ||--|{ professional_profile_specialties : "professional_profile_id"
+    professional_specialties ||--o{ professional_profile_specialties : "specialty_code"
+    professional_profiles ||--o{ professional_credentials : "professional_profile_id"
+    professional_credential_types ||--o{ professional_credentials : "credential_type_code"
+    professional_credentials ||--o{ professional_credential_verifications : "professional_credential_id"
     organizations ||--o{ invitations : "organization_id"
     organization_memberships ||--o{ invitations : "issued_by_membership_id"
     invitations ||--|{ invitation_intents : "invitation_id"
@@ -111,14 +117,17 @@ erDiagram
 | `people` | `id` | Raíz del Fitness ID. Creada solo por `activate_person` |
 | `access_accounts` | `id` | `UNIQUE (provider, issuer, subject)`; `person_id` nullable hasta activar |
 | `access_sessions` | `id` | hash SHA-256 de cookie; tokens cifrados; `UNIQUE (surface, provider_session_id)`; rotación compare-and-swap |
+| `password_reset_receipts` | `id` | `UNIQUE (provider, issuer, provider_event_id)`; sin payload, email ni subject; resultado y revocaciones atómicos |
 | `onboarding_attempts` | `id` | `account_id` NOT NULL; `person_id` nullable; `status onboarding_status` |
 | `eligibility_evidence` | `id` | `onboarding_attempt_id`; `result eligibility_result`; snapshot de la política aplicada |
 | `profile_attributes` | `id` | `UNIQUE code`; catálogo cerrado de atributos de perfil V1 |
 | `fitness_profile_claims` | `id` | `person_id`, `attribute_code`, `provenance`; coexisten; `UPDATE` revocado |
 | `body_progress_records` | `id` | `person_id`; valor+unidad; imagen sin EXIF por referencia |
 | `health_context_claims` | `id` | `person_id`; categoría más restrictiva |
-| `profile_verifications` | `id` | `claim_id`, verificador, política, registro/emisor, fingerprint, resultado y vigencia `<=12 meses`; append-only |
-| `professional_profiles` | `id` | `UNIQUE person_id`; pertenece a la persona |
+| `professional_profiles` | `id` | `UNIQUE person_id`; titular, biografía y año de inicio; pertenece a la persona |
+| `professional_profile_specialties` | `(professional_profile_id, specialty_code)` | Solo especialidades publicadas; al menos una al completar el perfil |
+| `professional_credentials` | `id` | Tipo gobernado por `professional_credential_types`; revisión por `supersedes_credential_id`; campos materiales inmutables |
+| `professional_credential_verifications` | `id` | `professional_credential_id`, verificador, política, registro/emisor, fingerprint, resultado y vigencia `<=12 meses`; append-only |
 | `invitations` | `id` | `UNIQUE (token_hash)`; membresía emisora restringida contra `organization_id`; sin `person_id` destino (`IX-24`) |
 | `invitation_intents` | `id` | `invitation_id`, `kind intent_kind`, `status intent_status`; materializa ≤1 destino |
 
@@ -127,6 +136,8 @@ erDiagram
 ```mermaid
 erDiagram
     organization_types ||--o{ organizations : "type_code"
+    organization_types ||--o{ organization_type_transitions : "from_type_code"
+    organization_types ||--o{ organization_type_transitions : "to_type_code"
     organizations ||--o{ organization_sites : "organization_id"
     organizations ||--|{ organization_memberships : "organization_id"
     people ||--o{ organization_memberships : "person_id"
@@ -140,14 +151,15 @@ erDiagram
 
 | Tabla | PK | Claves e invariantes notables |
 | --- | --- | --- |
-| `organizations` | `id` | `type_code`; identidad estable al crecer a equipo |
+| `organizations` | `id` | `type_code`, `revision_number`; identidad estable al crecer a equipo; ETag optimista |
 | `organization_types` | `id` | `UNIQUE code`; catálogo gobernado |
-| `organization_sites` | `id` | `organization_id`; informativa, no delimita permisos |
+| `organization_type_transitions` | `(from_type_code,to_type_code)` | catálogo gobernado; inicialmente práctica → gimnasio/estudio |
+| `organization_sites` | `id` | `organization_id`, `revision_number`; informativa, no delimita permisos |
 | `organization_memberships` | `id` | `organization_id`, `person_id`, `status`; no da acceso al Fitness ID |
 | `organization_roles` | `id` | `UNIQUE code`; catálogo cerrado: owner/admin/coach/staff |
 | `organization_capabilities` | `id` | `UNIQUE code`; catálogo de capacidades |
 | `role_capabilities` | `id` | `UNIQUE (role_code, capability_code)`; N:M gobernada |
-| `membership_roles` | `id` | `membership_id`, `role_code`, vigencia; protección del último owner por trigger |
+| `membership_roles` | `id` | `membership_id`, `role_code`, vigencia; constraint trigger diferible exige exactamente un `owner` activo por organización activa y el flujo genérico no puede alterarlo |
 | `organization_events` | `id` | actor membership, cuando existe, pertenece a la organización por FK compuesta; append-only (`IX-25`) |
 | `membership_events` | `id` | append-only |
 
@@ -182,8 +194,9 @@ erDiagram
     people ||--o{ consent_events : "person_id"
     service_relationships ||--o{ consent_events : "relationship_id"
     scope_definitions ||--o{ consent_events : "scope_definition_id"
-    service_relationships ||--o{ grant_requests : "relationship_id"
-    scope_definitions ||--o{ grant_requests : "scope_definition_id"
+    invitation_intents ||--o{ invitation_scope_options : "invitation_intent_id"
+    scope_definitions ||--o{ invitation_scope_options : "scope_definition_id"
+    invitation_scope_options ||--o| consent_events : "invitation_scope_option_id"
     consent_events ||--o| data_grants : "consent_event_id"
     people ||--o{ data_grants : "person_id"
     service_relationships ||--o{ data_grants : "relationship_id"
@@ -194,6 +207,8 @@ erDiagram
     organization_memberships ||--o{ historical_access_cases : "authorized_membership_id"
     historical_access_cases ||--o{ access_events : "historical_access_case_id"
     data_grants ||--o{ access_events : "data_grant_id"
+    people o|--o{ access_events : "subject_person_id"
+    organizations o|--o{ access_events : "subject_organization_id"
     people ||--o{ session_visibility_denials : "person_id"
     people ||--o{ erasure_requests : "person_id"
     retention_policies ||--o{ disposition_items : "retention_policy_id"
@@ -208,12 +223,12 @@ erDiagram
 | `data_classifications` | `id` | `UNIQUE code`; clasificación de sensibilidad |
 | `scope_definitions` | `id` | `UNIQUE (scope_code, version_number)`; portadora `UNIQUE (id, scope_code)`; inmutable |
 | `scope_resource_rules` | `id` | `scope_definition_id`, `data_classification_code`; recursos/campos/acciones máximas |
-| `consent_events` | `id` | FKs `(relationship_id,person_id,organization_id)` y `(scope_definition_id,scope_code)`; snapshot en `jsonb`; portadora de la tupla exacta; append-only (`IX-05`) |
-| `grant_requests` | `id` | FKs compuestas relación/organización, membresía solicitante/organización y definición/scope; pendiente único por `(relationship_id,scope_code)` (`IX-06`) |
+| `consent_events` | `id` | FKs con relación y opción exacta presentada; snapshot en `jsonb`; portadora de persona/organización/scope/versión; append-only (`IX-05`) |
+| `invitation_scope_options` | `id` | Solo cuelga de una intención `service_relationship`; definición/scope exactos, una opción por scope e inmutabilidad después de decidir (`IX-06`) |
 | `data_grants` | `id` | FKs compuestas con relación, definición y consentimiento prueban persona, organización, scope y versión exacta; único no revocado por `(relationship_id,scope_code)`; estado/cortes gobernados por trigger (`IX-07`) |
 | `session_visibility_denials` | `id` | ejecución y relación pertenecen a `person_id`; `UNIQUE (executed_session_id, relationship_id)` (`IX-08`) |
 | `historical_access_cases` | `id` | relación y membresías de la organización exacta por FK; elegibilidad temporal por trigger; `expires_at <= opened_at + 24h` (`IX-09/10`) |
-| `access_events` | `(id, occurred_at)` | **particionada por rango mensual**; actor humano obligatorio; entrada única `privacy.log_access_event`; base visible solo al sujeto; A10/A12 usan superficies restringidas; retención 24 meses |
+| `access_events` | `(id, occurred_at)` | **particionada por rango mensual**; XOR persona/organización sujeto; actor humano obligatorio; organización exige membership activo y contexto operacional cerrado; entrada única `privacy.log_access_event`; `v_my_access_events` conserva solo sujeto persona; retención 24 meses (`IX-23`) |
 | `retention_policies` | `id` | `UNIQUE (data_classification_code, jurisdiction, version_number)`; congelada |
 | `erasure_requests` | `id` | `person_id`, alcance |
 | `disposition_cases` | `id` | `subject_person_id`; solicitud opcional del mismo sujeto por FK compuesta (`IX-26`) |
@@ -276,6 +291,11 @@ erDiagram
     program_assignments ||--o{ assignment_management_periods : "assignment_id"
     program_assignments ||--o{ prescription_revisions : "assignment_id"
     program_assignments ||--|{ planned_sessions : "assignment_id"
+    people ||--o{ service_access_blocks : "person_id"
+    organizations ||--o{ service_access_blocks : "organization_id"
+    service_relationships o|--o{ service_access_blocks : "relationship_id"
+    plan_subscriptions o|--o{ service_access_blocks : "subscription_id"
+    organization_events o|--o{ service_access_blocks : "organization_event_id"
 ```
 
 | Tabla | PK | Claves e invariantes notables |
@@ -296,6 +316,7 @@ erDiagram
 | `assignment_management_periods` | `id` | `person_id` restringido contra asignación y relación; un periodo vigente por asignación (`IX-12`) |
 | `prescription_revisions` | `id` | `person_id` restringido contra asignación y autor profesional; override tipado (`IX-13`) |
 | `planned_sessions` | `id` | `person_id` restringido contra la asignación; clave portadora para intentos (`IX-15`) |
+| `service_access_blocks` | `id` | Causa tipada y una sola fila abierta por fuente; cerrar quita solo ese bloqueo y nunca restaura estado de otros dominios (`IX-40`) |
 
 ## 11. Ejecución
 
@@ -385,6 +406,7 @@ erDiagram
 | `outbox_events` | `id` | tipo, agregado, payload `jsonb` sin datos sensibles; orden por agregado |
 | `idempotency_keys` | `id` | unique de transporte y `Command-Id` scoped; response 24 h + tombstone durable; `processing` no puede confirmar |
 | `job_runs` | `id` | worker, ciclo, resultado; idempotencia de jobs |
+| `invitation_rate_windows` | `(scope,scope_hash)` | ventanas durables por actor, organización y destinatario hasheado; nunca email/IP en claro |
 | `platform_role_assignments` | `id` | rol base de entrada; no concede deber; sin autoasignación ni último admin revocado |
 | `platform_duty_assignments` | `id` | persona/deber/vigencia/AAL; máximo 90 días; historial sin `DELETE`; autoridad transaccional |
 | `break_glass_requests` | `id` | `A10`, sujeto, categorías, propósito/caso, tier, quorum y duración inmutables; pendiente 30 min, ventana 30/15 min |
@@ -425,6 +447,7 @@ La regla estructural: `identity.people` y las raíces de autenticación no depen
 | --- | --- | --- |
 | `people` → `access_accounts` | `1 : 0..N` | `UNIQUE (provider,issuer,subject)`; una cuenta a una persona |
 | `access_accounts` → `access_sessions` | `1 : 0..N` | cookie opaca por sesión; `UNIQUE (surface, provider_session_id)` |
+| `access_accounts` → `password_reset_receipts` | `1 : 0..N` | FK nullable para cuenta ausente; evento único por `provider + issuer + provider_event_id` |
 | `onboarding_attempts` → `people` | `1 : 0..1` | intento no elegible no crea persona |
 | `service_relationships` activa por par | `≤ 1` | `UNIQUE parcial WHERE status='active'` |
 | `relationship_professional_assignments` titular efectivo | `≤ 1` | `UNIQUE parcial` de titular vigente |
@@ -443,7 +466,7 @@ La regla estructural: `identity.people` y las raíces de autenticación no depen
 
 ### 14.1 Integridad de identidad y tenant
 
-Los 35 invariantes `IX-01..35` cierran los cruces entre persona, organización, membresía, relación, planificación, ejecución, privacidad, nutrición y soporte. Se materializan con las claves portadoras necesarias, FKs compuestas, constraint triggers y entradas cerradas de auditoría. El DDL no puede degradarlos a validaciones de API o RLS.
+Los 45 invariantes `IX-01..45` cierran los cruces entre persona, organización, membresía, relación, planificación, ejecución, privacidad, nutrición, pagos y soporte. Se materializan con las claves portadoras necesarias, FKs compuestas, constraint triggers y entradas cerradas de auditoría. El DDL no puede degradarlos a validaciones de API o RLS.
 
 Cada invariante tiene una prueba negativa `T-INT-*` ejecutada con `BYPASSRLS`; por tanto, el éxito de la suite demuestra integridad estructural y no solo el comportamiento de una policy.
 
@@ -467,7 +490,7 @@ Cada invariante tiene una prueba negativa `T-INT-*` ejecutada con `BYPASSRLS`; p
 
 ## 16. Resolución física
 
-Columnas, nullability, índices, retención y eventos están en las 115 fichas individuales. Nombres, enums compartidos, JSONB y las dos tablas particionadas están cerrados en `V1_PHYSICAL_OBJECT_CATALOG.md`; ninguna de esas decisiones se reserva al DDL.
+Columnas, nullability, índices, retención y eventos están en las 127 fichas individuales. Nombres, enums compartidos, JSONB y las dos tablas particionadas están cerrados en `V1_PHYSICAL_OBJECT_CATALOG.md`; ninguna de esas decisiones se reserva al DDL.
 
 ## 17. Estado de salida
 

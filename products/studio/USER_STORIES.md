@@ -1,11 +1,16 @@
 # Historias de usuario — Allfit Studio
 
-**Estado:** borrador para revisión conjunta<br>
-**Fecha:** 30 de julio de 2026<br>
+**Estado:** alcance BETA ratificado; implementación en curso<br>
+**Fecha:** 30 de julio de 2026; alcance ratificado el 17 de agosto de 2026<br>
 **Producto:** la aplicación del profesional y la organización. Web.
 
 Este documento es **autocontenido**: no hay que abrir ningún otro archivo para
 entenderlo ni para construir a partir de él.
+
+Las 86 historias forman el alcance BETA comprometido para el **31 de agosto de
+2026**. El compromiso de alcance no afirma implementación: una historia cuenta
+como completa solo cuando sus entregables BACK y FRONT están verificados y
+fusionados en `main`. El despliegue de la BETA queda fuera de este compromiso.
 
 ---
 
@@ -18,7 +23,7 @@ entenderlo ni para construir a partir de él.
 **quiero** <qué>
 **para** <para qué>.
 
-`E-STUDIO-07` · imprescindible · HU-STUDIO-041
+`E-STUDIO-07` · imprescindible
 
 **Criterios**
 
@@ -30,10 +35,13 @@ entenderlo ni para construir a partir de él.
 | `HU-STUDIO-###` | Identificador estable. No se reutiliza nunca |
 | `E-STUDIO-##` | Épica a la que pertenece |
 | Prioridad | `imprescindible` sin esto no se lanza · `importante` debería estar · `después` puede esperar |
+| Dependencias | Se declaran una sola vez en el grafo de la sección 6; son prerrequisitos directos, no historias meramente relacionadas |
 
 ## 2. Quién usa Allfit Studio
 
 Cuatro roles, y no hay más. No se pueden crear roles a medida.
+
+Toda organización activa tiene exactamente una membresía activa con rol **propietario**. Esa misma membresía puede tener además roles compatibles como admin o coach, pero la propiedad no se asigna ni se retira desde la gestión común de roles.
 
 | Rol | Puede | No puede |
 | --- | --- | --- |
@@ -99,6 +107,99 @@ vence por separado; decidir una no decide las demás.
 | Roles a medida o permisos por sede | Fuera de esta versión |
 | Menores de 18 años | Fuera de esta versión |
 
+## 6. Grafo de dependencias
+
+Una arista `A → B` significa que la historia `A` **depende directamente de** `B`: `B` debe estar disponible antes de que `A` pueda cumplir todos sus criterios. `—` identifica una raíz. El grafo solo contiene dependencias de entrega entre historias de Studio; los estados de negocio producidos por Space, proveedores o procesos externos se mantienen como precondiciones en los criterios y contratos, no como aristas ficticias.
+
+| Historia | Depende directamente de |
+| --- | --- |
+| `HU-STUDIO-001` | — |
+| `HU-STUDIO-002` | `HU-STUDIO-001` |
+| `HU-STUDIO-003` | — |
+| `HU-STUDIO-004` | `HU-STUDIO-006` |
+| `HU-STUDIO-005` | `HU-STUDIO-001` |
+| `HU-STUDIO-006` | `HU-STUDIO-001` |
+| `HU-STUDIO-007` | `HU-STUDIO-001` |
+| `HU-STUDIO-008` | `HU-STUDIO-007` |
+| `HU-STUDIO-009` | `HU-STUDIO-007` |
+| `HU-STUDIO-010` | `HU-STUDIO-009` |
+| `HU-STUDIO-011` | `HU-STUDIO-007` |
+| `HU-STUDIO-012` | `HU-STUDIO-017` |
+| `HU-STUDIO-013` | `HU-STUDIO-007` |
+| `HU-STUDIO-014` | `HU-STUDIO-007` |
+| `HU-STUDIO-015` | `HU-STUDIO-014` |
+| `HU-STUDIO-016` | `HU-STUDIO-014` |
+| `HU-STUDIO-017` | `HU-STUDIO-007` |
+| `HU-STUDIO-018` | `HU-STUDIO-007` |
+| `HU-STUDIO-019` | `HU-STUDIO-017`, `HU-STUDIO-018` |
+| `HU-STUDIO-020` | `HU-STUDIO-017`, `HU-STUDIO-018` |
+| `HU-STUDIO-021` | `HU-STUDIO-017` |
+| `HU-STUDIO-022` | `HU-STUDIO-006` |
+| `HU-STUDIO-023` | `HU-STUDIO-007` |
+| `HU-STUDIO-024` | `HU-STUDIO-007` |
+| `HU-STUDIO-025` | `HU-STUDIO-023` |
+| `HU-STUDIO-026` | `HU-STUDIO-025` |
+| `HU-STUDIO-027` | `HU-STUDIO-017`, `HU-STUDIO-025` |
+| `HU-STUDIO-028` | `HU-STUDIO-027` |
+| `HU-STUDIO-029` | `HU-STUDIO-027` |
+| `HU-STUDIO-030` | `HU-STUDIO-029` |
+| `HU-STUDIO-031` | `HU-STUDIO-029` |
+| `HU-STUDIO-032` | `HU-STUDIO-025` |
+| `HU-STUDIO-033` | `HU-STUDIO-027` |
+| `HU-STUDIO-034` | `HU-STUDIO-001` |
+| `HU-STUDIO-035` | `HU-STUDIO-025`, `HU-STUDIO-034` |
+| `HU-STUDIO-036` | `HU-STUDIO-007` |
+| `HU-STUDIO-037` | `HU-STUDIO-036` |
+| `HU-STUDIO-038` | `HU-STUDIO-037` |
+| `HU-STUDIO-039` | `HU-STUDIO-038` |
+| `HU-STUDIO-040` | `HU-STUDIO-038` |
+| `HU-STUDIO-041` | `HU-STUDIO-038` |
+| `HU-STUDIO-042` | `HU-STUDIO-041` |
+| `HU-STUDIO-043` | `HU-STUDIO-042` |
+| `HU-STUDIO-044` | `HU-STUDIO-007` |
+| `HU-STUDIO-045` | `HU-STUDIO-044` |
+| `HU-STUDIO-046` | `HU-STUDIO-027`, `HU-STUDIO-035`, `HU-STUDIO-042` |
+| `HU-STUDIO-047` | `HU-STUDIO-046` |
+| `HU-STUDIO-048` | `HU-STUDIO-046` |
+| `HU-STUDIO-049` | `HU-STUDIO-046` |
+| `HU-STUDIO-050` | `HU-STUDIO-046` |
+| `HU-STUDIO-051` | `HU-STUDIO-027`, `HU-STUDIO-035` |
+| `HU-STUDIO-052` | `HU-STUDIO-027`, `HU-STUDIO-035` |
+| `HU-STUDIO-053` | `HU-STUDIO-027`, `HU-STUDIO-035` |
+| `HU-STUDIO-054` | `HU-STUDIO-027`, `HU-STUDIO-035` |
+| `HU-STUDIO-055` | `HU-STUDIO-054` |
+| `HU-STUDIO-056` | `HU-STUDIO-054` |
+| `HU-STUDIO-057` | `HU-STUDIO-055` |
+| `HU-STUDIO-058` | `HU-STUDIO-057` |
+| `HU-STUDIO-059` | `HU-STUDIO-051` |
+| `HU-STUDIO-060` | `HU-STUDIO-059` |
+| `HU-STUDIO-061` | `HU-STUDIO-032` |
+| `HU-STUDIO-062` | `HU-STUDIO-061` |
+| `HU-STUDIO-063` | `HU-STUDIO-061` |
+| `HU-STUDIO-064` | `HU-STUDIO-007` |
+| `HU-STUDIO-065` | `HU-STUDIO-064` |
+| `HU-STUDIO-066` | `HU-STUDIO-064` |
+| `HU-STUDIO-067` | `HU-STUDIO-007` |
+| `HU-STUDIO-068` | `HU-STUDIO-027`, `HU-STUDIO-035` |
+| `HU-STUDIO-069` | `HU-STUDIO-068` |
+| `HU-STUDIO-070` | `HU-STUDIO-071` |
+| `HU-STUDIO-071` | `HU-STUDIO-027`, `HU-STUDIO-035` |
+| `HU-STUDIO-072` | `HU-STUDIO-068` |
+| `HU-STUDIO-073` | `HU-STUDIO-007` |
+| `HU-STUDIO-074` | `HU-STUDIO-007` |
+| `HU-STUDIO-075` | `HU-STUDIO-074` |
+| `HU-STUDIO-076` | `HU-STUDIO-075` |
+| `HU-STUDIO-077` | `HU-STUDIO-074` |
+| `HU-STUDIO-078` | `HU-STUDIO-075` |
+| `HU-STUDIO-079` | `HU-STUDIO-078` |
+| `HU-STUDIO-080` | `HU-STUDIO-078` |
+| `HU-STUDIO-081` | `HU-STUDIO-016`, `HU-STUDIO-017`, `HU-STUDIO-025`, `HU-STUDIO-027`, `HU-STUDIO-055`, `HU-STUDIO-078` |
+| `HU-STUDIO-082` | `HU-STUDIO-024` |
+| `HU-STUDIO-083` | `HU-STUDIO-035`, `HU-STUDIO-047`, `HU-STUDIO-051`, `HU-STUDIO-054`, `HU-STUDIO-056` |
+| `HU-STUDIO-084` | `HU-STUDIO-028`, `HU-STUDIO-032`, `HU-STUDIO-035` |
+| `HU-STUDIO-085` | `HU-STUDIO-014` |
+| `HU-STUDIO-086` | `HU-STUDIO-001`, `HU-STUDIO-085` |
+
 ---
 
 ## E-STUDIO-00 · Entrar
@@ -115,8 +216,11 @@ vence por separado; decidir una no decide las demás.
 
 1. Entro con mi correo y contraseña.
 2. Un intento fallido no me dice si el error fue el correo o la contraseña.
-3. Si no pertenezco a ninguna organización, entro pero no veo nada operativo: se me explica que necesito una invitación.
+3. Si no pertenezco a ninguna organización, elijo entre crear mi propio espacio profesional o un equipo o centro; también puedo continuar más adelante mediante una invitación.
 4. Mi sesión de Allfit Studio es independiente de la de la aplicación personal. Si soy coach y además entreno, son dos accesos distintos.
+5. Si creo la cuenta desde Studio y todavía no tengo una persona vinculada, completo personalmente la acreditación adulta, las aceptaciones legales y mis datos identificativos básicos antes de acceder a cualquier operación profesional.
+6. Studio nunca completa ese registro en nombre de otra persona ni usa el alta administrativa del proveedor de identidad.
+7. Tras completar el registro, una membresía activa entra directamente al workspace y varias membresías presentan un selector de organización.
 
 ### HU-STUDIO-002 — Cerrar sesión
 
@@ -130,6 +234,19 @@ vence por separado; decidir una no decide las demás.
 
 1. Al cerrar sesión no queda nada consultable sin volver a entrar.
 2. La sesión caduca sola tras un tiempo de inactividad.
+3. Desde que se solicita el cierre, Studio desmonta el workspace y no vuelve a
+   mostrar nombres, organizaciones ni datos protegidos durante la comprobación.
+4. Si el navegador recuerda un cierre pero la cookie aún es válida, no recupera
+   la sesión automáticamente: muestra una pantalla segura y exige completar el
+   cierre antes de permitir un nuevo acceso.
+5. Si la API confirma que la sesión ya no existe, vuelvo al acceso normal. Si no
+   puede comprobarlo, permanezco bloqueado y puedo reintentar sin que se monte
+   el workspace.
+6. Completar la recuperación borra la cookie, conserva la idempotencia del
+   logout y me obliga a pulsar de nuevo **Entrar a Studio**.
+7. El cierre manual, por inactividad o desde otra pestaña mantiene cualquier
+   invitación de equipo pendiente solo en esa pestaña para poder cambiar de
+   cuenta sin perderla.
 
 ### HU-STUDIO-003 — Recuperar mi contraseña
 
@@ -175,13 +292,20 @@ vence por separado; decidir una no decide las demás.
 **Criterios**
 
 1. El perfil profesional pertenece a la persona y puede existir sin una organización.
-2. La presentación general, las especialidades, los años de experiencia y las credenciales verificadas viven en **un único perfil personal**; no se duplican por gimnasio.
-3. La organización no crea, copia ni administra otro perfil profesional. Su contexto se limita a la membresía y sus roles vigentes.
-4. La ficha que ve un cliente combina el perfil profesional personal vigente con la organización, la membresía y los roles efectivos desde sus fuentes canónicas, sin copiar el perfil a la organización.
-5. Si trabajo en dos gimnasios mantengo un solo perfil profesional, dos membresías y los roles que correspondan en cada una.
-6. Al salir de una organización termina esa membresía y dejo de aparecer como parte de su equipo operativo. La organización no puede modificar ni borrar mi perfil personal o mis credenciales.
-7. Actualizar el perfil personal se refleja en las vistas autorizadas de las organizaciones donde mantengo una membresía; no cambia mis membresías ni sus roles.
-8. Completar el perfil no me habilita a ver datos de nadie: para eso se aplica **LA FÓRMULA** completa.
+2. Mi presentación contiene un titular profesional, una biografía, el año en que inicié mi práctica y una o más especialidades de un catálogo gobernado.
+3. Los años de experiencia se calculan desde el año de inicio; no guardo ni actualizo manualmente un contador que quede obsoleto.
+4. Puedo declarar credenciales profesionales individualmente. Cada credencial conserva identidad y ciclo de vida propios; no se guarda como un objeto anónimo dentro del perfil.
+5. Una credencial declarada se muestra como **no verificada** hasta que el flujo competente de Allfit verifique esa credencial exacta. Studio no puede verificarla ni presentar el perfil completo como verificado.
+6. Una verificación pertenece a una versión exacta de la credencial, tiene vigencia y puede vencer o revocarse sin alterar mi presentación, especialidades u otras credenciales.
+7. La organización no crea, copia ni administra otro perfil profesional. Su contexto se limita a la membresía y sus roles vigentes.
+8. La ficha que ve un cliente combina el perfil profesional personal vigente con la organización, la membresía y los roles efectivos desde sus fuentes canónicas, sin copiar el perfil a la organización ni exponer evidencia interna de verificación.
+9. Si trabajo en dos gimnasios mantengo un solo perfil profesional, dos membresías y los roles que correspondan en cada una.
+10. Al salir de una organización termina esa membresía y dejo de aparecer como parte de su equipo operativo. La organización no puede modificar ni borrar mi perfil personal o mis credenciales.
+11. Actualizar el perfil personal se refleja en las vistas autorizadas de las organizaciones donde mantengo una membresía; no cambia mis membresías ni sus roles.
+12. Completar el perfil no me habilita a ver datos de nadie: para eso se aplica **LA FÓRMULA** completa.
+13. Studio no infiere que una persona sea profesional por crear una cuenta, ser propietaria de una organización o pertenecer a un espacio. La persona inicia expresamente la configuración de su perfil profesional.
+14. Mientras no exista un perfil profesional, Studio no presenta formularios de especialidades ni credenciales como tareas pendientes. Declarar credenciales es opcional incluso después de crear el perfil.
+15. Configurar el perfil profesional no forma parte del onboarding inicial. Studio no muestra accesos ni invitaciones para hacerlo mientras la persona completa su identidad, crea o selecciona su primer espacio y ve la confirmación **Listo**.
 
 ### HU-STUDIO-006 — Ver en qué gimnasios trabajo
 
@@ -209,8 +333,8 @@ vence por separado; decidir una no decide las demás.
 **Criterios**
 
 1. Cualquier persona con cuenta puede crear su organización. **No hace falta tener completo el perfil profesional**: sigue siendo personal y puede completarse antes o después, sin pertenecer a la organización.
-2. Al crearla quedo como propietario.
-3. Al crearla nace también mi membresía propietaria inicial, que referencia mi identidad y mi perfil profesional personal sin copiarlos.
+2. Al crearla quedo como propietario y la transacción solo se confirma si la organización nace con exactamente un propietario activo.
+3. Al crearla nace también mi membresía propietaria inicial, que referencia mi identidad y mi perfil profesional personal sin copiarlos; esa membresía puede recibir además otros roles compatibles.
 4. Si trabajo solo, mi organización es mi propia práctica: sirve como frontera de operación y no implica tener una empresa constituida.
 5. No existe una marca permanente de "independiente": esta misma organización puede incorporar equipo después sin cambiar de identidad ni migrar nada.
 6. Reintentar no crea una segunda organización.
@@ -225,10 +349,12 @@ vence por separado; decidir una no decide las demás.
 
 **Criterios**
 
-1. Todo cambio queda registrado con el valor anterior y el nuevo.
-2. Cambiar el tipo de organización solo es posible si la transición está permitida.
-3. Incorporar personal **no** cambia el tipo automáticamente.
-4. Si dos personas editan a la vez, una recibe un aviso de conflicto en lugar de perder su cambio en silencio.
+1. El `PATCH` es cerrado: solo permite modificar `display_name`, `legal_name` y `type_code`.
+2. `responsible_party`, `id`, `status`, timestamps, `purpose` y `responsible_party_schema_version` son inmutables en autoservicio.
+3. Todo cambio queda registrado con el valor anterior y el nuevo.
+4. Cambiar el tipo de organización solo es posible si la transición está publicada en `organization_type_transitions`. Inicialmente solo se admiten `professional_practice → gym` y `professional_practice → studio`.
+5. Incorporar personal **no** cambia el tipo automáticamente.
+6. Toda lectura devuelve una revisión y un ETag fuerte `"organization:{id}:r{revision}"`. El `PATCH` exige `If-Match`: si falta devuelve `428`; si la revisión quedó atrás devuelve `409 stale-draft` sin perder cambios en silencio.
 
 ### HU-STUDIO-009 — Registrar una sede
 
@@ -243,6 +369,7 @@ vence por separado; decidir una no decide las demás.
 1. Una sede es información de ubicación básica.
 2. Una sede **no** representa recursos reservables, capacidad, clases ni inventario.
 3. Una sede **no** delimita permisos: no existe alcance de rol por sede en V1.
+4. La sede expone `revision_number` y el ETag fuerte `"organization-site:{id}:r{revision}"` para sus escrituras posteriores.
 
 ### HU-STUDIO-010 — Actualizar o desactivar una sede
 
@@ -256,6 +383,7 @@ vence por separado; decidir una no decide las demás.
 
 1. Desactivar una sede no afecta relaciones, asignaciones ni historial.
 2. El cambio queda registrado.
+3. Editar o desactivar exige el `If-Match` de la sede; si falta devuelve `428` y si quedó atrás devuelve `409 stale-draft`.
 
 ### HU-STUDIO-011 — Consultar la organización
 
@@ -280,12 +408,11 @@ vence por separado; decidir una no decide las demás.
 
 **Criterios**
 
-1. El destinatario debe formar parte del gimnasio.
-2. El gimnasio nunca queda sin propietario, ni por un instante.
-
-> **Fuera de la primera versión.** Se retoma cuando aparezca el primer caso
-> real. Mientras tanto, si un gimnasio necesita cambiar de dueño, lo resuelve el
-> equipo de Allfit directamente.
+1. El destinatario debe tener una membresía activa en el gimnasio.
+2. La transferencia es atómica: al confirmar sigue existiendo exactamente un propietario activo, sin estados observables con cero o dos propietarios.
+3. La transferencia es el único flujo que puede cambiar qué membresía tiene el rol de propietario.
+4. Se bloquean la organización, las membresías involucradas y sus roles `owner`; se cierra el rol anterior y se abre el nuevo dentro de una sola transacción.
+5. El propietario anterior conserva su membresía activa y cualquier rol no `owner`. Si no conserva otro rol, queda sin capacidades hasta una asignación explícita o su renuncia mediante HU-STUDIO-022; no recibe un rol residual implícito.
 
 ### HU-STUDIO-013 — Cerrar la organización
 
@@ -301,6 +428,8 @@ vence por separado; decidir una no decide las demás.
 2. Cerrar **no elimina** el Fitness ID de nadie ni las sesiones de ninguna persona.
 3. La organización conserva solo evidencia mínima, con una finalidad y un plazo; conservar no es mantener acceso cotidiano.
 4. Si alguna terminación no se puede completar, no se cierra nada: no existe un cierre a medias.
+5. El cierre se coordina en una sola transacción PostgreSQL mediante contratos públicos estrechos de Organizaciones, Relaciones, Privacidad, Planificación, Ejecución y Nutrición. Ejecución cancela propuestas de corrección pendientes y Nutrición cancela propuestas nutricionales pendientes. Ningún dominio escribe directamente tablas de otro dominio.
+6. Si falla cualquier contrato público, también se revierten las cancelaciones y el estado organizacional: no queda un cierre parcial.
 
 ---
 
@@ -316,11 +445,16 @@ vence por separado; decidir una no decide las demás.
 
 **Criterios**
 
-1. Invito por email o celular. **Nunca** puedo invitar seleccionando una persona existente del sistema.
+1. Invito por email. **Nunca** puedo invitar seleccionando una persona existente del sistema.
 2. La invitación **no crea** cuenta, persona, perfil ni membresía: solo transporta una propuesta.
 3. No aprendo si ese contacto ya tiene cuenta en Allfit.
 4. Si vuelvo a invitar al mismo contacto con la misma propuesta, se reutiliza la invitación vigente en lugar de crear otra.
-5. Si falla el envío del correo o el SMS, la invitación sigue siendo válida.
+5. Si falla el envío del correo, la invitación sigue siendo válida y puede reintentarse sin crear otra propuesta.
+6. La invitación vence a los siete días y su enlace abre exclusivamente Allfit Studio.
+
+**Corte implementado:** emisión y entrega por correo tienen gates independientes.
+La resolución y decisión se realizan en Studio mediante `HU-STUDIO-085` y
+`HU-STUDIO-086`; no dependen de historias de Space.
 
 ### HU-STUDIO-015 — Revocar una invitación
 
@@ -349,6 +483,42 @@ vence por separado; decidir una no decide las demás.
 
 1. Veo el estado **por propuesta**, no una aceptación global.
 2. Mientras la invitación siga pendiente, no puedo saber si el contacto ya tiene cuenta en Allfit.
+3. Puedo filtrar por estado, avanzar por páginas y ver rol propuesto, vencimiento y correo completo porque soy un integrante autorizado de la organización.
+4. Los estados terminales son aceptada, rechazada, revocada y vencida; nunca se confunden con una invitación pendiente.
+
+### HU-STUDIO-085 — Consultar una invitación de equipo
+
+**Como** persona que recibió una invitación para trabajar en una organización
+**quiero** consultar en Studio quién invita, el rol propuesto y el vencimiento
+**para** decidir con información sin exponer el destinatario.
+
+`E-STUDIO-02` · imprescindible
+
+**Criterios**
+
+1. El enlace abre `studio.allfit.one/invitations`; el token viaja en el fragmento, se retira inmediatamente de la barra y no aparece en paths, query strings, logs ni referrers.
+2. Puedo consultar la organización, la parte responsable, el rol propuesto y el vencimiento antes de iniciar sesión, pero nunca veo el correo destinatario.
+3. Consultar no acepta ni crea cuenta, persona, membresía, perfil de cliente, relación, scope o grant.
+4. Una invitación inválida, vencida, revocada o consumida produce el mismo resultado y no revela su estado real.
+5. El token se conserva solo en la pestaña durante login, cambio de cuenta o activación, y se elimina al decidir o alcanzar un estado terminal.
+
+### HU-STUDIO-086 — Aceptar o rechazar una invitación de equipo
+
+**Como** persona invitada a trabajar en una organización
+**quiero** aceptar o rechazar la propuesta desde Studio
+**para** decidir si me incorporo a ese equipo.
+
+`E-STUDIO-02` · imprescindible
+
+**Criterios**
+
+1. Solo puedo decidir autenticado con el mismo correo verificado al que se envió la invitación; si uso otra cuenta puedo cerrar sesión y cambiarla sin que Studio revele el destinatario.
+2. Si mi cuenta aún no tiene una persona activa, completo primero la activación y luego regreso a la invitación; activarme no equivale a aceptarla.
+3. Aceptar crea una membresía con el rol propuesto. Si ya tengo una membresía activa, conserva su identidad y fecha de ingreso y añade solo el rol faltante; una membresía terminada no se reutiliza.
+4. Rechazar completa la invitación sin crear membresía ni rol.
+5. Aceptar nunca crea perfil de cliente, relación profesional, scope, grant ni acceso a datos de clientes.
+6. Reintentar el mismo comando devuelve el mismo resultado. En una carrera con revocación gana la primera operación confirmada.
+7. Tras aceptar entro a la organización; tras rechazar veo la confirmación y puedo regresar a Studio.
 
 ### HU-STUDIO-017 — Ver el equipo de la organización
 
@@ -388,7 +558,7 @@ vence por separado; decidir una no decide las demás.
 
 **Criterios**
 
-1. Solo el propietario puede otorgar el rol de propietario.
+1. Esta operación solo permite otorgar administrador, coach o staff. El rol de propietario se rechaza y solo puede cambiar mediante una transferencia de propiedad.
 2. **Un rol no es un consentimiento:** dar el rol de coach no da acceso a los datos de ninguna persona.
 3. El efecto es inmediato y no retroactivo: no amplía nada de lo ya ocurrido.
 4. Asignar un rol que ya tiene no lo duplica.
@@ -404,9 +574,10 @@ vence por separado; decidir una no decide las demás.
 
 **Criterios**
 
-1. La organización nunca puede quedarse sin propietario.
+1. Esta operación no permite retirar el rol de propietario; solo una transferencia de propiedad puede cambiarlo.
 2. Al retirar el rol de coach, sus asignaciones sobre relaciones dejan de tener efecto: el permiso de la persona sobrevive, pero ese profesional deja de poder ejercerlo.
-3. La pérdida de acceso es inmediata, sin ventana de gracia.
+3. Retirar administrador o staff no cierra asignaciones profesionales cuando la membresía conserva el rol coach vigente.
+4. La pérdida de acceso es inmediata, sin ventana de gracia.
 
 ### HU-STUDIO-021 — Dar de baja a un integrante
 
@@ -421,11 +592,11 @@ vence por separado; decidir una no decide las demás.
 1. Se cierran su membresía, sus roles y todas sus asignaciones sobre relaciones.
 2. **No termina las relaciones de servicio de la organización**: quedan sin profesional responsable y hay que reasignarlas.
 3. Su autoría sobre lo que escribió se conserva.
-4. No se puede dar de baja al único propietario.
+4. No se puede dar de baja a una membresía mientras tenga el rol de propietario; primero debe completarse una transferencia de propiedad.
 
 ### HU-STUDIO-022 — Renunciar a mi membresía
 
-**Como** coach o staff
+**Como** integrante con membresía activa que no es owner
 **quiero** renunciar a mi membresía
 **para** dejar de trabajar en esta organización.
 
@@ -434,8 +605,9 @@ vence por separado; decidir una no decide las demás.
 **Criterios**
 
 1. Un propietario no puede renunciar sin transferir la propiedad antes.
-2. Al renunciar, las relaciones que atendía quedan sin profesional responsable y se notifica a la administración.
-3. Mi autoría sobre lo que registré se conserva.
+2. Puedo renunciar aunque ya no conserve ningún rol; basta que la membresía propia siga activa y no sea owner.
+3. Al renunciar, todas mis asignaciones efectivas se cierran y se notifica a la administración.
+4. Mi autoría sobre lo que registré se conserva.
 
 ---
 
@@ -1368,8 +1540,11 @@ estado de pago de una persona no es un dato de entrenamiento.
 1. Suspender **no toca los permisos** que la persona nos dio, **no desacopla** su programa y **no termina** la relación.
 2. Lo que sí hace: nuestro coach deja de poder escribir, y se pausan las sesiones futuras del programa que le asignamos.
 3. La persona conserva todo su historial y puede seguir entrenando por su cuenta.
-4. Reactivar devuelve todo a como estaba, **sin pedirle a la persona ninguna autorización nueva**.
-5. Si la operación intentara tocar permisos o asignaciones, se revierte entera.
+4. Reactivar **solo cierra el bloqueo comercial de esta suscripción** y vuelve a calcular el acceso con el estado vigente; no restaura una copia de cómo estaban antes los permisos, la relación, la asignación, la membresía del coach ni las sesiones.
+5. Si durante la suspensión se revocó un permiso, terminó la relación, cambió la asignación o una sesión fue cancelada, iniciada o quedó en el pasado, la reactivación **no revive** ese estado.
+6. No se pide una autorización nueva únicamente cuando el permiso actual sigue vigente. Si existe otro bloqueo —por ejemplo, la organización continúa suspendida—, la escritura y las sesiones afectadas siguen pausadas.
+7. Solo vuelven a estar disponibles las sesiones futuras, no iniciadas y no canceladas que todavía pertenezcan a una relación y asignación vigentes.
+8. Si la operación intentara tocar permisos, relaciones, membresías, asignaciones o el estado intrínseco de una sesión, se revierte entera.
 
 ### HU-STUDIO-080 — Terminar una suscripción
 
@@ -1405,6 +1580,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 4. **Lo que veo depende de mi rol.** Un coach no ve cobros; un staff no ve nada de entrenamiento.
 5. Desde cada aviso llego directo a donde se resuelve.
 6. Si no hay nada pendiente se dice, en lugar de mostrar una pantalla vacía.
+7. Un scope rechazado o revocado nunca reaparece como “permiso pendiente” ni como una acción para que el coach vuelva a solicitarlo. Las decisiones de scopes ocurren únicamente dentro de la aceptación de una nueva relación.
 
 ### HU-STUDIO-082 — Buscar a una persona de mi gimnasio
 
@@ -1458,7 +1634,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 | --- | --- | ---: |
 | `E-STUDIO-00` Entrar | `HU-STUDIO-001` – `HU-STUDIO-004` | 4 de 4 |
 | `E-STUDIO-01` Perfil y organización | `HU-STUDIO-005` – `HU-STUDIO-013` | 5 de 9 |
-| `E-STUDIO-02` Equipo, roles y membresías | `HU-STUDIO-014` – `HU-STUDIO-022` | 7 de 9 |
+| `E-STUDIO-02` Equipo, roles y membresías | `HU-STUDIO-014` – `HU-STUDIO-022`, `HU-STUDIO-085` – `HU-STUDIO-086` | 9 de 11 |
 | `E-STUDIO-03` Invitación de personas y directorio | `HU-STUDIO-023` – `HU-STUDIO-026` | 3 de 4 |
 | `E-STUDIO-04` Responsable, suplencias y terminación | `HU-STUDIO-027` – `HU-STUDIO-033` | 3 de 7 |
 | `E-STUDIO-05` Qué nos autorizó cada persona | `HU-STUDIO-034` – `HU-STUDIO-035` | 1 de 2 |
@@ -1471,7 +1647,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 | `E-STUDIO-12` Nutrición | `HU-STUDIO-068` – `HU-STUDIO-072` | 0 de 5 |
 | `E-STUDIO-13` Planes y cobro | `HU-STUDIO-073` – `HU-STUDIO-080` | 5 de 8 |
 | `E-STUDIO-14` Resumen del día | `HU-STUDIO-081` – `HU-STUDIO-084` | 3 de 4 |
-| **Total** | **84 historias** | **42 imprescindibles** |
+| **Total** | **86 historias** | **44 imprescindibles** |
 
 El camino mínimo para lanzar es: entrar, crear el gimnasio con su equipo,
 invitar a una persona, armar un programa y asignárselo, ver lo que ejecutó, y

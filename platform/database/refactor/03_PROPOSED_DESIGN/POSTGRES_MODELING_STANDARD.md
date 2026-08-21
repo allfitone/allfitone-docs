@@ -210,7 +210,7 @@ El plan exige que "los estados imposibles se bloquean con constraints". Se usan,
 4. **FK simple o compuesta** para toda referencia entre tablas; las N:M son tablas puente explícitas, nunca arrays de uuid. Si el hijo repite `person_id`, `organization_id`, relación o ejecución, la FK debe probar la tupla completa.
 5. **Constraint de exclusión** (`EXCLUDE`) cuando haya que impedir solapamiento temporal de vigencias sobre el mismo sujeto.
 6. **Constraint triggers diferibles** cuando la regla depende de estado o tiempo en otra tabla, de un target polimórfico o de una familia derivada.
-7. **Triggers ordinarios** solo para guardianes no diferibles: append-only (bloquear `UPDATE`/`DELETE`), congelar una fila publicada, proteger al último `owner` o validar la entrada cerrada de una tabla particionada.
+7. **Triggers ordinarios** solo para guardianes no diferibles: append-only (bloquear `UPDATE`/`DELETE`), congelar una fila publicada o validar la entrada cerrada de una tabla particionada. La cardinalidad de `owner`, al depender de organización, membresía y vigencia de rol y necesitar cambios atómicos, usa un constraint trigger diferible conforme al punto anterior.
 
 Regla: preferir siempre la restricción más declarativa posible. Un trigger es el último recurso, no el primero.
 
@@ -303,7 +303,7 @@ Ninguna tabla entra al diccionario sin cumplir:
 - [ ] vive en el schema de su dominio;
 - [ ] `created_at`, y `updated_at` si es mutable;
 - [ ] toda FK con comportamiento de borrado explícito e índice si participa en RLS;
-- [ ] toda ruta `PR-01..27` compila contra columnas existentes y dispone de sus índices `T-PHY-*`;
+- [ ] toda ruta `PR-01..29` compila contra columnas existentes y dispone de sus índices `T-PHY-*`;
 - [ ] estados imposibles bloqueados por `NOT NULL`, `UNIQUE`, `CHECK` o `EXCLUDE`;
 - [ ] `NULL` nunca sustituido por cero o vacío;
 - [ ] JSONB solo para contenido genuinamente variable, con versión y contrato `CHECK` registrado;

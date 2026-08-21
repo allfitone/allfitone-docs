@@ -115,8 +115,12 @@ erDiagram
     PERSON ||--o{ FITNESS_PROFILE_CLAIM : posee
     PERSON ||--o{ BODY_PROGRESS_RECORD : registra
     PERSON ||--o{ HEALTH_CONTEXT_CLAIM : declara
-    FITNESS_PROFILE_CLAIM ||--o{ PROFILE_VERIFICATION : verifica
     PERSON ||--o| PROFESSIONAL_PROFILE : presenta
+    PROFESSIONAL_PROFILE ||--|{ PROFESSIONAL_PROFILE_SPECIALTY : declara
+    PROFESSIONAL_SPECIALTY ||--o{ PROFESSIONAL_PROFILE_SPECIALTY : clasifica
+    PROFESSIONAL_PROFILE ||--o{ PROFESSIONAL_CREDENTIAL : declara
+    PROFESSIONAL_CREDENTIAL_TYPE ||--o{ PROFESSIONAL_CREDENTIAL : tipifica
+    PROFESSIONAL_CREDENTIAL ||--o{ PROFESSIONAL_CREDENTIAL_VERIFICATION : verifica
 
     INVITATION_INTENT o|--o| ORGANIZATION_MEMBERSHIP : materializa
     INVITATION_INTENT o|--o| SERVICE_RELATIONSHIP : materializa
@@ -134,8 +138,12 @@ erDiagram
 | `FITNESS_PROFILE_CLAIM` | Afirmación tipada, con autor, procedencia y vigencia | El modelo lógico la separará por estructura y sensibilidad; no será EAV universal |
 | `BODY_PROGRESS_RECORD` | Medición, tendencia o foto corporal elegida por la persona | Se estructura aparte de entrenamiento y elimina EXIF/geolocalización no necesarios |
 | `HEALTH_CONTEXT_CLAIM` | Dolor, limitación, recuperación u otro contexto fitness minimizado | No representa historia clínica, diagnósticos, laboratorios o nutrición |
-| `PROFILE_VERIFICATION` | Verificación de una afirmación concreta | No convierte el resto del perfil en verificado ni amplía scopes |
-| `PROFESSIONAL_PROFILE` | Presentación profesional personal | Existe fuera de una organización; operar exige membresía organizacional |
+| `PROFESSIONAL_PROFILE` | Presentación profesional personal | Existe fuera de una organización; años de experiencia se derivan del año de inicio y operar exige membresía organizacional |
+| `PROFESSIONAL_SPECIALTY` | Especialidad profesional gobernada | No se confunde automáticamente con una disciplina de entrenamiento |
+| `PROFESSIONAL_PROFILE_SPECIALTY` | Especialidad declarada en un perfil | Une el perfil personal con un código publicado sin texto libre |
+| `PROFESSIONAL_CREDENTIAL_TYPE` | Tipo gobernado de credencial profesional | Evita tipos libres y conserva el significado de declaraciones históricas |
+| `PROFESSIONAL_CREDENTIAL` | Credencial profesional declarada | Tiene identidad y revisiones propias; declararla no la verifica |
+| `PROFESSIONAL_CREDENTIAL_VERIFICATION` | Decisión sobre una versión exacta de credencial | No verifica otras credenciales ni el perfil completo y no amplía scopes |
 | `INVITATION` | Sobre temporal de entrega y seguridad | No necesita `person_id` y nunca crea una persona provisional |
 | `INVITATION_INTENT` | Propuesta tipada decidida de forma independiente | Materializa como máximo un destino compatible con su tipo |
 

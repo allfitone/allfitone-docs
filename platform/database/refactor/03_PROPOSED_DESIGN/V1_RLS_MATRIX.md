@@ -1,9 +1,9 @@
 # Matriz de seguridad y RLS V1
 
-**Versión de revisión:** 5
-**Fecha:** 3 de agosto de 2026
+**Versión de revisión:** 6
+**Fecha:** 17 de agosto de 2026
 **Fase:** 3 — Definir operaciones, seguridad y contratos
-**Estado:** Backoffice opción B recertificada; resto de P0 pendiente
+**Estado:** AFO-39 recertifica Organización y equipo; implementación física pendiente
 **Deriva de:** [`V1_OPERATIONS_MATRIX.md`](./V1_OPERATIONS_MATRIX.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md) y [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md)
 
 ## 1. Propósito
@@ -33,7 +33,7 @@ flowchart TB
 | RLS | Un `WHERE` olvidado, un join mal escrito, un endpoint nuevo sin revisar | **No** filtra columnas: una fila visible es visible entera |
 | Proyecciones y field-sets | Que un campo de otra categoría viaje dentro de una fila legítima | No sustituye a RLS: no restringe qué filas se leen |
 
-La integridad de la fila es ortogonal a estas cuatro capas. RLS puede denegar una fila, pero no puede demostrar que dos IDs válidos pertenezcan a la misma persona u organización. Las escrituras se someten además a las FKs compuestas y guardianes `IX-01..35` de [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md), incluso cuando el actor de prueba usa `BYPASSRLS`.
+La integridad de la fila es ortogonal a estas cuatro capas. RLS puede denegar una fila, pero no puede demostrar que dos IDs válidos pertenezcan a la misma persona u organización. Las escrituras se someten además a las FKs compuestas y guardianes `IX-01..45` de [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md), incluso cuando el actor de prueba usa `BYPASSRLS`.
 
 Las dos reglas que se derivan de esta separación y que atraviesan todo el documento:
 
@@ -54,7 +54,7 @@ Ningún proceso se conecta como superusuario ni con `BYPASSRLS`. La propiedad de
 | Rol | Uso | RLS | Grants |
 | --- | --- | --- | --- |
 | `allfit_owner` | Propietario de los objetos. **Solo** migraciones, nunca runtime | Exento por ser owner | DDL |
-| `allfit_api` | Único rol de la API en runtime | **`FORCE ROW LEVEL SECURITY`** | `SELECT`/`INSERT`/`UPDATE` acotados por tabla; casi ningún `DELETE` |
+| `allfit_api` | Único rol de la API en runtime | **`FORCE ROW LEVEL SECURITY`** | Privilegios mínimos por tabla; agregados protegidos usan `SELECT` RLS y `EXECUTE` cerrado, sin DML directo |
 | `allfit_worker_privacy` | Workers de disposición, retención y supresión | Forzada | Solo las tablas de Privacidad y los targets que dispone |
 | `allfit_worker_outbox` | Despachador y notificaciones | Forzada | `SELECT`/`UPDATE` sobre outbox; `SELECT` de identificadores de contacto |
 | `allfit_worker_maintenance` | Expiraciones y recálculo de derivados | Forzada | Las tablas de su alcance, nada más |
@@ -277,22 +277,58 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **`T-SESSION-3` (negativa)** — `PUBLIC` no ejecuta ninguna función de sesión.
 - **`T-SESSION-4` (concurrencia)** — Solo la versión esperada rota el refresh token; el compare-and-swap perdedor no sobrescribe la versión ganadora.
 - **`T-SESSION-5` (revocación)** — Una sesión revocada deja de cargar inmediatamente.
+- **`T-SESSION-6` (superficie)** — Una sesión Studio conserva AAL1 compatible y nunca carga en Backoffice; una fila Backoffice no puede existir sin AAL2, `password_totp`, evidencia y vencimientos.
+- **`T-SESSION-7` (tiempo)** — Quince minutos sin actividad u ocho horas absolutas cierran la sesión aunque el token WorkOS continúe vigente.
+
+#### `ACCESS_ACCOUNT_MFA_FACTOR` · `BACKOFFICE_AUTHENTICATION_ATTEMPT` · `MFA_FACTOR_RECOVERY_EVENT`
+
+| Actor | SELECT | INSERT | UPDATE | DELETE |
+| --- | --- | --- | --- | --- |
+| `A0`–`A12`, incluido `allfit_api` directo | — | — | — | — |
+| `allfit_migrator` en ceremonia protegida | Mediante función | Mediante función | Mediante función | — |
+
+- **Condición RLS** — `FORCE ROW LEVEL SECURITY` y policy únicamente para `allfit_owner`. No se conceden privilegios de tabla a `allfit_api`, worker o `PUBLIC`.
+- **Contexto requerido** — Las funciones de login reciben hashes y contexto calculado por servidor. Las de recuperación exigen dos personas distintas del sujeto con `manage_platform_access` vigente y autoridad `allfit_migrator`.
+- **Grants mínimos** — `allfit_api` sólo ejecuta resolver, iniciar/cargar/bind/fallar/completar/expirar mediante funciones cerradas. El worker sólo prepara limpieza por event ID y nunca lee ciphertext, factor ID o `sid` desde la cola.
+- **Índice para la policy** — No hay acceso RLS directo; los lookups usan factor actual por cuenta, token hash único, intento abierto por cuenta y expiración `(expires_at,id)`.
+- **`T-AAL2-1` (negativa)** — Password correcto no crea `ACCESS_SESSION`; sólo un challenge TOTP confirmado puede completar el intento.
+- **`T-AAL2-2` (negativa)** — Persona inactiva, rol ausente/revocado, factor terminal u otra superficie fallan con la misma ausencia de sesión.
+- **`T-AAL2-3` (códigos)** — Los primeros cuatro códigos inválidos conservan el intento; el quinto lo termina y elimina el secreto cifrado.
+- **`T-AAL2-4` (idempotencia)** — Un command se vincula antes de consumir el challenge externo; replay legítimo converge y headers distintos no crean una segunda sesión.
+- **`T-AAL2-5` (concurrencia)** — Completar TOTP y revocar rol/factor serializan cuenta, intento, factor, rol y sesión; sólo la primera transacción confirmada puede ganar.
+- **`T-AAL2-6` (recuperación)** — Dos aprobadores distintos del sujeto revocan factor, sesiones e intentos y escriben evidencia inmutable; runtime y autoaprobación fallan.
+
+#### `PASSWORD_RESET_RECEIPT`
+
+| Actor | SELECT | INSERT | UPDATE | DELETE |
+| --- | --- | --- | --- | --- |
+| `A0`–`A12`, incluido `allfit_api` directo | — | — | — | — |
+
+- **Condición RLS** — `FORCE ROW LEVEL SECURITY`; solo `allfit_owner` tiene policy. El runtime no recibe privilegios de tabla.
+- **Contexto requerido** — ninguno aceptado desde el cliente. La función recibe únicamente la proyección firmada `provider + issuer + event_id + subject + occurred_at` después de la verificación del body crudo.
+- **Grants mínimos** — `allfit_api` solo ejecuta `identity.process_password_reset_succeeded`; `PUBLIC` no la ejecuta. La función es la única escritura permitida sobre receipts y la única revocación masiva por reset.
+- **Índice para la policy** — no aplica a lectura directa; la función usa el unique `(provider, issuer, provider_event_id)` y la cuenta se resuelve por `(provider, issuer, subject)`.
+- **`T-PASSWORD-RESET-1` (positiva)** — revoca todas las sesiones activas creadas hasta `occurred_at` y `load_access_session` deja de devolverlas.
+- **`T-PASSWORD-RESET-2` (temporal)** — conserva una sesión creada después del evento.
+- **`T-PASSWORD-RESET-3` (tenant)** — el mismo subject bajo otro issuer no se modifica.
+- **`T-PASSWORD-RESET-4` (idempotencia)** — replay secuencial o concurrente produce un receipt y devuelve el resultado durable.
+- **`T-PASSWORD-RESET-5` (negativa)** — una cuenta inexistente converge a `account_absent`; DML directo sobre receipts o sesiones permanece denegado.
 
 #### `ONBOARDING_ATTEMPT` · `ELIGIBILITY_EVIDENCE`
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
-| `A1` | Propio | Propio | Propio | — |
+| `A1` | Propio | Vía función gobernada | Vía función gobernada | — |
 | `A2` | Propios históricos | — | — | — |
 | `A9` privacy | Por disposición | — | — | Sí |
 | Resto | — | — | — | — |
 
 - **Condición RLS** — `account_id = app.actor_account_id`. La evidencia hereda la condición de su intento.
-- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(status)`. Sin `DELETE`.
+- **Grants mínimos** — `allfit_api`: `SELECT` sobre intentos y evidencia; `EXECUTE` sobre inicio, registro de evidencia y activación. Sin DML directo de runtime.
 - **Índice para la policy** — sobre `account_id`; parcial sobre intentos abiertos.
 - **`T-ONBOARD-1` (positiva)** — Una cuenta lee y avanza su propio intento.
-- **`T-ONBOARD-2` (negativa)** — Un intento con evidencia `fail` o `review_required` no puede transicionar a `activated`: lo impide un constraint, no solo la aplicación.
-- **`T-ONBOARD-3` (negativa)** — Ninguna organización lee evidencia de elegibilidad de nadie. La fecha de nacimiento nunca sale de Identidad.
+- **`T-ONBOARD-2` (negativa)** — Un intento sin evidencia `pass` vigente para la política V1 no puede transicionar a `activated`: lo impide un constraint, no solo la aplicación.
+- **`T-ONBOARD-3` (negativa)** — Ninguna organización lee evidencia de elegibilidad de nadie. La declaración y el snapshot de política nunca salen de Identidad.
 
 #### `FITNESS_PROFILE_CLAIM`
 
@@ -346,20 +382,6 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **`T-HEALTH-1` (negativa)** — Un dolor registrado **dentro** de una sesión visible permanece oculto sin `health_context`. La visibilidad de la sesión no arrastra la del dolor.
 - **`T-HEALTH-2` (negativa)** — `health_context` no expone biometría continua, raw de dispositivos ni inferencias médicas: no existen en V1.
 
-#### `PROFILE_VERIFICATION`
-
-| Actor | SELECT | INSERT | UPDATE | DELETE |
-| --- | --- | --- | --- | --- |
-| `A2` | Propias | — | — | — |
-| `A3`, `A7` | `R*` con el scope del atributo verificado | — | — | — |
-| `A11/verify_professional_credentials` | Las que emitió | Credenciales profesionales | Revocación append-only mediante función | — |
-
-- **Condición RLS** — Hereda el scope del atributo verificado. `INSERT` restringido a `actor_kind = 'support'`, `platform_duty = 'verify_professional_credentials'`, AAL2, deber vigente, método/fuente permitidos y ausencia de conflicto según ADR-026.
-- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT` restringido.
-- **`T-VERIF-1` (negativa)** — Verificar una credencial **no** marca otros atributos ni el perfil completo como verificados.
-- **`T-VERIF-2` (negativa)** — Vencer o revocar una verificación no altera el valor afirmado ni comparte automáticamente la evidencia.
-- **`T-VG-01..06`** — Deber separado, métodos cerrados, exclusiones, conflictos, vigencia y ciclo append-only según [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md).
-
 #### `PROFESSIONAL_PROFILE`
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
@@ -368,63 +390,123 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | `A3`–`A6` | De los miembros de la misma organización | — | — | — |
 | Resto | — | — | — | — |
 
-- **Condición RLS** — `access_control.is_self(person_id)` **OR** existe membresía vigente de esa persona en `access_control.org()`.
+- **Condición RLS** — La tabla base exige `access_control.is_self(person_id)`. La lectura organizacional ocurre exclusivamente mediante una proyección cerrada que comprueba membresía vigente compartida en `access_control.org()` y omite evidencia interna.
 - **Índice para la policy** — sobre `person_id` en `ORGANIZATION_MEMBERSHIP` con `(organization_id, status)`.
 - **`T-PROF-1` (negativa)** — El perfil profesional **no** es público: no existe una lectura anónima ni entre organizaciones. Perfiles públicos y marketplace están diferidos.
+- **`T-PROF-2` (negativa)** — Una organización compartida puede consumir la presentación autorizada, pero no editarla ni convertirla en una copia organizacional.
+
+#### `PROFESSIONAL_PROFILE_SPECIALTY`
+
+| Actor | SELECT | INSERT | UPDATE | DELETE |
+| --- | --- | --- | --- | --- |
+| `A2` | Propias | Vía `OP-IDN-010` | — | Vía `OP-IDN-010` |
+| `A3`–`A6` | Proyección de miembros de la misma organización | — | — | — |
+| Resto | — | — | — | — |
+
+- **Condición RLS** — Hereda el perfil mediante `professional_profile_id`; el comando resuelve el perfil de `access_control.person()` y solo acepta códigos publicados.
+- **Grants mínimos** — Sin DML directo de runtime; `OP-IDN-010` reemplaza el conjunto dentro de una transacción.
+- **`T-PROF-3` (negativa)** — Un código libre, inexistente o no publicado no puede declararse como especialidad.
+
+#### `PROFESSIONAL_CREDENTIAL`
+
+| Actor | SELECT | INSERT | UPDATE | DELETE |
+| --- | --- | --- | --- | --- |
+| `A2` | Propias | Vía `OP-IDN-029` | Solo retiro vía `OP-IDN-031` | — |
+| `A3`–`A6` | Proyección de miembros de la misma organización | — | — | — |
+| `A11/verify_professional_credentials` | Solo la credencial asignada a su solicitud | — | — | — |
+| Resto | — | — | — | — |
+
+- **Condición RLS** — Ownership transitivo desde `professional_profile_id`; la revisión `OP-IDN-030` crea una nueva credencial y retira la anterior en la misma transacción. No existe `UPDATE` material ni `DELETE` de runtime.
+- **Proyección** — Expone identificación profesional, emisor, vigencia declarada y estado de verificación de esa versión; nunca fingerprint, referencia interna ni datos de otra credencial.
+- **`T-CRED-1` (positiva)** — La persona declara, revisa y retira únicamente sus credenciales.
+- **`T-CRED-2` (negativa)** — Revisar una credencial no traslada la verificación de la versión reemplazada.
+
+#### `PROFESSIONAL_CREDENTIAL_VERIFICATION`
+
+| Actor | SELECT | INSERT | UPDATE | DELETE |
+| --- | --- | --- | --- | --- |
+| `A2` | Estado propio mediante proyección | — | — | — |
+| `A3`–`A7` | Estado autorizado mediante proyección | — | — | — |
+| `A11/verify_professional_credentials` | Las asignadas o emitidas, por función cerrada | Vía `OP-IDN-011` | Revocación append-only mediante función | — |
+| Resto | — | — | — | — |
+
+- **Condición RLS** — `OP-IDN-011` restringe a `actor_kind='support'`, deber `verify_professional_credentials`, AAL2, asignación vigente, versión exacta, método/fuente permitidos y ausencia de conflicto según ADR-026.
+- **Grants mínimos** — Sin DML directo de runtime sobre la tabla. Las funciones cerradas insertan decisiones append-only; las proyecciones separan estado público autorizado de evidencia interna.
+- **`T-VERIF-1` (negativa)** — Verificar una credencial **no** marca otras versiones, otras credenciales ni el perfil completo como verificados.
+- **`T-VERIF-2` (negativa)** — Vencer o revocar una verificación no altera la declaración ni comparte automáticamente la evidencia.
+- **`T-VG-01..06`** — Deber separado, métodos cerrados, exclusiones, conflictos, vigencia y ciclo append-only según [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md).
 
 #### `INVITATION` · `INVITATION_INTENT`
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
 | `A0` | — | — | — | — |
-| `A1`, `A2` | Por token válido y vigente | — | Decisión de intención | — |
-| `A3`–`A6` | Las de su organización | Sí, con capacidad | Revocación | — |
-| `A9` maintenance | Vencidas | — | Vencimiento | — |
+| `A1`, `A2` | — | — | — | — |
+| `A3`–`A6` | — | — | — | — |
+| `A9` maintenance | — | — | — | — |
 
-- **Condición RLS** — `SELECT` del invitado: coincidencia exacta de token vigente y no revocado. `SELECT` de la organización: `organization_id = access_control.org()` con `access_control.has_capability(org, 'invite')`.
-- **Contexto requerido** — Para el invitado basta `actor_kind IN ('account','person')`: la invitación se consulta **antes** de existir la persona.
-- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(status)`. Sin `DELETE`: una invitación vencida o revocada conserva evidencia.
-- **Índice para la policy** — único sobre el hash del token; sobre `(organization_id, status)`.
-- **`T-INV-1` (positiva)** — Una cuenta sin persona consulta la invitación y ve las intenciones **por separado**.
-- **`T-INV-2` (negativa)** — La respuesta no revela si el contacto invitado ya tiene cuenta en Allfit: eso filtraría la existencia de una persona.
-- **`T-INV-3` (negativa)** — Aceptar la intención de relación y rechazar la de programa **no** concede ningún scope: no aparece ningún `DATA_GRANT`.
-- **`T-INV-4` (negativa)** — Una invitación pendiente no crea cuenta, persona, perfil, relación, grant ni asignación. Se verifica contando filas en las seis tablas.
-- **`T-INV-5` (positiva)** — Dos aceptaciones concurrentes de la misma intención materializan **un** solo destino.
+- **Condición RLS** — `FORCE ROW LEVEL SECURITY`; solo `allfit_owner` tiene policy física. Ningún actor runtime recibe DML directo.
+- **Contexto requerido** — `resolve_staff_invitation` exige actor anónimo y token hasheado; `decide_staff_invitation` exige persona activa y `app.actor_verified_email`; listar/revocar exigen capacidad `invite`; expirar exige actor worker.
+- **Grants mínimos** — `allfit_api` recibe únicamente `EXECUTE` sobre las funciones cerradas de emitir, limitar, resolver, decidir, listar, revocar y expirar. El token no se expone a SQL en claro.
+- **Índices para funciones** — único sobre `token_hash`; propuesta pendiente; `(organization_id, status, expires_at DESC)`; listado `(organization_id, created_at DESC, id DESC)`.
+- **`T-INV-1` (positiva)** — El actor anónimo resuelve una invitación de staff pendiente y ve organización, responsable, rol y vencimiento, nunca contacto.
+- **`T-INV-2` (negativa)** — Inválida, vencida, revocada y completada producen la misma proyección vacía/`404`.
+- **`T-INV-3` (negativa)** — Un email ausente, no verificado o distinto no puede decidir la invitación.
+- **`T-INV-4` (negativa)** — Aceptar staff no crea perfil de cliente, relación, grant, scope ni asignación.
+- **`T-INV-5` (positiva)** — Aceptar crea o reutiliza una sola membresía activa, conserva `joined_at` y añade el rol faltante una vez.
+- **`T-INV-6` (positiva)** — Aceptación y revocación concurrentes confirman un único efecto terminal.
+- **`T-INV-7` (positiva)** — La expiración por lotes usa bloqueo con `SKIP LOCKED` y emite una sola evidencia por invitación.
+- **`T-INV-8` (negativa)** — Los límites persisten solo hashes SHA-256, nunca email o IP en claro.
 
 ### 7.2 Organizaciones
 
-#### `ORGANIZATION` · `ORGANIZATION_TYPE` · `ORGANIZATION_SITE`
+#### `ORGANIZATION` · `ORGANIZATION_TYPE` · `ORGANIZATION_TYPE_TRANSITION` · `ORGANIZATION_SITE`
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
-| `A2` | — | Crear la propia | — | — |
-| `A3`, `A6` | La suya | — | — | — |
-| `A4` | La suya | Sedes | Datos y sedes | — |
-| `A5` | La suya | Sedes | Todo, cierre | — |
+| `A2` | — | Vía `organizations.create_organization` | — | — |
+| `A3`, `A6` | Vía `organizations.read_organization` | — | — | — |
+| `A4` | Vía `organizations.read_organization` | Vía función cerrada | Vía función cerrada | — |
+| `A5` | Vía `organizations.read_organization` | Vía función cerrada | Vía función cerrada, transferencia y cierre | — |
 
-- **Condición RLS** — `access_control.has_membership(id)`. Las sedes heredan por `organization_id`. `ORGANIZATION_TYPE` es catálogo global de lectura para cualquier autenticado.
-- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE`. Sin `DELETE`: cerrar es un cambio de estado.
+- **Condición RLS** — `access_control.has_membership(id)`. Las sedes heredan por `organization_id`. `ORGANIZATION_TYPE` y `ORGANIZATION_TYPE_TRANSITION` son catálogos globales de lectura autenticada, sin DML de runtime.
+- **Grants mínimos** — `allfit_api` no recibe `SELECT` ni DML sobre `organizations.organizations`; solo `EXECUTE` sobre `organizations.create_organization`, `organizations.update_organization`, `organizations.create_site`, `organizations.update_site`, `organizations.read_organization`, `organizations.transfer_ownership` y `organizations.close_organization`. Los catálogos globales conservan grants de columnas seguras explícitos; sede/membresía/rol necesarios para esta proyección se leen dentro de la función. `responsible_party` nunca es seleccionable por runtime.
+- **Entrada cerrada** — Las funciones de escritura son `SECURITY DEFINER`, fijan `search_path = pg_catalog`, califican todos los objetos, toman actor/persona/membresía del contexto transaccional y revocan `EXECUTE` a `PUBLIC`.
 - **Índice para la policy** — sobre `(person_id, organization_id, status)` en `ORGANIZATION_MEMBERSHIP`.
 - **`T-ORG-1` (negativa)** — Una organización no lee ni referencia datos privados de otra. Se prueba con dos organizaciones independientes.
 - **`T-ORG-2` (positiva)** — Una práctica unipersonal incorpora integrantes **sin** cambiar `organization_id` y sin perder clientes, programas ni auditoría.
+- **`T-ORG-3` (negativa)** — Un `PATCH` con campo fuera de `display_name`, `legal_name` y `type_code`, transición no publicada, `If-Match` ausente u obsoleto no muta la organización.
+- **`T-ORG-4` (positiva)** — Las dos transiciones publicadas incrementan `revision_number`, devuelven ETag fuerte y escriben before/after; incorporar equipo no cambia `type_code`.
+- **`T-ORG-5` (negativa)** — `allfit_api` no puede ejecutar DML directo sobre organización, sede, membresía, rol o eventos, aun con contexto owner; no puede fabricar estado, owner ni snapshots.
+- **`T-ORG-6` (positiva/negativa)** — Cada función cerrada permite el actor/campo/tenant documentado y deniega actor, tenant, campo inmutable, transición o ETag inválido.
+- **`T-ORG-7` (auditoría)** — `OP-ORG-013` devuelve la proyección cerrada y registra `ACCESS_EVENT` en la misma transacción; si el registro falla no retorna contenido, y otro tenant recibe el mismo `404` que una organización inexistente.
+- **`T-ORG-8` (interdominio)** — Cada contrato destino permite la llamada del coordinador owner para el mismo tenant y deniega tenant ajeno; un fallo inyectado en Relaciones, Privacidad, Planificación, Ejecución o Nutrición revierte todos los efectos previos.
+- **`T-ORG-9` (concurrencia/idempotencia)** — Cierre y bajas concurrentes serializan, conservan un solo receipt por `Command-Id` y nunca dejan roles, asignaciones, grants o propuestas en estado parcial.
+- **`T-ORG-10` (PII de sede)** — Dirección domiciliaria solo aparece en la proyección del tenant autorizado con `no-store`; el `ACCESS_EVENT` registra únicamente el recurso cerrado y la disposición aplica la política `identity_pii` sin copiar la dirección.
 
 #### `ORGANIZATION_MEMBERSHIP` · `MEMBERSHIP_ROLE`
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
-| `A2` | Las propias | — | Renuncia propia | — |
+| `A2` | Las propias | — | Vía `organizations.resign_membership` | — |
 | `A3` | Las de su organización | — | — | — |
 | `A6` | Las de su organización | — | — | — |
-| `A4`, `A5` | Las de su organización | Sí | Roles, terminación | — |
+| `A4`, `A5` | Las de su organización | Vía función cerrada | Vía función cerrada | — |
 
-- **Condición RLS** — `organization_id = access_control.org()` con membresía vigente, **OR** `person_id = access_control.person()`. `INSERT` y `UPDATE` de roles exigen `access_control.has_capability(org, 'manage_staff')`; otorgar `owner` exige que el actor sea `owner`.
-- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE`. Sin `DELETE`: las bajas conservan historial.
+- **Condición RLS** — `organization_id = access_control.org()` con membresía vigente, **OR** `person_id = access_control.person()`. Las operaciones genéricas solo admiten `admin`, `coach` y `staff` y rechazan `owner`; esa regla vive dentro de las entradas cerradas, no en un grant DML.
+- **Grants mínimos** — `allfit_api` recibe `SELECT` RLS y solo `EXECUTE` sobre `organizations.grant_membership_role`, `organizations.revoke_membership_role`, `organizations.terminate_membership`, `organizations.resign_membership` y `organizations.transfer_ownership`. Sin DML directo sobre membresías o roles.
+- **Contratos destino** — `relationships.end_assignments_for_membership` y los cinco contratos de cierre son `SECURITY DEFINER` del dominio destino, con `PUBLIC/allfit_api` sin `EXECUTE`; solo el coordinador Organization ejecutado como owner los llama. Ningún grant autoriza DML cross-schema.
 - **Índice para la policy** — sobre `(organization_id, status)` y sobre `(person_id, status)`.
 - **`T-MEMB-1` (negativa)** — Una membresía, en cualquier rol, **no** concede acceso a datos fitness de ningún cliente. Un `admin` sin asignación ni grant no lee nada del Fitness ID.
 - **`T-MEMB-2` (negativa)** — Un rol de una organización no se propaga a otra, aunque la persona sea miembro de ambas.
-- **`T-MEMB-3` (negativa)** — Retirar el último `owner` es imposible: lo impide un constraint.
+- **`T-MEMB-3` (negativa)** — Cerrar el rol o la membresía `owner` y confirmar con cero owners es imposible: lo impide `organizations.enforce_exactly_one_active_owner_ct`.
 - **`T-MEMB-4` (positiva)** — Terminar una membresía deja inefectivas sus asignaciones profesionales **en la misma transacción**; el grant sobrevive, el actor deja de poder ejercerlo.
 - **`T-MEMB-5` (negativa)** — `A6` (staff) ve nombre y estado del directorio, y ninguna columna de perfil, ejecución, medida corporal o salud.
+- **`T-MEMB-6` (negativa)** — Crear un segundo rol `owner` activo y confirmar con dos owners es imposible: lo impide el mismo constraint diferible.
+- **`T-MEMB-7` (positiva)** — `organizations.transfer_ownership(...)` ejecutada por el owner a una membresía activa del mismo tenant confirma un owner, conserva la membresía y roles no-owner anteriores y registra `organization.ownership_transferred.v1`.
+- **`T-MEMB-8` (negativa)** — Admin, destino inactivo/ajeno o dos transferencias concurrentes no producen cero/dos owners ni cambios parciales; `allfit_api` no puede alterar `owner` fuera de la función cerrada.
+- **`T-MEMB-9` (multirrol)** — Retirar `admin` o `staff` a una membresía que conserva `coach` no cierra asignaciones; retirar `coach`, terminar o renunciar sí las cierra en la misma transacción.
+- **`T-MEMB-10` (self)** — La persona con membresía propia activa no-owner renuncia aunque no tenga roles vigentes; el owner vigente falla y no muta nada.
 
 #### `ORGANIZATION_ROLE` · `ORGANIZATION_CAPABILITY` · `ROLE_CAPABILITY`
 
@@ -442,11 +524,12 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | --- | --- | --- | --- | --- |
 | `A2` | Los de sus propios vínculos | — | — | — |
 | `A4`, `A5` | Los de su organización | — | — | — |
-| `allfit_api` | — | Sí | — | — |
+| `allfit_api` | — | Solo como efecto de función/trigger cerrado | — | — |
 
 - **Condición RLS** — Heredan la condición de su agregado.
-- **Grants mínimos** — `INSERT` únicamente; **sin `UPDATE` ni `DELETE` para ningún rol de runtime**. La naturaleza append-only se impone con privilegios.
-- **`T-EVENT-1` (negativa)** — Ningún rol de runtime puede modificar ni borrar un evento ya escrito.
+- **Grants mínimos** — Sin DML directo para `allfit_api` ni otro runtime. Las funciones cerradas y triggers propietarios insertan eventos append-only; `UPDATE` y `DELETE` permanecen revocados.
+- **`T-EVENT-1` (negativa)** — Ningún rol de runtime puede insertar, modificar ni borrar un evento directamente.
+- **`T-EVENT-2` (positiva/negativa)** — Cada función gobernada produce el snapshot contractual correspondiente y rechaza claves, tipos o combinación `event_type`/snapshot inválidos.
 
 ### 7.3 Relaciones
 
@@ -532,19 +615,21 @@ Es el dominio donde una policy mal escrita produce una fuga real. Todas sus fich
 - **`T-SCOPE-2` (negativa)** — No existe ningún scope, vista, RPC ni endpoint equivalente a `all_data`. Se verifica enumerando el catálogo y comprobando que solo hay siete. El estado de pago **no es un scope** y no se expone por ninguno de ellos.
 - **`T-SCOPE-3` (positiva)** — Cada campo expuesto por una regla tiene una `DATA_CLASSIFICATION` asignada; publicar una regla con un campo sin clasificar falla.
 
-#### `CONSENT_EVENT` · solicitudes de grant
+#### `CONSENT_EVENT` · opciones de scope de la invitación
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
-| `A2` | Los propios | Decisiones propias | — | — |
-| `A3`–`A5` | Los de sus relaciones, sin contenido | Solicitudes | Retiro | — |
+| `A2` | Los propios | Solo mediante decisión de invitación | — | — |
+| `A3`–`A5` | Los de sus relaciones, sin contenido | — | — | — |
 | Resto | — | — | — | — |
 
-- **Condición RLS** — En `consent_events`: `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** existe `service_relationships(id=relationship_id, organization_id=access_control.org())`). En `grant_requests`: join por `(relationship_id, organization_id)`; la persona compara `service_relationships.person_id`, la organización compara `organization_id`. La organización ve **estado**, nunca contenido amparado.
-- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`. Sin `UPDATE` ni `DELETE`: el evento de consentimiento es evidencia inmutable.
-- **Índice para la policy** — `consent_events`: `(person_id, decided_at DESC)`, `(relationship_id, scope_code, decided_at DESC)`, `(organization_id, decided_at DESC)`; `grant_requests`: `(relationship_id, status)`, `(organization_id, status)` y único parcial pendiente `(relationship_id, scope_code)`.
+- **Condición RLS** — En `consent_events`: `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** existe `service_relationships(id=relationship_id, organization_id=access_control.org())`). `invitation_scope_options` hereda el acceso de `identity.invitation_intents`/`invitations` y no admite DML directo. La organización ve **estado**, nunca contenido amparado.
+- **Grants mínimos** — `allfit_api`: `SELECT`; `INSERT` solo mediante `identity.decide_invitation_intent`. Sin `UPDATE` ni `DELETE`: el evento de consentimiento es evidencia inmutable.
+- **Índice para la policy** — `consent_events`: `(person_id, decided_at DESC)`, `(relationship_id, scope_code, decided_at DESC)`, `(organization_id, decided_at DESC)`; `invitation_scope_options`: único `(invitation_intent_id,scope_code)`.
 - **`T-CONSENT-1` (positiva)** — Rechazar o revocar conserva la evidencia sin dejar grant activo.
 - **`T-CONSENT-2` (positiva)** — El evento conserva el **snapshot exacto** que se presentó a la persona, aunque después se publique otra versión del scope.
+- **`T-CONSENT-3` (negativa)** — Ningún endpoint Studio crea opciones para una relación activa; un scope rechazado o revocado no reaparece como pendiente.
+- **`T-CONSENT-4` (positiva)** — Una confirmación puede aceptar la relación y cualquier subconjunto de scopes; produce un evento por opción y grants solo para las concedidas.
 
 #### `DATA_GRANT`
 
@@ -557,7 +642,7 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 | `A4`, `A5` | Los de su organización | — | — | — |
 | `A9` privacy | Por disposición | — | Cierre | — |
 
-- **Condición RLS** — `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** existe `service_relationships(id=relationship_id, organization_id=access_control.org())`). `INSERT` exclusivo de `privacy.grant_consent`, que exige sujeto propio y solicitud pendiente exacta. `UPDATE` solo mediante `privacy.revoke_grant` o `relationships.terminate_relationship`; el trigger de transición valida columnas y dirección.
+- **Condición RLS** — `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** existe `service_relationships(id=relationship_id, organization_id=access_control.org())`). `INSERT` exclusivo de `identity.decide_invitation_intent`, que exige sujeto, invitación, relación recién materializada y opción exactos. `UPDATE` solo mediante `privacy.revoke_grant` o `relationships.terminate_relationship`; el trigger de transición valida columnas y dirección.
 - **Contexto requerido** — Completo.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT` restringido y `UPDATE(status, frozen_at, revoked_at, last_reviewed_at)`. **Sin `DELETE`**. Policies + trigger solo permiten: consentimiento `INSERT`; persona `active/frozen → revoked`; terminación `active → frozen`; mantenimiento de `last_reviewed_at` sin cambiar autoridad.
 - **Índice para la policy** — **crítico**: único parcial `(relationship_id, scope_code) WHERE status IN ('active','frozen')`, `(person_id, status)`, `(organization_id, status)` y parcial `(relationship_id, scope_code, frozen_at) WHERE status='frozen'`.
@@ -622,9 +707,9 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 | `allfit_api` | — | Solo vía `privacy.log_access_event` | — | — |
 | `A9` privacy | —; inspecciona catálogo de particiones | — | — | Particiones vencidas mediante mantenimiento, no filas |
 
-- **Condición RLS** — `subject_person_id = access_control.person()` para la persona. **Ninguna organización lee esta tabla**: un profesional no audita quién más accedió a los datos de su cliente.
+- **Condición RLS** — `subject_person_id = access_control.person()` para la persona. La rama `subject_organization_id` nunca es visible por RLS a miembros: **ninguna organización lee esta tabla**. `privacy.v_my_access_events` filtra exclusivamente sujeto persona.
 - **Grants mínimos** — Tabla base: `allfit_api` sin `INSERT` directo; `EXECUTE` sobre `privacy.log_access_event`. `SELECT` solo para la proyección personal bajo RLS. `A10` recibe `EXECUTE` sobre la función de lectura de eventos de plataforma. **Sin `UPDATE` ni `DELETE`**; privacidad elimina particiones vencidas.
-- **Índice para la policy** — sobre `(subject_person_id, occurred_at DESC)`. Particionamiento por tiempo previsto en Fase 4: es la tabla de mayor crecimiento del sistema.
+- **Índice para la policy** — `(subject_person_id, occurred_at DESC)` y `(subject_organization_id, occurred_at DESC)` por partición. Particionamiento mensual por tiempo.
 - **`T-ACCESS-1` (positiva)** — Toda lectura en vivo escribe un evento con **actor humano real**, membresía, asignación, relación, scope, versión y propósito.
 - **`T-ACCESS-2` (negativa)** — Un evento que registra solo la organización, sin actor humano, se considera defecto: la columna es obligatoria.
 - **`T-ACCESS-3` (positiva)** — Si el evento no puede escribirse, la lectura falla. Se prueba forzando el fallo de la inserción.
@@ -632,6 +717,9 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 - **`T-ACCESS-5` (positiva)** — Toda lectura `frozen`, permitida o denegada, registra caso, modo, recurso, propósito, `request_id` y resultado; la persona puede verla.
 - **`T-ACCESS-6` (negativa)** — `A10` y `A12` no pueden hacer `SELECT` directo sobre `privacy.access_events`.
 - **`T-ACCESS-7` (positiva)** — `A12/audit_break_glass` obtiene solo metadatos `access_mode='break_glass'`; `A10` ve únicamente sus eventos de soporte y la persona ve los eventos cuyo sujeto es ella.
+- **`T-ACCESS-8` (organización)** — `OP-ORG-013` registra sujeto organización, modo `organization_operational`, recurso cerrado, actor/persona/membresía/request/purpose de contexto y todos los campos de relación/grant/caso/scope nulos antes de devolver contenido.
+- **`T-ACCESS-9` (negativa)** — Rechaza cero/dos sujetos, membership inactivo, de otro tenant o de otra persona, recurso distinto y cualquier contexto personal en la rama organización; el fallo revierte la lectura.
+- **`T-ACCESS-10` (proyección)** — `privacy.v_my_access_events` devuelve solo filas `subject_person_id = access_control.person()` y nunca eventos cuyo sujeto es organización.
 
 #### `ERASURE_REQUEST` · `RETENTION_POLICY` · `DISPOSITION_CASE` · `DISPOSITION_ITEM` · `DISPOSITION_EVENT`
 
@@ -1019,7 +1107,7 @@ Este dominio tiene una particularidad: **el `coach` no aparece en ninguna fila**
 - **`T-PAY-3` (negativa)** — Una persona sin relación con la organización no ve ningún plan suyo: no existe catálogo público.
 - **`T-PAY-4` (negativa)** — Publicar una versión nueva **no** cambia el monto que ve una suscripción vigente.
 
-#### `PLAN_SUBSCRIPTION` · `PAYMENT_RECORD` · `SUBSCRIPTION_EVENT`
+#### `PLAN_SUBSCRIPTION` · `PAYMENT_RECORD` · `SUBSCRIPTION_EVENT` · `SERVICE_ACCESS_BLOCK`
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
@@ -1029,14 +1117,19 @@ Este dominio tiene una particularidad: **el `coach` no aparece en ninguna fila**
 | `A9` | Las alcanzadas por el webhook | `payment_records` | Solo `active` ↔ `suspended` | — |
 
 - **Condición RLS** — `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** `access_control.has_capability(organization_id,'manage_billing')`).
+- **Bloqueo causal** — `planning.service_access_blocks` solo se crea/cierra mediante las funciones de suspensión/reactivación. La persona y `admin`/`owner` con capacidad pueden leer la fila; el coach solo consume el booleano efectivo en proyecciones de acceso y agenda, sin causa ni datos de pago.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(status, suspended_at, ended_at, ended_by_kind, ended_by_membership_id, current_period_end)`. El rol del worker de pagos tiene `UPDATE` **restringido a `status`, `suspended_at` y `current_period_end`**: no puede escribir `ended_at` ni el actor humano.
-- **Índice para la policy** — `(person_id, status)`, `(organization_id, status)`.
+- **Índice para la policy** — Suscripciones: `(person_id, status)`, `(organization_id, status)`. Bloqueos: `(person_id, ended_at)`, `(organization_id, ended_at)` y unique parcial por fuente abierta.
 - **`T-PAY-5` (negativa)** — Un `coach` con la persona asignada y grant vigente **no** lee su suscripción ni sus pagos.
 - **`T-PAY-6` (negativa)** — El worker de pagos **no puede** llevar una suscripción a `ended`: le falta el privilegio y le falta el actor humano que exige el `CHECK`.
 - **`T-PAY-7` (negativa)** — Una transición a `suspended` que intente escribir en `privacy.data_grants` o `planning.assignment_management_periods` se revierte entera (`IX-40`).
-- **`T-PAY-8` (positiva)** — Reactivar tras el pago restaura la escritura del profesional y reanuda las sesiones pausadas **sin** ninguna aceptación nueva de la persona.
+- **`T-PAY-8` (positiva)** — Reactivar tras el pago cierra solo el bloqueo de esa suscripción. La escritura y las sesiones futuras elegibles vuelven sin repetir una aceptación únicamente cuando grant, relación, membresía y asignación siguen vigentes.
 - **`T-PAY-9` (negativa)** — El reenvío del mismo webhook no crea un segundo `payment_record`: lo impide el unique, no el código.
 - **`T-PAY-10` (negativa)** — Terminar la suscripción **no** cambia el estado de la relación de servicio ni congela ningún grant.
+- **`T-PAY-11` (negativa)** — Revocar el grant, terminar la relación o cambiar membresía/asignación durante la suspensión permanece efectivo después del pago; la reactivación no actualiza ni inserta esas filas.
+- **`T-PAY-12` (negativa)** — Cerrar el bloqueo de suscripción no cierra un bloqueo simultáneo de organización; la contribución y agenda siguen denegadas por la causa restante.
+- **`T-PAY-13` (negativa)** — Una sesión cancelada, iniciada o pasada durante la suspensión no reaparece como futura disponible tras reactivar.
+- **`T-PAY-14` (concurrencia)** — Reactivación concurrente con terminación, revocación, cambio de asignación u otro bloqueo serializa o falla para reintento; nunca restaura un snapshot anterior.
 
 ### 7.9 Soporte
 
@@ -1105,7 +1198,7 @@ Un índice que solo existe para consultas de negocio no basta: la condición RLS
 | `SERVICE_RELATIONSHIP` | `(person_id, status)`; `(organization_id, status)`; único parcial `(person_id, organization_id) WHERE status='active'` | Visibilidad y unicidad de relación activa |
 | `RELATIONSHIP_PROFESSIONAL_ASSIGNMENT` | `(relationship_id, status, valid_from, valid_to)`; único parcial de titular efectivo | `access_control.effective_assignment` |
 | `CONSENT_EVENT` | `(person_id, decided_at DESC)`; `(relationship_id, scope_code, decided_at DESC)`; `(organization_id, decided_at DESC)` | Estado para persona y organización |
-| `GRANT_REQUEST` | `(relationship_id, status)`; `(organization_id, status)`; único parcial pendiente `(relationship_id, scope_code)` | Solicitud exacta por tenant/scope |
+| `INVITATION_SCOPE_OPTION` | `UNIQUE (invitation_intent_id, scope_code)` | Una opción exacta por scope dentro de la intención de relación |
 | `DATA_GRANT` | único parcial `(relationship_id, scope_code) WHERE status IN ('active','frozen')`; `(person_id, status)`; `(organization_id, status)`; parcial frozen con corte | Lookup live/frozen y unicidad efectiva |
 | `SESSION_VISIBILITY_DENIAL` | único `(executed_session_id, relationship_id)`; `(relationship_id, status)` | Denegación antes de proyectar y de agregar |
 | `EXECUTED_SESSION` | `(person_id, started_at DESC)`; `(context_relationship_id, started_at DESC)` | Listados y evaluación de denegación en lote |

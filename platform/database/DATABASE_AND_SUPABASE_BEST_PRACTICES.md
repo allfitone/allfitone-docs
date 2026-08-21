@@ -56,12 +56,20 @@ unique and descriptions are ASCII `lower_snake_case`.
 - Every table containing business or personal data enables and forces RLS.
 - Policies use transaction-local actor context set by the API. Supabase-specific
   `auth.uid()`, `anon`, `authenticated` and direct-client patterns are forbidden.
+- A narrow `SECURITY INVOKER` function may coalesce sequential actor-context and
+  RLS reads into one database statement. It must preserve the same account-first,
+  person-second checks, use transaction-local settings and have explicit runtime
+  grants; a `SECURITY DEFINER` session projection is not authorization evidence.
 - Privileges follow least privilege. Public receives no implicit table or
   function access, and `SECURITY DEFINER` functions use a fixed safe
   `search_path`.
 - Foreign-key columns and common policy predicates have supporting indexes.
 - Sensitive values are encrypted or hashed as appropriate. Logs and tests never
   expose credentials, session tokens or personal data.
+- Personal history projections remain scoped to the authenticated person inside
+  closed security-definer functions. Returning terminated organization context
+  never reactivates membership-based authorization, which continues to require
+  an active membership.
 
 ## Required local and CI checks
 
@@ -84,13 +92,18 @@ functions. Generated types remain synchronized with the rebuilt schema.
 
 ## Environments and deployment
 
-Local, preview, staging and production use separate databases, credentials and
-data. Preview data is synthetic or sanitized.
+Local, preview and production use separate databases, credentials and data.
+Staging is temporarily deferred; when provisioned it must use a fourth,
+independent project and must never share the production database. Preview data
+is synthetic or sanitized.
 
 - Pull requests validate by rebuilding an ephemeral local stack.
-- Successful CI on `main` deploys pending migrations to staging.
-- Production deployment is manually approved through a protected GitHub
-  Environment.
+- Until staging exists, a successful CI run on `main` **does not deploy a
+  database**. Production deployment is an explicit manual action through the
+  protected `supabase-production` GitHub Environment.
+- The production workflow repeats the complete local database gate before it
+  links to the remote project. This repetition is mandatory while no staging
+  environment exists.
 - Deployment runs `migration list`, `db push --dry-run`, then `db push`, and is
   serialized per environment.
 - Production never runs `db reset`, never loads `seed.sql`, and never deploys
@@ -110,6 +123,20 @@ See [OPERATIONS.md](OPERATIONS.md) for credentials and runbooks.
   migration failures and backup status without logging sensitive values.
 - Cross-system writes use the transactional outbox. PostgreSQL and external
   providers are never treated as one transaction.
+- Signed external events that invalidate local security state use a durable
+  idempotency receipt and one narrow `SECURITY DEFINER` function. Signature
+  verification happens before PostgreSQL is called; the receipt and every local
+  effect commit together. Raw payloads, signatures and provider PII are never
+  persisted.
+- Authentication ceremonies store only hashes of browser credentials. Provider
+  tokens, TOTP enrollment material and challenges are encrypted with bounded
+  expiry and removed on every terminal state. A runtime role never receives
+  table DML for factors, attempts, sessions, roles or duties; it executes narrow
+  functions that lock every authority participating in the decision.
+- Bootstrap and factor recovery are not runtime APIs. They require a protected
+  GitHub Environment with `prevent self-review`, a temporary `allfit_migrator`
+  credential, two distinct people, one transaction and durable evidence. The
+  credential is removed or rotated immediately after the ceremony.
 - Retention, deletion, export and incident access are explicit per domain.
   Production access is time-limited, attributable and audited.
 

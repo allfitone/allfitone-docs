@@ -1,9 +1,9 @@
 # Contrato OpenAPI de la primera rebanada vertical V1
 
-**Versión de revisión:** 8<br>
-**Fecha:** 6 de agosto de 2026<br>
+**Versión de revisión:** 10<br>
+**Fecha:** 17 de agosto de 2026<br>
 **Fase:** 3 — Contrato ejecutable previo a Fase 5<br>
-**Estado:** aprobado; contrato, tipos generados y gate de rutas sincronizados<br>
+**Estado:** manifiesto vigente sincronizado; rutas AFO-39 aprobadas documentalmente y pendientes del PR BACK<br>
 **Fuente canónica:** [`allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml)<br>
 **Deriva de:** [`V1_OPERATIONS_MATRIX.md`](./V1_OPERATIONS_MATRIX.md), [`V1_SPACE_STUDIO_API_CONTRACTS.md`](./V1_SPACE_STUDIO_API_CONTRACTS.md), [`V1_IDEMPOTENCY_CONTRACT.md`](./V1_IDEMPOTENCY_CONTRACT.md) y [`V1_DEGRADATION_AND_RECOVERY_MATRIX.md`](./V1_DEGRADATION_AND_RECOVERY_MATRIX.md)
 
@@ -24,14 +24,21 @@ Los P1/P2 contractuales de Nutrición quedan resueltos en esta revisión: el con
 
 ## 2. Alcance implementable
 
-La primera rebanada ampliada se materializa en veinticinco operaciones HTTP sobre veintidós rutas: ocho del flujo original, trece del dominio Nutrición y cuatro de identidad/sesión Studio.
+El manifiesto ejecutable vigente contiene cuarenta y cinco operaciones HTTP
+sobre cuarenta y una rutas. La tabla siguiente conserva los hitos originales y
+añade el ciclo completo de invitaciones de equipo; el YAML y el manifiesto
+generado son el inventario exhaustivo.
 
 | Paso | Método y ruta | Operación | Request | Response | Caché |
 | --- | --- | --- | --- | --- | --- |
 | Iniciar autenticación Studio | `GET /studio/v1/auth/start` | `OP-IDN-025` | sin body | `302` hacia WorkOS + cookie temporal de `state` | `no-store` |
 | Completar autenticación Studio | `GET /studio/v1/auth/callback` | `OP-IDN-026` | query `code`, `state` | `303` a Studio + cookie opaca | `no-store` |
 | Consultar sesión Studio | `GET /studio/v1/session` | `OP-IDN-027` | `cookieAuth` | `StudioSession` | `private, no-store` |
-| Cerrar sesión Studio | `POST /studio/v1/auth/logout` | `OP-IDN-028` | `Origin` exacto + cookie opcional | `303` hacia logout alojado | `no-store` |
+| Cerrar sesión Studio | `POST /studio/v1/auth/logout` | `OP-IDN-028` | `Origin` exacto + cookie opcional + `reason` (`manual`, `inactivity` o `recovery`) | `303` hacia logout alojado | `no-store` |
+| Resolver invitación de equipo | `POST /studio/v1/invitations/resolve` | `OP-IDN-016` | `TeamInvitationResolveRequest` con token en cuerpo | `TeamInvitationPresentation` sin email | `no-store` |
+| Decidir invitación de equipo | `POST /studio/v1/invitations/decisions` | `OP-IDN-009` | headers de comando + token/decisión en cuerpo | `TeamInvitationDecisionResult` | `no-store` |
+| Emitir/listar invitaciones de equipo | `POST/GET /studio/v1/organizations/{organizationId}/invitations` | `OP-ORG-005/016` | comando de emisión / filtros y cursor | invitación creada / `TeamInvitationPage` | `no-store` |
+| Revocar invitación de equipo | `POST /studio/v1/organizations/{organizationId}/invitations/{invitationId}/revocation` | `OP-ORG-006` | headers de comando + objeto vacío | `TeamInvitationRevoked` | `no-store` |
 | Publicar versión | `POST /studio/v1/organizations/{organizationId}/programs/{programId}/versions` | `OP-PLN-008` | `ProgramVersionCreate` | `ProgramVersion` | `no-store` |
 | Asignar versión | `POST /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments` | `OP-PLN-010` | `ProgramAssignmentCreate` | `ProgramAssignment` | `no-store` |
 | Consultar agenda | `GET /space/v1/agenda` | `OP-PLN-016` | query `from`, `to`, `limit`, `cursor` | `AgendaPage` | `private, max-age=0, must-revalidate` + `ETag` |
@@ -53,6 +60,32 @@ La primera rebanada ampliada se materializa en veinticinco operaciones HTTP sobr
 
 La lectura Studio posterior a la revocación reutiliza las operaciones GET correspondientes y, salvo la excepción de medios, responde `403 scope-required`; la revocación no crea operaciones adicionales. `OP-NUT-013` es la excepción cerrada: ante recurso inexistente o cualquier autorización no efectiva responde siempre el mismo `404` sin bytes para no revelar la existencia de la foto.
 
+### 2.1 Gate AFO-39 pendiente del PR de código
+
+AFO-39 aprueba para el próximo cambio contract-first estas rutas de Studio; aún
+no forman parte de las 45 operaciones/41 paths del manifiesto ejecutable vigente
+y no se declaran sincronizadas con el YAML o los tipos generados:
+
+| Método y ruta | Operación | Request/headers | Respuesta mínima |
+| --- | --- | --- | --- |
+| `GET/PATCH /studio/v1/organizations/{organizationId}` | `OP-ORG-013/002` | `cookieAuth`; GET sin body; PATCH cerrado + `Origin` + headers de comando + `If-Match` | proyección cerrada con `revision_number` + ETag; sin responsible party/contacto |
+| `POST /studio/v1/organizations/{organizationId}/sites` | `OP-ORG-003` | `cookieAuth` + `Origin` + sede cerrada + headers de comando | sede con revisión + ETag |
+| `PATCH /studio/v1/organizations/{organizationId}/sites/{siteId}` | `OP-ORG-004` | `cookieAuth` + `Origin` + cambio cerrado + headers de comando + `If-Match` | sede con nueva revisión + ETag |
+| `POST /studio/v1/organizations/{organizationId}/memberships/{membershipId}/roles` | `OP-ORG-007` | `cookieAuth` + `Origin` + `{role_code}` + headers de comando | rol y `valid_from` |
+| `DELETE /studio/v1/organizations/{organizationId}/memberships/{membershipId}/roles/{roleCode}` | `OP-ORG-008` | `cookieAuth` + `Origin` + headers de comando; sin body | rol y `valid_to` |
+| `POST /studio/v1/organizations/{organizationId}/memberships/{membershipId}/termination` | `OP-ORG-009` | `cookieAuth` + `Origin` + objeto vacío cerrado + headers de comando | membresía terminada + `ended_at` |
+| `POST /studio/v1/organizations/{organizationId}/me/membership/resignation` | `OP-ORG-010` | `cookieAuth` + `Origin` + objeto vacío cerrado + headers de comando | renuncia + `ended_at` |
+| `POST /studio/v1/organizations/{organizationId}/ownership-transfers` | `OP-ORG-011` | `cookieAuth` + `Origin` + `target_membership_id` + headers de comando | owner nuevo/anterior + `transferred_at` |
+| `POST /studio/v1/organizations/{organizationId}/closure` | `OP-ORG-012` | `cookieAuth` + `Origin` + objeto vacío cerrado + headers de comando | cierre confirmado sin estado parcial |
+
+Cada operación declara objetos cerrados, errores comunes más `404` uniforme para
+recurso ajeno/inexistente y `Cache-Control: no-store`; los comandos exigen ambos
+headers de idempotencia. El PR BACK debe editar el OpenAPI canónico del
+repositorio de código, validarlo, regenerar DTOs y manifiesto y actualizar los
+conteos de este documento. Este cambio documental no edita YAML ni tipos
+generados: hasta entonces estas filas son un gate aprobado, no evidencia de
+implementación.
+
 ## 3. Reglas transversales cerradas
 
 ### 3.1 Identidad e idempotencia
@@ -72,20 +105,25 @@ Las operaciones técnicas `OP-IDN-025`, `OP-IDN-026` y `OP-IDN-028` no crean una
 - `cookieAuth` usa `allfit_studio_session`, una cookie host-only de sesión, `HttpOnly`, `SameSite=Lax`, `Path=/studio/v1` y `Secure` en producción; no lleva `Max-Age`.
 - La cookie contiene 256 bits aleatorios Base64URL. PostgreSQL guarda solo SHA-256; access y refresh tokens se cifran con AES-256-GCM y nonce aleatorio.
 - El callback compara `state`, verifica issuer/superficie/`sub`/`sid`, crea o resuelve `ACCESS_ACCOUNT` y nunca crea `PERSON`.
-- `StudioSession` expone únicamente `authenticated: true` y `registration_status: complete | registration_incomplete`.
+- `StudioSession` expone únicamente el estado público y los nombres requeridos
+  por la interfaz. El email verificado se cifra dentro de la sesión para decidir
+  invitaciones y nunca se serializa en esta respuesta.
 - `registration-incomplete` y `account-closed` forman parte del catálogo cerrado de errores. Una persona cerrada causa revocación local.
 - El refresh ocurre fuera de la transacción PostgreSQL; el token rotado se persiste por compare-and-swap. Un fallo transitorio no destruye una sesión todavía vigente.
-- Logout exige `Origin` exacto, revoca localmente, borra la cookie y usa la URL alojada de WorkOS por `sid` con retorno a Studio.
+- Logout exige `Origin` exacto, revoca localmente, borra la cookie y usa la URL alojada de WorkOS por `sid` con retorno a Studio. Es idempotente si la cookie falta o la sesión ya fue revocada. Un registro local de cierre nunca reactiva una cookie válida: `401` permite volver al acceso y `200`, `503` o un fallo de red mantienen el workspace desmontado hasta completar el cierre con `reason=recovery`.
 
 ### 3.2 Concurrencia
 
-`OP-EXE-005` y `OP-EXE-006` exigen un `If-Match` fuerte con formato:
+`OP-EXE-005`, `OP-EXE-006`, `OP-ORG-002` y `OP-ORG-004` exigen un
+`If-Match` fuerte. Los formatos aprobados son:
 
 ```text
 "execution:{executionId}:r{revision_number}"
+"organization:{organizationId}:r{revision_number}"
+"organization-site:{siteId}:r{revision_number}"
 ```
 
-Falta del header → `428 precondition-required`. Revisión obsoleta → `409 stale-draft`. Cada escritura exitosa incrementa `revision_number` y devuelve el nuevo `ETag`.
+Falta del header → `428 precondition-required`. Revisión obsoleta → `409 stale-draft`. Cada escritura exitosa incrementa `revision_number` y devuelve el nuevo `ETag` fuerte.
 
 ### 3.3 Caché
 
@@ -124,8 +162,9 @@ El manifiesto generado desde OpenAPI contiene ambas listas. CI enumera `createAp
 | Método y ruta | Clase | Ciclo de vida | Motivo |
 | --- | --- | --- | --- |
 | `GET /health` | Operacional | Permanente | Liveness pertenece al despliegue, no al contrato de producto. |
+| `POST /webhooks/workos` | Operacional | Permanente | Entrega firmada del proveedor compartida por aplicaciones; no es API cliente. |
 
-Las rutas `auth/start` y `auth/callback` dejaron de ser provisionales: junto con `session` y `auth/logout` constituyen el contrato estable de sesión Studio. `/health` es la única exclusión vigente. Space Auth continúa fuera de esta rebanada hasta cerrar su propio contrato de sesión.
+Las rutas `auth/start` y `auth/callback` dejaron de ser provisionales: junto con `session` y `auth/logout` constituyen el contrato estable de sesión Studio. Las únicas exclusiones vigentes son `/health` y el webhook firmado de WorkOS. Space Auth continúa fuera de esta rebanada hasta cerrar su propio contrato de sesión.
 
 Una operación solo puede implementarse cuando:
 
@@ -144,7 +183,7 @@ El YAML inicial reúne Space y Studio para validar el flujo de extremo a extremo
 | --- | --- |
 | `T-API-01` | El archivo parsea como OpenAPI 3.1.0 y todas las referencias locales resuelven. |
 | `T-API-02` | Cada `operationId` es único, cada operación declara un `x-allfit-operation` válido y toda ruta Hono está cubierta por OpenAPI o por una exclusión vigente; ninguna exclusión queda obsoleta. |
-| `T-API-03` | Las veinticinco operaciones y veintidós rutas estables de la rebanada están presentes; no falta ningún paso ejecutable. |
+| `T-API-03` | Las cuarenta y cinco operaciones y cuarenta y una rutas estables del manifiesto vigente están presentes; no falta ningún paso ejecutable. |
 | `T-API-04` | Requests, responses y ejemplos validan contra esquemas cerrados. |
 | `T-API-05` | Todo comando exige `Idempotency-Key` y `Command-Id`; resultados/finalización exigen `If-Match`. |
 | `T-API-06` | Cada operación y respuesta declara su política de caché; los errores nunca son cacheables. |
@@ -152,7 +191,13 @@ El YAML inicial reúne Space y Studio para validar el flujo de extremo a extremo
 | `T-API-08` | Toda URL firmada es HTTPS, dura como máximo 300 segundos y no filtra su query a logs. |
 | `T-API-09` | Los tipos TypeScript y el manifiesto de operaciones/exclusiones se regeneran de forma determinista y no difieren del OpenAPI publicado. |
 | `T-API-10` | El flujo Studio valida `state`, issuer, superficie, `sub` y `sid`; la cookie no es persistente y ninguna respuesta expone credenciales o identificadores internos. |
-| `T-API-11` | Refresh persiste el token rotado mediante compare-and-swap; logout exige origen exacto, revoca localmente y redirige al flujo alojado. |
+| `T-API-11` | Refresh persiste el token rotado mediante compare-and-swap; logout exige origen exacto, revoca localmente y redirige al flujo alojado. La recuperación nunca monta el workspace y admite `reason=recovery` de forma idempotente. |
+| `T-INV-API-01` | El token de staff solo aparece en el cuerpo de `POST`; no existe en path o query y resolver nunca devuelve contacto. |
+| `T-INV-API-02` | Resolver, decidir, listar y revocar declaran CORS exacto, `no-store`, `no-referrer`, estados terminales indistinguibles y `429` con `Retry-After`. |
+| `T-INV-API-03` | Decisión y revocación exigen ambos headers de comando; la decisión solo admite el email verificado exacto y sus DTOs no mezclan entidades de cliente. |
+| `T-ORG-API-01` | El PR BACK añade `OP-ORG-007..010` con objetos cerrados, `cookieAuth`, `Origin` exacto y ambos headers de comando; ningún ejemplo usa bearer. |
+| `T-ORG-API-02` | Membresía/rol de otro tenant y recurso inexistente producen el mismo `404`; owner/rol inválido no revelan IDs ajenos. |
+| `T-ORG-API-03` | `OP-ORG-013` devuelve solo organización/sedes aprobadas, trata dirección domiciliaria como posible PII, incluye revisión/ETag y `private, no-store`, y omite responsible party/contacto. Registra sujeto organización con modo/recurso cerrados; otro tenant recibe `404` y un fallo de auditoría no retorna body. |
 
 ### 5.1 Verificaciones nutricionales
 
@@ -179,4 +224,9 @@ Estas verificaciones deben entrar en CI antes del primer handler. La validación
 
 ## 6. Resultado
 
-Los tres P1 y los tres P2 de Nutrición dejan de ser bloqueos contractuales: frozen usa una columna física real, la propuesta profesional exige `rationale`, Studio tiene revocación efectiva por petición para medios, `NutritionGoalVersion` publica autoría mínima y la trazabilidad operación→prueba es exacta. La sesión opaca de Studio amplía la recertificación a 22 paths/25 operaciones; `/health` queda como única exclusión auditable y Space Auth permanece pendiente de su contrato propio.
+Los tres P1 y los tres P2 de Nutrición dejan de ser bloqueos contractuales y el
+ciclo de invitaciones de equipo queda contract-first dentro de Studio. La sesión
+opaca conserva el email verificado solo del lado servidor; el token no aparece
+en URLs de API y los tipos/manifiesto se regeneran desde el YAML. El inventario
+vigente queda en 41 paths/45 operaciones con dos exclusiones operativas
+auditables.

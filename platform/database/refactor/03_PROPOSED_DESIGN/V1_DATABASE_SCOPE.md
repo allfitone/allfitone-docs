@@ -2,13 +2,18 @@
 
 **Estado:** aprobado; acceso Backoffice recertificado por ADR-028 y topología por ADR-029<br>
 **Fecha de consolidación:** 20 de julio de 2026<br>
-**Recertificaciones:** 3 de agosto de 2026 · Backoffice; 5 de agosto de 2026 · monorepo<br>
+**Recertificaciones:** 3 de agosto de 2026 · Backoffice; 5 de agosto de 2026 · monorepo; 17 de agosto de 2026 · alcance BETA Studio 86/86<br>
 **Fase:** entregable de Fase 1 — lenguaje y alcance<br>
 **Fuentes normativas internas:** `ALLFIT_ARCHITECTURE_DECISIONS.md`, `ALLFIT_DOMAIN_GLOSSARY.md` y `DATABASE_REFACTOR_PHASES.md`.
 
 ## 1. Propósito
 
 Este documento define la frontera funcional y de datos de la primera baseline de base de datos para el ecosistema Allfit One, consumida por Studio, Space y Backoffice.
+
+Las 86 HU de Studio están incluidas en el alcance BETA comprometido para el 31
+de agosto de 2026. Esta inclusión no afirma implementación: una HU se completa
+solo con BACK y FRONT verificados y fusionados en `main`; el despliegue no forma
+parte del compromiso.
 
 Responde:
 
@@ -116,6 +121,8 @@ Studio puede crear una invitación por email o celular con intenciones tipadas:
 
 Cada intención se acepta o rechaza de forma independiente. La aceptación parcial es válida. Términos, políticas, contratos, scopes, pagos y usos secundarios no se aceptan implícitamente mediante la invitación.
 
+Cuando la invitación contiene una intención `service_relationship`, presenta también sus opciones de scope. La persona decide la relación y cada scope de forma independiente en una sola confirmación autenticada. En V1 no existe una solicitud posterior de permisos iniciada por Studio: un scope rechazado o revocado permanece denegado y volver a compartir exige una nueva relación y una nueva aceptación.
+
 Una persona ya registrada en Space acepta la invitación con su cuenta y `person_id` existentes. Nunca se crea otro Fitness ID por entrar a una organización o relación.
 
 ### 5.3 Elegibilidad adulta
@@ -136,19 +143,31 @@ La elegibilidad se resuelve antes de crear/activar la persona, recopilar datos f
 
 El perfil profesional pertenece a la persona y puede existir sin organización. No constituye otra identidad.
 
+V1 normaliza cuatro piezas distintas:
+
+- `professional_profiles` conserva titular profesional, biografía y año de inicio de práctica;
+- `professional_profile_specialties` referencia un catálogo global de especialidades profesionales;
+- `professional_credentials` conserva cada credencial declarada con identidad y ciclo de vida propios;
+- `professional_credential_verifications` conserva decisiones append-only sobre una versión exacta de una credencial.
+
+Los años de experiencia se derivan del año de inicio. Una credencial declarada no se presenta como verificada; el perfil completo nunca recibe un estado global de verificación. Editar materialmente una credencial verificada crea una revisión y exige una nueva decisión competente.
+
 Para prestar servicios, gestionar clientes, asignar programas o realizar cualquier operación profesional mediante Studio, la persona debe actuar dentro de una organización activa.
 
 ### 6.2 Tipos operativos iniciales
 
-V1 usa una raíz organizacional común para:
+V1 usa una raíz organizacional común y mantiene activos inicialmente estos tipos:
 
-- práctica profesional;
-- gimnasio;
-- estudio;
-- academia;
-- clínica u otra clase compatible cuando exista un caso real V1.
+- `professional_practice`, presentado como “Profesional independiente”;
+- `gym`, presentado como “Gimnasio”;
+- `studio`, presentado como “Estudio”.
+
+`academy` y `clinic` permanecen gobernados pero inactivos hasta que exista un caso real V1 aprobado. El catálogo de onboarding no los devuelve y la creación de organizaciones los rechaza mientras permanezcan inactivos.
 
 El tipo describe la actividad principal, no el tamaño.
+Las transiciones explícitas viven en `organizations.organization_type_transitions`.
+El catálogo inicial permite únicamente `professional_practice → gym` y
+`professional_practice → studio`; incorporar equipo nunca cambia `type_code`.
 
 ### 6.3 Práctica inicialmente unipersonal
 
@@ -156,6 +175,9 @@ El onboarding `solo_professional` crea una organización `professional_practice`
 
 - La organización puede incorporar staff y otros profesionales sin cambiar de identidad.
 - El número de integrantes se deriva de membresías activas.
+- Toda organización activa tiene exactamente una membresía activa con rol `owner`; esa membresía puede acumular otros roles compatibles.
+- `owner` no se concede ni se revoca mediante la gestión genérica de roles. La transferencia V1 es owner-only, exige una membresía destino activa y cambia ambas vigencias bajo locks en una transacción que confirma exactamente un owner.
+- El owner anterior conserva su membresía y roles no `owner`; no recibe un rol residual implícito y puede renunciar después mediante el flujo propio.
 - No existe un tipo permanente `independent_professional` ni un `is_independent` que gobierne permisos.
 - Una organización operativa no implica por sí sola una persona jurídica.
 
@@ -170,6 +192,13 @@ Incluidos:
 - asignación efectiva de profesionales a relaciones;
 - suplencias acotadas en el tiempo y aceptadas por la persona;
 - historial de reasignaciones.
+
+El cierre de una organización es un comando coordinado en una sola transacción
+PostgreSQL. Organizaciones llama contratos públicos estrechos de Relaciones,
+Privacidad, Planificación, Ejecución y Nutrición; Ejecución cancela propuestas
+de corrección pendientes y Nutrición cancela propuestas nutricionales
+pendientes. Cada dominio escribe solo sus tablas y cualquier fallo revierte el
+cierre completo.
 
 Las membresías comerciales de clientes no forman parte de V1.
 
@@ -612,7 +641,11 @@ Durante la suspensión:
 | Grants | Intactos, en estado `active` | Nada. Suspender el servicio **no** es retirar el consentimiento |
 | Asignación | Su versión, revisiones y origen | Nada. **No** pasa a `detached_pending_choice` |
 
-Al confirmarse el pago todo se reanuda sin ninguna aceptación nueva.
+Al confirmarse el pago se cierra únicamente el bloqueo de esa suscripción y se
+recalculan escritura y agenda con el estado vigente. No se restaura un snapshot:
+un grant revocado, una relación terminada, una asignación o membresía cambiada y
+una sesión cancelada, iniciada o pasada no reviven. No hace falta repetir una
+aceptación que siga vigente; si otro bloqueo continúa abierto, su efecto permanece.
 
 ### 16.4 Frontera con la terminación
 

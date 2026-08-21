@@ -104,11 +104,15 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 **Criterios**
 
-1. Entro con mi correo y contraseña.
-2. Si no tengo rol de plataforma vigente **no entro**, aunque mi cuenta exista.
-3. Un intento fallido no revela si el correo existe o si la contraseña está mal.
-4. La sesión del Backoffice es independiente de la de Allfit Studio: entrar a uno no me mete al otro.
-5. Entrar no habilita ninguna operación: cada pantalla y acción comprueba un deber vigente y, para funciones sensibles, AAL2.
+1. Entro con mi correo, contraseña y un código TOTP de seis dígitos. En el primer acceso enroló un autenticador mediante QR o clave manual antes de obtener una sesión.
+2. El correo debe estar verificado y debo ser una persona activa con rol base `allfit_admin` vigente; si falta cualquiera de estas condiciones **no entro**, aunque la cuenta exista.
+3. Correo, contraseña, cuenta, persona o rol inválidos producen la misma respuesta. Un código incorrecto no revela más información y el intento termina al quinto fallo.
+4. La sesión sólo nace después de que WorkOS confirme el challenge TOTP y PostgreSQL materialice AAL2 para ese `sid`. No se infiere AAL2 de claims, grupos, `auth_time`, rol o Application.
+5. La sesión del Backoffice es independiente de la de Allfit Studio: entrar a uno no me mete al otro. Caduca a las ocho horas como máximo y a los quince minutos de inactividad.
+6. Entrar no habilita ninguna operación: cada pantalla y acción comprueba dentro de su transacción un deber vigente y `required_aal=2`.
+7. Esta evidencia V1 combina contraseña y TOTP. No es resistente al phishing y no se presenta como equivalencia integral a una oferta AAL2 moderna con WebAuthn/passkeys.
+8. El navegador reanuda un challenge o enrolamiento pendiente después de recargar, pero nunca persiste correo, contraseña, código, QR, clave TOTP ni identidad del proveedor.
+9. Mientras se comprueba la sesión o hay una respuesta indeterminada, el contenido autenticado permanece desmontado. Una respuesta perdida tras verificar TOTP se resuelve comprobando la sesión antes de repetir el mismo comando idempotente.
 
 ### HU-BO-002 — Cerrar sesión
 
@@ -120,8 +124,11 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 **Criterios**
 
-1. Al cerrar sesión no queda nada consultable sin volver a entrar.
-2. La sesión caduca sola tras un tiempo de inactividad.
+1. Al cerrar sesión se revoca primero la sesión opaca local, se elimina su cookie host-only y se solicita la revocación del `sid` exacto en WorkOS.
+2. Repetir el cierre, cerrar una sesión ya ausente o usar `manual`, `inactivity` o `recovery` produce el mismo resultado seguro y no redirige a Hosted AuthKit.
+3. La sesión caduca sola tras quince minutos de inactividad o al cumplir ocho horas, y el worker reintenta cualquier revocación externa parcial.
+4. Retirar el rol base, recuperar el factor o cambiar la contraseña corta también las sesiones Backoffice y los intentos pendientes.
+5. El navegador desmonta inmediatamente el contenido autenticado, sincroniza el cierre entre pestañas y revalida al recuperar visibilidad o restaurar el historial. Si no puede confirmar el cierre, muestra una recuperación segura sin datos del operador.
 
 ### HU-BO-003 — Recuperar mi contraseña
 
@@ -133,9 +140,11 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 **Criterios**
 
-1. Pido el restablecimiento con mi correo y me llega un enlace temporal.
-2. El mensaje es el mismo exista o no la cuenta.
-3. Al cambiar la contraseña se cierran mis otras sesiones abiertas.
+1. Pido el restablecimiento con mi correo y WorkOS envía un enlace temporal desde su dominio alojado `*.authkit.app`; Backoffice no usa Resend para este flujo.
+2. El mensaje y la respuesta `202` son los mismos exista o no la cuenta y aunque el proveedor tarde o falle.
+3. Al cambiar la contraseña se cierran mis sesiones Studio y Backoffice y se invalidan intentos Backoffice pendientes, sin eliminar mi factor TOTP activo.
+4. `auth.allfit.one` está diferido. Incorporarlo después cambia configuración y branding de páginas alojadas, no contratos ni sesiones locales.
+5. El formulario siempre presenta la misma confirmación y no conserva el correo después de solicitar el restablecimiento.
 
 ---
 
@@ -372,9 +381,10 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 3. **Sus clientes conservan todo lo suyo**: su historial completo, su entrenamiento por su cuenta y su registro de comidas. Los programas que el gimnasio les asignó quedan pausados.
 4. **Los permisos no se tocan** y las relaciones no se terminan. Suspender no es cancelar.
 5. Si estaba habilitado para dar Premium a sus clientes, esos clientes bajan al plan gratuito mientras dure la suspensión, sin perder ningún dato.
-6. Al levantar la suspensión todo se reanuda **sin que nadie tenga que autorizar nada de nuevo**.
-7. Queda registrado quién lo suspendió, cuándo y con qué motivo.
-8. Suspender o reactivar exige `manage_organization_lifecycle`, AAL2 y motivo cerrado; el actor se conserva como persona y asignación de deber vigentes.
+6. Levantar la suspensión **solo cierra el bloqueo de esa organización** y vuelve a calcular la operación con el estado vigente; no restaura una copia anterior de permisos, relaciones, membresías, asignaciones, suscripciones ni sesiones.
+7. Nadie repite una autorización que siga vigente, pero lo revocado, terminado, cambiado, cancelado, iniciado o vencido durante la suspensión **no revive**. Cualquier otro bloqueo vigente sigue aplicando.
+8. Queda registrado quién lo suspendió o reactivó, cuándo y con qué motivo.
+9. Suspender o reactivar exige `manage_organization_lifecycle`, AAL2 y motivo cerrado; el actor se conserva como persona y asignación de deber vigentes.
 
 ### HU-BO-017 — Cancelar la relación con un gimnasio
 

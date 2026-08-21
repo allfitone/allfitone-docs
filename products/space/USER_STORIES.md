@@ -348,12 +348,13 @@ movilidad no se organizan en series y repeticiones.
 
 **Criterios**
 
-1. Veo la organización, la parte responsable que se presenta, el propósito y **cada propuesta por separado**: unirme al equipo, iniciar una relación profesional o recibir un programa.
+1. Veo la organización, la parte responsable que se presenta, el propósito y **cada propuesta de cliente por separado**: iniciar una relación profesional, recibir un programa o conceder un scope.
 2. Para la relación veo por separado cada scope solicitado, su finalidad, la versión de su contrato y el nivel de acceso solicitado.
 3. Puedo abrir la invitación antes de tener cuenta.
 4. La invitación no revela si mi contacto ya tiene cuenta en Allfit.
 5. Una invitación inválida y una vencida se ven igual: no puedo deducir cuál es cuál.
 6. Abrir la invitación no acepta nada.
+7. Las invitaciones para integrarse al staff o equipo no se abren ni se deciden en Space; pertenecen exclusivamente a Studio.
 
 ### HU-SP-017 — Aceptar o rechazar cada propuesta por separado
 
@@ -376,6 +377,7 @@ movilidad no se organizan en series y repeticiones.
 9. Aunque acepte el programa, solo se materializa si acepté la relación y concedí `relationship_training` con el nivel requerido.
 10. Si ya tenía cuenta, acepto con mi identidad existente y mi historial anterior no se comparte hacia atrás.
 11. Reintentar la decisión no crea vínculos ni grants duplicados.
+12. Esta historia no crea membresías ni roles de equipo; esas decisiones pertenecen exclusivamente a Studio.
 
 ### HU-SP-018 — Ver mis relaciones profesionales
 
@@ -1494,7 +1496,9 @@ ninguno.
 4. Lo único que se pausa son las **sesiones futuras** del programa que me asignó ese gimnasio. Lo que ya entrené no se toca.
 5. Mi entrenador puede seguir viendo lo que le compartí, pero **no puede asignarme nada nuevo** ni escribir sobre mis datos.
 6. La suspensión dura **el tiempo que sea**: no hay un plazo tras el cual me cierren nada.
-7. Al pagar, todo vuelve exactamente como estaba y **no tengo que volver a dar ningún permiso**.
+7. Al pagar se quita **solo el bloqueo de esa suscripción** y se vuelve a calcular qué puedo usar con el estado actual; no se restaura una copia anterior.
+8. No tengo que volver a dar un permiso que siga vigente, pero un permiso revocado, una relación terminada, una asignación cambiada o una sesión cancelada, iniciada o pasada **no revive** por pagar.
+9. Si queda otro bloqueo activo, lo afectado sigue pausado. Solo vuelven las sesiones futuras, no iniciadas y no canceladas que todavía correspondan a una relación y asignación vigentes.
 
 ---
 

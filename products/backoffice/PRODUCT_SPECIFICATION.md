@@ -2,7 +2,7 @@
 
 ## Visión del producto interno para operar y gobernar Allfit One
 
-> **Estado del documento:** baseline V1 alineada con las 33 historias de Backoffice y ADR-028 al 3 de agosto de 2026.
+> **Estado del documento:** baseline V1 alineada con las 33 historias de Backoffice y ADR-028; backend AAL2 recertificado al 12 de agosto de 2026.
 
 Este documento define el propósito, los límites y la experiencia operativa de Allfit Backoffice. Las [historias de usuario](USER_STORIES.md) detallan el comportamiento verificable y [ADR-028](../../platform/database/refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md) es la fuente normativa para autorización, separación de deberes y break-glass.
 
@@ -31,6 +31,10 @@ Backoffice no crea otra copia de personas, organizaciones, pagos o contenido. Co
 ## 3. Quién puede utilizarlo
 
 `allfit_admin` es únicamente la habilitación base para iniciar sesión mediante la WorkOS Application exclusiva de Backoffice. No concede lectura ni escritura.
+
+El login V1 no usa Hosted AuthKit: la API autentica correo y contraseña con la Application de Backoffice, exige email verificado y completa un challenge TOTP mediante la API MFA componible de WorkOS. PostgreSQL crea una sesión host-only sólo después de materializar esa prueba como `assurance_level=2` y `authentication_method=password_totp` para el `sid` exacto. La sesión dura ocho horas como máximo y quince minutos sin actividad. Roles, permisos, organizaciones, `authenticationMethod` y `auth_time` del proveedor no autorizan nada.
+
+La combinación contraseña + TOTP constituye la evidencia AAL2 interna de V1, pero no es resistente al phishing. Allfit no declarará equivalencia integral con una oferta AAL2 moderna hasta incorporar WebAuthn/passkeys. La recuperación de contraseña sí usa la página alojada y el correo predeterminado de WorkOS en `*.authkit.app`; `auth.allfit.one` queda diferido como configuración y branding, no como dependencia contractual.
 
 Cada operación exige AAL2 y un deber temporal vigente, otorgado por otra persona durante un máximo de 90 días:
 

@@ -1,9 +1,9 @@
 # Matriz de operaciones V1
 
-**Versión de revisión:** 5
-**Fecha:** 3 de agosto de 2026
+**Versión de revisión:** 7
+**Fecha:** 17 de agosto de 2026
 **Fase:** 3 — Definir operaciones, seguridad y contratos
-**Estado:** acceso Backoffice recertificado con ADR-028; resto de P0 pendiente
+**Estado:** AFO-39 ratifica alcance BETA Studio; implementación por rebanada pendiente
 **Depende de:** [`ALLFIT_ARCHITECTURE_DECISIONS.md`](../02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md), [`ALLFIT_DOMAIN_GLOSSARY.md`](./ALLFIT_DOMAIN_GLOSSARY.md), [`V1_DATABASE_SCOPE.md`](./V1_DATABASE_SCOPE.md), [`DOMAIN_OWNERSHIP_MAP.md`](./DOMAIN_OWNERSHIP_MAP.md), [`V1_CONCEPTUAL_ERD.md`](./V1_CONCEPTUAL_ERD.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
 
 ## 1. Propósito
@@ -64,7 +64,7 @@ Un actor no es un rol ni un permiso: es el sujeto autenticado desde el que se ev
 | `A2` Persona | `PERSON` activa con Fitness ID. Sujeto de Space | No |
 | `A3` Profesional coach | `PERSON` con `PROFESSIONAL_PROFILE` que opera mediante `ORGANIZATION_MEMBERSHIP` vigente con rol `coach` | No |
 | `A4` Admin de organización | Membresía vigente con rol `admin` | No |
-| `A5` Owner de organización | Membresía vigente con rol `owner`. Único que transfiere ownership y cierra la organización | No |
+| `A5` Owner de organización | La única membresía activa de la organización con rol `owner`. Puede transferir la propiedad y cerrar la organización mediante comandos atómicos V1 | No |
 | `A6` Staff | Membresía vigente con rol `staff`. Gestiona invitaciones y directorio; nunca datos fitness | No |
 | `A7` Profesional suplente | `A3` con una suplencia aceptada por la persona y vigente dentro de una relación | No |
 | `A8` Backend | La API actuando en nombre de un actor humano. No es un actor autónomo: siempre porta un sujeto | N/A |
@@ -98,7 +98,7 @@ Cuando una ficha dice **`FÓRMULA`** en filtros obligatorios, se refiere a estas
 
 | Rol | Capacidades |
 | --- | --- |
-| `owner` | Todas las de `admin`, más transferir ownership y cerrar la organización. Protegido: una organización nunca queda con cero owners |
+| `owner` | Todas las de `admin`, más cerrar la organización. Protegido: toda organización activa tiene exactamente una membresía activa con este rol; el flujo genérico de roles no puede otorgarlo ni retirarlo |
 | `admin` | Gestionar sedes, membresías, roles, invitaciones, relaciones, asignación de profesionales, terminación de relaciones y casos históricos mediante `manage_historical_access`. Esta capacidad administra casos y **no** concede lectura |
 | `coach` | Crear y publicar contenido, asignar programas, ejercer grants sobre las personas que tiene asignadas, observar y proponer correcciones. `guide_nutrition` puede asociarse al rol, pero solo es efectivo con credencial `nutrition_professional` verificada |
 | `staff` | Crear invitaciones y consultar el directorio de personas relacionadas con la organización: nombre, estado de relación y estado de invitación. **Ningún** dato fitness, de perfil, de ejecución, corporal o de salud |
@@ -193,18 +193,18 @@ Toda sesión conserva la zona horaria de la persona en el momento del hecho. La 
 
 | Dominio | Comandos | Consultas | Total |
 | --- | --- | --- | --- |
-| Identidad | 17 | 11 | 28 |
+| Identidad | 20 | 11 | 31 |
 | Organizaciones | 13 | 5 | 18 |
 | Relaciones | 9 | 5 | 14 |
 | Privacidad | 13 | 7 | 20 |
-| Catálogo | 4 | 6 | 10 |
+| Catálogo | 4 | 8 | 12 |
 | Planificación | 15 | 6 | 21 |
 | Ejecución | 13 | 7 | 20 |
 | Nutrición | 8 | 5 | 13 |
 | Pagos | 16 | 7 | 23 |
-| Sistema | 10 | 0 | 10 |
+| Sistema | 10 | 1 | 11 |
 | Soporte | 6 | 5 | 11 |
-| **Total** | **124** | **64** | **188** |
+| **Total** | **127** | **67** | **194** |
 
 Algunas fichas cubren dos identificadores cuando la operación es simétrica —crear y editar un borrador, listar y consultar el detalle—. En esos casos el encabezado nombra ambos y el contenido aplica a los dos.
 
@@ -212,7 +212,7 @@ Algunas fichas cubren dos identificadores cuando la operación es simétrica —
 
 ### 7.1 Identidad
 
-Este dominio es dueño de `PERSON`, `ACCESS_ACCOUNT`, `ACCESS_SESSION`, `ONBOARDING_ATTEMPT`, `ELIGIBILITY_EVIDENCE`, `FITNESS_PROFILE_CLAIM`, `BODY_PROGRESS_RECORD`, `HEALTH_CONTEXT_CLAIM`, `PROFILE_VERIFICATION`, `PROFESSIONAL_PROFILE`, `INVITATION` e `INVITATION_INTENT`.
+Este dominio es dueño de `PERSON`, `ACCESS_ACCOUNT`, `ACCESS_SESSION`, `ONBOARDING_ATTEMPT`, `ELIGIBILITY_EVIDENCE`, `FITNESS_PROFILE_CLAIM`, `BODY_PROGRESS_RECORD`, `HEALTH_CONTEXT_CLAIM`, `PROFESSIONAL_PROFILE`, `PROFESSIONAL_PROFILE_SPECIALTY`, `PROFESSIONAL_CREDENTIAL`, `PROFESSIONAL_CREDENTIAL_VERIFICATION`, `INVITATION` e `INVITATION_INTENT`.
 
 Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Ninguna operación crea una `PERSON` sin control personal del sujeto, elegibilidad adulta resuelta y onboarding completo.
 
@@ -228,12 +228,12 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-008` | Declarar contexto de salud fitness | Comando | `A2` |
 | `OP-IDN-009` | Decidir las intenciones de una invitación | Comando | `A2` |
 | `OP-IDN-010` | Crear o actualizar perfil profesional | Comando | `A2` |
-| `OP-IDN-011` | Registrar verificación de una afirmación | Comando | `A11` |
+| `OP-IDN-011` | Registrar verificación de una credencial profesional | Comando | `A11` |
 | `OP-IDN-012` | Consultar mi identidad y cuentas vinculadas | Consulta | `A2` |
 | `OP-IDN-013` | Consultar la proyección actual de mi perfil | Consulta | `A2` |
 | `OP-IDN-014` | Consultar el historial de un atributo | Consulta | `A2` |
 | `OP-IDN-015` | Consultar mis registros de progreso corporal | Consulta | `A2` |
-| `OP-IDN-016` | Consultar una invitación por token | Consulta | `A1`, `A2` |
+| `OP-IDN-016` | Consultar una invitación por token protegido | Consulta | `A0`, `A1`, `A2` |
 | `OP-IDN-017` | Consultar mi perfil profesional | Consulta | `A3` |
 | `OP-IDN-018` | Consultar el perfil de entrenamiento de un cliente | Consulta | `A3`, `A7` |
 | `OP-IDN-019` | Consultar el progreso corporal de un cliente | Consulta | `A3`, `A7` |
@@ -246,11 +246,20 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-026` | Completar callback y crear sesión Studio | Comando | `A0` → `A1`, `A2` |
 | `OP-IDN-027` | Consultar la sesión actual de Studio | Consulta | `A1`, `A2` |
 | `OP-IDN-028` | Cerrar la sesión actual de Studio | Comando | `A1`, `A2` |
-| `OP-IDN-029` | Crear cuenta de Space y enviar código de verificación | Comando | `A0` |
-| `OP-IDN-030` | Verificar el código y emitir la primera sesión de Space | Comando | `A0` → `A1` |
-| `OP-IDN-031` | Iniciar sesión en Space | Comando | `A0` → `A1`, `A2` |
-| `OP-IDN-032` | Renovar la sesión de Space | Comando | `A1`, `A2` |
-| `OP-IDN-033` | Pedir el restablecimiento de contraseña de Space | Comando | `A0` |
+| `OP-IDN-029` | Declarar una credencial profesional | Comando | `A2` |
+| `OP-IDN-030` | Revisar una credencial profesional | Comando | `A2` |
+| `OP-IDN-031` | Retirar una credencial profesional | Comando | `A2` |
+| `OP-IDN-032` | Iniciar autenticación Backoffice por contraseña | Comando | `A0` |
+| `OP-IDN-033` | Consultar intento de autenticación Backoffice | Consulta | `A0` con cookie temporal |
+| `OP-IDN-034` | Verificar TOTP y crear sesión AAL2 Backoffice | Comando | `A0` con intento válido |
+| `OP-IDN-035` | Consultar sesión Backoffice | Consulta | `allfit_admin` autenticado |
+| `OP-IDN-036` | Cerrar sesión Backoffice | Comando | sesión presente o ausente |
+| `OP-IDN-037` | Solicitar recuperación de contraseña Backoffice | Comando | `A0` |
+| `OP-IDN-038` | Crear cuenta de Space y enviar código de verificación | Comando | `A0` |
+| `OP-IDN-039` | Verificar el código y emitir la primera sesión de Space | Comando | `A0` → `A1` |
+| `OP-IDN-040` | Iniciar sesión en Space | Comando | `A0` → `A1`, `A2` |
+| `OP-IDN-041` | Renovar la sesión de Space | Comando | `A1`, `A2` |
+| `OP-IDN-042` | Pedir el restablecimiento de contraseña de Space | Comando | `A0` |
 
 ---
 
@@ -259,7 +268,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/onboarding-attempts` y `POST /studio/v1/onboarding-attempts` |
+| **Superficie** | `POST /space/v1/onboarding-attempts` o `POST /studio/v1/onboarding-attempts` |
 | **Actor** | `A1` — usuario WorkOS válido sin persona vinculada |
 | **Filtros obligatorios** | `ACCESS_ACCOUNT` derivado de `(issuer, subject)` del token verificado; la cuenta no debe tener ya una `PERSON` vinculada |
 | **Transacción** | Crear `ONBOARDING_ATTEMPT` y vincularlo a la cuenta externa. Si el flujo viene de una invitación, congelar el token de referencia sin materializar ninguna intención |
@@ -268,7 +277,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Offline / concurrencia** | No admite `draft_local`: sin estado autoritativo no hay onboarding. Dos peticiones concurrentes convergen al mismo intento |
 | **Información sensible** | Ninguna categoría fitness. Identificadores de cuenta y, si existe, token de invitación |
 | **Evento de dominio** | `identity.onboarding_attempt_started.v1` |
-| **Reglas** | No crea `PERSON`, perfil, relación, grant ni membresía. No marca la invitación como aceptada. Un intento tiene vencimiento propio. **El profesional que entra por Studio usa esta misma operación**: una persona es una persona, y su Fitness ID no depende de la superficie por la que llegó. Dos superficies, una sola operación y una sola transacción; lo que cambia es la proyección |
+| **Reglas** | No crea `PERSON`, perfil, relación, grant ni membresía. No marca la invitación como aceptada. Un intento tiene vencimiento propio |
 | **Falla cerrada** | Sin token verificable, sin respuesta |
 
 #### `OP-IDN-002` — Registrar evidencia de elegibilidad adulta
@@ -276,14 +285,14 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/eligibility-evidence` y su equivalente en `/studio/v1` |
+| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/eligibility-evidence` o `POST /studio/v1/onboarding-attempts/{id}/eligibility-evidence` |
 | **Actor** | `A1`, dueño del intento |
 | **Filtros obligatorios** | El intento pertenece a la cuenta autenticada y está abierto |
 | **Transacción** | Crear `ELIGIBILITY_EVIDENCE` aplicando la **versión vigente** de la política adulta y congelarla en la evidencia |
 | **Idempotencia** | `Idempotency-Key`. Reenviar la misma evaluación no crea otra evidencia; una evaluación distinta se añade como intento adicional, append-only |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Sin conexión no hay evaluación |
-| **Información sensible** | Fecha de nacimiento o equivalente. Categoría personal identificable, nunca expuesta a ninguna organización |
+| **Información sensible** | Declaración explícita de tener al menos 18 años bajo la política adulta V1 para Colombia. No se almacena fecha de nacimiento |
 | **Evento de dominio** | `identity.eligibility_evaluated.v1` |
 | **Reglas** | `fail` y `review_required` **no** son elegibilidad. La ausencia de evidencia tampoco. Un intento no elegible no crea perfil, ni datos fitness, ni persona parcial |
 | **Falla cerrada** | Cualquier error de evaluación deja el intento como no elegible |
@@ -293,16 +302,16 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/completion` y su equivalente en `/studio/v1` |
+| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/completion` o `POST /studio/v1/onboarding-attempts/{id}/completion` |
 | **Actor** | `A1`, dueño del intento |
-| **Filtros obligatorios** | Intento abierto, propio, con `ELIGIBILITY_EVIDENCE` en estado `pass` vigente, y con aceptación de términos registrada |
+| **Filtros obligatorios** | Intento abierto, propio, con `ELIGIBILITY_EVIDENCE` en estado `pass` vigente, y con aceptaciones versionadas de `platform_terms_v1` y `privacy_notice_v1` registradas |
 | **Transacción** | Una sola: crear `PERSON`, vincular `ACCESS_ACCOUNT` a esa persona, cerrar el `ONBOARDING_ATTEMPT` como `activated` y, si el intento porta una invitación, marcarla como reclamable por esa persona **sin** materializar intenciones |
 | **Idempotencia** | `Idempotency-Key`. Un reintento sobre un intento ya activado devuelve la misma `PERSON`; nunca crea una segunda |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Dos peticiones concurrentes producen una sola persona: la unicidad se resuelve en la base, no en el cliente |
 | **Información sensible** | Datos identificativos básicos |
 | **Evento de dominio** | `identity.person_activated.v1` |
-| **Reglas** | Es el **único** camino que crea una `PERSON`. Si la cuenta ya tenía persona (invitación posterior sobre alguien ya registrado en Space), reutiliza el mismo `person_id` y no duplica el Fitness ID. El profesional se activa por `/studio/v1` con esta misma operación, **para sí mismo**: la prohibición es que una organización o un profesional la invoque **en nombre de otra persona**, no que un profesional se active a sí mismo |
+| **Reglas** | Es el **único** camino que crea una `PERSON`. Studio puede invocarlo exclusivamente para que el titular autenticado complete su propia activación; nunca puede activar a otra persona ni adquirir por ello potestades organizacionales. Si la cuenta ya tenía persona (invitación posterior sobre alguien ya registrado en Space), reutiliza el mismo `person_id` y no duplica el Fitness ID |
 | **Falla cerrada** | Sin elegibilidad `pass` no hay persona, aunque la invitación exista y esté vigente |
 
 #### `OP-IDN-004` — Declarar afirmación de perfil
@@ -395,16 +404,16 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/invitations/{token}/decisions` |
+| **Superficie** | `POST /studio/v1/invitations/decisions` para staff; `POST /space/v1/invitations/decisions` para clientes. El token viaja en el cuerpo |
 | **Actor** | `A2` |
-| **Filtros obligatorios** | Invitación vigente, no revocada, no vencida, y dirigida al contacto verificado de la persona autenticada. Cada `INVITATION_INTENT` se decide por separado |
-| **Transacción** | Una sola por decisión aceptada: materializar **como máximo un destino** por intención (`ORGANIZATION_MEMBERSHIP`, `SERVICE_RELATIONSHIP` o `PROGRAM_ASSIGNMENT`) validando sus dependencias. Las intenciones rechazadas conservan la decisión sin crear nada |
-| **Idempotencia** | `Idempotency-Key` por intención. Un reintento no duplica membresías, relaciones ni asignaciones |
+| **Filtros obligatorios** | Invitación pendiente, vigente y dirigida al email verificado exacto de la persona autenticada. Staff admite una única intención `membership`; cliente decide cada intención y cada `INVITATION_SCOPE_OPTION` presentada |
+| **Transacción** | Staff: bloquear invitación, aceptar o rechazar, crear/reutilizar membresía activa y añadir solo el rol faltante. Cliente: materializar **como máximo un destino** por intención; relación, consentimientos, grants concedidos y programa dependiente se confirman juntos. Los dos flujos preservan evidencia y no mezclan entidades |
+| **Idempotencia** | `Idempotency-Key` y `Command-Id`. Un reintento no duplica membresías, roles, relaciones, grants ni asignaciones |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada. Dos aceptaciones concurrentes de la misma intención materializan un solo destino |
+| **Offline / concurrencia** | Falla cerrada. Dos decisiones concurrentes materializan un solo destino; en staff, aceptación y revocación bloquean la misma fila y gana la primera confirmada |
 | **Información sensible** | Identidad y vínculo. Ningún dato fitness cambia de manos aquí |
-| **Evento de dominio** | `identity.invitation_intent_decided.v1`, más el evento del dominio destino |
-| **Reglas** | La aceptación parcial es válida: aceptar la relación y rechazar el programa es un resultado correcto. Aceptar **no concede scopes**: el consentimiento es una operación separada (`OP-PRV-003`). Una intención de programa cuya intención de relación fue rechazada no puede materializarse |
+| **Evento de dominio** | `identity.invitation_intent_decided.v1`, más los eventos del dominio destino y `privacy.grant_created.v1` / `privacy.grant_rejected.v1` por opción decidida |
+| **Reglas** | Staff se decide exclusivamente en Studio y nunca crea perfil de cliente, relación, scope o grant. Cliente se decide exclusivamente en Space: relación, programa y cada scope son independientes aunque se confirmen en una sola acción. Activar la persona no acepta ninguna intención |
 | **Falla cerrada** | Dependencia faltante, la intención queda pendiente y no se materializa nada |
 
 #### `OP-IDN-010` — Crear o actualizar perfil profesional
@@ -415,30 +424,30 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Superficie** | `PUT /studio/v1/me/professional-profile` |
 | **Actor** | `A2` |
 | **Filtros obligatorios** | Sujeto = persona autenticada |
-| **Transacción** | Crear o revisar `PROFESSIONAL_PROFILE` |
+| **Transacción** | Crear o actualizar `PROFESSIONAL_PROFILE` y reemplazar atómicamente sus relaciones `PROFESSIONAL_PROFILE_SPECIALTY` por códigos publicados |
 | **Idempotencia** | `Idempotency-Key`. `PUT` con el mismo contenido no genera revisión |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Sin modo offline |
 | **Información sensible** | Presentación profesional. No es dato fitness |
 | **Evento de dominio** | `identity.professional_profile_updated.v1` |
-| **Reglas** | El perfil profesional pertenece a la **persona**, no a la organización, y sobrevive al cambio de organización. Existir no habilita operar: para prestar servicio hace falta membresía vigente. No es un perfil público ni un listing de marketplace |
-| **Falla cerrada** | — |
+| **Reglas** | El perfil profesional pertenece a la **persona**, no a la organización, y sobrevive al cambio de organización. El payload contiene titular, biografía, `practice_started_year` y al menos una especialidad publicada; los años de experiencia se derivan. No acepta credenciales embebidas ni un indicador global de verificación. Existir no habilita operar: para prestar servicio hace falta membresía vigente. No es un perfil público ni un listing de marketplace |
+| **Falla cerrada** | Año futuro, especialidad inexistente/deprecada o perfil de otra persona: rechazo sin escritura parcial |
 
-#### `OP-IDN-011` — Registrar verificación de una afirmación
+#### `OP-IDN-011` — Registrar verificación de una credencial profesional
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
 | **Superficie** | `POST /backoffice/v1/verifications` |
 | **Actor** | `A11` con `verify_professional_credentials`, AAL2 y deber vigente |
-| **Filtros obligatorios** | Claim de credencial profesional; método `official_registry_lookup` o `issuer_confirmation`; evidencia mínima; ausencia de conflicto; `valid_to` obligatorio y `<= min(vencimiento fuente, 12 meses)` |
-| **Transacción** | Crear `PROFILE_VERIFICATION` append-only con política, método, fuente, fingerprint, resultado y vigencia |
+| **Filtros obligatorios** | Versión exacta de `PROFESSIONAL_CREDENTIAL`; método `official_registry_lookup` o `issuer_confirmation`; evidencia mínima; ausencia de conflicto; `valid_to` obligatorio y `<= min(vencimiento fuente, 12 meses)` |
+| **Transacción** | Crear `PROFESSIONAL_CREDENTIAL_VERIFICATION` append-only con política, método, fuente, fingerprint, resultado y vigencia |
 | **Idempotencia** | `Idempotency-Key` |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
-| **Información sensible** | Depende del atributo verificado; hereda su clasificación |
-| **Evento de dominio** | `identity.claim_verified.v1` |
-| **Reglas** | Verificar **una** afirmación no marca otras ni convierte el perfil en verificado. Vencer, revocar, renovar o apelar crea otro evento. Documento, edad, salud, dispositivo, afiliación y perfil completo no son verificables en V1. La verificación no amplía scopes |
+| **Información sensible** | `identity_pii`; la proyección ordinaria nunca devuelve referencia de fuente ni fingerprint |
+| **Evento de dominio** | `identity.professional_credential_verified.v1` |
+| **Reglas** | Verificar **una versión exacta** no marca otras credenciales ni convierte el perfil en verificado. Revisar materialmente la credencial crea otra versión sin heredar el estado. Vencer, revocar, renovar o apelar crea otro evento. Documento, edad, salud, dispositivo, afiliación y perfil completo no son verificables en V1. La verificación no amplía scopes |
 | **Falla cerrada** | Evidencia ausente/ambigua, método no permitido, conflicto, AAL2/deber ausente o vencido: `unverifiable`/denegación; nunca `verified` |
 | **Gobernanza** | Catálogo, conflictos, vigencia y `T-VG-01..06` en [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md) |
 
@@ -510,21 +519,21 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | Las URLs de imagen son firmadas, de vigencia corta y no enumerables |
 | **Falla cerrada** | — |
 
-#### `OP-IDN-016` — Consultar una invitación por token
+#### `OP-IDN-016` — Consultar una invitación por token protegido
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /space/v1/invitations/{token}` |
-| **Actor** | `A1`, `A2` |
-| **Filtros obligatorios** | Token válido, vigente y no revocado |
+| **Superficie** | `POST /studio/v1/invitations/resolve` para staff; `POST /space/v1/invitations/resolve` para clientes. El token viaja en el cuerpo |
+| **Actor** | `A0`, `A1`, `A2` |
+| **Filtros obligatorios** | Token válido y pendiente. Inválido, vencido, revocado y consumido devuelven el mismo `404` |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
-| **Información sensible** | Identidad de la organización invitante y contenido de las intenciones |
+| **Offline / concurrencia** | Falla cerrada. Límite perimetral de resolución por IP y respuesta `429` con `Retry-After` |
+| **Información sensible** | Identidad de la organización invitante y contenido mínimo de las intenciones; nunca el email destinatario |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Muestra organización, parte responsable presentada, propósito y las intenciones **por separado**, para que la decisión pueda ser parcial e informada. No revela si el contacto ya tiene cuenta en Allfit: eso filtraría la existencia de una persona a quien invita |
+| **Reglas** | Staff muestra organización, responsable, rol y vencimiento únicamente en Studio. Cliente muestra en Space relación, programa y scopes por separado. El token nunca aparece en path, query, logs o referrers; consultar no acepta ni materializa nada |
 | **Falla cerrada** | Token inválido y token vencido devuelven la misma respuesta |
 
 #### `OP-IDN-017` — Consultar mi perfil profesional
@@ -539,9 +548,9 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Idempotencia** | N/A |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Sin modo offline |
-| **Información sensible** | Presentación profesional |
+| **Información sensible** | Presentación profesional y credenciales declaradas; sin evidencia interna de verificación |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Devuelve el perfil profesional y un resumen de membresías; el detalle de membresías es `OP-ORG-014` |
+| **Reglas** | Devuelve titular, biografía, año de inicio, años derivados, especialidades publicadas, credenciales y el estado/vigencia proyectados de cada credencial; nunca evidencia interna ni una bandera global de perfil verificado. Incluye un resumen de membresías; el detalle es `OP-ORG-014` |
 | **Falla cerrada** | — |
 
 #### `OP-IDN-018` — Consultar el perfil de entrenamiento de un cliente
@@ -714,7 +723,133 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | Cookie host-only, `Path=/studio/v1`, sin `Max-Age`; su borrado usa el mismo path |
 | **Falla cerrada** | Origen distinto: `403 forbidden` sin tocar la sesión |
 
-#### `OP-IDN-029` — Crear cuenta de Space y enviar código de verificación
+#### `OP-IDN-029` — Declarar una credencial profesional
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /studio/v1/me/professional-credentials` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Perfil profesional propio; tipo, emisor y nombre normalizados; fechas coherentes; URL opcional HTTPS |
+| **Transacción** | Crear `PROFESSIONAL_CREDENTIAL` activa sin verificación |
+| **Idempotencia** | `Idempotency-Key`; el replay devuelve la misma credencial |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Sin modo offline; dos comandos distintos pueden declarar credenciales distintas |
+| **Información sensible** | `identity_pii` |
+| **Evento de dominio** | `identity.professional_credential_declared.v1` |
+| **Reglas** | Declarar nunca produce `verified`. La credencial tiene identidad estable y no se embebe en `PROFESSIONAL_PROFILE` |
+| **Falla cerrada** | Perfil ajeno, formato inválido o intento de declarar estado de verificación: rechazo |
+
+#### `OP-IDN-030` — Revisar una credencial profesional
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /studio/v1/me/professional-credentials/{credentialId}/revisions` |
+| **Actor** | `A2`, dueño de la credencial |
+| **Filtros obligatorios** | Credencial propia y activa; contenido material distinto y válido |
+| **Transacción** | Crear otra `PROFESSIONAL_CREDENTIAL` con `supersedes_credential_id` y retirar la anterior en la misma transacción |
+| **Idempotencia** | `Idempotency-Key`; un replay no crea otra revisión |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Concurrencia optimista; solo una revisión puede suceder a la versión activa |
+| **Información sensible** | `identity_pii` |
+| **Evento de dominio** | `identity.professional_credential_revised.v1` |
+| **Reglas** | Las verificaciones anteriores permanecen como evidencia histórica y nunca se trasladan a la revisión nueva |
+| **Falla cerrada** | Versión ya retirada, ajena o sin cambios: conflicto/rechazo sin alterar historia |
+
+#### `OP-IDN-031` — Retirar una credencial profesional
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /studio/v1/me/professional-credentials/{credentialId}/retirement` |
+| **Actor** | `A2`, dueño de la credencial |
+| **Filtros obligatorios** | Credencial propia activa |
+| **Transacción** | Cambiar únicamente `status='retired'` y `retired_at`; conservar declaración y verificaciones históricas |
+| **Idempotencia** | `Idempotency-Key`; repetir no cambia el instante original |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Sin modo offline; retiro y revisión concurrentes no pueden confirmar ambos |
+| **Información sensible** | `identity_pii` |
+| **Evento de dominio** | `identity.professional_credential_retired.v1` |
+| **Reglas** | Una credencial retirada deja de presentarse como vigente aunque una verificación histórica todavía tenga `valid_to` futuro |
+| **Falla cerrada** | Credencial ajena o ya sucedida por otra versión: misma respuesta cerrada |
+
+#### `OP-IDN-032` — Iniciar autenticación Backoffice por contraseña
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando público |
+| **Superficie** | `POST /backoffice/v1/auth/password` |
+| **Actor** | `A0`; `Origin` exacto de `BACKOFFICE_WEB_URL` |
+| **Filtros obligatorios** | Application Backoffice, email verificado, cuenta vinculada, persona activa y `allfit_admin` vigente |
+| **Transacción** | Invalida intentos anteriores, persiste/reutiliza factor TOTP y crea intento de diez minutos. No crea sesión |
+| **Idempotencia** | Un único intento abierto por cuenta; concurrencia serializada en PostgreSQL |
+| **Información sensible** | Password, email, tokens, QR, clave manual, factor/challenge IDs nunca se registran; secretos temporales cifrados |
+| **Reglas** | Respuesta `totp-enrollment` o `totp-challenge`; cualquier fallo de credencial/cuenta/persona/rol es el mismo `401` |
+
+#### `OP-IDN-033` — Consultar intento de autenticación Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta pública ligada a cookie temporal |
+| **Superficie** | `GET /backoffice/v1/auth/attempt` |
+| **Actor** | Poseedor de `allfit_backoffice_auth_attempt`, host-only y `SameSite=Strict` |
+| **Filtros obligatorios** | Intento abierto, no vencido, hash exacto y `Origin` exacto |
+| **Transacción** | Lectura por función cerrada; no extiende los diez minutos |
+| **Información sensible** | Sólo `next`, vencimiento y, durante primer enrolamiento, QR/clave manual; nunca identidad o IDs externos |
+| **Falla cerrada** | Ausente, terminal, vencido o corrupto: `401` indistinguible y borrado de cookie |
+
+#### `OP-IDN-034` — Verificar TOTP y crear sesión AAL2 Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/auth/totp/verification` |
+| **Actor** | Intento temporal válido; aún no es actor Backoffice |
+| **Filtros obligatorios** | Código de seis dígitos, `Idempotency-Key`, `Command-Id`, factor vigente, persona activa y rol base vigente |
+| **Transacción** | Vincula command antes de consumir challenge; después bloquea cuenta, factor, intento, rol y sesión, activa factor nuevo y crea sesión AAL2 en una sola confirmación |
+| **Idempotencia** | Token final derivado por HMAC del intento con separación de dominio; el mismo command puede recuperar un challenge ya verificado sin crear otra sesión; otro command recibe `409` |
+| **Concurrencia** | La primera confirmación entre verificación y revocación gana. Máximo cinco códigos inválidos por intento |
+| **Información sensible** | PostgreSQL conserva hash de token; challenge, QR, clave y tokens cifrados se eliminan al terminar |
+| **Evento de dominio** | Solicitudes de limpieza externa si la operación termina o pierde la carrera |
+
+#### `OP-IDN-035` — Consultar sesión Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /backoffice/v1/session` |
+| **Actor** | Persona activa con rol `allfit_admin` y sesión Backoffice AAL2 |
+| **Filtros obligatorios** | Hash y superficie exactos, `sid` válido, AAL2, `password_totp`, inactividad menor de 15 minutos y absoluto menor de 8 horas |
+| **Transacción** | Revalida persona/rol/evidencia y actualiza actividad mediante función cerrada; verifica/refresca token WorkOS fuera de autoridad de dominio |
+| **Información sensible** | Devuelve sólo nivel, método, nombre propio y vencimientos; sin email, factor, deber, claim, token ni permiso |
+| **Falla cerrada** | Cualquier pérdida de autoridad revoca/cierra la sesión y devuelve `401`; proveedor transitoriamente indisponible devuelve `503` sin ampliar vencimientos |
+
+#### `OP-IDN-036` — Cerrar sesión Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando idempotente |
+| **Superficie** | `POST /backoffice/v1/auth/logout` |
+| **Actor** | Sesión Backoffice presente o ausente |
+| **Filtros obligatorios** | `Origin` exacto; razón `manual`, `inactivity` o `recovery` |
+| **Transacción** | Revoca primero la sesión local por función cerrada, elimina cookie y solicita revocar el `sid`; una falla externa queda en outbox para worker |
+| **Idempotencia** | Ausente o ya revocada responde `204` igual que la primera ejecución |
+| **Información sensible** | Métrica sólo con trigger/outcome; sin PII ni `sid` |
+
+#### `OP-IDN-037` — Solicitar recuperación de contraseña Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando público de respuesta uniforme |
+| **Superficie** | `POST /backoffice/v1/auth/password-resets` |
+| **Actor** | `A0`, `Origin` exacto |
+| **Transacción** | Ninguna local al solicitar; WorkOS envía correo y aloja página en `*.authkit.app`. Webhook firmado posterior revoca sesiones Studio/Backoffice e intentos en una transacción |
+| **Idempotencia** | La respuesta siempre es `202`; el receipt del webhook deduplica por evento |
+| **Información sensible** | La API descarta URL/token de reset y no revela existencia de cuenta ni salud del proveedor; TOTP activo se conserva |
+| **Falla cerrada** | `auth.allfit.one` no es dependencia. Sin webhook válido no se aplica revocación local |
+
+#### `OP-IDN-038` — Crear cuenta de Space y enviar código de verificación
 
 | Campo | Valor |
 | --- | --- |
@@ -731,7 +866,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | **La respuesta no puede revelar si el correo ya tiene cuenta.** Éxito y «ya registrado» son indistinguibles: mismo estado, mismo cuerpo, misma expiración. Por eso responde `202` y nunca `201` ni `409` |
 | **Falla cerrada** | Proveedor caído: `503`, sin crear nada |
 
-#### `OP-IDN-030` — Verificar el código y emitir la primera sesión de Space
+#### `OP-IDN-039` — Verificar el código y emitir la primera sesión de Space
 
 | Campo | Valor |
 | --- | --- |
@@ -748,7 +883,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | Una sola respuesta para código erróneo, contraseña errónea y correo desconocido. **Límite de intentos obligatorio**: un código de seis dígitos se agota por fuerza bruta en minutos |
 | **Falla cerrada** | Cualquier duda deja la cuenta sin verificar |
 
-#### `OP-IDN-031` — Iniciar sesión en Space
+#### `OP-IDN-040` — Iniciar sesión en Space
 
 | Campo | Valor |
 | --- | --- |
@@ -765,7 +900,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | **Un intento fallido no dice si falló el correo o la contraseña** (HU-SP-002 criterio 2). Un correo sin verificar recibe la misma respuesta que uno inexistente. **Límite de intentos obligatorio** |
 | **Falla cerrada** | Sin credenciales válidas no se emite token, aunque la cuenta exista |
 
-#### `OP-IDN-032` — Renovar la sesión de Space
+#### `OP-IDN-041` — Renovar la sesión de Space
 
 | Campo | Valor |
 | --- | --- |
@@ -782,7 +917,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | Es lo que sostiene HU-SP-002 criterio 4, que la sesión se mantiene entre aperturas. Un refresco rechazado obliga a iniciar sesión otra vez, nunca a un acceso degradado |
 | **Falla cerrada** | Token inválido o de otra superficie: `401`, sin emitir nada |
 
-#### `OP-IDN-033` — Pedir el restablecimiento de contraseña de Space
+#### `OP-IDN-042` — Pedir el restablecimiento de contraseña de Space
 
 | Campo | Valor |
 | --- | --- |
@@ -816,8 +951,8 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | `OP-ORG-007` | Asignar rol a una membresía | Comando | `A4`, `A5` |
 | `OP-ORG-008` | Retirar rol de una membresía | Comando | `A4`, `A5` |
 | `OP-ORG-009` | Terminar una membresía | Comando | `A4`, `A5` |
-| `OP-ORG-010` | Renunciar a una membresía propia | Comando | `A3`, `A6` |
-| `OP-ORG-011` | Transferir ownership | Comando | `A5` |
+| `OP-ORG-010` | Renunciar a una membresía propia | Comando | `A2` con membresía propia activa no-owner |
+| `OP-ORG-011` | Transferir propiedad | Comando | `A5` |
 | `OP-ORG-012` | Cerrar la organización | Comando | `A5` |
 | `OP-ORG-013` | Consultar la organización | Consulta | `A3`–`A6` |
 | `OP-ORG-014` | Listar mis membresías | Consulta | `A2` |
@@ -825,6 +960,8 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | `OP-ORG-016` | Listar invitaciones emitidas | Consulta | `A4`, `A5`, `A6` |
 | `OP-ORG-017` | Consultar catálogo de roles y capacidades | Consulta | `A3`–`A6` |
 | `OP-ORG-018` | Crear una organización y entregarla a su dueño | Comando | `A10` |
+| `OP-ORG-019` | Consultar catálogo de tipos de organización | Consulta | `A2` |
+| `OP-ORG-020` | Resolver el contexto de entrada de Studio | Consulta | `A1`, `A2` |
 
 ---
 
@@ -835,15 +972,15 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Tipo** | Comando |
 | **Superficie** | `POST /studio/v1/organizations` |
 | **Actor** | `A2` — cualquier persona activa |
-| **Filtros obligatorios** | Persona activa con `PROFESSIONAL_PROFILE`. El tipo solicitado pertenece al catálogo gobernado de `ORGANIZATION_TYPE` |
-| **Transacción** | Una sola: crear `ORGANIZATION`, crear `ORGANIZATION_MEMBERSHIP` para el creador, asignarle `MEMBERSHIP_ROLE` = `owner` y registrar el `ORGANIZATION_EVENT` de alta |
+| **Filtros obligatorios** | Persona activa. El tipo solicitado pertenece al catálogo gobernado de `ORGANIZATION_TYPE` |
+| **Transacción** | `organizations.create_organization(...)` crea `ORGANIZATION`, la membresía inicial, el rol `owner` y los eventos; solo confirma si el constraint diferible verifica exactamente un `owner` activo |
 | **Idempotencia** | `Idempotency-Key`. Un reintento devuelve la organización creada, nunca una segunda |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Datos de la parte responsable. Ningún dato fitness |
 | **Evento de dominio** | `organization.created.v1`, `organization.membership_created.v1` |
-| **Reglas** | El onboarding `solo_professional` crea una organización de tipo `professional_practice`: es una **frontera operativa**, no necesariamente una persona jurídica. No existe una bandera permanente de "independiente": la misma organización incorpora equipo después sin cambiar de identidad |
-| **Falla cerrada** | Sin perfil profesional, rechazo |
+| **Reglas** | El onboarding `solo_professional` crea una organización de tipo `professional_practice`: es una **frontera operativa**, no necesariamente una persona jurídica. No existe una bandera permanente de "independiente": la misma organización incorpora equipo después sin cambiar de identidad. Toda organización activa conserva exactamente un `owner` activo |
+| **Falla cerrada** | Sin persona activa o con tipo fuera del catálogo, rechazo |
 
 #### `OP-ORG-002` — Actualizar datos de la organización
 
@@ -853,13 +990,13 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Superficie** | `PATCH /studio/v1/organizations/{orgId}` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | Membresía vigente en `{orgId}` con capacidad de administración |
-| **Transacción** | Actualizar la organización y registrar `ORGANIZATION_EVENT` con before/after |
-| **Idempotencia** | `Idempotency-Key`. Un `PATCH` sin cambios efectivos no genera evento |
+| **Transacción** | `organizations.update_organization(...)` bloquea el agregado, valida revisión/transición, actualiza solo `display_name`, `legal_name` o `type_code`, incrementa `revision_number` y registra `ORGANIZATION_EVENT` con before/after |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`. Un `PATCH` sin cambios efectivos no genera evento ni incrementa la revisión |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada. Escrituras concurrentes se resuelven por versión optimista; la perdedora recibe `409` |
-| **Información sensible** | Datos de la parte responsable |
+| **Offline / concurrencia** | Exige `If-Match: "organization:{id}:r{revision}"`. Si falta devuelve `428 precondition-required`; si quedó atrás, `409 stale-draft`. El éxito incrementa `revision_number` y devuelve el nuevo ETag fuerte |
+| **Información sensible** | `legal_name` puede ser `identity_pii`; el comando no lee ni escribe el JSON de la parte responsable |
 | **Evento de dominio** | `organization.updated.v1` |
-| **Reglas** | Cambiar el tipo organizacional exige que la transición esté permitida por el catálogo. Incorporar personal **no** cambia el tipo automáticamente |
+| **Reglas** | El `PATCH` es cerrado. `responsible_party`, `id`, `status`, timestamps, `purpose` y `responsible_party_schema_version` son inmutables en autoservicio. Cambiar `type_code` exige una fila activa en `organization_type_transitions`; inicialmente solo existen `professional_practice → gym` y `professional_practice → studio`. Incorporar personal **no** cambia el tipo automáticamente |
 | **Falla cerrada** | Transición de tipo no permitida, rechazo |
 
 #### `OP-ORG-003` — Crear sede
@@ -870,11 +1007,11 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/sites` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | Membresía vigente con capacidad de administración |
-| **Transacción** | Crear `ORGANIZATION_SITE` |
-| **Idempotencia** | `Idempotency-Key` |
+| **Transacción** | `organizations.create_site(...)` crea `ORGANIZATION_SITE` con `revision_number = 0` y su evento contractual |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id` |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
-| **Información sensible** | Ubicación del negocio. No es dato personal |
+| **Offline / concurrencia** | Falla cerrada; devuelve `ETag: "organization-site:{id}:r0"` |
+| **Información sensible** | `address` puede ser `identity_pii` si la sede de una práctica profesional coincide con un domicilio |
 | **Evento de dominio** | `organization.site_created.v1` |
 | **Reglas** | Una sede es información básica de ubicación. **No** representa recursos reservables, capacidad, clases ni inventario, y **no** delimita permisos: el alcance de rol por sede queda fuera de V1 |
 | **Falla cerrada** | — |
@@ -887,11 +1024,11 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Superficie** | `PATCH /studio/v1/organizations/{orgId}/sites/{siteId}` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | La sede pertenece a `{orgId}`; membresía vigente con capacidad de administración |
-| **Transacción** | Actualizar la sede y registrar el evento |
-| **Idempotencia** | `Idempotency-Key` |
+| **Transacción** | `organizations.update_site(...)` bloquea la sede, valida revisión/tenant, actualiza campos cerrados, incrementa `revision_number` y registra el evento |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; converge |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada; versión optimista |
-| **Información sensible** | Ninguna categoría personal |
+| **Offline / concurrencia** | Exige `If-Match: "organization-site:{id}:r{revision}"`; faltante `428 precondition-required`, obsoleto `409 stale-draft`; el éxito devuelve el nuevo ETag fuerte |
+| **Información sensible** | `address` puede ser `identity_pii`; actualizar o desactivar no reduce su protección ni retención |
 | **Evento de dominio** | `organization.site_updated.v1` |
 | **Reglas** | Desactivar una sede no afecta relaciones, asignaciones ni historial: la sede es informativa |
 | **Falla cerrada** | — |
@@ -903,14 +1040,14 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Tipo** | Comando |
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/invitations` con intención de tipo `membership` |
 | **Actor** | `A4`, `A5`, `A6` |
-| **Filtros obligatorios** | Membresía vigente con capacidad de invitar. El destino es un email o celular; **nunca** un `person_id` |
+| **Filtros obligatorios** | Membresía vigente con capacidad de invitar. El destino V1 es un email; **nunca** un `person_id` |
 | **Transacción** | Crear `INVITATION` con su token e `INVITATION_INTENT` de membresía, incluyendo el rol propuesto, y encolar el envío en el outbox |
 | **Idempotencia** | `Idempotency-Key`. Reinvitar al mismo contacto con la misma intención reutiliza la invitación vigente en lugar de crear otra |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
+| **Offline / concurrencia** | Falla cerrada. PostgreSQL limita 20 emisiones/hora por actor, 100/día por organización y tres entregas/24 h por destinatario y organización |
 | **Información sensible** | Contacto de la persona invitada. La organización **no** aprende si ese contacto ya tiene cuenta |
 | **Evento de dominio** | `organization.staff_invited.v1` |
-| **Reglas** | Studio nunca ejecuta `Create User` ni crea personas. La invitación no crea cuenta, persona, perfil ni membresía: solo transporta una propuesta. El envío es asíncrono; un fallo del proveedor no invalida la invitación |
+| **Reglas** | Studio nunca ejecuta `Create User` ni crea personas. La invitación no crea cuenta, persona, perfil ni membresía: solo transporta una propuesta. El correo enlaza a `https://studio.allfit.one/invitations#token=…`; el envío es asíncrono y un fallo del proveedor no invalida la invitación |
 | **Falla cerrada** | Sin capacidad de invitar, rechazo |
 
 #### `OP-ORG-006` — Revocar una invitación emitida
@@ -921,7 +1058,7 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/invitations/{id}/revocation` |
 | **Actor** | `A4`, `A5`, `A6` |
 | **Filtros obligatorios** | La invitación pertenece a `{orgId}` y sigue pendiente |
-| **Transacción** | Marcar la invitación y todas sus intenciones pendientes como revocadas |
+| **Transacción** | Bloquear y marcar la invitación y todas sus intenciones pendientes como revocadas; serializa sobre la misma fila que aceptación |
 | **Idempotencia** | `Idempotency-Key`; converge |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Si la aceptación llega primero, la revocación no deshace lo materializado |
@@ -937,15 +1074,15 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Tipo** | Comando |
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/memberships/{id}/roles` |
 | **Actor** | `A4`, `A5` |
-| **Filtros obligatorios** | La membresía pertenece a `{orgId}` y está vigente. El rol pertenece al catálogo V1 |
-| **Transacción** | Crear `MEMBERSHIP_ROLE` con vigencia y registrar `MEMBERSHIP_EVENT` |
-| **Idempotencia** | `Idempotency-Key`. Asignar un rol ya vigente no lo duplica |
+| **Filtros obligatorios** | La membresía pertenece a `{orgId}` y está vigente. El rol solicitado es `admin`, `coach` o `staff`; `owner` se rechaza |
+| **Transacción** | `organizations.grant_membership_role(...)` crea la vigencia, registra `MEMBERSHIP_EVENT` y persiste el receipt durable bajo el mismo commit |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`. Asignar un rol ya vigente no lo duplica; el replay durable devuelve el receipt original incluso después de revocar el rol o expirar el replay HTTP |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Nunca se confirma un cambio de permisos desde caché o read model atrasado |
 | **Información sensible** | Ninguna categoría personal |
 | **Evento de dominio** | `organization.role_granted.v1` |
-| **Reglas** | Solo `A5` puede otorgar `owner`. Un rol no es consentimiento: conceder `coach` no da acceso a ninguna persona. El efecto es inmediato y no retroactivo: no amplía lo ya ocurrido |
-| **Falla cerrada** | Rol fuera del catálogo, rechazo |
+| **Reglas** | La gestión genérica nunca concede `owner`. Un rol no es consentimiento: conceder `coach` no da acceso a ninguna persona. El efecto es inmediato y no retroactivo: no amplía lo ya ocurrido |
+| **Falla cerrada** | Rol fuera de `admin`, `coach` o `staff`, incluido `owner`, rechazo |
 
 #### `OP-ORG-008` — Retirar rol de una membresía
 
@@ -954,15 +1091,15 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Tipo** | Comando |
 | **Superficie** | `DELETE /studio/v1/organizations/{orgId}/memberships/{id}/roles/{roleCode}` |
 | **Actor** | `A4`, `A5` |
-| **Filtros obligatorios** | La membresía pertenece a `{orgId}`; el rol está vigente |
-| **Transacción** | Cerrar la vigencia del `MEMBERSHIP_ROLE`, registrar el evento y **reevaluar en la misma transacción** las asignaciones profesionales que dependían de ese rol |
-| **Idempotencia** | `Idempotency-Key`; converge |
+| **Filtros obligatorios** | La membresía pertenece a `{orgId}`; el rol está vigente y no es `owner` |
+| **Transacción** | `organizations.revoke_membership_role(...)` cierra la vigencia y registra el evento. Solo cuando `role_code=coach` llama `relationships.end_assignments_for_membership(...)` dentro de la misma transacción; Organizaciones no escribe tablas de Relaciones |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; converge |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Ninguna categoría personal |
 | **Evento de dominio** | `organization.role_revoked.v1` |
-| **Reglas** | Nunca puede quedar la organización sin `owner`. Retirar `coach` deja inefectivas sus asignaciones profesionales: el grant sobrevive, pero ese actor deja de poder ejercerlo. La invalidación es inmediata, sin ventana de caché |
-| **Falla cerrada** | Último owner, rechazo |
+| **Reglas** | La gestión genérica nunca retira `owner`. Retirar `coach` deja inefectivas sus asignaciones profesionales: el grant sobrevive, pero ese actor deja de poder ejercerlo. Retirar `admin` o `staff` preserva las asignaciones si `coach` sigue vigente. La invalidación es inmediata, sin ventana de caché |
+| **Falla cerrada** | Intento de retirar `owner`, rechazo |
 
 #### `OP-ORG-009` — Terminar una membresía
 
@@ -972,14 +1109,14 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/memberships/{id}/termination` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | La membresía pertenece a `{orgId}` y está vigente |
-| **Transacción** | Una sola: cerrar la membresía, cerrar sus roles, cerrar todas sus `RELATIONSHIP_PROFESSIONAL_ASSIGNMENT` efectivas y registrar los eventos correspondientes |
-| **Idempotencia** | `Idempotency-Key`; converge |
+| **Transacción** | `organizations.terminate_membership(...)` cierra la membresía/roles, registra eventos y llama incondicionalmente `relationships.end_assignments_for_membership(...)`. Cada dominio escribe únicamente sus tablas |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; converge |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Ninguna categoría personal, pero afecta quién puede leer datos de terceros |
 | **Evento de dominio** | `organization.membership_terminated.v1` |
-| **Reglas** | Terminar una membresía **no** termina las relaciones de servicio de la organización: las deja sin profesional asignado y exige reasignar (`OP-REL-005`). El historial de autoría permanece. No puede terminarse la membresía del último `owner` |
-| **Falla cerrada** | Último owner, rechazo |
+| **Reglas** | Terminar una membresía **no** termina las relaciones de servicio de la organización: las deja sin profesional asignado y exige reasignar (`OP-REL-005`). El historial de autoría permanece. No puede terminarse una membresía mientras tenga el rol `owner` |
+| **Falla cerrada** | Membresía con rol `owner`, rechazo |
 
 #### `OP-ORG-010` — Renunciar a una membresía propia
 
@@ -987,33 +1124,33 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | --- | --- |
 | **Tipo** | Comando |
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/me/membership/resignation` |
-| **Actor** | `A3`, `A6` |
+| **Actor** | `A2` — sujeto autenticado con membresía propia activa no-owner; no requiere un rol residual |
 | **Filtros obligatorios** | La membresía es la del sujeto autenticado y está vigente |
-| **Transacción** | Idéntica a `OP-ORG-009` |
-| **Idempotencia** | `Idempotency-Key`; converge |
+| **Transacción** | `organizations.resign_membership(...)` resuelve la membresía desde la persona del contexto y ejecuta la misma baja coordinada de `OP-ORG-009` |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; converge |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Ninguna categoría personal |
 | **Evento de dominio** | `organization.membership_resigned.v1` |
-| **Reglas** | Un `owner` no puede renunciar sin transferir ownership antes. La renuncia deja las relaciones sin profesional asignado y notifica a la administración de la organización |
-| **Falla cerrada** | Owner único, rechazo |
+| **Reglas** | Un `owner` no puede renunciar sin transferir ownership antes. Cualquier persona con membresía propia activa no-owner puede renunciar aunque no conserve roles. La renuncia cierra incondicionalmente sus asignaciones efectivas y notifica a la administración de la organización |
+| **Falla cerrada** | Membresía con rol `owner`, rechazo |
 
-#### `OP-ORG-011` — Transferir ownership
+#### `OP-ORG-011` — Transferir propiedad
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/organizations/{orgId}/ownership-transfer` |
-| **Actor** | `A5` |
-| **Filtros obligatorios** | El destinatario tiene membresía vigente en `{orgId}` |
-| **Transacción** | Una sola: otorgar `owner` al destinatario y, si corresponde, retirarlo del emisor, registrando ambos eventos |
-| **Idempotencia** | `Idempotency-Key` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/ownership-transfers` |
+| **Actor** | `A5` — `owner` vigente de `{orgId}` |
+| **Filtros obligatorios** | `target_membership_id` pertenece a `{orgId}`, está activa y no es la membresía owner actual |
+| **Transacción** | `organizations.transfer_ownership(...)` bloquea en orden la organización, ambas membresías y sus filas de rol `owner`; cierra el rol anterior, abre el destino, registra `ORGANIZATION_EVENT` y ambos `MEMBERSHIP_EVENT`, y confirma solo si `organizations.enforce_exactly_one_active_owner_ct` observa exactamente uno |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; el replay devuelve el mismo owner resultante y nunca vuelve a intercambiar roles |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada. Dos transferencias concurrentes se serializan; la organización nunca queda sin owner en un estado intermedio |
-| **Información sensible** | Identidad de la parte responsable |
+| **Offline / concurrencia** | Falla cerrada. Transferencias concurrentes serializan por el lock de organización; la perdedora relee o recibe conflicto sin estado parcial |
+| **Información sensible** | Ninguna categoría personal; cambia la máxima autoridad organizacional |
 | **Evento de dominio** | `organization.ownership_transferred.v1` |
-| **Reglas** | El disparador de re-consentimiento **no es el cambio de dueño, sino el cambio de la parte responsable presentada** en `RESPONSIBLE_PARTY_SNAPSHOT`. Si la transferencia no altera la marca ni la parte responsable frente a la persona, los grants siguen vigentes y no se le pide nada. Si la altera —típicamente una `professional_practice` cuya parte responsable es una persona natural que pasa a otra—, los grants de esa organización se revocan y exigen nueva aceptación (`OP-PRV-003`); un grant revocado nunca revive. Reasignar profesionales nunca es un cambio de parte responsable |
-| **Falla cerrada** | Destinatario sin membresía, rechazo |
+| **Reglas** | El owner anterior conserva membresía activa y roles no `owner`. Si no tiene otro rol queda sin capacidades hasta asignación explícita o `OP-ORG-010`; no se asigna un rol residual implícito |
+| **Falla cerrada** | Actor no owner, destino inactivo/ajeno, organización no activa o imposibilidad de conservar exactamente un owner: rollback completo |
 
 #### `OP-ORG-012` — Cerrar la organización
 
@@ -1023,14 +1160,14 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/closure` |
 | **Actor** | `A5` |
 | **Filtros obligatorios** | Membresía `owner` vigente |
-| **Transacción** | Una sola: terminar todas las relaciones de servicio activas con su efecto completo (congelar grants, cerrar periodos de gestión, desacoplar asignaciones), cerrar membresías, cerrar la organización y abrir el `DISPOSITION_CASE` correspondiente |
-| **Idempotencia** | `Idempotency-Key`; converge |
+| **Transacción** | `organizations.close_organization(...)` coordina una sola transacción PostgreSQL y llama, en orden estable, los contratos públicos `relationships.terminate_for_organization(...)`, `privacy.apply_organization_closure(...)`, `planning.detach_for_organization_closure(...)`, `execution.cancel_proposals_for_organization_closure(...)` y `nutrition.cancel_proposals_for_organization_closure(...)`; después cierra membresías y organización. Ningún dominio escribe directamente tablas de otro |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; converge |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Afecta el acceso a todas las categorías concedidas a esta organización |
 | **Evento de dominio** | `organization.closed.v1`, más un `relationship.terminated.v1` por relación |
-| **Reglas** | Cerrar no elimina el Fitness ID de nadie ni las ejecuciones de las personas. La organización conserva únicamente evidencia bilateral mínima bajo finalidad, acceso restringido y plazo; retener no es mantener acceso ordinario |
-| **Falla cerrada** | Si alguna terminación no puede completarse, la transacción entera se revierte |
+| **Reglas** | Los contratos públicos son estrechos y reciben `organization_id`, un instante efectivo único y el command ID; cada dominio conserva ownership de sus invariantes. Ejecución cancela propuestas de corrección pendientes y Nutrición cancela propuestas nutricionales pendientes. Cerrar no elimina el Fitness ID ni ejecuciones. La organización conserva únicamente evidencia bilateral mínima bajo finalidad, acceso restringido y plazo; retener no es mantener acceso ordinario |
+| **Falla cerrada** | Si cualquier contrato de Relaciones, Privacidad, Planificación, Ejecución o Nutrición falla, la transacción entera se revierte |
 
 #### `OP-ORG-013` — Consultar la organización
 
@@ -1040,14 +1177,14 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Superficie** | `GET /studio/v1/organizations/{orgId}` |
 | **Actor** | `A3`–`A6` |
 | **Filtros obligatorios** | Membresía vigente en `{orgId}` |
-| **Transacción** | Ninguna |
+| **Transacción** | Una sola transacción resuelve cuenta/persona, fija contexto con `SET LOCAL`, consulta la proyección cerrada y registra `privacy.log_access_event` antes de devolver contenido; si la auditoría falla, no retorna la proyección |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Cacheable para presentación |
-| **Información sensible** | Ninguna categoría personal |
+| **Offline / concurrencia** | `Cache-Control: private, no-store`; devuelve `revision_number` y `ETag: "organization:{id}:r{revision}"` fuerte |
+| **Información sensible** | `legal_name` y `organization_sites.address` pueden ser `identity_pii`; excluye el JSON de `responsible_party`, identificadores legales y contacto |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Una organización nunca es legible por miembros de otra |
-| **Falla cerrada** | Sin membresía, misma respuesta que "no existe" |
+| **Reglas** | Proyección cerrada: `id`, `display_name`, `legal_name`, `type_code`, `status`, `revision_number` y contexto mínimo de sedes (`id`, `name`, `address`, `status`, `revision_number`). Una organización nunca es legible por miembros de otra |
+| **Falla cerrada** | Sin membresía, misma respuesta `404` que "no existe"; antes de devolver registra sujeto organización, modo `organization_operational` y recurso `organizations.organization_context`; un fallo de `ACCESS_EVENT` revierte la lectura |
 
 #### `OP-ORG-014` — Listar mis membresías
 
@@ -1063,8 +1200,41 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Offline / concurrencia** | Cacheable para presentación, **nunca** para decidir en qué organización se puede actuar |
 | **Información sensible** | Ninguna categoría personal |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Es la única operación de Studio fuera del ámbito `/organizations/{orgId}`. Devuelve organizaciones, roles vigentes y capacidades efectivas |
+| **Reglas** | Es una operación personal de Studio fuera del ámbito `/organizations/{orgId}`. Devuelve organizaciones, roles vigentes y capacidades efectivas |
 | **Falla cerrada** | — |
+
+#### `OP-ORG-019` — Consultar catálogo de tipos de organización
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /studio/v1/organization-types` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Persona activa = sujeto del token |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Sin paginación. Orden gobernado por código |
+| **Información sensible** | Ninguna |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Devuelve únicamente los tipos activos `professional_practice`, `gym` y `studio`. `professional_practice` se presenta como “Profesional independiente”. `academy` y `clinic` permanecen gobernados pero inactivos hasta que un caso real V1 sea aprobado. El cliente nunca inventa ni persiste tipos libres |
+| **Falla cerrada** | Sin persona activa, rechazo |
+
+#### `OP-ORG-020` — Resolver el contexto de entrada de Studio
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /studio/v1/entry-context` |
+| **Actor** | `A1`, `A2` |
+| **Filtros obligatorios** | Cuenta autenticada resuelta primero mediante RLS. Si existe persona, debe estar activa y sus membresías se leen bajo su contexto RLS |
+| **Transacción** | La resolución account/person ocurre en una sentencia; la consulta de membresías ocurre una vez para una persona completa |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Sin paginación; mismo orden que `OP-ORG-014` |
+| **Offline / concurrencia** | `Cache-Control: private, no-store`. El snapshot de cliente por 30 segundos solo optimiza presentación y nunca autoriza otra operación |
+| **Información sensible** | Nombre y email verificado de la cuenta; organizaciones y roles propios. No expone tokens ni identificadores internos de account/person |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Una cuenta sin persona recibe `incomplete` y una lista vacía. Una persona activa recibe `complete` y sus membresías. La proyección de cliente nunca sustituye la autorización PostgreSQL de otra operación |
+| **Falla cerrada** | Sin sesión o referencia irresoluble: `401`; persona cerrada: `403`; dependencia o configuración fallida: `503` |
 
 #### `OP-ORG-015` — Listar membresías de la organización
 
@@ -1090,14 +1260,14 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Tipo** | Consulta |
 | **Superficie** | `GET /studio/v1/organizations/{orgId}/invitations` |
 | **Actor** | `A4`, `A5`, `A6` |
-| **Filtros obligatorios** | Invitaciones patrocinadas por `{orgId}` |
+| **Filtros obligatorios** | Invitaciones de equipo patrocinadas por `{orgId}` y filtro opcional de estado |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | Cursor. Orden: emisión descendente, desempate por identificador |
-| **Offline / concurrencia** | Cacheable para presentación |
+| **Offline / concurrencia** | `no-store`; el cursor conserva el filtro y el orden estable |
 | **Información sensible** | Contactos invitados |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Muestra el estado por **intención**, no una aceptación global. Nunca revela si el contacto tiene cuenta en Allfit mientras la invitación siga pendiente |
+| **Reglas** | Muestra contacto completo, rol, vencimiento y estado por **intención** únicamente a actores autorizados. Nunca revela si el contacto tiene cuenta en Allfit mientras la invitación siga pendiente |
 | **Falla cerrada** | — |
 
 #### `OP-ORG-017` — Consultar catálogo de roles y capacidades
@@ -1166,14 +1336,14 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Tipo** | Comando |
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/invitations` con intención `service_relationship` y, opcionalmente, `program_assignment` |
 | **Actor** | `A3`–`A6` con capacidad de invitar |
-| **Filtros obligatorios** | Membresía vigente. Destino email o celular, nunca `person_id`. Si incluye intención de programa, la versión referenciada debe estar publicada y pertenecer a `{orgId}` |
-| **Transacción** | Crear `INVITATION`, sus `INVITATION_INTENT` tipadas y el `RESPONSIBLE_PARTY_SNAPSHOT` que se presentará; encolar el envío |
+| **Filtros obligatorios** | Membresía vigente. Destino email o celular, nunca `person_id`. Cada opción usa una definición de los siete scopes V1 publicada, nivel permitido y propósito declarado. Si incluye intención de programa, la versión referenciada debe estar publicada y pertenecer a `{orgId}` y debe ofrecer `relationship_training` con nivel compatible |
+| **Transacción** | Crear `INVITATION`, sus `INVITATION_INTENT`, las `INVITATION_SCOPE_OPTION` de la relación y los snapshots exactos que se presentarán; encolar el envío |
 | **Idempotencia** | `Idempotency-Key`. Reinvitar al mismo contacto con las mismas intenciones reutiliza la invitación vigente |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Contacto de la persona invitada |
 | **Evento de dominio** | `relationship.client_invited.v1` |
-| **Reglas** | No crea persona, cuenta, relación ni asignación. Cada intención se decidirá por separado (`OP-IDN-009`). La invitación **no** propone scopes: el consentimiento es posterior y explícito |
+| **Reglas** | No crea persona, cuenta, relación, grant ni asignación. La persona decidirá relación, programa y cada scope de forma independiente en una sola confirmación (`OP-IDN-009`). Las opciones quedan fijadas al emitir; Studio no puede añadirlas o volver a pedirlas después sobre una relación activa |
 | **Falla cerrada** | Versión de programa no publicada, rechazo de toda la invitación |
 
 #### `OP-REL-002` — Asignar profesional titular
@@ -1411,10 +1581,6 @@ Reglas que gobiernan todo el dominio:
 
 | ID | Operación | Tipo | Actor |
 | --- | --- | --- | --- |
-| `OP-PRV-001` | Solicitar un grant | Comando | `A3`, `A4`, `A5` |
-| `OP-PRV-002` | Retirar una solicitud de grant | Comando | `A3`, `A4`, `A5` |
-| `OP-PRV-003` | Conceder un grant | Comando | `A2` |
-| `OP-PRV-004` | Rechazar una solicitud de grant | Comando | `A2` |
 | `OP-PRV-005` | Revocar un grant | Comando | `A2` |
 | `OP-PRV-006` | Ocultar una sesión autónoma para una relación | Comando | `A2` |
 | `OP-PRV-007` | Revertir la ocultación de una sesión | Comando | `A2` |
@@ -1423,7 +1589,7 @@ Reglas que gobiernan todo el dominio:
 | `OP-PRV-010` | Liberar un hold legal | Comando | `A10` |
 | `OP-PRV-011` | Publicar una versión de definición de scope | Comando | `A11` |
 | `OP-PRV-012` | Consultar definiciones de scope publicadas | Consulta | `A2`, `A3`–`A6` |
-| `OP-PRV-013` | Listar mis grants y solicitudes pendientes | Consulta | `A2` |
+| `OP-PRV-013` | Listar mis grants y decisiones de consentimiento | Consulta | `A2` |
 | `OP-PRV-014` | Listar grants recibidos por la organización | Consulta | `A3`–`A5` |
 | `OP-PRV-015` | Consultar el historial de accesos a mis datos | Consulta | `A2` |
 | `OP-PRV-016` | Consultar el estado de una solicitud de supresión | Consulta | `A2` |
@@ -1433,74 +1599,6 @@ Reglas que gobiernan todo el dominio:
 | `OP-PRV-020` | Consultar una relación histórica congelada | Consulta | `A3`, `A4`, `A5` autorizados por el caso |
 
 ---
-
-#### `OP-PRV-001` — Solicitar un grant
-
-| Campo | Valor |
-| --- | --- |
-| **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/organizations/{orgId}/relationships/{relId}/grant-requests` |
-| **Actor** | `A3` (titular), `A4`, `A5` |
-| **Filtros obligatorios** | Relación vigente en `{orgId}`; scope solicitado dentro de los cuatro V1; versión de `SCOPE_DEFINITION` vigente al momento de solicitar; propósito declarado |
-| **Transacción** | Crear la solicitud congelando scope, versión, `access_level`, propósito y `RESPONSIBLE_PARTY_SNAPSHOT`; notificar a la persona |
-| **Idempotencia** | `Idempotency-Key`. Una solicitud pendiente del mismo scope y versión no se duplica |
-| **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
-| **Información sensible** | Ninguna: solicitar no da acceso a nada |
-| **Evento de dominio** | `privacy.grant_requested.v1` |
-| **Reglas** | Una solicitud por scope: no existe una petición conjunta que se acepte en bloque. Solicitar `contribute` exige justificarlo por separado de `read`. Solicitar no crea presunción: el silencio **no** es consentimiento |
-| **Falla cerrada** | Scope fuera de V1 o sin propósito, rechazo |
-
-#### `OP-PRV-002` — Retirar una solicitud de grant
-
-| Campo | Valor |
-| --- | --- |
-| **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/organizations/{orgId}/grant-requests/{id}/withdrawal` |
-| **Actor** | `A3`, `A4`, `A5` |
-| **Filtros obligatorios** | La solicitud pertenece a `{orgId}` y sigue pendiente |
-| **Transacción** | Marcar la solicitud como retirada |
-| **Idempotencia** | `Idempotency-Key`; converge |
-| **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
-| **Información sensible** | Ninguna |
-| **Evento de dominio** | `privacy.grant_request_withdrawn.v1` |
-| **Reglas** | Retirar conserva la evidencia de que se solicitó, para que la persona pueda auditar qué le fue pedido |
-| **Falla cerrada** | — |
-
-#### `OP-PRV-003` — Conceder un grant
-
-| Campo | Valor |
-| --- | --- |
-| **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/consents` |
-| **Actor** | `A2`, sujeto de la relación |
-| **Filtros obligatorios** | Relación propia y vigente; solicitud pendiente o concesión iniciada por la persona; versión de `SCOPE_DEFINITION` publicada y presentada íntegramente |
-| **Transacción** | Una sola: crear `CONSENT_EVENT` con el **snapshot exacto presentado** y crear el `DATA_GRANT` identificando persona, relación, organización receptora, versión de scope, `access_level`, propósito y vigencia |
-| **Idempotencia** | `Idempotency-Key`. Conceder dos veces el mismo scope y versión no crea dos grants |
-| **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada. Jamás se confirma desde caché |
-| **Información sensible** | Habilita el acceso a la categoría concedida |
-| **Evento de dominio** | `privacy.grant_created.v1` |
-| **Reglas** | Conceder un scope **no** concede los demás. El grant permanece `active` mientras la relación esté activa o hasta revocación; al terminar la relación pasa a `frozen` según ADR-005. El recordatorio de revisión a los 12 meses **no** corta el acceso si no hay respuesta. Los grants no se heredan entre relaciones, ni siquiera entre dos relaciones sucesivas con la misma organización |
-| **Falla cerrada** | Versión de scope no publicada o snapshot no presentable, rechazo |
-
-#### `OP-PRV-004` — Rechazar una solicitud de grant
-
-| Campo | Valor |
-| --- | --- |
-| **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/grant-requests/{id}/rejection` |
-| **Actor** | `A2` |
-| **Filtros obligatorios** | La solicitud está dirigida a la persona autenticada y sigue pendiente |
-| **Transacción** | Crear `CONSENT_EVENT` con la decisión negativa **sin** crear grant |
-| **Idempotencia** | `Idempotency-Key` |
-| **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
-| **Información sensible** | Ninguna |
-| **Evento de dominio** | `privacy.grant_rejected.v1` |
-| **Reglas** | Rechazar conserva evidencia de la decisión. Rechazar un scope **no** afecta la relación ni los demás scopes: una relación activa sin `relationship_training` es válida, y en ese estado las funciones de resultados quedan bloqueadas para la organización |
-| **Falla cerrada** | — |
 
 #### `OP-PRV-005` — Revocar un grant
 
@@ -1611,7 +1709,7 @@ Reglas que gobiernan todo el dominio:
 | **Tipo** | Comando |
 | **Superficie** | `POST /backoffice/v1/scope-definitions/{code}/versions` |
 | **Actor** | `A12` con rol base, `manage_privacy_requests`, AAL2 y deber vigente |
-| **Filtros obligatorios** | El scope pertenece a los cuatro V1; la versión enumera recursos, campos, exclusiones, acciones máximas y `historical_readable` de forma exhaustiva |
+| **Filtros obligatorios** | El scope pertenece a los siete V1; la versión enumera recursos, campos, exclusiones, acciones máximas y `historical_readable` de forma exhaustiva |
 | **Transacción** | Crear `SCOPE_DEFINITION` inmutable con sus `SCOPE_RESOURCE_RULE`, incluyendo el subconjunto histórico |
 | **Idempotencia** | `Idempotency-Key` |
 | **Paginación y orden** | No aplica |
@@ -1638,7 +1736,7 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | Permite a la persona leer exactamente qué recursos y campos abarca lo que le están pidiendo, **antes** de decidir |
 | **Falla cerrada** | — |
 
-#### `OP-PRV-013` — Listar mis grants y solicitudes pendientes
+#### `OP-PRV-013` — Listar mis grants y decisiones de consentimiento
 
 | Campo | Valor |
 | --- | --- |
@@ -1652,7 +1750,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Cacheable para presentación |
 | **Información sensible** | Qué comparte y con quién |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Muestra por cada grant: organización, parte responsable, relación, scope, **versión**, `access_level`, propósito, vigencia y quiénes pueden ejercerlo hoy —titular y suplentes—. Es el panel de control del consentimiento |
+| **Reglas** | Muestra por cada decisión: organización, parte responsable, relación, scope, **versión**, nivel, propósito y resultado; para grants vigentes añade quiénes pueden ejercerlos hoy —titular y suplentes—. No muestra solicitudes pendientes ni permite a Studio crear otra. Es el panel de control del consentimiento |
 | **Falla cerrada** | — |
 
 #### `OP-PRV-014` — Listar grants recibidos por la organización
@@ -1669,7 +1767,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Nunca cacheable para decidir acceso |
 | **Información sensible** | **Estado** del consentimiento, no su contenido |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Devuelve qué está concedido y en qué versión, para que la organización sepa qué puede pedir. No devuelve ningún dato amparado |
+| **Reglas** | Devuelve qué está concedido y en qué versión para que la organización sepa qué puede ejercer. No devuelve ningún dato amparado ni ofrece una acción para volver a solicitar un scope rechazado o revocado |
 | **Falla cerrada** | — |
 
 #### `OP-PRV-015` — Consultar el historial de accesos a mis datos
@@ -1796,6 +1894,8 @@ Reglas que gobiernan todo el dominio:
 | `OP-CAT-010` | Consultar un movimiento | Consulta | Autenticado |
 | `OP-CAT-011` | Listar equipamiento | Consulta | Autenticado |
 | `OP-CAT-012` | Consultar contratos de resultados de un tipo de actividad | Consulta | Autenticado |
+| `OP-CAT-013` | Listar especialidades profesionales | Consulta | Autenticado |
+| `OP-CAT-014` | Listar tipos de credencial profesional | Consulta | Autenticado |
 
 ---
 
@@ -1951,6 +2051,40 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Devuelve contratos, versiones, cuál es default y los mínimos por nivel `partial`, `summary`, `detailed` y `sensor_enriched`. La validación autoritativa sigue siendo del servidor: esta consulta existe para dar mensajes útiles al usuario, no para autorizar |
 | **Falla cerrada** | — |
+
+#### `OP-CAT-013` — Listar especialidades profesionales
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /studio/v1/professional-specialties` |
+| **Actor** | Cualquier cuenta autenticada |
+| **Filtros obligatorios** | Solo `status='published'` |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Sin paginación en V1; `display_order`, desempate por código |
+| **Offline / concurrencia** | Cacheable con `ETag` |
+| **Información sensible** | Ninguna |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Una especialidad es vocabulario profesional gobernado y no se infiere automáticamente desde `catalog.disciplines` |
+| **Falla cerrada** | Códigos draft, deprecados o archivados no se devuelven para nuevas selecciones |
+
+#### `OP-CAT-014` — Listar tipos de credencial profesional
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /studio/v1/professional-credential-types` |
+| **Actor** | `A2` con sesión Studio activa |
+| **Filtros obligatorios** | Solo `status='published'` |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Sin paginación en V1; `display_order`, desempate por código |
+| **Offline / concurrencia** | Cacheable con `ETag` |
+| **Información sensible** | Ninguna |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | El tipo gobierna nuevas declaraciones; deprecarlo conserva credenciales históricas y evita nuevas declaraciones o revisiones con ese código |
+| **Falla cerrada** | Códigos draft, deprecados o archivados no se devuelven para nuevas declaraciones |
 
 ### 7.6 Planificación
 
@@ -2820,15 +2954,15 @@ Reglas que gobiernan todo el dominio:
 | **Tipo** | Comando |
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/subscriptions/{id}/suspension` · `/reactivation` |
 | **Actor** | `A4`, `A5` con `manage_billing` |
-| **Filtros obligatorios** | Suscripción de `{orgId}`; estado compatible con la transición |
-| **Transacción** | Cambiar el estado, registrar `subscription_events` con el actor humano y encolar la notificación |
+| **Filtros obligatorios** | Suscripción de `{orgId}` y estado compatible. Para reactivar: sigue suspendida, no está terminada y existe el bloqueo abierto exacto `source_kind='subscription_suspension' AND subscription_id={id}` |
+| **Transacción** | Bajo lock de la suscripción y del bloqueo causal: suspender cambia el estado y abre de forma idempotente `planning.service_access_blocks`; reactivar cambia a `active` y cierra **solo** ese bloqueo. Registrar `subscription_events` con el actor humano y encolar la notificación, sin escribir grants, relación, membresía, asignación ni estado intrínseco de sesiones |
 | **Idempotencia** | `Idempotency-Key`; converge |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
+| **Offline / concurrencia** | Serializa con terminación, revocación, cambio de asignación y apertura/cierre de otros bloqueos. Un estado leído antes de una transición concurrente no autoriza restaurarlo: conflicto y reintento desde estado fresco |
 | **Información sensible** | Estado de pago |
 | **Evento de dominio** | `payments.subscription_suspended.v1` · `payments.subscription_reactivated.v1` |
-| **Reglas** | Suspender **no toca los grants, no desacopla la asignación y no termina la relación**; lo garantiza `IX-40`. Corta la escritura del profesional y pausa las sesiones futuras del programa de esa organización. Reactivar reanuda sin ninguna aceptación nueva de la persona |
-| **Falla cerrada** | Si la transacción intenta escribir en grants o periodos de gestión, se revierte entera |
+| **Reglas** | Suspender **no toca los grants, no desacopla la asignación y no termina la relación**; lo garantiza `IX-40`. El bloqueo hace inefectiva la escritura profesional y proyecta como pausadas las sesiones futuras administradas. Reactivar es sustractivo: quita una causa y recalcula desde el estado vigente; no revive grants revocados, relaciones terminadas, membresías/asignaciones cambiadas ni sesiones canceladas, iniciadas o pasadas. No exige aceptación nueva solo si el grant actual sigue vigente. Otro bloqueo abierto sigue denegando |
+| **Falla cerrada** | Suscripción terminada, bloqueo ausente o de otra fuente, o intento de restaurar/escribir grants, relación, membresía, asignación o sesiones: rechazo y rollback completo |
 
 #### `OP-PAY-010` — Terminar una suscripción desde la organización
 
@@ -2878,7 +3012,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Falla cerrada. **Jamás se confirma desde caché** |
 | **Información sensible** | Vínculo comercial. Ningún dato de tarjeta pasa por Allfit |
 | **Evento de dominio** | `payments.subscription_started.v1` |
-| **Reglas** | Los datos de tarjeta se entregan **directamente a la pasarela de la organización**; Allfit nunca los ve ni los almacena. Suscribirse **no concede ningún acceso a datos**: el consentimiento sigue siendo una operación separada (`OP-PRV-003`). Suscribirse tampoco crea la relación de servicio |
+| **Reglas** | Los datos de tarjeta se entregan **directamente a la pasarela de la organización**; Allfit nunca los ve ni los almacena. Suscribirse **no concede ningún acceso a datos**: los scopes solo se deciden al aceptar una relación nueva. Suscribirse tampoco crea la relación de servicio |
 | **Falla cerrada** | Sin pasarela activa en la organización: rechazo explícito, porque no habría a dónde cobrar |
 
 #### `OP-PAY-013` — Consultar mi suscripción · `OP-PAY-014` — Mi historial de pagos
@@ -2923,13 +3057,13 @@ Reglas que gobiernan todo el dominio:
 | **Superficie** | `SYS` — consumidor del webhook de la pasarela |
 | **Actor** | `A9` con credencial propia |
 | **Filtros obligatorios** | Firma del proveedor verificada; la organización tiene conexión activa; la suscripción existe y pertenece a esa organización |
-| **Transacción** | Insertar `payment_records` y, si corresponde, transicionar la suscripción entre `active` y `suspended`, registrando el evento |
+| **Transacción** | Bajo lock de la suscripción y su bloqueo causal, insertar `payment_records` y, si corresponde, transicionar entre `active` y `suspended`: el fallo abre idempotentemente el bloqueo exacto y el pago exitoso cierra solo ese bloqueo. Registrar el evento sin escribir el estado protegido de otros dominios |
 | **Idempotencia** | `UNIQUE (organization_id, external_payment_ref)`: **el reenvío del webhook no duplica nada por construcción**, no por convención |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Dos entregas concurrentes del mismo cobro producen una sola fila |
+| **Offline / concurrencia** | Dos entregas concurrentes del mismo cobro producen una sola fila. Terminación, revocación, cambios de asignación y otros bloqueos se serializan o fuerzan reintento; nunca se restaura un estado leído antes del lock |
 | **Información sensible** | Estado de pago; **ningún dato de tarjeta** |
 | **Evento de dominio** | `payments.payment_recorded.v1`, más la transición si ocurre |
-| **Reglas** | Un cobro fallido lleva la suscripción a `suspended` y **ahí se queda, de forma indefinida**. Este worker **no puede terminar nada**: la tabla exige actor humano para `ended` y él no lo tiene. Tampoco puede tocar grants ni asignaciones (`IX-40`) |
+| **Reglas** | Un cobro fallido lleva la suscripción a `suspended` y **ahí se queda, de forma indefinida**. Este worker **no puede terminar nada**: la tabla exige actor humano para `ended` y él no lo tiene. Tampoco puede tocar grants, relaciones, membresías, asignaciones o sesiones (`IX-40`). Un pago posterior solo elimina el bloqueo de esa suscripción y recalcula acceso/agenda con el estado vigente; no revive estado obsoleto ni cierra otros bloqueos |
 | **Falla cerrada** | Firma inválida, organización sin conexión activa o suscripción ajena: se descarta y se registra el intento |
 
 #### `OP-PAY-017` — Publicar una versión de plan de plataforma
@@ -3053,9 +3187,9 @@ Reglas que gobiernan todo el dominio:
 
 ### 7.8 Procesos de sistema
 
-Operaciones sin actor humano. Todas se ejecutan con credencial propia y **grants mínimos**: ningún worker usa un rol universal ni hereda los permisos de un usuario.
+Operaciones de plataforma. Los comandos sin actor humano se ejecutan con credencial propia y **grants mínimos**: ningún worker usa un rol universal ni hereda los permisos de un usuario. Las consultas públicas de configuración no aceptan identidad ni datos de dominio.
 
-Regla que gobierna todo el dominio: un worker es **idempotente y auditable**. Reejecutarlo converge al mismo estado y deja evidencia de lo que hizo.
+Regla que gobierna todo el dominio: un worker es **idempotente y auditable**. Reejecutarlo converge al mismo estado y deja evidencia de lo que hizo. Una consulta pública falla cerrada y devuelve solo configuración no sensible.
 
 | ID | Operación | Disparador |
 | --- | --- | --- |
@@ -3069,6 +3203,7 @@ Regla que gobierna todo el dominio: un worker es **idempotente y auditable**. Re
 | `OP-SYS-008` | Resolver una solicitud de supresión | Evento + programado |
 | `OP-SYS-009` | Reaplicar disposiciones tras una restauración | Manual + evento |
 | `OP-SYS-010` | Recalcular derivados invalidados | Evento |
+| `OP-SYS-011` | Consultar configuración pública de telemetría | Solicitud cliente |
 
 ---
 
@@ -3241,6 +3376,23 @@ Regla que gobierna todo el dominio: un worker es **idempotente y auditable**. Re
 | **Evento de dominio** | `execution.derived_recomputed.v1` |
 | **Reglas** | Los derivados no se editan a mano jamás. Un input denegado por ocultación queda **fuera** del cálculo, y el derivado resultante lo refleja |
 | **Falla cerrada** | Un derivado que no puede recalcularse permanece invalidado y ausente, nunca aproximado |
+
+#### `OP-SYS-011` — Consultar configuración pública de telemetría
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /{surface}/v1/telemetry-config`, donde `surface` es `studio`, `space` o `backoffice` |
+| **Actor** | `A0` |
+| **Filtros obligatorios** | Superficie cerrada de la ruta; no acepta sujeto, identificadores ni parámetros |
+| **Transacción** | Ninguna; lee solo configuración de despliegue |
+| **Idempotencia** | Natural; respuesta cacheable durante cinco minutos |
+| **Paginación y orden** | N/A |
+| **Offline / concurrencia** | Ante ausencia, error o configuración inválida el cliente no inicializa telemetría |
+| **Información sensible** | Ninguna |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Devuelve únicamente `enabled` y `notice_version = analytics-v1`; no autentica, no recibe cookies y no expone claves, ambiente ni proveedor |
+| **Falla cerrada** | Cualquier fallo equivale a `enabled = false` en el cliente |
 
 ### 7.9 Soporte de plataforma
 
@@ -3698,10 +3850,10 @@ Un evento se escribe en el outbox dentro de la transacción de su comando. Trans
 
 | Dominio | Eventos |
 | --- | --- |
-| Identidad | `onboarding_attempt_started`, `eligibility_evaluated`, `person_activated`, `contact_changed`, `contact_verified`, `profile_claim_declared`, `profile_claim_revised`, `body_progress_recorded`, `health_context_declared`, `invitation_intent_decided`, `invitation_revoked`, `invitation_expired`, `professional_profile_updated`, `claim_verified` |
+| Identidad | `onboarding_attempt_started`, `eligibility_evaluated`, `person_activated`, `contact_changed`, `contact_verified`, `profile_claim_declared`, `profile_claim_revised`, `body_progress_recorded`, `health_context_declared`, `invitation_intent_decided`, `invitation_revoked`, `invitation_expired`, `professional_profile_updated`, `professional_credential_declared`, `professional_credential_revised`, `professional_credential_retired`, `professional_credential_verified`, `professional_credential_verification_revoked` |
 | Organizaciones | `created`, `created_unclaimed`, `updated`, `site_created`, `site_updated`, `membership_created`, `membership_terminated`, `membership_resigned`, `role_granted`, `role_revoked`, `staff_invited`, `ownership_transferred`, `closed` |
 | Relaciones | `client_invited`, `professional_assigned`, `professional_reassigned`, `substitution_proposed`, `substitution_decided`, `substitution_ended`, `substitution_expired`, `termination_requested`, `terminated` |
-| Privacidad | `grant_requested`, `grant_request_withdrawn`, `grant_created`, `grant_rejected`, `grant_frozen`, `grant_revoked`, `grant_review_due`, `scope_definition_published`, `session_visibility_denied`, `session_visibility_restored`, `erasure_requested`, `erasure_resolved`, `disposition_case_opened`, `disposition_executed`, `disposition_reapplied`, `legal_hold_applied`, `legal_hold_released` |
+| Privacidad | `grant_created`, `grant_rejected`, `grant_frozen`, `grant_revoked`, `grant_review_due`, `scope_definition_published`, `session_visibility_denied`, `session_visibility_restored`, `erasure_requested`, `erasure_resolved`, `disposition_case_opened`, `disposition_executed`, `disposition_reapplied`, `legal_hold_applied`, `legal_hold_released` |
 | Catálogo | `private_movement_created`, `private_movement_updated`, `private_movement_archived`, `result_contract_published` |
 | Planificación | `session_template_created`, `session_template_draft_updated`, `session_template_version_published`, `session_template_version_derived`, `session_template_version_deprecated`, `program_created`, `program_draft_updated`, `program_version_published`, `program_version_deprecated`, `assignment_created`, `assignment_detached`, `assignment_cancelled`, `assignment_continued`, `assignment_ended`, `session_rescheduled`, `prescription_revised` |
 | Ejecución | `attempt_started`, `attempt_resumed`, `attempt_abandoned`, `session_started`, `finalized`, `primary_resolved`, `primary_changed`, `revised`, `annulled`, `observation_created`, `observation_revised`, `correction_proposed`, `correction_decided`, `correction_expired`, `derived_recomputed` |

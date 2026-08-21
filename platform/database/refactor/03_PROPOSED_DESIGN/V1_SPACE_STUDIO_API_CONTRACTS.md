@@ -1,9 +1,9 @@
 # Contratos de API de Space, Studio y Backoffice — V1
 
-**Versión de revisión:** 7
-**Fecha:** 6 de agosto de 2026
+**Versión de revisión:** 8
+**Fecha:** 17 de agosto de 2026
 **Fase:** 3 — Definir operaciones, seguridad y contratos
-**Estado:** superficie Backoffice recertificada por ADR-028; fuente OpenAPI, tipos generados y gate de rutas consolidados en el monorepo por ADR-029; contratos detallados restantes sujetos a los P0
+**Estado:** contrato documental AFO-39 aprobado; OpenAPI, tipos generados e implementación pendientes del PR BACK
 **Deriva de:** [`V1_OPERATIONS_MATRIX.md`](./V1_OPERATIONS_MATRIX.md), [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_OPENAPI_CONTRACT.md`](./V1_OPENAPI_CONTRACT.md) y [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
 
 ## 1. Propósito
@@ -72,14 +72,14 @@ Toda operación de Studio que toque datos de una persona cuelga de `/organizatio
 
 `{orgId}` no se resuelve desde el token ni desde una preferencia guardada. Está en la ruta, aparece en los logs y en el `ACCESS_EVENT`, y se valida contra una membresía vigente dentro de la transacción.
 
-Las dos únicas excepciones son `GET /studio/v1/me` y `GET /studio/v1/me/memberships`, que responden "quién soy" y "dónde puedo actuar".
+Las rutas personales `GET /studio/v1/me`, `GET /studio/v1/me/memberships` y `GET /studio/v1/entry-context`, el catálogo `GET /studio/v1/organization-types` y la activación propia mediante `/studio/v1/onboarding-attempts` no reciben una organización. `entry-context` y las rutas de onboarding aceptan una cuenta autenticada sin persona; el resto exige una persona activa.
 
 ## 3. Convenciones
 
 ### 3.1 Autenticación
 
-- `Authorization: Bearer <access_token>` de WorkOS AuthKit.
-- La API verifica la firma mediante el JWKS de la Application y valida `iss`, `exp`, `iat`, `sub`, `sid` y **`client_id`**: un token emitido para Space u Studio no opera contra `/backoffice/v1`, aunque la persona tenga cuenta. Cambiar de producto exige la WorkOS Application correspondiente.
+- Space presenta `Authorization: Bearer <access_token>` de WorkOS AuthKit. Studio usa `cookieAuth` con una cookie de sesión opaca; sus rutas Organization/equipo nunca reciben el access token en el navegador. Backoffice usa su cookie AAL2 separada.
+- La API verifica o refresca la credencial server-side y valida `iss`, `exp`, `iat`, `sub`, `sid` y **`client_id`**: una sesión o token emitidos para otra superficie no operan contra la ruta solicitada. Cambiar de producto exige la WorkOS Application correspondiente.
 - El `sub` se resuelve a `ACCESS_ACCOUNT` y, si existe, a `PERSON`, **en la base**. Ningún identificador de dominio viaja en el token.
 - Los claims `org_id`, `role` y `permissions` que WorkOS pueda transportar se ignoran para autorización de negocio. Organizaciones, roles, relaciones, consentimientos y deberes de plataforma viven en PostgreSQL (ADR-002 y ADR-028).
 - Space usa Authorization Code con PKCE como cliente público y nunca contiene una API key o client secret de WorkOS.
@@ -160,7 +160,7 @@ GET /space/v1/executions?limit=25&cursor=eyJ2IjoxLCJzIjoi...
 | `precondition-required` | 428 | Falta el `If-Match` obligatorio para una escritura con revisión |
 | `precondition-failed` | 412 | Estado incompatible: relación terminada, versión no publicada |
 | `conflict` | 409 | Escritura concurrente perdida; versión optimista |
-| `integrity-conflict` | 409 | Los IDs visibles no forman el mismo contexto de persona/organización/relación según `IX-01..35`; nunca revela cuál ID ajeno existe |
+| `integrity-conflict` | 409 | Los IDs visibles o una transición gobernada no cumplen `IX-01..45`; nunca revela cuál ID ajeno existe |
 | `idempotency-key-required` | 400 | Falta la identidad de replay en un comando HTTP |
 | `command-id-required` | 400 | Falta la identidad durable en un comando HTTP |
 | `idempotency-key-reuse` | 409 | Misma clave, cuerpo distinto |
@@ -170,7 +170,7 @@ GET /space/v1/executions?limit=25&cursor=eyJ2IjoxLCJzIjoi...
 | `command-effect-disposed` | 410 | El comando ya se aplicó pero su efecto fue dispuesto; nunca se recrea |
 | `validation-failed` | 422 | Cuerpo mal formado o inválido |
 | `contract-validation-failed` | 422 | La ejecución no cumple el contrato de resultados. Incluye errores **tipados** por regla |
-| `rate-limited` | 429 | Cuota del WorkOS Application o del dominio |
+| `rate-limited` | 429 | Cuota del WorkOS Application, perímetro o dominio; siempre incluye `Retry-After` |
 | `service-degraded` | 503 | Dependencia caída; la operación falla cerrada |
 
 Tres reglas que no se negocian:
@@ -188,7 +188,7 @@ Tres reglas que no se negocian:
 
 ### 3.7 Autoridad OpenAPI y gate de implementación
 
-[`allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml) es la fuente canónica de rutas, DTOs, ejemplos y caché para las veinticinco operaciones HTTP de la primera rebanada vertical ampliada. [`V1_OPENAPI_CONTRACT.md`](./V1_OPENAPI_CONTRACT.md) registra su alcance y las pruebas `T-API-01..11` + `T-NUT-API-01..14`.
+[`allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml) es la fuente canónica de rutas, DTOs, ejemplos y caché para las operaciones HTTP implementadas de la primera rebanada vertical ampliada. [`V1_OPENAPI_CONTRACT.md`](./V1_OPENAPI_CONTRACT.md) registra su alcance y sus pruebas contractuales.
 
 Un endpoint estable de producto listado más adelante pero ausente del YAML todavía es **diseño**, no una superficie implementable. Debe incorporarse contract-first con su `x-allfit-operation` antes de crear el handler.
 
@@ -219,8 +219,8 @@ Sujeto implícito: la persona autenticada. Ningún endpoint recibe un `person_id
 
 | Método | Ruta | Operación | Notas |
 | --- | --- | --- | --- |
-| `GET` | `/invitations/{token}` | `OP-IDN-016` | Accesible sin persona |
-| `POST` | `/invitations/{token}/decisions` | `OP-IDN-009` | Decisión **por intención** |
+| `POST` | `/invitations/resolve` | `OP-IDN-016` | Solo invitaciones de cliente; token en cuerpo, accesible sin persona |
+| `POST` | `/invitations/decisions` | `OP-IDN-009` | Solo cliente; token y decisión **por intención** en cuerpo |
 | `GET` | `/relationships` | `OP-REL-012` | Incluye cerradas y su enlace anterior |
 | `GET` | `/relationships/{id}/events` | `OP-REL-014` | |
 | `POST` | `/relationships/{id}/termination` | `OP-REL-007` | Efecto inmediato |
@@ -233,9 +233,7 @@ Sujeto implícito: la persona autenticada. Ningún endpoint recibe un `person_id
 | Método | Ruta | Operación | Notas |
 | --- | --- | --- | --- |
 | `GET` | `/consents` | `OP-PRV-013` | Panel de control del consentimiento |
-| `POST` | `/consents` | `OP-PRV-003` | Congela versión de scope |
 | `POST` | `/consents/{id}/revocation` | `OP-PRV-005` | Invalidación transaccional |
-| `POST` | `/grant-requests/{id}/rejection` | `OP-PRV-004` | |
 | `GET` | `/visibility-denials` | `OP-PRV-017` | |
 | `PUT` | `/executions/{id}/visibility` | `OP-PRV-006` | Ocultar por relación |
 | `DELETE` | `/executions/{id}/visibility/{relId}` | `OP-PRV-007` | |
@@ -300,32 +298,238 @@ Sujeto implícito: la persona autenticada. Ningún endpoint recibe un `person_id
 
 ## 5. Contrato de Studio
 
-Sujeto: la organización de la ruta.
+Sujeto: la cuenta o persona autenticada en las rutas personales y de onboarding; la organización explícita de la ruta para toda operación organizacional.
 
 ### 5.1 Identidad profesional y organización
 
 | Método | Ruta | Operación |
 | --- | --- | --- |
+| `POST` | `/onboarding-attempts` | `OP-IDN-001` |
+| `POST` | `/onboarding-attempts/{id}/eligibility-evidence` | `OP-IDN-002` |
+| `POST` | `/onboarding-attempts/{id}/completion` | `OP-IDN-003` |
 | `GET` | `/me` | `OP-IDN-017` |
 | `PUT` | `/me/professional-profile` | `OP-IDN-010` |
+| `POST` | `/me/professional-credentials` | `OP-IDN-029` |
+| `POST` | `/me/professional-credentials/{credentialId}/revisions` | `OP-IDN-030` |
+| `POST` | `/me/professional-credentials/{credentialId}/retirement` | `OP-IDN-031` |
+| `GET` | `/entry-context` | `OP-ORG-020` |
 | `GET` | `/me/memberships` | `OP-ORG-014` |
+| `GET` | `/organization-types` | `OP-ORG-019` |
 | `POST` | `/organizations` | `OP-ORG-001` |
 | `GET` · `PATCH` | `/organizations/{orgId}` | `OP-ORG-013` · `OP-ORG-002` |
 | `POST` · `PATCH` | `/organizations/{orgId}/sites[/{siteId}]` | `OP-ORG-003` · `OP-ORG-004` |
-| `POST` | `/organizations/{orgId}/ownership-transfer` | `OP-ORG-011` |
 | `POST` | `/organizations/{orgId}/closure` | `OP-ORG-012` |
 | `GET` | `/organizations/{orgId}/roles` | `OP-ORG-017` |
 
-### 5.2 Staff y membresías
+`GET /studio/v1/entry-context` devuelve el siguiente contrato cerrado:
 
-| Método | Ruta | Operación |
-| --- | --- | --- |
+```ts
+interface StudioEntryContext {
+  authenticated: true
+  registration_status: 'complete' | 'incomplete'
+  identity: {
+    name: string | null
+    email: string | null
+  }
+  memberships: StudioMembership[]
+}
+```
+
+Resuelve la sesión una sola vez. Para `complete`, consulta las membresías una sola
+vez; para `incomplete`, devuelve `memberships: []`. Siempre responde
+`Cache-Control: private, no-store`, no expone tokens ni identificadores internos
+de cuenta o persona y conserva los errores `401`, `403` y `503` de las rutas de
+sesión existentes.
+
+### 5.2 Organización, staff y membresías
+
+| Método | Ruta | Operación | Notas |
+| --- | --- | --- | --- |
+| `GET` · `PATCH` | `/organizations/{orgId}` | `OP-ORG-013` · `OP-ORG-002` | GET devuelve ETag; PATCH cerrado con `If-Match` |
+| `POST` | `/organizations/{orgId}/sites` | `OP-ORG-003` | Devuelve ETag fuerte de sede |
+| `PATCH` | `/organizations/{orgId}/sites/{siteId}` | `OP-ORG-004` | `If-Match`; editar o desactivar |
+| `POST` | `/organizations/{orgId}/ownership-transfers` | `OP-ORG-011` | Solo owner; destino con membresía activa |
+| `POST` | `/organizations/{orgId}/closure` | `OP-ORG-012` | Solo owner; cierre interdominio atómico |
+| `POST` | `/invitations/resolve` | `OP-IDN-016` | Público; token solo en cuerpo; nunca devuelve el email |
+| `POST` | `/invitations/decisions` | `OP-IDN-009` | Autenticado; email verificado exacto; headers de comando |
 | `GET` | `/organizations/{orgId}/memberships` | `OP-ORG-015` |
 | `POST` · `DELETE` | `/organizations/{orgId}/memberships/{id}/roles[/{roleCode}]` | `OP-ORG-007` · `OP-ORG-008` |
 | `POST` | `/organizations/{orgId}/memberships/{id}/termination` | `OP-ORG-009` |
 | `POST` | `/organizations/{orgId}/me/membership/resignation` | `OP-ORG-010` |
-| `GET` · `POST` | `/organizations/{orgId}/invitations` | `OP-ORG-016` · `OP-ORG-005` / `OP-REL-001` |
-| `POST` | `/organizations/{orgId}/invitations/{id}/revocation` | `OP-ORG-006` |
+| `GET` · `POST` | `/organizations/{orgId}/invitations` | `OP-ORG-016` · `OP-ORG-005` | Listar y emitir exclusivamente invitaciones de equipo |
+| `POST` | `/organizations/{orgId}/invitations/{id}/revocation` | `OP-ORG-006` | Idempotente; serializa contra aceptación |
+
+Todo el gate de Organización/equipo usa exclusivamente `cookieAuth` de Studio.
+Las mutaciones exigen `Cookie: allfit_studio_session=<opaque>`, `Origin` exacto,
+`Idempotency-Key` y `Command-Id`; nunca aceptan bearer ni una identidad de actor
+en body o headers libres. Un recurso de otra organización y uno inexistente
+producen el mismo `404 not-found` sin confirmar IDs, membresías o roles.
+
+`GET /organizations/{orgId}` incluye `revision_number` y devuelve el ETag fuerte
+`"organization:{id}:r{revision}"`. Su `PATCH` acepta exclusivamente
+`display_name`, `legal_name` y `type_code`; `responsible_party`, `id`, `status`,
+timestamps, `purpose` y `responsible_party_schema_version` no son campos de
+autoservicio. `type_code` solo cambia por una transición activa del catálogo
+`organization_type_transitions`, inicialmente `professional_practice → gym` o
+`professional_practice → studio`.
+
+Toda respuesta de sede incluye `revision_number` y
+`ETag: "organization-site:{id}:r{revision}"`. Tanto el `PATCH` de organización
+como el de sede exigen ese ETag en `If-Match`: si falta responden
+`428 precondition-required`; si quedó atrás, `409 stale-draft`. Un éxito
+incrementa la revisión y devuelve el nuevo ETag.
+
+#### Proyección de organización
+
+`OP-ORG-013` devuelve únicamente este contrato cerrado, con
+`Cache-Control: private, no-store`:
+
+```json
+{
+  "id": "019a...",
+  "display_name": "Studio Norte",
+  "legal_name": "Studio Norte SAS",
+  "type_code": "studio",
+  "status": "active",
+  "revision_number": 4,
+  "sites": [
+    {
+      "id": "019d...",
+      "name": "Sede Centro",
+      "address": "Carrera 7 # 10-20",
+      "status": "active",
+      "revision_number": 2
+    }
+  ]
+}
+```
+
+No serializa `responsible_party`, `purpose`, schema version, identificadores
+legales ni contacto; `legal_name` y una `sites[].address` domiciliaria pueden
+clasificarse como `identity_pii`. La API
+resuelve la cuenta/persona, fija contexto transaccional, consulta la proyección y
+registra `ACCESS_EVENT` con sujeto organización, modo `organization_operational`
+y recurso `organizations.organization_context` antes de devolver contenido,
+todo en una transacción. Si la auditoría falla, la lectura falla cerrada. La respuesta incluye el ETag fuerte
+de la organización; otro tenant recibe el mismo `404` que un ID inexistente.
+
+#### Gestión de roles y salida del equipo
+
+Los requests y responses de `OP-ORG-007..010` son cerrados:
+
+```http
+POST /studio/v1/organizations/{orgId}/memberships/{membershipId}/roles
+Cookie: allfit_studio_session=<opaque>
+Origin: https://studio.allfit.one
+Idempotency-Key: <uuid-v4>
+Command-Id: <uuid-v7>
+Content-Type: application/json
+
+{ "role_code": "coach" }
+```
+
+```json
+{ "membership_id": "019c...", "role_code": "coach", "valid_from": "2026-08-17T10:30:00-05:00" }
+```
+
+`role_code` admite solo `admin`, `coach` o `staff`. `OP-ORG-007` conserva un
+receipt durable: repetir el command después de revocar el rol o expirar el TTL
+devuelve el resultado original y nunca reabre la vigencia.
+
+```http
+DELETE /studio/v1/organizations/{orgId}/memberships/{membershipId}/roles/{roleCode}
+Cookie: allfit_studio_session=<opaque>
+Origin: https://studio.allfit.one
+Idempotency-Key: <uuid-v4>
+Command-Id: <uuid-v7>
+```
+
+```json
+{ "membership_id": "019c...", "role_code": "coach", "valid_to": "2026-08-17T10:35:00-05:00" }
+```
+
+Solo retirar `coach` llama el contrato que cierra asignaciones; retirar `admin`
+o `staff` preserva asignaciones si `coach` continúa vigente.
+
+```http
+POST /studio/v1/organizations/{orgId}/memberships/{membershipId}/termination
+Cookie: allfit_studio_session=<opaque>
+Origin: https://studio.allfit.one
+Idempotency-Key: <uuid-v4>
+Command-Id: <uuid-v7>
+Content-Type: application/json
+
+{}
+```
+
+```json
+{ "membership_id": "019c...", "status": "terminated", "ended_at": "2026-08-17T10:40:00-05:00" }
+```
+
+```http
+POST /studio/v1/organizations/{orgId}/me/membership/resignation
+Cookie: allfit_studio_session=<opaque>
+Origin: https://studio.allfit.one
+Idempotency-Key: <uuid-v4>
+Command-Id: <uuid-v7>
+Content-Type: application/json
+
+{}
+```
+
+```json
+{ "membership_id": "019c...", "status": "terminated", "outcome": "resigned", "ended_at": "2026-08-17T10:45:00-05:00" }
+```
+
+Terminar o renunciar cierra asignaciones incondicionalmente. La renuncia está
+disponible para cualquier membresía propia activa no-owner, aunque no conserve
+roles. Además de los errores comunes: actor sin autoridad responde `403`, ID
+ajeno/invisible `404`, `owner` o role code inválido `422`, y una carrera que
+cambió el estado `409`; ninguna respuesta revela cuál ID ajeno existe.
+
+#### Transferencia de propiedad
+
+```http
+POST /studio/v1/organizations/{orgId}/ownership-transfers
+Cookie: allfit_studio_session=<opaque>
+Origin: https://studio.allfit.one
+Idempotency-Key: <uuid-v4>
+Command-Id: <uuid-v7>
+Content-Type: application/json
+```
+
+```json
+{ "target_membership_id": "019c..." }
+```
+
+```json
+{
+  "organization_id": "019a...",
+  "owner_membership_id": "019c...",
+  "previous_owner_membership_id": "019b...",
+  "transferred_at": "2026-08-17T10:30:00-05:00"
+}
+```
+
+Solo la membresía `owner` vigente puede ejecutar el comando. El destino debe ser
+otra membresía activa de la misma organización. La función bloquea organización,
+ambas membresías y sus roles, intercambia el rol `owner` en una transacción y
+emite `organization.ownership_transferred.v1`. El owner anterior conserva su
+membresía y roles no `owner`; si no tiene otro rol, queda sin capacidades y no
+recibe un rol implícito.
+
+Además de los errores comunes, responde `403 forbidden` si el actor no es owner,
+`404 not-found` si el destino no es visible en la organización, `409 conflict`
+si una transferencia concurrente cambió el owner, y `422 validation-failed` si
+el destino no está activo o coincide con el owner actual. Cualquier imposibilidad
+de confirmar exactamente un owner revierte el comando completo.
+
+Las cuatro rutas de invitaciones de equipo pertenecen a `/studio/v1`. Usan
+CORS de origen exacto, `Cache-Control: no-store` y
+`Referrer-Policy: no-referrer`. Inválida, vencida, revocada y consumida son el
+mismo `404`. El token nunca aparece en path o query string. La emisión puede
+cerrarse mediante gate sin retirar resolución, decisión, listado, revocación o
+expiración.
 
 ### 5.3 Clientes, relaciones y consentimiento
 
@@ -340,8 +544,6 @@ Sujeto: la organización de la ruta.
 | `POST` | `/organizations/{orgId}/relationships/{id}/termination` | `OP-REL-008` | Ninguno |
 | `POST` | `/organizations/{orgId}/relationships/{id}/termination-requests` | `OP-REL-009` | Ninguno |
 | `GET` | `/organizations/{orgId}/grants` | `OP-PRV-014` | Ninguno — estado del consentimiento |
-| `POST` | `.../relationships/{relId}/grant-requests` | `OP-PRV-001` | Ninguno |
-| `POST` | `/organizations/{orgId}/grant-requests/{id}/withdrawal` | `OP-PRV-002` | Ninguno |
 | `POST` | `/organizations/{orgId}/historical-access-cases` | `OP-PRV-018` | `manage_historical_access`; no concede lectura |
 | `POST` | `/organizations/{orgId}/historical-access-cases/{caseId}/closure` | `OP-PRV-019` | `manage_historical_access`; no concede lectura |
 
@@ -380,6 +582,16 @@ Todas exigen la fórmula completa y escriben `ACCESS_EVENT`.
 Ninguna de estas rutas exige scope: **el estado de pago no es un dato fitness**.
 Y ninguna la puede ejercer un `coach`: `manage_billing` se asigna solo a
 `owner` y `admin`.
+
+`/reactivation` cierra únicamente el `service_access_block` abierto cuya fuente
+es esa suscripción. La respuesta se calcula después del lock con grants,
+relación, membresía, asignación, sesiones y demás bloqueos vigentes; el comando
+no acepta ni devuelve un snapshot que pueda restaurarse.
+
+Si la suscripción terminó, no existe el bloqueo exacto o la transición compite
+con un cambio incompatible, responde conflicto y el cliente debe releer. Un
+éxito nunca implica que todo “volvió a como estaba”: solo confirma que esa causa
+comercial dejó de bloquear.
 
 ### 5.5 Datos históricos restringidos
 
@@ -463,6 +675,8 @@ Las cinco operaciones Studio exigen además relación/asignación/membresía efe
 | Método | Ruta | Operación | Cacheable |
 | --- | --- | --- | --- |
 | `GET` | `/disciplines` | `OP-CAT-007` | Sí, con `ETag` |
+| `GET` | `/studio/v1/professional-specialties` | `OP-CAT-013` | Sí, con `ETag` |
+| `GET` | `/studio/v1/professional-credential-types` | `OP-CAT-014` | Sí, con `ETag` |
 | `GET` | `/activity-types` | `OP-CAT-008` | Sí |
 | `GET` | `/activity-types/{id}/result-contracts` | `OP-CAT-012` | Sí |
 | `GET` | `/movements?discipline=&q=` | `OP-CAT-009` | Solo el subconjunto global |
@@ -669,16 +883,35 @@ Comandos con varias escrituras que deben ser atómicas. La API los invoca dentro
 | Función | Operación | Qué garantiza en una sola transacción |
 | --- | --- | --- |
 | `activate_person(attempt_id)` | `OP-IDN-003` | Crea `PERSON`, vincula `ACCESS_ACCOUNT`, cierra el intento. Único camino que crea una persona |
-| `decide_invitation_intent(intent_id, decision)` | `OP-IDN-009` | Materializa **como máximo un** destino y valida dependencias; la aceptación parcial no acopla intenciones |
-| `create_organization(...)` | `OP-ORG-001` | Organización + membresía + rol `owner` |
-| `terminate_membership(membership_id)` | `OP-ORG-009` | Cierra membresía, roles y asignaciones profesionales efectivas |
+| `identity.decide_staff_invitation(...)` | `OP-IDN-009` · Studio | Bloquea invitación, valida email verificado y materializa membresía/rol o rechazo en una transacción; nunca crea objetos de cliente |
+| `decide_client_invitation_intent(intent_id, decision, scope_decisions)` | `OP-IDN-009` · Space | Materializa **como máximo un** destino; para `service_relationship` exige una decisión por opción, crea la relación, todos los `CONSENT_EVENT` y solo los `DATA_GRANT` concedidos en la misma transacción |
+| `identity.resolve_staff_invitation(token_hash)` | `OP-IDN-016` · Studio | Proyección pública mínima, sin email y sin distinguir estados terminales |
+| `identity.list_staff_invitations(...)` | `OP-ORG-016` | Listado paginado por organización bajo capacidad, con contacto completo para el actor autorizado |
+| `identity.revoke_staff_invitation(...)` | `OP-ORG-006` | Revocación idempotente que bloquea la misma fila que la decisión |
+| `identity.expire_staff_invitations(limit)` | ciclo worker | Expira por lotes con `SKIP LOCKED`, emite evidencia y limpia contadores vencidos |
+| `organizations.create_organization(...)` | `OP-ORG-001` | Organización + membresía + rol `owner`; el constraint diferible confirma exactamente un owner activo |
+| `organizations.update_organization(organization_id, expected_revision, patch, command_id)` | `OP-ORG-002` | Valida actor, campo cerrado, transición y revisión; impide tocar responsible party/estado/owner y escribe evento contractual |
+| `organizations.create_site(organization_id, site, command_id)` | `OP-ORG-003` | Crea sede informativa con revisión inicial y evento contractual |
+| `organizations.update_site(organization_id, site_id, expected_revision, patch, command_id)` | `OP-ORG-004` | Valida tenant/revisión, limita campos y escribe evento de sede contractual |
+| `organizations.grant_membership_role(organization_id, membership_id, role_code, command_id)` | `OP-ORG-007` | Admite `admin/coach/staff`, nunca `owner`; vigencia única, evento y receipt durable |
+| `organizations.revoke_membership_role(organization_id, membership_id, role_code, effective_at, command_id)` | `OP-ORG-008` | Revoca rol; llama Relaciones solo para `coach`, no al retirar `admin/staff` |
+| `organizations.transfer_ownership(organization_id, target_membership_id, command_id)` | `OP-ORG-011` | Bloquea agregado y membresías; intercambia roles owner, conserva roles restantes, escribe eventos y confirma con exactamente un owner |
+| `relationships.end_assignments_for_membership(organization_id, membership_id, effective_at, command_id)` | `OP-ORG-008/009/010` | Relaciones cierra asignaciones: condicional al retirar `coach`, incondicional al terminar/renunciar; Organizaciones nunca escribe esa tabla |
+| `organizations.terminate_membership(organization_id, membership_id, effective_at, command_id)` | `OP-ORG-009` | Cierra membresía/roles y coordina Relaciones incondicionalmente en la misma transacción |
+| `organizations.resign_membership(organization_id, effective_at, command_id)` | `OP-ORG-010` | Resuelve la membresía desde la persona del contexto, permite self no-owner sin rol residual y coordina Relaciones |
+| `organizations.read_organization(organization_id)` | `OP-ORG-013` | Devuelve proyección cerrada y registra acceso dentro de la transacción de lectura; si auditar falla no retorna contenido |
+| `organizations.close_organization(organization_id, command_id)` | `OP-ORG-012` | Coordinador: llama contratos públicos de Relaciones, Privacidad, Planificación, Ejecución y Nutrición con un instante único y solo después cierra membresías/organización |
+| `relationships.terminate_for_organization(organization_id, effective_at, command_id)` | `OP-ORG-012` | Termina relaciones y asignaciones bajo invariantes de Relaciones; no toca grants ni planificación |
+| `privacy.apply_organization_closure(organization_id, effective_at, command_id)` | `OP-ORG-012` | Congela/revoca grants según contrato, invalida acceso y abre disposición bajo ownership de Privacidad |
+| `planning.detach_for_organization_closure(organization_id, effective_at, command_id)` | `OP-ORG-012` | Desacopla asignaciones y preserva versiones/sesiones históricas bajo ownership de Planificación |
+| `execution.cancel_proposals_for_organization_closure(organization_id, effective_at, command_id)` | `OP-ORG-012` | Cancela propuestas de corrección pendientes sin alterar ejecuciones ni autoría histórica |
+| `nutrition.cancel_proposals_for_organization_closure(organization_id, effective_at, command_id)` | `OP-ORG-012` | Cancela propuestas nutricionales pendientes sin alterar decisiones o metas personales |
 | `assign_professional(rel_id, membership_id)` | `OP-REL-002/003` | Cierra el titular anterior, abre el nuevo, notifica |
 | `relationships.terminate_relationship(rel_id)` | `OP-REL-007/008` | **La más crítica:** toma el actor del contexto y usa un instante `T` único; **congela** grants (`frozen`, `frozen_at = T`), cierra asignaciones y suplencias, cierra periodos de gestión, desacopla asignaciones, pausa sesiones futuras, cancela correcciones y propuestas nutricionales de esa relación, invalida read models |
 | `open_historical_access_case(rel_id, membership_id, purpose, reference, expires_at)` | `OP-PRV-018` | Valida relación terminada, actor elegible, capacidad de gestión, MFA y ventana `<=24h`; crea un caso exacto |
 | `close_historical_access_case(case_id)` | `OP-PRV-019` | Cierra el caso e invalida cualquier contexto asociado |
-| `privacy.grant_consent(request_id)` | `OP-PRV-003` | Resuelve persona, relación, organización, definición, scope, nivel y propósito desde la solicitud pendiente exacta; crea `CONSENT_EVENT` con snapshot + `DATA_GRANT` |
 | `privacy.revoke_grant(grant_id)` | `OP-PRV-005` | Acepta `active` o `frozen`, fija `revoked_at`, cierra casos históricos abiertos e invalida proyecciones y cachés antes de confirmar |
-| `privacy.log_access_event(subject_person_id, relationship_id, data_grant_id, historical_access_case_id, scope_code, scope_version, access_mode, resource, result)` | `OP-PRV-015` y toda lectura amparada | Única entrada a `privacy.access_events`; toma actor, membresía, propósito, request y tiempo del contexto, valida la tupla completa y falla la lectura si no puede registrar |
+| `privacy.log_access_event(subject_person_id, subject_organization_id, relationship_id, data_grant_id, historical_access_case_id, scope_code, scope_version, access_mode, resource, result)` | `OP-PRV-015`, `OP-ORG-013` y toda lectura amparada | Exige exactamente un sujeto; la rama organización valida membership activo/tenant, modo/recurso cerrados y contexto personal nulo; toma actor, membresía, propósito, request y tiempo del contexto y falla la lectura si no puede registrar |
 | `create_assignment(rel_id, program_version_id, starts_on, tz)` | `OP-PLN-010` | Asignación + periodo de gestión + **materialización completa** de sesiones |
 | `resolve_detached_assignment(asg_id, choice)` | `OP-PLN-015` | Reutiliza la misma asignación o cancela solo sesiones futuras no iniciadas |
 | `start_attempt(planned_session_id)` | `OP-EXE-001` | `attempt_number` único y monotónico bajo concurrencia |
@@ -694,7 +927,9 @@ Comandos con varias escrituras que deben ser atómicas. La API los invoca dentro
 | `nutrition.propose_goal_version(person_id,...)` | `OP-NUT-012` | Comprueba contexto profesional/credencial/grant y supersede pendiente de la relación |
 | Proxy autenticado de foto nutricional | `OP-NUT-013` | Reevalúa contexto profesional y ambos scopes, registra acceso y transmite el objeto saneado sin redirect |
 
-Las funciones que actúan como entrada cerrada sobre tablas sin DML directo —`activate_person`, `privacy.grant_consent`, `privacy.revoke_grant`, `relationships.terminate_relationship` y `privacy.log_access_event`— son `SECURITY DEFINER`, fijan `search_path = pg_catalog`, califican cada objeto y nunca reciben el actor como parámetro. Las demás son `SECURITY INVOKER`, salvo que su ficha física documente otra necesidad equivalente.
+Las funciones que actúan como entrada cerrada sobre tablas sin DML directo —`activate_person`, las funciones `identity.*staff_invitation`, todas las entradas `organizations.*` anteriores, `privacy.revoke_grant`, `relationships.terminate_relationship` y `privacy.log_access_event`— son `SECURITY DEFINER`, fijan `search_path = pg_catalog`, califican cada objeto y toman el actor del contexto transaccional cuando corresponde. `EXECUTE` está revocado a `PUBLIC`; `allfit_api` recibe solo las entradas HTTP de Organizaciones que consume y ningún DML directo sobre agregados o eventos protegidos.
+
+Los contratos interdominio `relationships.end_assignments_for_membership`, `relationships.terminate_for_organization`, `privacy.apply_organization_closure`, `planning.detach_for_organization_closure`, `execution.cancel_proposals_for_organization_closure` y `nutrition.cancel_proposals_for_organization_closure` también son `SECURITY DEFINER`, pertenecen al owner lógico y schema del dominio destino, fijan `search_path = pg_catalog` y califican cada objeto. `PUBLIC` y `allfit_api` no reciben `EXECUTE` directo sobre ellos: solo los coordinadores `organizations.revoke_membership_role`, `organizations.terminate_membership`, `organizations.resign_membership` y `organizations.close_organization`, ejecutados como `allfit_owner`, pueden llamarlos. `allfit_api` y Organizaciones conservan cero DML cross-schema.
 
 `relationships.terminate_relationship` corta inmediatamente las rutas operativas y de escritura; no revoca los grants. ADR-023 publica una superficie histórica separada, ejercida únicamente por el caso exacto y `access_control.can_read_frozen`. `privacy.revoke_grant` acepta `active` o `frozen`; al revocar uno congelado también cierra todos los casos abiertos de la relación antes de confirmar.
 
@@ -713,7 +948,7 @@ Los lookups `access_control.grant_of(relationship_id,scope_code)` y `access_cont
 | `execution.v_client_progress` | Studio | Herencia de clasificación |
 | `planning.v_person_agenda` | Space | Resuelta en la zona horaria de la persona |
 | `privacy.v_person_consents` | Space | Grants, versión, actores que pueden ejercerlos |
-| `privacy.v_my_access_events` | Space | Solo eventos cuyo sujeto es la persona autenticada |
+| `privacy.v_my_access_events` | Space | Solo `subject_person_id = access_control.person()`; excluye siempre eventos con sujeto organización |
 | `support.v_support_metadata` | Soporte | Solo metadatos operativos |
 | `nutrition.v_my_meals` | Space | Comidas propias; URL firmada si existe medio |
 | `nutrition.v_my_daily_summaries` | Space | Agregado reproducible por fecha local |
