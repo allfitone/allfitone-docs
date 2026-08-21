@@ -255,6 +255,11 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-035` | Consultar sesión Backoffice | Consulta | `allfit_admin` autenticado |
 | `OP-IDN-036` | Cerrar sesión Backoffice | Comando | sesión presente o ausente |
 | `OP-IDN-037` | Solicitar recuperación de contraseña Backoffice | Comando | `A0` |
+| `OP-IDN-038` | Crear cuenta de Space y enviar código de verificación | Comando | `A0` |
+| `OP-IDN-039` | Verificar el código y emitir la primera sesión de Space | Comando | `A0` → `A1` |
+| `OP-IDN-040` | Iniciar sesión en Space | Comando | `A0` → `A1`, `A2` |
+| `OP-IDN-041` | Renovar la sesión de Space | Comando | `A1`, `A2` |
+| `OP-IDN-042` | Pedir el restablecimiento de contraseña de Space | Comando | `A0` |
 
 ---
 
@@ -843,6 +848,91 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Idempotencia** | La respuesta siempre es `202`; el receipt del webhook deduplica por evento |
 | **Información sensible** | La API descarta URL/token de reset y no revela existencia de cuenta ni salud del proveedor; TOTP activo se conserva |
 | **Falla cerrada** | `auth.allfit.one` no es dependencia. Sin webhook válido no se aplica revocación local |
+
+#### `OP-IDN-038` — Crear cuenta de Space y enviar código de verificación
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/auth/registrations` |
+| **Actor** | `A0` — anónimo. Space usa login headless: la app nunca habla con el proveedor |
+| **Filtros obligatorios** | Correo con forma válida y contraseña que cumpla la política: mínimo 8 caracteres con una minúscula, una mayúscula y un dígito |
+| **Transacción** | Ninguna en PostgreSQL. Crea la credencial en el proveedor y pide el envío del código. No crea `PERSON`, ni perfil, ni `ACCESS_ACCOUNT` |
+| **Idempotencia** | Sin `Idempotency-Key`: no se guarda nada de nuestro lado, así que no hay resultado que reproducir. Un reintento reenvía el código, y ese costo lo absorbe el límite de intentos |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Sin conexión no hay registro |
+| **Información sensible** | Correo y contraseña. La contraseña nunca se registra ni se devuelve |
+| **Evento de dominio** | Ninguno todavía; la persona no existe en el dominio |
+| **Reglas** | **La respuesta no puede revelar si el correo ya tiene cuenta.** Éxito y «ya registrado» son indistinguibles: mismo estado, mismo cuerpo, misma expiración. Por eso responde `202` y nunca `201` ni `409` |
+| **Falla cerrada** | Proveedor caído: `503`, sin crear nada |
+
+#### `OP-IDN-039` — Verificar el código y emitir la primera sesión de Space
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/auth/registrations/verification` |
+| **Actor** | `A0` → `A1` |
+| **Filtros obligatorios** | Código de seis dígitos vigente para ese correo |
+| **Transacción** | Marca el correo verificado en el proveedor y autentica, devolviendo tokens. Sigue sin crear `PERSON`: el `ACCESS_ACCOUNT` se deriva en la primera operación autenticada |
+| **Idempotencia** | El código se consume al redimirlo; reintentar con el mismo código falla como inválido |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada |
+| **Información sensible** | Tokens de sesión. Nunca se registran |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Una sola respuesta para código erróneo, contraseña errónea y correo desconocido. **Límite de intentos obligatorio**: un código de seis dígitos se agota por fuerza bruta en minutos |
+| **Falla cerrada** | Cualquier duda deja la cuenta sin verificar |
+
+#### `OP-IDN-040` — Iniciar sesión en Space
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/auth/sessions` |
+| **Actor** | `A0` → `A1` si no completó registro, `A2` si ya tiene `PERSON` |
+| **Filtros obligatorios** | Correo y contraseña. El token se emite para la Application de Space y no opera contra otra superficie |
+| **Transacción** | Ninguna en PostgreSQL. Autentica contra el proveedor y devuelve tokens |
+| **Idempotencia** | No aplica: cada inicio de sesión emite su propia sesión |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Varias sesiones simultáneas del mismo Fitness ID son válidas |
+| **Información sensible** | Credenciales y tokens. Ninguno se registra |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | **Un intento fallido no dice si falló el correo o la contraseña** (HU-SP-002 criterio 2). Un correo sin verificar recibe la misma respuesta que uno inexistente. **Límite de intentos obligatorio** |
+| **Falla cerrada** | Sin credenciales válidas no se emite token, aunque la cuenta exista |
+
+#### `OP-IDN-041` — Renovar la sesión de Space
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/auth/sessions/refresh` |
+| **Actor** | `A1`, `A2`, portador de un token de refresco vigente |
+| **Filtros obligatorios** | Token de refresco emitido para la Application de Space |
+| **Transacción** | Ninguna en PostgreSQL. Cambia el token de refresco por un par nuevo |
+| **Idempotencia** | El proveedor rota el token de refresco: reusar el anterior falla, que es lo que detecta un robo |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Sin conexión la app conserva la sesión guardada pero no puede renovarla |
+| **Información sensible** | Tokens. Nunca se registran |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Es lo que sostiene HU-SP-002 criterio 4, que la sesión se mantiene entre aperturas. Un refresco rechazado obliga a iniciar sesión otra vez, nunca a un acceso degradado |
+| **Falla cerrada** | Token inválido o de otra superficie: `401`, sin emitir nada |
+
+#### `OP-IDN-042` — Pedir el restablecimiento de contraseña de Space
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/auth/password-resets` |
+| **Actor** | `A0` — anónimo, por definición: quien olvidó su contraseña no puede autenticarse |
+| **Filtros obligatorios** | Correo con forma válida. Nada más: comprobar si existe sería el propio dato que no se puede revelar |
+| **Transacción** | Ninguna en PostgreSQL. El proveedor emite el token y envía el correo; la URL secreta nunca llega hasta nosotros |
+| **Idempotencia** | Sin `Idempotency-Key`: no se guarda nada de nuestro lado. Repetir envía otro enlace, y el anterior sigue siendo válido hasta su vencimiento |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Sin conexión no hay envío |
+| **Información sensible** | Correo. El token y su URL nunca se registran ni se devuelven |
+| **Evento de dominio** | Ninguno al pedirlo. El cambio efectivo llega después como webhook del proveedor y lo procesa `identity.process_password_reset_succeeded` |
+| **Reglas** | **Responde `202` siempre**, exista o no la cuenta y esté o no el proveedor en pie: HU-SP-004 criterio 2. Un fallo del proveedor tampoco es público, porque distinguirlo delataría igualmente qué direcciones existen. **Límite de intentos obligatorio**: sin él, este endpoint envía correos a cualquier dirección que le pidan |
+| **Falla cerrada** | Cualquier error se traga y se responde `202`; nada se crea |
 
 ### 7.2 Organizaciones
 

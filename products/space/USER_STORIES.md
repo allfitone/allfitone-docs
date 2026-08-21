@@ -1,7 +1,7 @@
 # Historias de usuario — Allfit Space
 
 **Estado:** borrador para revisión conjunta<br>
-**Fecha:** 30 de julio de 2026<br>
+**Fecha:** 10 de agosto de 2026<br>
 **Producto:** la aplicación de la persona. Móvil, iOS y Android.
 
 Este documento es **autocontenido**: no hay que abrir ningún otro archivo para
@@ -302,6 +302,37 @@ movilidad no se organizan en series y repeticiones.
 2. La aplicación funciona con lo que haya: si falta algo, se nota dónde y por qué conviene completarlo.
 3. Si lo dejo a medias y vuelvo después, retomo donde iba, no desde el principio.
 4. Desde mi perfil puedo completar lo que falte en cualquier momento.
+
+### HU-SP-096 — Decir mi sexo biológico
+
+**Como** persona en el onboarding
+**quiero** indicar mi sexo biológico
+**para** que las estimaciones y las referencias de carga se calculen sobre un cuerpo parecido al mío.
+
+`E-SP-01` · imprescindible · HU-SP-008
+
+**Criterios**
+
+1. Antes de que se me pregunte, se me dice **para qué se usa el dato**: entra en cálculos, no en cómo la aplicación me nombra ni me presenta.
+2. **El sexo biológico y la identidad de género no son el mismo dato.** Aquí se pregunta el primero, porque es el que cambia un cálculo. La aplicación nunca lo trata como mi identidad ni lo muestra como tal.
+3. Puedo no responder. La aplicación funciona igual, con estimaciones menos ajustadas, y lo dice en lugar de fingir precisión.
+4. Puedo cambiarlo cuando quiera desde mi perfil, y cambiarlo no reescribe lo que ya registré.
+5. Solo lo ve un gimnasio si tengo relación con él y le autoricé mi perfil de entrenamiento.
+
+### HU-SP-097 — Señalar en qué parte del cuerpo quiero enfocarme
+
+**Como** persona en el onboarding
+**quiero** señalar qué zonas del cuerpo quiero trabajar más
+**para** que lo que me propongan tenga en cuenta lo que a mí me importa.
+
+`E-SP-01` · importante · HU-SP-010
+
+**Criterios**
+
+1. Señalo una o varias zonas sobre una figura del cuerpo, y **puedo elegir las mismas zonas de una lista** sin usar la figura.
+2. Es un énfasis, no un plan: señalar una zona no excluye el resto del cuerpo ni promete un programa dedicado solo a ella.
+3. Puedo no señalar ninguna. En ese caso el énfasis lo decide mi objetivo principal.
+4. Puedo cambiarlo cuando quiera desde mi perfil.
 
 ---
 
@@ -1661,7 +1692,7 @@ y lo sigue viendo.
 | Épica | Historias | Imprescindibles |
 | --- | --- | ---: |
 | `E-SP-00` Entrar a la aplicación | `HU-SP-001` – `HU-SP-005` | 4 de 5 |
-| `E-SP-01` Registro y onboarding | `HU-SP-006` – `HU-SP-015` | 8 de 10 |
+| `E-SP-01` Registro y onboarding | `HU-SP-006` – `HU-SP-015`, `HU-SP-096` – `HU-SP-097` | 9 de 12 |
 | `E-SP-02` Invitaciones y relaciones | `HU-SP-016` – `HU-SP-020`, `HU-SP-095` | 3 de 6 |
 | `E-SP-03` Perfil, cuerpo y salud | `HU-SP-021` – `HU-SP-028` | 2 de 8 |
 | `E-SP-04` Mis datos y quién los ve | `HU-SP-029` – `HU-SP-036` | 6 de 8 |
@@ -1677,7 +1708,7 @@ y lo sigue viendo.
 | `E-SP-14` Qué pasa si no pago | `HU-SP-083` | 0 de 1 |
 | `E-SP-15` Allfit Premium | `HU-SP-084` – `HU-SP-088` | 5 de 5 |
 | `E-SP-16` Hoy y navegación | `HU-SP-089` – `HU-SP-094` | 3 de 6 |
-| **Total** | **95 historias** | **50 imprescindibles** |
+| **Total** | **97 historias** | **51 imprescindibles** |
 
 El camino mínimo para lanzar es: crear cuenta y entrar, activar el Fitness ID,
 ver qué toca hoy, entrenar y registrarlo aunque no haya señal, ver el historial,
