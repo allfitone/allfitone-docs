@@ -68,6 +68,23 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** PK. `status` no se indexa (baja cardinalidad).
 - **Retención:** el cierre elimina PII —nombre, apellido, correo y teléfono— y deja tombstone técnico sin PII (`OP-SYS-008`); nunca `deleted_at`. El contacto es dato personal bajo la Ley 1581: clasificación `identity_pii`, misma política de disposición que el resto de la identidad.
 - **Eventos:** `identity.person_activated.v1`, `identity.contact_changed.v1`, `identity.contact_verified.v1`.
+- **Nota de diseño:** el nombre de usuario **no es una columna de esta tabla**. Vive en `identity.usernames`, porque la unicidad tiene que abarcar también los handles reservados por intentos de onboarding que todavía no tienen persona. Duplicarlo aquí crearía dos fuentes de verdad que se desincronizan en carrera.
+
+### 4.1.1 `identity.usernames`
+
+- **Propósito:** el nombre de usuario y su unicidad, para personas activas y para intentos de onboarding que aún no tienen persona.
+- **Dominio / fuente de verdad:** Identidad. Es la fuente de verdad del handle.
+- **Clasificación:** `identity_pii`.
+- **Columnas:** `username citext` (PK) · `person_id uuid` (nullable) · `onboarding_attempt_id uuid` (nullable) · `reserved_at timestamptz`.
+- **FKs y borrado:** `person_id → people(id) RESTRICT`; `onboarding_attempt_id → onboarding_attempts(id) CASCADE`. El `CASCADE` es deliberado: purgar un intento abandonado libera su handle.
+- **Uniques y checks:** PK sobre `username`, que es la unicidad completa. `CHECK (num_nonnulls(person_id, onboarding_attempt_id) = 1)`: un handle pertenece a una persona o a un intento, nunca a ambos ni a ninguno. `CHECK` de formato: 3 a 30 caracteres, empieza por letra, sigue con letras, dígitos o `_`.
+- **Actores:** la propia cuenta lee y reserva el suyo mediante `OP-IDN-043`; `activate_person` traslada la fila del intento a la persona; worker de privacidad dispone. **Nadie consulta esta tabla por `username`**: no existe operación de disponibilidad en ninguna superficie.
+- **RLS:** `access_control.is_self(person_id)` **OR** el intento pertenece a `app.actor_account_id`. Sin esas condiciones no hay lectura, y por eso un choque solo se conoce como resultado de intentar reservar.
+- **Consultas:** por `person_id` para mostrar el propio handle; por `onboarding_attempt_id` durante la activación.
+- **Índices:** PK sobre `username`; único parcial sobre `person_id` y sobre `onboarding_attempt_id` (un handle por dueño).
+- **Retención:** el cierre de cuenta elimina la fila junto al resto de la PII; el handle vuelve a estar libre.
+- **Eventos:** `identity.username_reserved.v1`, `identity.username_released.v1`.
+- **Nota de diseño:** `citext` porque dos handles que difieren en mayúsculas son el mismo handle, igual que ya se decidió para `contact_email`. Y a diferencia del correo, **el handle sí admite un choque visible**: no es un identificador que exista fuera de la plataforma, así que decir «en uso» no confirma que una persona conocida tenga cuenta. Aun así solo se comprueba dentro de un comando autenticado y con límite de intentos, nunca como consulta pública.
 
 ### 4.2 `identity.access_accounts`
 
@@ -158,15 +175,16 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** flujo previo a activar una persona; puede terminar sin crearla.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `identity_pii`.
-- **Columnas:** `id` · `account_id uuid` · `person_id uuid` (nullable) · `status identity.onboarding_status` · `invitation_token_hash text` (nullable, SHA-256 en hexadecimal) · `terms_version text` (nullable) · `terms_accepted_at timestamptz` (nullable) · `privacy_notice_version text` (nullable) · `privacy_notice_accepted_at timestamptz` (nullable) · `expires_at timestamptz`.
+- **Columnas:** `id` · `account_id uuid` · `person_id uuid` (nullable) · `status identity.onboarding_status` · `invitation_token_hash text` (nullable, SHA-256 en hexadecimal) · `given_name text` (nullable) · `family_name text` (nullable) · `username citext` (nullable) · `terms_version text` (nullable) · `terms_accepted_at timestamptz` (nullable) · `privacy_notice_version text` (nullable) · `privacy_notice_accepted_at timestamptz` (nullable) · `expires_at timestamptz`.
 - **FKs y borrado:** `account_id → access_accounts(id) RESTRICT`; `person_id → people(id) RESTRICT`.
-- **Uniques y checks:** `UNIQUE parcial (account_id) WHERE status='open'` (un intento abierto por cuenta).
+- **Uniques y checks:** `UNIQUE parcial (account_id) WHERE status='open'` (un intento abierto por cuenta). `CHECK` de no vacío sobre `given_name` y `family_name` cuando no son nulos.
 - **Actores:** la propia cuenta lee; los cambios ocurren mediante funciones gobernadas; worker de privacidad dispone. Asociar el hash de una invitación conserva continuidad de navegación y nunca acepta la intención.
 - **RLS:** `account_id = app.actor_account_id`.
 - **Consultas:** por `account_id` y estado abierto.
 - **Índices:** parcial de intento abierto por cuenta.
 - **Retención:** intentos no activados se purgan; los datos de elegibilidad se minimizan.
-- **Eventos:** `identity.onboarding_attempt_started.v1`.
+- **Eventos:** `identity.onboarding_attempt_started.v1`, `identity.onboarding_identity_declared.v1`.
+- **Nota de diseño:** nombre, apellido y usuario viven aquí y no en `people` porque la persona todavía no existe: en Space la activación es el último paso del onboarding y `OP-IDN-003` los **lee** de aquí. En Studio llegan del proveedor de identidad y estas columnas quedan nulas. La unicidad del usuario no se resuelve aquí, sino en `identity.usernames`.
 
 ### 4.4 `identity.eligibility_evidence`
 

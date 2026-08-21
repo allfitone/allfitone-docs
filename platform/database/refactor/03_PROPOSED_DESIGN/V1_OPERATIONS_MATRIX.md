@@ -260,6 +260,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-040` | Iniciar sesión en Space | Comando | `A0` → `A1`, `A2` |
 | `OP-IDN-041` | Renovar la sesión de Space | Comando | `A1`, `A2` |
 | `OP-IDN-042` | Pedir el restablecimiento de contraseña de Space | Comando | `A0` |
+| `OP-IDN-043` | Declarar la identidad del onboarding y reservar el nombre de usuario | Comando | `A1` |
 
 ---
 
@@ -304,14 +305,14 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Tipo** | Comando |
 | **Superficie** | `POST /space/v1/onboarding-attempts/{id}/completion` o `POST /studio/v1/onboarding-attempts/{id}/completion` |
 | **Actor** | `A1`, dueño del intento |
-| **Filtros obligatorios** | Intento abierto, propio, con `ELIGIBILITY_EVIDENCE` en estado `pass` vigente, y con aceptaciones versionadas de `platform_terms_v1` y `privacy_notice_v1` registradas |
-| **Transacción** | Una sola: crear `PERSON`, vincular `ACCESS_ACCOUNT` a esa persona, cerrar el `ONBOARDING_ATTEMPT` como `activated` y, si el intento porta una invitación, marcarla como reclamable por esa persona **sin** materializar intenciones |
+| **Filtros obligatorios** | Intento abierto, propio, con `ELIGIBILITY_EVIDENCE` en estado `pass` vigente, con nombre y apellido disponibles, y con aceptaciones versionadas de `platform_terms_v1` y `privacy_notice_v1` registradas |
+| **Transacción** | Una sola: crear `PERSON`, vincular `ACCESS_ACCOUNT` a esa persona, trasladar a la persona la reserva de `USERNAME` que colgaba del intento, cerrar el `ONBOARDING_ATTEMPT` como `activated` y, si el intento porta una invitación, marcarla como reclamable por esa persona **sin** materializar intenciones |
 | **Idempotencia** | `Idempotency-Key`. Un reintento sobre un intento ya activado devuelve la misma `PERSON`; nunca crea una segunda |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Dos peticiones concurrentes producen una sola persona: la unicidad se resuelve en la base, no en el cliente |
 | **Información sensible** | Datos identificativos básicos |
 | **Evento de dominio** | `identity.person_activated.v1` |
-| **Reglas** | Es el **único** camino que crea una `PERSON`. Studio puede invocarlo exclusivamente para que el titular autenticado complete su propia activación; nunca puede activar a otra persona ni adquirir por ello potestades organizacionales. Si la cuenta ya tenía persona (invitación posterior sobre alguien ya registrado en Space), reutiliza el mismo `person_id` y no duplica el Fitness ID |
+| **Reglas** | Es el **único** camino que crea una `PERSON`. Studio puede invocarlo exclusivamente para que el titular autenticado complete su propia activación; nunca puede activar a otra persona ni adquirir por ello potestades organizacionales. Si la cuenta ya tenía persona (invitación posterior sobre alguien ya registrado en Space), reutiliza el mismo `person_id` y no duplica el Fitness ID. **De dónde sale el nombre depende de la superficie, y la operación es la misma**: en Studio lo trae el proveedor de identidad; en Space, donde el ingreso es headless y el proveedor no lo tiene, lo declaró antes `OP-IDN-043` sobre el intento. La activación lee, no pregunta |
 | **Falla cerrada** | Sin elegibilidad `pass` no hay persona, aunque la invitación exista y esté vigente |
 
 #### `OP-IDN-004` — Declarar afirmación de perfil
@@ -891,13 +892,13 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Superficie** | `POST /space/v1/auth/sessions` |
 | **Actor** | `A0` → `A1` si no completó registro, `A2` si ya tiene `PERSON` |
 | **Filtros obligatorios** | Correo y contraseña. El token se emite para la Application de Space y no opera contra otra superficie |
-| **Transacción** | Ninguna en PostgreSQL. Autentica contra el proveedor y devuelve tokens |
+| **Transacción** | Ninguna en PostgreSQL. Autentica contra el proveedor y devuelve tokens, más el correo verificado de la credencial y el nombre que el proveedor tenga |
 | **Idempotencia** | No aplica: cada inicio de sesión emite su propia sesión |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Varias sesiones simultáneas del mismo Fitness ID son válidas |
 | **Información sensible** | Credenciales y tokens. Ninguno se registra |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | **Un intento fallido no dice si falló el correo o la contraseña** (HU-SP-002 criterio 2). Un correo sin verificar recibe la misma respuesta que uno inexistente. **Límite de intentos obligatorio** |
+| **Reglas** | **Un intento fallido no dice si falló el correo o la contraseña** (HU-SP-002 criterio 2). Un correo sin verificar recibe la misma respuesta que uno inexistente. **Límite de intentos obligatorio**. La respuesta lleva el correo verificado porque `OP-IDN-043` tiene que mostrarlo sin poder editarlo: es el correo de quien acaba de autenticarse, así que devolverlo no revela nada que no supiera |
 | **Falla cerrada** | Sin credenciales válidas no se emite token, aunque la cuenta exista |
 
 #### `OP-IDN-041` — Renovar la sesión de Space
@@ -908,13 +909,13 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Superficie** | `POST /space/v1/auth/sessions/refresh` |
 | **Actor** | `A1`, `A2`, portador de un token de refresco vigente |
 | **Filtros obligatorios** | Token de refresco emitido para la Application de Space |
-| **Transacción** | Ninguna en PostgreSQL. Cambia el token de refresco por un par nuevo |
+| **Transacción** | Ninguna en PostgreSQL. Cambia el token de refresco por un par nuevo, y devuelve con ellos el correo verificado y el nombre que tenga el proveedor |
 | **Idempotencia** | El proveedor rota el token de refresco: reusar el anterior falla, que es lo que detecta un robo |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Sin conexión la app conserva la sesión guardada pero no puede renovarla |
 | **Información sensible** | Tokens. Nunca se registran |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Es lo que sostiene HU-SP-002 criterio 4, que la sesión se mantiene entre aperturas. Un refresco rechazado obliga a iniciar sesión otra vez, nunca a un acceso degradado |
+| **Reglas** | Es lo que sostiene HU-SP-002 criterio 4, que la sesión se mantiene entre aperturas. Un refresco rechazado obliga a iniciar sesión otra vez, nunca a un acceso degradado. Devuelve el mismo contacto que `OP-IDN-040` para que una sesión restaurada llegue al onboarding sabiendo el correo; **no devuelve identidad de analítica**, que es cosa distinta y sí depende de un inicio de sesión |
 | **Falla cerrada** | Token inválido o de otra superficie: `401`, sin emitir nada |
 
 #### `OP-IDN-042` — Pedir el restablecimiento de contraseña de Space
@@ -933,6 +934,23 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno al pedirlo. El cambio efectivo llega después como webhook del proveedor y lo procesa `identity.process_password_reset_succeeded` |
 | **Reglas** | **Responde `202` siempre**, exista o no la cuenta y esté o no el proveedor en pie: HU-SP-004 criterio 2. Un fallo del proveedor tampoco es público, porque distinguirlo delataría igualmente qué direcciones existen. **Límite de intentos obligatorio**: sin él, este endpoint envía correos a cualquier dirección que le pidan |
 | **Falla cerrada** | Cualquier error se traga y se responde `202`; nada se crea |
+
+#### `OP-IDN-043` — Declarar la identidad del onboarding y reservar el nombre de usuario
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/identity` |
+| **Actor** | `A1`, dueño del intento. Todavía no hay `PERSON`, así que el dato no puede colgar de ella |
+| **Filtros obligatorios** | El intento pertenece a la cuenta autenticada y está abierto. Nombre y apellido no vacíos. Nombre de usuario de 3 a 30 caracteres, empieza por letra y sigue con letras, dígitos o `_` |
+| **Transacción** | Una sola: escribir nombre, apellido y usuario en el `ONBOARDING_ATTEMPT` y reservar el usuario en `USERNAME` contra ese intento. Reenviar con otro usuario libera el anterior y reserva el nuevo |
+| **Idempotencia** | `Idempotency-Key`. El servidor hashea el cuerpo canónico, así que reenviar lo mismo devuelve lo mismo y reusar la clave con un cuerpo distinto es `conflict`, no una segunda reserva |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | No admite `draft_local`: la reserva del usuario es autoritativa y no se puede prometer sin conexión. Dos intentos concurrentes por el mismo usuario producen una sola reserva; el segundo recibe `conflict` |
+| **Información sensible** | Datos identificativos básicos. Clasificación `identity_pii`. Ninguna categoría fitness |
+| **Evento de dominio** | `identity.onboarding_identity_declared.v1` |
+| **Reglas** | No crea `PERSON`: eso sigue siendo exclusivo de `OP-IDN-003`, que lee de aquí. **El correo no se acepta como entrada**: es el de la credencial y cambiarlo es `OP-IDN-021`, con su propia verificación. **No existe consulta de disponibilidad de usuario**, y es deliberado: un «ya está en uso» delata que alguien existe, igual que lo haría en el correo. Lo que lo hace tolerable es que solo se comprueba dentro de este comando autenticado, nunca como consulta pública. **Límite de intentos obligatorio**: sin él, este endpoint permite recorrer el espacio de nombres de usuario |
+| **Falla cerrada** | Sin intento abierto y propio, nada se escribe. Usuario en uso, `conflict`, y la identidad anterior del intento no se toca |
 
 ### 7.2 Organizaciones
 

@@ -330,6 +330,24 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **`T-ONBOARD-2` (negativa)** — Un intento sin evidencia `pass` vigente para la política V1 no puede transicionar a `activated`: lo impide un constraint, no solo la aplicación.
 - **`T-ONBOARD-3` (negativa)** — Ninguna organización lee evidencia de elegibilidad de nadie. La declaración y el snapshot de política nunca salen de Identidad.
 
+#### `USERNAME`
+
+| Actor | SELECT | INSERT | UPDATE | DELETE |
+| --- | --- | --- | --- | --- |
+| `A1` | El de su propio intento | Vía función gobernada | Vía función gobernada | — |
+| `A2` | El propio | — | Vía función gobernada | — |
+| `A9` privacy | Por disposición | — | — | Sí |
+| Resto | — | — | — | — |
+
+- **Condición RLS** — `access_control.is_self(person_id)` **OR** el `onboarding_attempt_id` pertenece a un intento cuyo `account_id = app.actor_account_id`. **No hay ninguna condición que permita leer la fila de otro**, y eso es lo que impide convertir la tabla en un directorio de handles.
+- **Grants mínimos** — `allfit_api`: `SELECT` acotado por la policy; `EXECUTE` sobre la reserva y sobre la activación. **Sin `INSERT`, `UPDATE` ni `DELETE` directos**: la unicidad y el traslado de dueño se garantizan con privilegios, no con disciplina.
+- **Índice para la policy** — PK sobre `username`; parcial sobre `person_id` y sobre `onboarding_attempt_id`.
+- **`T-USERNAME-1` (positiva)** — Una cuenta reserva un handle libre contra su intento abierto, y lo lee después.
+- **`T-USERNAME-2` (negativa)** — Otra cuenta pide el mismo handle: la reserva falla por la PK y **el dueño original no se altera**. El choque es un error de escritura, nunca el resultado de una lectura.
+- **`T-USERNAME-3` (negativa)** — Una cuenta intenta leer el handle de otra persona o del intento de otra cuenta: cero filas. No existe consulta por `username` en ninguna superficie.
+- **`T-USERNAME-4` (positiva)** — Al activar, la fila pasa del intento a la persona en la misma transacción: el handle no queda libre ni un instante, y no se duplica.
+- **`T-USERNAME-5` (negativa)** — Un handle que no cumple el formato se rechaza por constraint, no solo por la aplicación.
+
 #### `FITNESS_PROFILE_CLAIM`
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |

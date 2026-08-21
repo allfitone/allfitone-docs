@@ -26,6 +26,18 @@ Este compromiso no afirma que las 86 HU estén implementadas. Una HU cuenta como
 | Allfit Studio | 85 | 1 | 0 |
 | **Global** | **205** | **3** | **6** |
 
+> **Los recuentos de arriba describen el inventario ratificado el 3 de agosto de
+> 2026 y no se reescriben**, por la misma razón por la que AFO-39 no reescribió
+> aquel hecho: son el registro de una aprobación fechada.
+>
+> Allfit Space ha crecido desde entonces y hoy `products/space/USER_STORIES.md`
+> declara **98 historias y 52 imprescindibles**. Las tres añadidas son
+> `HU-SP-096` y `HU-SP-097` el 17 de agosto de 2026, y `HU-SP-098` el 20 de
+> agosto de 2026. Las tres tienen su fila en la sección 4; dos de ellas con la
+> brecha abierta, porque los atributos de perfil que necesitan no están
+> declarados en ningún documento. El inventario global vuelve a cuadrar cuando se
+> cierren esas brechas y se recertifique en `DB-P5-014`.
+
 ## 2. Reglas de clasificación
 
 1. Toda HU `imprescindible` o `importante` entra en V1, salvo que sea demostrablemente estado de interfaz sin persistencia.
@@ -219,7 +231,10 @@ Lectura de columnas:
 | `HU-SP-005 — Cambiar mi contraseña` | `importante` | `included_v1` | `EXT-AUTH` | Proveedor Auth + identity para proyección local | Auth/claims; positivo, denegación, tenant y reintento | Documentar frontera proveedor Auth → proyección DB y claims. |
 | `HU-SP-006 — Empezar mi registro` | `imprescindible` | `included_v1` | `OP-IDN-001` | identity: personas, identidades, contactos y preferencias | PR-001; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-SP-007 — Acreditar que soy mayor de edad` | `imprescindible` | `included_v1` | `OP-IDN-002` | identity: personas, identidades, contactos y preferencias | PR-001; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
+| `HU-SP-098 — Decir cómo me llamo` | `imprescindible` | `included_v1` | `OP-IDN-043` | identity: identidad preparada en el intento y reserva de nombre de usuario | PR-001; positivo, denegación, choque de usuario y reintento | Añadida el 20 de agosto de 2026, después del inventario ratificado. Activar exige nombre y apellido y ninguna HU los pedía. |
 | `HU-SP-008 — Activar mi Fitness ID` | `imprescindible` | `included_v1` | `OP-IDN-003` | identity: personas, identidades, contactos y preferencias | PR-001; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
+| `HU-SP-096 — Decir mi sexo biológico` | `imprescindible` | *(sin clasificar)* | *(sin operación)* | *(sin ubicación)* | *(sin plan de prueba)* | **Brecha abierta.** No existe columna, enum, operación ni atributo declarado. Su criterio 5 exige que el gimnasio lo vea bajo `relationship_training`, lo que obliga a clasificarlo `training`: como `body` o `health` quedaría fuera de `identity.v_client_profile`. |
+| `HU-SP-097 — Señalar en qué parte del cuerpo quiero enfocarme` | `importante` | *(sin clasificar)* | *(sin operación)* | *(sin ubicación)* | *(sin plan de prueba)* | **Brecha abierta.** Depende de los mismos atributos de perfil sin declarar. Su criterio 1 exige alternativa en lista además de la figura. |
 | `HU-SP-009 — Ver mi identidad y mis cuentas` | `imprescindible` | `included_v1` | `OP-IDN-012` | identity: personas, identidades, contactos y preferencias | PR-002; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-SP-010 — Decirle a Allfit qué quiero lograr` | `imprescindible` | `included_v1` | `OP-IDN-004` | identity: personas, identidades, contactos y preferencias | PR-002; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-SP-011 — Registrar mis datos físicos` | `imprescindible` | `included_v1` | `OP-IDN-004 + OP-IDN-006` | identity: personas, identidades, contactos y preferencias | PR-002; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
@@ -315,6 +330,8 @@ Lectura de columnas:
 - Pagos no tiene rutas físicas de autorización: cada rebanada `OP-PAY-*` debe cerrar los P0 que realmente consume. `DB-P5-008` se difiere hasta `HU-SP-086`, `HU-SP-088`, `HU-BO-027` o la primera autorización basada en Premium.
 - Backoffice ya cerró actor humano, deberes, elevación, auditoría y mínimo privilegio en `DB-P5-002`; sus capacidades `NEW-*` y rutas restantes continúan en `DB-P5-001` y `DB-P5-014`.
 - Las capacidades externas de autenticación deben documentar claims, proyección local, revocación y eventos de auditoría; `EXT-AUTH` no elimina el trabajo de BD.
+- **El catálogo `identity.profile_attributes` está declarado como cerrado y sus miembros no aparecen en ningún documento.** `OP-IDN-004` falla cerrado ante un atributo desconocido, así que hoy ninguna afirmación de perfil es escribible: afecta a `HU-SP-010` a `HU-SP-014`, `HU-SP-021` y `HU-SP-096`. Enumerarlo, con su `data_classification_code` y sus opciones cerradas, es requisito previo al DDL de esa rebanada.
+- **`HU-SP-096` obliga a una decisión de clasificación, no solo a una columna.** Su criterio 5 exige que el gimnasio vea el sexo biológico bajo `relationship_training`, y `identity.v_client_profile` excluye todo atributo clasificado corporal o de salud. O se clasifica `training`, o el criterio no se cumple.
 
 ## 6. Orden incremental de cierre de `DB-P5-001`
 

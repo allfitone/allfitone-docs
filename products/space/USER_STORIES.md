@@ -298,7 +298,7 @@ movilidad no se organizan en series y repeticiones.
 
 **Criterios**
 
-1. Puedo saltarme cualquier paso que no sea la edad y los términos.
+1. Puedo saltarme cualquier paso que no sea la edad, mi nombre y los términos.
 2. La aplicación funciona con lo que haya: si falta algo, se nota dónde y por qué conviene completarlo.
 3. Si lo dejo a medias y vuelvo después, retomo donde iba, no desde el principio.
 4. Desde mi perfil puedo completar lo que falte en cualquier momento.
@@ -333,6 +333,23 @@ movilidad no se organizan en series y repeticiones.
 2. Es un énfasis, no un plan: señalar una zona no excluye el resto del cuerpo ni promete un programa dedicado solo a ella.
 3. Puedo no señalar ninguna. En ese caso el énfasis lo decide mi objetivo principal.
 4. Puedo cambiarlo cuando quiera desde mi perfil.
+
+### HU-SP-098 — Decir cómo me llamo
+
+**Como** persona que acreditó su edad
+**quiero** decir mi nombre, mi apellido y con qué usuario me identifico
+**para** que se pueda activar mi Fitness ID y la aplicación sepa cómo llamarme.
+
+`E-SP-01` · imprescindible · HU-SP-007
+
+**Criterios**
+
+1. Doy nombre y apellido. Sin ellos no hay Fitness ID que activar, así que **este paso no se puede saltar**.
+2. Veo con qué correo entro y no lo puedo cambiar aquí. Cambiarlo es otra cosa y exige verificarlo de nuevo.
+3. Elijo un nombre de usuario **que no tenga nadie más**. Si el que pido ya está en uso, se me dice y elijo otro.
+4. Si mi cuenta ya venía con mi nombre, lo veo escrito y solo lo confirmo o lo corrijo.
+5. Lo que escribo queda guardado en mi registro aunque cierre la aplicación antes de terminar: al volver, sigo donde iba.
+6. Puedo cambiar mi nombre y mi usuario después desde mi perfil.
 
 ---
 
@@ -1692,7 +1709,7 @@ y lo sigue viendo.
 | Épica | Historias | Imprescindibles |
 | --- | --- | ---: |
 | `E-SP-00` Entrar a la aplicación | `HU-SP-001` – `HU-SP-005` | 4 de 5 |
-| `E-SP-01` Registro y onboarding | `HU-SP-006` – `HU-SP-015`, `HU-SP-096` – `HU-SP-097` | 9 de 12 |
+| `E-SP-01` Registro y onboarding | `HU-SP-006` – `HU-SP-015`, `HU-SP-096` – `HU-SP-098` | 10 de 13 |
 | `E-SP-02` Invitaciones y relaciones | `HU-SP-016` – `HU-SP-020`, `HU-SP-095` | 3 de 6 |
 | `E-SP-03` Perfil, cuerpo y salud | `HU-SP-021` – `HU-SP-028` | 2 de 8 |
 | `E-SP-04` Mis datos y quién los ve | `HU-SP-029` – `HU-SP-036` | 6 de 8 |
@@ -1708,7 +1725,7 @@ y lo sigue viendo.
 | `E-SP-14` Qué pasa si no pago | `HU-SP-083` | 0 de 1 |
 | `E-SP-15` Allfit Premium | `HU-SP-084` – `HU-SP-088` | 5 de 5 |
 | `E-SP-16` Hoy y navegación | `HU-SP-089` – `HU-SP-094` | 3 de 6 |
-| **Total** | **97 historias** | **51 imprescindibles** |
+| **Total** | **98 historias** | **52 imprescindibles** |
 
 El camino mínimo para lanzar es: crear cuenta y entrar, activar el Fitness ID,
 ver qué toca hoy, entrenar y registrarlo aunque no haya señal, ver el historial,
