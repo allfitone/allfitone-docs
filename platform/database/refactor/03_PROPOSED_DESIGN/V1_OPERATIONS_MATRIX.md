@@ -61,7 +61,7 @@ Un actor no es un rol ni un permiso: es el sujeto autenticado desde el que se ev
 | --- | --- | --- |
 | `A0` Anónimo | Petición sin autenticar | Sí |
 | `A1` Cuenta sin persona | Usuario WorkOS válido cuyo `ACCESS_ACCOUNT` todavía no vincula una `PERSON`. Solo puede operar sobre su propio onboarding | Sí |
-| `A2` Persona | `PERSON` activa con Fitness ID. Sujeto de Space | No |
+| `A2` Persona | `PERSON` con Fitness ID, **activo o `pending_activation`**. Sujeto de Space. Las operaciones que exigen un Fitness ID ya activo lo declaran en sus filtros obligatorios; el resto opera igual en ambos estados, porque `access_control.is_self` no mira el estado | No |
 | `A3` Profesional coach | `PERSON` con `PROFESSIONAL_PROFILE` que opera mediante `ORGANIZATION_MEMBERSHIP` vigente con rol `coach` | No |
 | `A4` Admin de organización | Membresía vigente con rol `admin` | No |
 | `A5` Owner de organización | La única membresía activa de la organización con rol `owner`. Puede transferir la propiedad y cerrar la organización mediante comandos atómicos V1 | No |
@@ -260,7 +260,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-040` | Iniciar sesión en Space | Comando | `A0` → `A1`, `A2` |
 | `OP-IDN-041` | Renovar la sesión de Space | Comando | `A1`, `A2` |
 | `OP-IDN-042` | Pedir el restablecimiento de contraseña de Space | Comando | `A0` |
-| `OP-IDN-043` | Declarar la identidad del onboarding y reservar el nombre de usuario | Comando | `A1` |
+| `OP-IDN-043` | Crear el Fitness ID en estado pendiente | Comando | `A1` → `A2` |
 | `OP-IDN-044` | Consultar el intento de onboarding abierto | Consulta | `A1` |
 
 ---
@@ -305,15 +305,15 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | --- | --- |
 | **Tipo** | Comando |
 | **Superficie** | `POST /space/v1/onboarding-attempts/{id}/completion` o `POST /studio/v1/onboarding-attempts/{id}/completion` |
-| **Actor** | `A1`, dueño del intento |
-| **Filtros obligatorios** | Intento abierto, propio, con `ELIGIBILITY_EVIDENCE` en estado `pass` vigente, con nombre y apellido disponibles, y con aceptaciones versionadas de `platform_terms_v1` y `privacy_notice_v1` registradas |
-| **Transacción** | Una sola: crear `PERSON`, vincular `ACCESS_ACCOUNT` a esa persona, trasladar a la persona la reserva de `USERNAME` que colgaba del intento, cerrar el `ONBOARDING_ATTEMPT` como `activated` y, si el intento porta una invitación, marcarla como reclamable por esa persona **sin** materializar intenciones |
+| **Actor** | `A2` en `pending_activation`, dueño del intento |
+| **Filtros obligatorios** | Intento abierto y propio, con `PERSON` ya creada en `pending_activation`, `ELIGIBILITY_EVIDENCE` en estado `pass` vigente, y aceptación de `platform_terms_v1` y `privacy_notice_v1` |
+| **Transacción** | Una sola: pasar la `PERSON` de `pending_activation` a `active` sellando `activated_at`, registrar las versiones legales aceptadas, cerrar el `ONBOARDING_ATTEMPT` como `activated` y, si el intento porta una invitación, marcarla como reclamable por esa persona **sin** materializar intenciones |
 | **Idempotencia** | `Idempotency-Key`. Un reintento sobre un intento ya activado devuelve la misma `PERSON`; nunca crea una segunda |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Dos peticiones concurrentes producen una sola persona: la unicidad se resuelve en la base, no en el cliente |
 | **Información sensible** | Datos identificativos básicos |
 | **Evento de dominio** | `identity.person_activated.v1` |
-| **Reglas** | Es el **único** camino que crea una `PERSON`. Studio puede invocarlo exclusivamente para que el titular autenticado complete su propia activación; nunca puede activar a otra persona ni adquirir por ello potestades organizacionales. Si la cuenta ya tenía persona (invitación posterior sobre alguien ya registrado en Space), reutiliza el mismo `person_id` y no duplica el Fitness ID. **De dónde sale el nombre depende de la superficie, y la operación es la misma**: en Studio lo trae el proveedor de identidad; en Space, donde el ingreso es headless y el proveedor no lo tiene, lo declaró antes `OP-IDN-043` sobre el intento. La activación lee, no pregunta |
+| **Reglas** | **Ya no crea la persona: la activa.** Es el único camino que lleva un Fitness ID a `active`, y no mueve ningún dato de sitio — lo que se respondió durante el onboarding ya está escrito sobre la persona. Studio puede invocarlo exclusivamente para que el titular autenticado complete su propia activación; nunca puede activar a otra persona ni adquirir por ello potestades organizacionales. Reactivar una persona ya `active` devuelve la misma y no vuelve a sellar `activated_at` |
 | **Falla cerrada** | Sin elegibilidad `pass` no hay persona, aunque la invitación exista y esté vigente |
 
 #### `OP-IDN-004` — Declarar afirmación de perfil
@@ -936,22 +936,22 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | **Responde `202` siempre**, exista o no la cuenta y esté o no el proveedor en pie: HU-SP-004 criterio 2. Un fallo del proveedor tampoco es público, porque distinguirlo delataría igualmente qué direcciones existen. **Límite de intentos obligatorio**: sin él, este endpoint envía correos a cualquier dirección que le pidan |
 | **Falla cerrada** | Cualquier error se traga y se responde `202`; nada se crea |
 
-#### `OP-IDN-043` — Declarar la identidad del onboarding y reservar el nombre de usuario
+#### `OP-IDN-043` — Crear el Fitness ID en estado pendiente
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/identity` |
-| **Actor** | `A1`, dueño del intento. Todavía no hay `PERSON`, así que el dato no puede colgar de ella |
-| **Filtros obligatorios** | El intento pertenece a la cuenta autenticada y está abierto. Nombre y apellido no vacíos. Nombre de usuario de 3 a 30 caracteres, empieza por letra y sigue con letras, dígitos o `_` |
-| **Transacción** | Una sola: escribir nombre, apellido y usuario en el `ONBOARDING_ATTEMPT` y reservar el usuario en `USERNAME` contra ese intento. Reenviar con otro usuario libera el anterior y reserva el nuevo |
-| **Idempotencia** | `Idempotency-Key`. El servidor hashea el cuerpo canónico, así que reenviar lo mismo devuelve lo mismo y reusar la clave con un cuerpo distinto es `conflict`, no una segunda reserva |
+| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/fitness-id` |
+| **Actor** | `A1`, dueño del intento. Al terminar, la cuenta pasa a tener persona y el actor es `A2` |
+| **Filtros obligatorios** | Intento abierto y propio, con `ELIGIBILITY_EVIDENCE` en estado `pass` vigente. Nombre y apellido no vacíos. Nombre de usuario libre y con formato válido. La cuenta no debe tener ya una `PERSON` vinculada |
+| **Transacción** | Una sola: crear `PERSON` en `pending_activation` con nombre, apellido y nombre de usuario, `activated_at` nulo; vincular `ACCESS_ACCOUNT` a esa persona; y anotar `person_id` en el `ONBOARDING_ATTEMPT`, que sigue `open` |
+| **Idempotencia** | `Idempotency-Key`. Un reintento devuelve la misma `PERSON`; nunca crea una segunda. La unicidad del handle y del vínculo cuenta–persona se resuelven en la base |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | No admite `draft_local`: la reserva del usuario es autoritativa y no se puede prometer sin conexión. Dos intentos concurrentes por el mismo usuario producen una sola reserva; el segundo recibe `conflict` |
+| **Offline / concurrencia** | No admite `draft_local`: la unicidad del handle es autoritativa y no se puede prometer sin conexión. Dos peticiones concurrentes producen una sola persona |
 | **Información sensible** | Datos identificativos básicos. Clasificación `identity_pii`. Ninguna categoría fitness |
-| **Evento de dominio** | `identity.onboarding_identity_declared.v1` |
-| **Reglas** | No crea `PERSON`: eso sigue siendo exclusivo de `OP-IDN-003`, que lee de aquí. **El correo no se acepta como entrada**: es el de la credencial y cambiarlo es `OP-IDN-021`, con su propia verificación. **No existe consulta de disponibilidad de usuario**, y es deliberado: un «ya está en uso» delata que alguien existe, igual que lo haría en el correo. Lo que lo hace tolerable es que solo se comprueba dentro de este comando autenticado, nunca como consulta pública. **Límite de intentos obligatorio**: sin él, este endpoint permite recorrer el espacio de nombres de usuario |
-| **Falla cerrada** | Sin intento abierto y propio, nada se escribe. Usuario en uso, `conflict`, y la identidad anterior del intento no se toca |
+| **Evento de dominio** | `identity.person_created_pending.v1` |
+| **Reglas** | **Crear la persona aquí es lo que permite que el resto del onboarding escriba directamente sobre ella**: sin esto, cada respuesta de perfil necesitaría una tabla de preparación y un segundo camino de escritura hacia `FITNESS_PROFILE_CLAIM`. La elegibilidad adulta se exige **antes**, que es lo que piden DT-012 y ADR-017: crear la fila más temprano no adelanta ningún control. Una persona `pending_activation` **no** puede crear organización ni perfil profesional; esas operaciones ya exigen estado activo. **No existe consulta de disponibilidad de usuario**: el choque vuelve como `conflict` sobre ese campo, porque preguntar si un handle está libre delata que alguien lo tiene. **Límite de intentos obligatorio** |
+| **Falla cerrada** | Sin elegibilidad `pass` no hay persona, aunque el nombre y el handle sean válidos. Usuario en uso: `conflict`, y nada se crea |
 
 #### `OP-IDN-044` — Consultar el intento de onboarding abierto
 
@@ -961,7 +961,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Superficie** | `GET /space/v1/onboarding-attempts/current` |
 | **Actor** | `A1`, dueño del intento |
 | **Filtros obligatorios** | Solo el intento abierto de la cuenta autenticada. Una cuenta nunca ve el intento de otra |
-| **Transacción** | Lectura. Devuelve el intento y la identidad que ya se declaró sobre él |
+| **Transacción** | Lectura. Devuelve el intento abierto, su estado de elegibilidad y si la cuenta ya tiene un Fitness ID pendiente |
 | **Idempotencia** | No aplica |
 | **Paginación y orden** | No aplica. Hay a lo sumo un intento abierto por cuenta |
 | **Offline / concurrencia** | Sin conexión no se puede retomar: el estado autoritativo del onboarding vive en el servidor |

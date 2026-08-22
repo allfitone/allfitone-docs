@@ -338,17 +338,17 @@ movilidad no se organizan en series y repeticiones.
 
 **Como** persona que acreditó su edad
 **quiero** decir mi nombre, mi apellido y con qué usuario me identifico
-**para** que se pueda activar mi Fitness ID y la aplicación sepa cómo llamarme.
+**para** tener ya mi Fitness ID, aunque todavía no esté activo, y que la aplicación sepa cómo llamarme.
 
 `E-SP-01` · imprescindible · HU-SP-007
 
 **Criterios**
 
-1. Doy nombre y apellido. Sin ellos no hay Fitness ID que activar, así que **este paso no se puede saltar**.
+1. Doy nombre y apellido. Sin ellos no hay Fitness ID que crear, así que **este paso no se puede saltar**.
 2. Veo con qué correo entro y no lo puedo cambiar aquí. Cambiarlo es otra cosa y exige verificarlo de nuevo.
 3. Elijo un nombre de usuario **que no tenga nadie más**. Si el que pido ya está en uso, se me dice y elijo otro.
 4. Si mi cuenta ya venía con mi nombre, lo veo escrito y solo lo confirmo o lo corrijo.
-5. Lo que escribo queda guardado en mi registro aunque cierre la aplicación antes de terminar: al volver, sigo donde iba.
+5. Al terminar este paso mi Fitness ID **ya existe**, pendiente de activación. Lo que responda de aquí en adelante queda guardado sobre él, así que si cierro la aplicación y vuelvo, sigo donde iba.
 6. Puedo cambiar mi nombre y mi usuario después desde mi perfil.
 
 ---
