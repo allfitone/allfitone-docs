@@ -260,7 +260,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-040` | Iniciar sesión en Space | Comando | `A0` → `A1`, `A2` |
 | `OP-IDN-041` | Renovar la sesión de Space | Comando | `A1`, `A2` |
 | `OP-IDN-042` | Pedir el restablecimiento de contraseña de Space | Comando | `A0` |
-| `OP-IDN-043` | *(retirada — la identidad es parámetro de `OP-IDN-003`)* | — | — |
+| `OP-IDN-043` | Declarar la identidad del onboarding y reservar el nombre de usuario | Comando | `A1` |
 | `OP-IDN-044` | Consultar el intento de onboarding abierto | Consulta | `A1` |
 
 ---
@@ -306,14 +306,14 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Tipo** | Comando |
 | **Superficie** | `POST /space/v1/onboarding-attempts/{id}/completion` o `POST /studio/v1/onboarding-attempts/{id}/completion` |
 | **Actor** | `A1`, dueño del intento |
-| **Filtros obligatorios** | Intento abierto, propio, con `ELIGIBILITY_EVIDENCE` en estado `pass` vigente, nombre y apellido no vacíos, y aceptaciones versionadas de `platform_terms_v1` y `privacy_notice_v1`. En Space además un nombre de usuario libre y con formato válido |
-| **Transacción** | Una sola: crear `PERSON` con el nombre y el nombre de usuario recibidos, vincular `ACCESS_ACCOUNT` a esa persona, cerrar el `ONBOARDING_ATTEMPT` como `activated` y, si el intento porta una invitación, marcarla como reclamable por esa persona **sin** materializar intenciones |
+| **Filtros obligatorios** | Intento abierto, propio, con `ELIGIBILITY_EVIDENCE` en estado `pass` vigente, con nombre y apellido disponibles, y con aceptaciones versionadas de `platform_terms_v1` y `privacy_notice_v1` registradas |
+| **Transacción** | Una sola: crear `PERSON`, vincular `ACCESS_ACCOUNT` a esa persona, trasladar a la persona la reserva de `USERNAME` que colgaba del intento, cerrar el `ONBOARDING_ATTEMPT` como `activated` y, si el intento porta una invitación, marcarla como reclamable por esa persona **sin** materializar intenciones |
 | **Idempotencia** | `Idempotency-Key`. Un reintento sobre un intento ya activado devuelve la misma `PERSON`; nunca crea una segunda |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Dos peticiones concurrentes producen una sola persona: la unicidad se resuelve en la base, no en el cliente |
 | **Información sensible** | Datos identificativos básicos |
 | **Evento de dominio** | `identity.person_activated.v1` |
-| **Reglas** | Es el **único** camino que crea una `PERSON`. Studio puede invocarlo exclusivamente para que el titular autenticado complete su propia activación; nunca puede activar a otra persona ni adquirir por ello potestades organizacionales. Si la cuenta ya tenía persona (invitación posterior sobre alguien ya registrado en Space), reutiliza el mismo `person_id` y no duplica el Fitness ID. **De dónde sale el nombre depende de la superficie, y la operación es la misma**: en Studio lo trae el proveedor de identidad y el cuerpo solo actúa de respaldo; en Space, donde el ingreso es headless y el proveedor no lo tiene, viaja siempre en el cuerpo. El nombre de usuario es exclusivo de Space y su choque se devuelve como `conflict` sobre ese campo, sin consulta previa de disponibilidad |
+| **Reglas** | Es el **único** camino que crea una `PERSON`. Studio puede invocarlo exclusivamente para que el titular autenticado complete su propia activación; nunca puede activar a otra persona ni adquirir por ello potestades organizacionales. Si la cuenta ya tenía persona (invitación posterior sobre alguien ya registrado en Space), reutiliza el mismo `person_id` y no duplica el Fitness ID. **De dónde sale el nombre depende de la superficie, y la operación es la misma**: en Studio lo trae el proveedor de identidad; en Space, donde el ingreso es headless y el proveedor no lo tiene, lo declaró antes `OP-IDN-043` sobre el intento. La activación lee, no pregunta |
 | **Falla cerrada** | Sin elegibilidad `pass` no hay persona, aunque la invitación exista y esté vigente |
 
 #### `OP-IDN-004` — Declarar afirmación de perfil
@@ -936,17 +936,22 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | **Responde `202` siempre**, exista o no la cuenta y esté o no el proveedor en pie: HU-SP-004 criterio 2. Un fallo del proveedor tampoco es público, porque distinguirlo delataría igualmente qué direcciones existen. **Límite de intentos obligatorio**: sin él, este endpoint envía correos a cualquier dirección que le pidan |
 | **Falla cerrada** | Cualquier error se traga y se responde `202`; nada se crea |
 
-#### `OP-IDN-043` — *retirada*
+#### `OP-IDN-043` — Declarar la identidad del onboarding y reservar el nombre de usuario
 
-Preparaba nombre, apellido y usuario sobre el `ONBOARDING_ATTEMPT` para que
-`OP-IDN-003` los leyera al final. Existía solo porque la activación era el último
-paso del onboarding; al adelantarla, la identidad pasó a ser **parámetro** de
-`OP-IDN-003` y aterriza en `PERSON` en la misma transacción que la crea, que es lo
-que Studio ya hacía.
-
-El identificador queda retirado y **no se reutiliza**. Preparar respuestas aparte
-para materializarlas después solo se justifica cuando la transacción final las
-consume de golpe; el perfil no es ese caso y se escribe con `OP-IDN-004`.
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/identity` |
+| **Actor** | `A1`, dueño del intento. Todavía no hay `PERSON`, así que el dato no puede colgar de ella |
+| **Filtros obligatorios** | El intento pertenece a la cuenta autenticada y está abierto. Nombre y apellido no vacíos. Nombre de usuario de 3 a 30 caracteres, empieza por letra y sigue con letras, dígitos o `_` |
+| **Transacción** | Una sola: escribir nombre, apellido y usuario en el `ONBOARDING_ATTEMPT` y reservar el usuario en `USERNAME` contra ese intento. Reenviar con otro usuario libera el anterior y reserva el nuevo |
+| **Idempotencia** | `Idempotency-Key`. El servidor hashea el cuerpo canónico, así que reenviar lo mismo devuelve lo mismo y reusar la clave con un cuerpo distinto es `conflict`, no una segunda reserva |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | No admite `draft_local`: la reserva del usuario es autoritativa y no se puede prometer sin conexión. Dos intentos concurrentes por el mismo usuario producen una sola reserva; el segundo recibe `conflict` |
+| **Información sensible** | Datos identificativos básicos. Clasificación `identity_pii`. Ninguna categoría fitness |
+| **Evento de dominio** | `identity.onboarding_identity_declared.v1` |
+| **Reglas** | No crea `PERSON`: eso sigue siendo exclusivo de `OP-IDN-003`, que lee de aquí. **El correo no se acepta como entrada**: es el de la credencial y cambiarlo es `OP-IDN-021`, con su propia verificación. **No existe consulta de disponibilidad de usuario**, y es deliberado: un «ya está en uso» delata que alguien existe, igual que lo haría en el correo. Lo que lo hace tolerable es que solo se comprueba dentro de este comando autenticado, nunca como consulta pública. **Límite de intentos obligatorio**: sin él, este endpoint permite recorrer el espacio de nombres de usuario |
+| **Falla cerrada** | Sin intento abierto y propio, nada se escribe. Usuario en uso, `conflict`, y la identidad anterior del intento no se toca |
 
 #### `OP-IDN-044` — Consultar el intento de onboarding abierto
 
@@ -956,13 +961,13 @@ consume de golpe; el perfil no es ese caso y se escribe con `OP-IDN-004`.
 | **Superficie** | `GET /space/v1/onboarding-attempts/current` |
 | **Actor** | `A1`, dueño del intento |
 | **Filtros obligatorios** | Solo el intento abierto de la cuenta autenticada. Una cuenta nunca ve el intento de otra |
-| **Transacción** | Lectura. Devuelve el intento abierto y su estado de elegibilidad. No devuelve identidad: no hay identidad preparada que devolver |
+| **Transacción** | Lectura. Devuelve el intento y la identidad que ya se declaró sobre él |
 | **Idempotencia** | No aplica |
 | **Paginación y orden** | No aplica. Hay a lo sumo un intento abierto por cuenta |
 | **Offline / concurrencia** | Sin conexión no se puede retomar: el estado autoritativo del onboarding vive en el servidor |
 | **Información sensible** | Datos identificativos básicos. **No devuelve contacto**: el correo verificado es server-only y la app ya tiene el que usó para entrar |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Es lo que sostiene HU-SP-015 criterio 3: volver retoma en el paso que corresponde en vez de empezar de nuevo, y es lo que evita aterrizar en una pantalla que ya se completó. Una cuenta sin intento abierto —incluida una persona ya activada— recibe `null`, no un error: no haber empezado no es un fallo. Lo ausente viaja como `null` y nunca omitido, para que la app no tenga que adivinar si un paso se saltó o si el campo no llegó |
+| **Reglas** | Es lo que sostiene HU-SP-015 criterio 3 y HU-SP-098 criterio 5: volver retoma donde iba en vez de empezar de nuevo. Una cuenta sin intento abierto —incluida una persona ya activada— recibe `null`, no un error: no haber empezado no es un fallo. Lo ausente viaja como `null` y nunca omitido, para que la app no tenga que adivinar si un paso se saltó o si el campo no llegó |
 | **Falla cerrada** | Sin token verificable, sin respuesta |
 
 ### 7.2 Organizaciones
