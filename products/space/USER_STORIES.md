@@ -348,7 +348,7 @@ movilidad no se organizan en series y repeticiones.
 2. Veo con qué correo entro y no lo puedo cambiar aquí. Cambiarlo es otra cosa y exige verificarlo de nuevo.
 3. Elijo un nombre de usuario **que no tenga nadie más**. Si el que pido ya está en uso, se me dice y elijo otro.
 4. Si mi cuenta ya venía con mi nombre, lo veo escrito y solo lo confirmo o lo corrijo.
-5. Lo que escribo queda guardado en mi registro aunque cierre la aplicación antes de terminar: al volver, sigo donde iba.
+5. Nada de esto queda a medias: o se registra completo al activar mi Fitness ID, o no se registra. Si cierro antes de terminar, vuelvo a escribirlo.
 6. Puedo cambiar mi nombre y mi usuario después desde mi perfil.
 
 ---
