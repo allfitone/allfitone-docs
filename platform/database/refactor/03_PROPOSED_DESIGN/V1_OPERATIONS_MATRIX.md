@@ -262,6 +262,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-042` | Pedir el restablecimiento de contraseña de Space | Comando | `A0` |
 | `OP-IDN-043` | Crear el Fitness ID en estado pendiente | Comando | `A1` → `A2` |
 | `OP-IDN-044` | Consultar el intento de onboarding abierto | Consulta | `A1` |
+| `OP-IDN-045` | Declarar el sexo biológico | Comando | `A2` |
 
 ---
 
@@ -943,15 +944,15 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Tipo** | Comando |
 | **Superficie** | `POST /space/v1/onboarding-attempts/{id}/fitness-id` |
 | **Actor** | `A1`, dueño del intento. Al terminar, la cuenta pasa a tener persona y el actor es `A2` |
-| **Filtros obligatorios** | Intento abierto y propio, con `ELIGIBILITY_EVIDENCE` en estado `pass` vigente. Nombre y apellido no vacíos. Nombre de usuario libre y con formato válido. La cuenta no debe tener ya una `PERSON` vinculada. **El proveedor debe confirmar la dirección de la credencial como verificada**: sin eso no hay contacto que registrar |
-| **Transacción** | Una sola: crear `PERSON` en `pending_activation` con nombre, apellido, nombre de usuario, **correo de contacto y su sello de verificación**, `activated_at` nulo; vincular `ACCESS_ACCOUNT` a esa persona; y anotar `person_id` en el `ONBOARDING_ATTEMPT`, que sigue `open` |
-| **Idempotencia** | `Idempotency-Key`. Un reintento devuelve la misma `PERSON`; nunca crea una segunda. La unicidad del handle y del vínculo cuenta–persona se resuelven en la base |
+| **Filtros obligatorios** | Intento abierto y propio, con `ELIGIBILITY_EVIDENCE` en estado `pass` vigente — **también al corregir**: una corrección no salta el control de adultez. Nombre y apellido no vacíos. Nombre de usuario con formato válido y libre para cualquier otra persona. **El proveedor debe confirmar la dirección de la credencial como verificada** al crear: sin eso no hay contacto que registrar |
+| **Transacción** | Una sola. Si la cuenta no tiene persona: crear `PERSON` en `pending_activation` con nombre, apellido, nombre de usuario, **correo de contacto y su sello de verificación**, `activated_at` nulo; vincular `ACCESS_ACCOUNT` a esa persona; y anotar `person_id` en el `ONBOARDING_ATTEMPT`, que sigue `open`. **Si ya la tiene: corregir** nombre, apellido y nombre de usuario sobre la misma persona. El contacto no se reescribe aquí: pertenece a la credencial y cambiarlo es `OP-IDN-021` |
+| **Idempotencia** | `Idempotency-Key`. Un reintento devuelve la misma `PERSON`; nunca crea una segunda, ni al crear ni al corregir. La unicidad del handle y del vínculo cuenta–persona se resuelven en la base |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | No admite `draft_local`: la unicidad del handle es autoritativa y no se puede prometer sin conexión. Dos peticiones concurrentes producen una sola persona |
 | **Información sensible** | Datos identificativos básicos **y contacto**. Clasificación `identity_pii`. Ninguna categoría fitness |
 | **Evento de dominio** | `identity.person_created_pending.v1` |
 | **Reglas** | **Crear la persona aquí es lo que permite que el resto del onboarding escriba directamente sobre ella**: sin esto, cada respuesta de perfil necesitaría una tabla de preparación y un segundo camino de escritura hacia `FITNESS_PROFILE_CLAIM`. La elegibilidad adulta se exige **antes**, que es lo que piden DT-012 y ADR-017: crear la fila más temprano no adelanta ningún control. Una persona `pending_activation` **no** puede crear organización ni perfil profesional; esas operaciones ya exigen estado activo. **No existe consulta de disponibilidad de usuario**: el choque vuelve como `conflict` sobre ese campo, porque preguntar si un handle está libre delata que alguien lo tiene. **El correo de contacto no se acepta como entrada**: es la dirección de la credencial —DT-016 los declara el mismo dato— y la API la consulta al proveedor por `sub`. Una dirección que mandara el cliente jamás puede guardarse como verificada: quedaría un contacto que nadie probó satisfaciendo el filtro de `OP-SYS-002`. Cambiarla es `OP-IDN-021`, con su propia verificación. **Límite de intentos obligatorio** |
-| **Falla cerrada** | Sin elegibilidad `pass` no hay persona, aunque el nombre y el handle sean válidos. Usuario en uso: `conflict`, y nada se crea. Si el proveedor no confirma la dirección como verificada: `forbidden`, y nada se crea |
+| **Falla cerrada** | Sin elegibilidad `pass` no hay persona ni corrección, aunque el nombre y el handle sean válidos. Usuario que otra persona tiene: `conflict`, y nada cambia. Si el proveedor no confirma la dirección como verificada: `forbidden` |
 
 #### `OP-IDN-044` — Consultar el intento de onboarding abierto
 
@@ -969,6 +970,23 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Es lo que sostiene HU-SP-015 criterio 3 y HU-SP-098 criterio 5: volver retoma donde iba en vez de empezar de nuevo. Una cuenta sin intento abierto —incluida una persona ya activada— recibe `null`, no un error: no haber empezado no es un fallo. Lo ausente viaja como `null` y nunca omitido, para que la app no tenga que adivinar si un paso se saltó o si el campo no llegó |
 | **Falla cerrada** | Sin token verificable, sin respuesta |
+
+#### `OP-IDN-045` — Declarar el sexo biológico
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/biological-sex` |
+| **Actor** | `A2`, dueño del intento. La persona ya existe en `pending_activation` desde `OP-IDN-043` |
+| **Filtros obligatorios** | Intento abierto y propio con `ELIGIBILITY_EVIDENCE` en `pass`. La cuenta debe tener `PERSON` vinculada. El sujeto es siempre la persona autenticada; nadie declara el sexo de otra |
+| **Transacción** | Una sola: escribir `PERSON.biological_sex`. El intento no cambia de estado |
+| **Idempotencia** | `Idempotency-Key`. Un reintento devuelve el mismo valor. **Una segunda declaración distinta corrige**, no choca: la persona puede volver atrás y cambiar su respuesta, y declinar después de haber declarado borra el valor. El sello del intento no se retira: la pregunta quedó respondida de todos modos |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | No admite `draft_local`: es un paso del onboarding y el estado autoritativo vive en el servidor |
+| **Información sensible** | Perfil fitness. Clasificación `training` |
+| **Evento de dominio** | Ninguno en V1. Nada reacciona todavía a este dato |
+| **Reglas** | **Vive en `identity.people`, no en `FITNESS_PROFILE_CLAIM`**: es un hecho singular y estable, y el catálogo de afirmaciones existe para datos que cambian y que varias fuentes observan. **No declararlo es una respuesta válida y se representa como ausencia de valor**, nunca como `unknown`: un centinela obligaría después a distinguirlo de «no preguntado». Por eso declinar **no llama a esta operación**; simplemente avanza. **Límite de intentos obligatorio** |
+| **Falla cerrada** | Valor fuera del enum: `invalid-request`, y nada se escribe. Sin persona vinculada: `forbidden`. Intento cerrado o sin elegibilidad: `invalid-request` |
 
 ### 7.2 Organizaciones
 
