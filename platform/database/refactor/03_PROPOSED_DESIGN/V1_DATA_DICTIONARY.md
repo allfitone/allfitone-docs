@@ -193,11 +193,14 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 - **Propósito:** catálogo cerrado de los atributos de perfil fitness declarables en V1.
 - **Dominio / fuente de verdad:** Identidad (catálogo de referencia).
+- **Miembros V1.** Se declaran cuando se construye la pantalla que los escribe, no antes: dar de alta un atributo es un `insert` en este catálogo, no un cambio de esquema, y enumerar códigos sin la pantalla que los usa inventa vocabulario que después no calza.
+  - `primary_training_goal` — `value_kind` enum, sin unidad, clasificación `training`. Valores: `lose_weight`, `build_muscle`, `get_fit`, `improve_performance`, `run_a_race`, `maintain`, que son los seis del criterio 1 de `HU-SP-010`. Clasificado `training` porque el profesional programa contra él: sin verlo no puede ajustar volumen ni intensidad.
+    - **`improve_performance` queda fuera del lanzamiento inicial de V1**, decidido el 23 de agosto de 2026. Permanece en el catálogo porque va a entrar más adelante y borrarlo obligaría a reponerlo, pero **el contrato de API declara solo los otros cinco** y rechaza este con `400`. Que no esté en V1 tiene que ser una garantía verificable, no una omisión de la pantalla.
 - **Fuera del catálogo:** el **sexo biológico** vive como columna de `identity.people`, no como atributo declarable. Decidido el 23 de agosto de 2026: es un hecho singular y estable, y el diseño de este catálogo —procedencias que coexisten, vigencias, `superseded_by_id`— existe para datos que cambian y que varias fuentes observan. Ver §4.1.
 - **Clasificación:** `operational`.
-- **Columnas:** `id` · `code text` · `name text` · `data_classification_code text` · `value_kind text` (numérico, texto, enum) · `unit_dimension text` (nullable).
+- **Columnas:** `id` · `code text` · `name text` · `data_classification_code text` · `value_kind text` (numérico, texto, enum) · `unit_dimension text` (nullable) · `allowed_values text[]` (nullable).
 - **FKs y borrado:** `data_classification_code → privacy.data_classifications(code) RESTRICT`.
-- **Uniques y checks:** `UNIQUE code`.
+- **Uniques y checks:** `UNIQUE code`. `allowed_values` es obligatorio y de al menos dos miembros cuando `value_kind` es enum, y nulo en cualquier otro caso; `unit_dimension` solo se acepta cuando el valor es numérico. Los miembros del enum viven aquí y no en la aplicación, para que la validación ocurra en la misma transacción que la escritura.
 - **Actores:** lectura autenticada; escritura plataforma.
 - **RLS:** lectura abierta a autenticados.
 - **Consultas:** por `code`.

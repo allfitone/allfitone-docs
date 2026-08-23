@@ -231,6 +231,13 @@ movilidad no se organizan en series y repeticiones.
 2. Puedo elegir solo uno como principal, para que la aplicación tenga una dirección.
 3. Puedo cambiarlo cuando quiera desde mi perfil.
 
+**Alcance del lanzamiento inicial.** Decidido el 23 de agosto de 2026: **mejorar mi
+rendimiento no se ofrece en el lanzamiento inicial de V1**. Entra más adelante y por
+eso sigue declarado en el catálogo de atributos, pero la lista del criterio 1 arranca
+con cinco. La razón es de producto: es el único de los seis cuyo avance no se ve en el
+cuerpo, así que la pantalla no puede mostrar lo que promete y ninguna de las otras
+cinco tiene ese problema.
+
 ### HU-SP-011 — Registrar mis datos físicos
 
 **Como** persona en el onboarding
