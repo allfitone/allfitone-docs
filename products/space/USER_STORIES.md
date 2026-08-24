@@ -263,8 +263,25 @@ cinco tiene ese problema.
 **Criterios**
 
 1. Elijo una o varias disciplinas: fuerza, running, movilidad, híbrido y las demás disponibles.
-2. Digo cuánta experiencia tengo en cada una, en términos simples: empezando, con algo de práctica, con experiencia.
+2. Digo cuánta experiencia tengo, en términos simples: empezando, con algo de práctica, con experiencia.
 3. Digo cuántos días a la semana puedo entrenar y cuánto tiempo tengo por sesión.
+
+**Alcance del lanzamiento inicial.** Decidido el 24 de agosto de 2026: el criterio 2
+declara **un nivel global**, no uno por disciplina. Decía «en cada una», y eso no es
+construible hoy: `catalog.disciplines` solo tiene filas sintéticas de prueba en
+`seed.sql` —que declara que producción no lo carga y exige curaduría aprobada— y su
+única política es `to allfit_owner` sin ningún `grant` para el rol de runtime, así que
+Space no puede leer la lista. Sin disciplinas reales que enumerar, el nivel por
+disciplina no tiene sobre qué colgarse. El argumento de producto apunta al mismo
+sitio: si las cargas se ajustan desde la primera semana, la precisión por disciplina
+en el momento de registrarse compra poco. El criterio 1 espera por la misma razón, y
+el criterio 3 es otra pregunta y merece su propia pantalla.
+
+**Pendiente de confirmar.** Los niveles de volumen que la pantalla anuncia —poco,
+medio, alto— y los cortes de tiempo —seis meses, años— vienen de un prototipo y **no
+los ha validado nadie que programe entrenamiento**. Ninguna pieza de `planning` los
+consume todavía, así que hoy describen una intención y no el comportamiento del plan.
+Revisar antes de tratarlos como promesa.
 
 ### HU-SP-013 — Contar dónde entreno y con qué
 
