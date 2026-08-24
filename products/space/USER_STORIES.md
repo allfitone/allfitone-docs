@@ -338,7 +338,7 @@ cinco tiene ese problema.
 
 1. Señalo una o varias zonas sobre una figura del cuerpo, y **puedo elegir las mismas zonas de una lista** sin usar la figura.
 2. Es un énfasis, no un plan: señalar una zona no excluye el resto del cuerpo ni promete un programa dedicado solo a ella.
-3. Puedo no señalar ninguna. En ese caso el énfasis lo decide mi objetivo principal.
+3. Puedo decir **«todo el cuerpo»**, y entonces el énfasis lo decide mi objetivo principal. Es una respuesta explícita y no dejar la pregunta en blanco: para continuar tengo que contestar algo.
 4. Puedo cambiarlo cuando quiera desde mi perfil.
 
 ### HU-SP-098 — Decir cómo me llamo
