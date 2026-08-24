@@ -343,12 +343,14 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **Contexto requerido** — Completo, incluido `app.purpose` para el acceso profesional.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`. **Sin `UPDATE` ni `DELETE`**: la inmutabilidad se garantiza con privilegios, no solo con disciplina.
 - **Proyección** — `identity.v_client_profile`, que aplica el `SCOPE_RESOURCE_RULE` de la **versión congelada en el grant**. Un grant v1 no recibe atributos añadidos en v2 aunque la fila los tenga.
-- **Índice para la policy** — sobre `(person_id, attribute_code, valid_from DESC)`.
+- **Índice para la policy** — sobre `(person_id, attribute_code, valid_from DESC)`. Además, único parcial de miembro vigente para los atributos multivaluados; hoy solo `focus_areas`. No participa en la policy: protege la forma del conjunto.
 - **`T-CLAIM-1` (positiva)** — Un coach con `relationship_training` v1 lee los atributos del field-set v1.
 - **`T-CLAIM-2` (negativa)** — Publicada la v2 con atributos nuevos, ese mismo grant v1 **no** los recibe.
 - **`T-CLAIM-3` (negativa)** — Un grant `read` intenta insertar una observación: denegado.
 - **`T-CLAIM-4` (positiva)** — Declaración de la persona, observación profesional e inferencia del sistema sobre el mismo atributo coexisten; ninguna sobrescribe a otra.
 - **`T-CLAIM-5` (negativa)** — Un profesional intenta revisar una afirmación con procedencia `person_declared`: denegado. Solo puede proponer.
+- **`T-CLAIM-6` (positiva)** — Varias afirmaciones vigentes del **mismo** atributo multivaluado y la **misma** procedencia coexisten, una por miembro del conjunto. Es lo que distingue un atributo multivaluado de uno singular, y sin esta prueba la diferencia solo vive en el cuerpo de la función.
+- **`T-CLAIM-7` (negativa)** — El mismo miembro dos veces vigente para la misma persona: rechazado por el único parcial, no por el comando.
 
 #### `BODY_PROGRESS_RECORD`
 

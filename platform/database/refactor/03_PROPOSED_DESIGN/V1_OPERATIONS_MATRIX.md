@@ -263,6 +263,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-043` | Crear el Fitness ID en estado pendiente | Comando | `A1` → `A2` |
 | `OP-IDN-044` | Consultar el intento de onboarding abierto | Consulta | `A1` |
 | `OP-IDN-045` | Declarar el sexo biológico | Comando | `A2` |
+| `OP-IDN-046` | Declarar las zonas de énfasis | Comando | `A2` |
 
 ---
 
@@ -987,6 +988,23 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno en V1. Nada reacciona todavía a este dato |
 | **Reglas** | **Vive en `identity.people`, no en `FITNESS_PROFILE_CLAIM`**: es un hecho singular y estable, y el catálogo de afirmaciones existe para datos que cambian y que varias fuentes observan. **No declararlo es una respuesta válida y se representa como ausencia de valor**, nunca como `unknown`: un centinela obligaría después a distinguirlo de «no preguntado». Por eso declinar **no llama a esta operación**; simplemente avanza. **Límite de intentos obligatorio** |
 | **Falla cerrada** | Valor fuera del enum: `invalid-request`, y nada se escribe. Sin persona vinculada: `forbidden`. Intento cerrado o sin elegibilidad: `invalid-request` |
+
+#### `OP-IDN-046` — Declarar las zonas de énfasis
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/profile/focus-areas` |
+| **Actor** | `A2`. El sujeto es siempre la persona autenticada |
+| **Filtros obligatorios** | La cuenta tiene `PERSON` vinculada. Cada miembro del conjunto pertenece a `allowed_values` del atributo `focus_areas`. Sin miembros repetidos y sin nulos internos. `whole_body` llega solo o no llega |
+| **Transacción** | Una sola, y declara **el conjunto completo**: sella con `valid_to` las afirmaciones vigentes de `focus_areas` que ya no están en el conjunto, inserta las que faltan y **no toca las que siguen**. Una zona retirada queda con `valid_to` y **sin `superseded_by_id`**: nada la reemplazó, y ese campo significa «fue reemplazada por esta otra», no «terminó» |
+| **Idempotencia** | `Idempotency-Key` con receipt durable. **Aquí `Command-Id` no es la PK de la fila**, a diferencia de `OP-IDN-004`: el comando escribe varias filas, así que cada una lleva su propio UUIDv7 y el agregado del receipt es la persona. Consecuencia declarada: el replay devuelve **el conjunto vigente**, no una foto de lo que escribió aquel comando. El reintento no duplica, que es lo que la clave garantiza |
+| **Paginación y orden** | No aplica. El conjunto se lee ordenado por código para que la comparación sea determinista |
+| **Offline / concurrencia** | Admite `draft_local` como el resto de la edición de perfil. Dos declaraciones concurrentes del mismo conjunto son idempotentes; dos distintas se serializan y gana la última, que es la semántica de declarar un conjunto entero |
+| **Información sensible** | Perfil fitness, clasificación `training`. Visible al profesional bajo `relationship_training` y según el field-set del grant |
+| **Evento de dominio** | Ninguno en V1. Nada reacciona todavía al énfasis; se añade cuando la planificación lo consuma |
+| **Reglas** | **El array es interfaz del comando, nunca almacenamiento**: cada zona es una fila, como en `OP-IDN-010` con las especialidades. La procedencia es `person_declared` y **no supersede la observación de un profesional** sobre el mismo atributo. `whole_body` es un miembro y significa «sin énfasis»; el conjunto vacío **no** es una respuesta y se rechaza, porque «no contesté» tiene que seguir siendo distinguible de «no quiero énfasis» |
+| **Falla cerrada** | Miembro fuera del catálogo, repetido, nulo, conjunto vacío, o `whole_body` acompañado de una zona: `invalid-request` y **nada se escribe**, sin escritura parcial. Sin persona vinculada: `forbidden` |
 
 ### 7.2 Organizaciones
 
