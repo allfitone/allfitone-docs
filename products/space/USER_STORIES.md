@@ -250,7 +250,21 @@ cinco tiene ese problema.
 
 1. Registro peso y estatura, y elijo si los quiero en kilos o libras, centímetros o pies.
 2. Estos datos son **míos**: quedan como mi primer registro de progreso y puedo actualizarlos cuando quiera.
-3. Puedo saltarme este paso; la aplicación funciona sin ellos, aunque el progreso será menos preciso.
+3. Las dos medidas se responden, en una sola pantalla y con el mismo control.
+
+**Alcance del lanzamiento inicial.** Decidido el 29 de agosto de 2026: **el paso deja de
+poder saltarse.** El criterio 3 decía «puedo saltarme este paso; la aplicación funciona sin
+ellos, aunque el progreso será menos preciso», y eso ya no es cierto: el peso es la **línea
+base de la serie de progreso**, y sin él no hay contra qué medir nada de lo que venga
+después. La frase «y sin él la aplicación funciona igual» prometía algo que el producto no
+cumple.
+
+**Las dos medidas comparten pantalla, y eso costó dos intentos.** El primero puso una
+tarjeta con su regla arriba y otra regla distinta abajo: dos objetos compitiendo, sin
+centro. Se separaron entonces en una pantalla cada una, y con una pregunta sola por
+pantalla el control ocupaba un tercio y el resto quedaba muerto. Vuelven juntas cuando las
+dos mitades pasan a ser **el mismo objeto** —rótulo, unidades, lectura y cinta—: como
+objetos distintos competían, como un objeto repetido se leen como pareja.
 
 ### HU-SP-012 — Contar qué entreno y desde cuándo
 
