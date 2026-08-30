@@ -174,6 +174,22 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Eventos:** `identity.onboarding_attempt_started.v1`, `identity.person_created_pending.v1`.
 - **Nota de diseño:** el intento guarda **lo que es del intento**: la cuenta, el estado, la invitación de referencia y las aceptaciones legales versionadas. Ningún dato de la persona vive aquí. `person_id` se llena en cuanto se crea el Fitness ID pendiente, así que desde ese momento el intento y la persona están relacionados y todo lo demás del onboarding escribe sobre ella. Por eso esta tabla **no crece cuando cambia el onboarding**: añadir o quitar preguntas de perfil no la toca.
 
+### 4.3.1 `identity.onboarding_step_skips`
+
+- **Propósito:** registrar que una persona **saltó** un paso del onboarding, para que no se le vuelva a preguntar.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `operational`.
+- **Columnas:** `onboarding_attempt_id uuid` · `step_code text` · `skipped_at timestamptz`.
+- **FKs y borrado:** `onboarding_attempt_id → onboarding_attempts(id) ON DELETE CASCADE`. El salto no sobrevive al intento que lo produjo.
+- **Uniques y checks:** PK compuesta `(onboarding_attempt_id, step_code)`, que hace el salto idempotente por construcción: saltar dos veces no escribe dos filas.
+- **Actores:** la propia cuenta, mediante función gobernada.
+- **RLS:** por el intento, `account_id = app.actor_account_id`.
+- **Consultas / índices:** por intento; la PK basta.
+- **Retención:** se purga con el intento.
+- **Eventos:** ninguno.
+- **Nota de diseño:** `HU-SP-015` permite saltar cualquier paso que no sea edad, nombre y términos, y `HU-SP-011` es el primero que lo ejerce. Una columna por paso en `onboarding_attempts` —como la que tiene el sexo— habría reproducido el problema que ya obligó a convertir la lectura del onboarding en un solo objeto `answers`: cada paso nuevo cambia la tabla. Aquí el paso es **un valor**, no una columna, así que la tabla no crece cuando crece el onboarding, lo mismo que promete la nota de §4.3. Un array de códigos habría sido la otra tentación, y la norma lo prohíbe: los conjuntos son tablas explícitas.
+- **Lo que un salto NO es:** declinar. El sexo biológico se declina y eso deja el sello en el intento con valor ausente, porque declinar **es** una respuesta a esa pregunta. Saltar es no responderla. Coinciden en que el paso deja de pedirse y se distinguen en que el salto no afirma nada sobre la persona.
+
 ### 4.4 `identity.eligibility_evidence`
 
 - **Propósito:** aplicación versionada de la política de mayoría de edad, congelada en la evidencia.
@@ -238,7 +254,9 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Clasificación:** `body`.
 - **Columnas:** `id uuid` (**Command-Id UUIDv7 del dispositivo para `OP-IDN-006`**) · `person_id uuid` · `metric_code text` · `value_numeric numeric` · `unit_code text` · `original_value numeric` (nullable) · `original_unit_code text` (nullable) · `measured_on date` · `media_ref text` (nullable, sin EXIF) · `has_media boolean`.
 - **FKs y borrado:** `person_id → people(id) RESTRICT`; `unit_code → catalog.units(code) RESTRICT`.
-- **Uniques y checks:** `CHECK (has_media = (media_ref is not null))`.
+- **Uniques y checks:** `CHECK (has_media = (media_ref is not null))`. Añadido al construir: `CHECK` cerrado sobre `metric_code` con los miembros de V1, y `CHECK ((original_value is null) = (original_unit_code is null))`, porque media pareja de original no dice nada.
+- **Miembros V1 de `metric_code`:** `body_weight` y `body_height`, declarados el 24 de agosto de 2026 con `HU-SP-011`. La ficha no le da FK ni catálogo, así que sin el check sería texto libre y un dedazo crearía una métrica fantasma que nadie vuelve a escribir. El prefijo `body_` no es adorno: `metric_code` existe también en los resultados de ejecución y en los derivados, donde `weight` es la carga levantada y no el peso de la persona. Añadir un miembro cuesta una migración, y ese coste es preferible.
+- **Canónico y original:** `value_numeric`/`unit_code` guardan **siempre** la unidad canónica de la dimensión, y `original_value`/`original_unit_code` lo que la persona vio. La conversión la hace la función con `catalog.units.to_canonical_factor` y nunca el cliente: el factor tiene una sola fuente de verdad, y guardar solo lo mostrado hace que 74 kg → 163 lb → 73,9 kg y el peso se mueva solo al cambiar de unidad y volver.
 - **Actores:** la persona (lee, escribe, borra); el profesional con `body_progress` **read**; worker de privacidad.
 - **RLS:** `access_control.is_self(person_id)` **OR** `access_control.can_access(person_id,'body_progress','read')`. `relationship_training` **no** alcanza; Studio usa `identity.v_client_body_progress`.
 - **Consultas:** `(person_id, measured_on desc)`.
@@ -1007,8 +1025,9 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Columnas:** `id` · `code text` · `dimension text` (peso, distancia, tiempo…) · `is_canonical boolean` · `to_canonical_factor numeric`.
 - **FKs y borrado:** ninguna saliente; las referencias entrantes usan `ON DELETE RESTRICT`.
 - **Uniques y checks:** `UNIQUE code`; `UNIQUE parcial (dimension) WHERE is_canonical`.
+- **Miembros V1.** Curados el 24 de agosto de 2026 con `HU-SP-011`, que es la primera pantalla que necesita unidades reales: dimensión `mass` con `kg` canónica y `lb` a `0.45359237`; dimensión `length` con `cm` canónica y `in` a `2.54`. Las filas `test_*` de `seed.sql` son sintéticas y producción no las carga.
 - **Actores:** lectura autenticada; escritura exclusiva de curaduría de plataforma.
-- **RLS:** lectura autenticada; sin escritura de runtime salvo función de curaduría.
+- **RLS:** lectura autenticada; sin escritura de runtime salvo función de curaduría. **El esquema no lo cumplía**: hasta el 24 de agosto de 2026 la única política era `to allfit_owner` y no había `grant` para el rol de runtime, así que Space no podía leer el catálogo que sus propias pantallas necesitan. Corregido al construir `HU-SP-011`; no es un cambio de norma sino ponerse en conformidad con ella.
 - **Consultas / índices:** por `code`; por `dimension`.
 - **Retención:** permanente; una unidad referenciada no se elimina.
 - **Eventos:** ninguno.

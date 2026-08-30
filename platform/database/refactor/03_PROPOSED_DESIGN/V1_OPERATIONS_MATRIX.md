@@ -264,6 +264,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-044` | Consultar el intento de onboarding abierto | Consulta | `A1` |
 | `OP-IDN-045` | Declarar el sexo biológico | Comando | `A2` |
 | `OP-IDN-046` | Declarar las zonas de énfasis | Comando | `A2` |
+| `OP-IDN-047` | Saltarse un paso del onboarding | Comando | `A2` |
 
 ---
 
@@ -1005,6 +1006,23 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno en V1. Nada reacciona todavía al énfasis; se añade cuando la planificación lo consuma |
 | **Reglas** | **El array es interfaz del comando, nunca almacenamiento**: cada zona es una fila, como en `OP-IDN-010` con las especialidades. La procedencia es `person_declared` y **no supersede la observación de un profesional** sobre el mismo atributo. `whole_body` es un miembro y significa «sin énfasis»; el conjunto vacío **no** es una respuesta y se rechaza, porque «no contesté» tiene que seguir siendo distinguible de «no quiero énfasis» |
 | **Falla cerrada** | Miembro fuera del catálogo, repetido, nulo, conjunto vacío, o `whole_body` acompañado de una zona: `invalid-request` y **nada se escribe**, sin escritura parcial. Sin persona vinculada: `forbidden` |
+
+#### `OP-IDN-047` — Saltarse un paso del onboarding
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/skips` |
+| **Actor** | `A2`, dueño del intento |
+| **Filtros obligatorios** | Intento abierto y propio. El paso pertenece a los que `HU-SP-015` permite saltar: **nunca** la edad, el nombre ni los términos, que son la condición para que exista una persona |
+| **Transacción** | Una sola: escribir `ONBOARDING_STEP_SKIP`. El intento no cambia de estado y no se escribe nada sobre la persona |
+| **Idempotencia** | La **clave primaria compuesta** `(intento, paso)` es toda la garantía: saltar dos veces escribe una fila. No lleva recibo durable porque no hay cuerpo que un replay pudiera contradecir, a diferencia de las demás operaciones de esta sección |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | No admite `draft_local`: es estado del onboarding y vive en el servidor |
+| **Información sensible** | Ninguna. Un salto no afirma nada de la persona, que es justo lo que lo distingue de declinar |
+| **Evento de dominio** | Ninguno en V1 |
+| **Reglas** | **Saltar no es declinar.** Declinar el sexo biológico deja el sello en el intento con valor ausente, porque declinar **es** una respuesta a esa pregunta; saltar es no responderla. Coinciden en que el paso deja de pedirse. Un salto **no impide volver**: el paso sigue siendo editable desde la flecha atrás y responderlo después lo deja respondido |
+| **Falla cerrada** | Paso no saltable o código desconocido: `invalid-request`. Intento cerrado, vencido o ajeno: `forbidden` |
 
 ### 7.2 Organizaciones
 
