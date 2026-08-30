@@ -389,6 +389,27 @@ Revisar antes de tratarlos como promesa.
 5. Al terminar este paso mi Fitness ID **ya existe**, pendiente de activación. Lo que responda de aquí en adelante queda guardado sobre él, así que si cierro la aplicación y vuelvo, sigo donde iba.
 6. Puedo cambiar mi nombre y mi usuario después desde mi perfil.
 
+### HU-SP-099 — Cerrar el onboarding y empezar
+
+**Como** persona que ya respondió todo el onboarding
+**quiero** ver que mi perfil quedó listo y entrar de una vez
+**para** empezar a entrenar sin preguntarme si faltaba algo.
+
+`E-SP-01` · imprescindible · HU-SP-008
+
+**Criterios**
+
+1. Veo que mi perfil está listo, y con mi nombre de usuario: lo que confirma que terminé es mi propia identidad, no un mensaje genérico.
+2. **Al entrar, mi Fitness ID queda activo.** Es el mismo paso, no dos: la pantalla no promete algo que ocurra después.
+3. Veo la semana que empieza, con hoy señalado. No es un plan todavía y no promete sesiones: dice cuándo empieza lo que sigue.
+4. Si vuelvo atrás, sigo pudiendo corregir lo que respondí. Cerrar el onboarding no cierra las respuestas.
+
+**Por qué existe esta historia.** La escribimos el 30 de agosto de 2026, después de
+detectar que el diseño tenía la pantalla y ninguna historia la describía: se habría
+construido contra nada. `HU-SP-008` dice lo que la activación **garantiza** —un solo
+Fitness ID, reutilizar la identidad si ya existía, ninguna organización actuando por
+ti— y esta dice **dónde y cómo** ocurre.
+
 ---
 
 ## E-SP-02 · Invitaciones y relaciones
