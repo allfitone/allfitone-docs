@@ -1316,15 +1316,16 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 
 ### 9.16 `planning.planned_sessions`
 
-- **Propósito:** sesión del calendario materializada al asignar; en la zona horaria de la persona.
+- **Propósito:** sesión del calendario materializada al asignar; en la zona horaria de la persona. **Pertenece a una semana, no a un día.**
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del calendario materializado de una asignación.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `assignment_id uuid` · `person_id uuid` · `template_version_id uuid` · `scheduled_at timestamptz` · `timezone text` · `status text` (`scheduled`, `paused`, `cancelled`, `completed`).
+- **Columnas:** `id` · `assignment_id uuid` · `person_id uuid` · `template_version_id uuid` · `week_starts_on date` · `scheduled_at timestamptz` · `timezone text` · `status text` (`scheduled`, `paused`, `cancelled`, `completed`).
+- **`week_starts_on` es lo que decide qué se ofrece**, y es el lunes de la semana de calendario a la que pertenece la sesión. `scheduled_at` se conserva como el día **sugerido** dentro de esa semana: ordena la lista y fecha el historial, pero no obliga. La semana N del programa cae en la semana de calendario N contada desde la que contiene el día de la asignación, así que tomar un programa un viernes deja esa primera semana corta. Lo que no se hace **no se arrastra**: la semana siguiente empieza limpia.
 - **FKs y borrado:** `(assignment_id, person_id) → program_assignments(id, person_id) ON DELETE CASCADE`; `template_version_id → session_template_versions(id) RESTRICT` (`IX-15`).
 - **Uniques y checks:** clave portadora `UNIQUE (id, person_id)`.
 - **Actores:** la persona (agenda); el coach reprograma la parte administrada.
 - **RLS:** vía la asignación.
-- **Consultas / índices:** `(assignment_id, scheduled_at)`.
+- **Consultas / índices:** `(assignment_id, scheduled_at)`, `(person_id, week_starts_on)`.
 - **Retención:** con la asignación.
 - **Eventos:** `planning.session_rescheduled.v1`.
 

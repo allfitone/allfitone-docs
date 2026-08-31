@@ -2211,6 +2211,7 @@ Reglas que gobiernan todo el dominio:
 | `OP-PLN-020` | Listar programas y versiones | Consulta | `A2`, `A3`–`A5` |
 | `OP-PLN-021` | Consultar una versión publicada | Consulta | `A2`, `A3`–`A5` |
 | `OP-PLN-022` | Consultar mi día | Consulta | `A2` |
+| `OP-PLN-024` | Ordenar mis programas | Comando | `A2` |
 
 ---
 
@@ -2375,13 +2376,13 @@ Reglas que gobiernan todo el dominio:
 | **Superficie** | `POST /space/v1/assignments` |
 | **Actor** | `A2` |
 | **Filtros obligatorios** | Versión de programa publicada y accesible para la persona: propia o global |
-| **Transacción** | Igual que `OP-PLN-010`, **sin** relación de origen y sin periodo de gestión |
+| **Transacción** | Igual que `OP-PLN-010`, **sin** relación de origen y sin periodo de gestión. Si la versión es `global`, **bifurca primero**: copia el programa, sus plantillas, sus pasos y sus targets a contenido de la persona y asigna la copia. Todo en la misma transacción y bajo un solo recibo |
 | **Idempotencia** | `Idempotency-Key` |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Ninguna se comparte: es contenido personal |
 | **Evento de dominio** | `planning.assignment_created.v1` |
-| **Reglas** | Una asignación personal no tiene gestor y nadie la administra. Ninguna organización la ve, salvo que un grant la incluya explícitamente |
+| **Reglas** | Una asignación personal no tiene gestor y nadie la administra. Ninguna organización la ve, salvo que un grant la incluya explícitamente. **Tomar un programa global es quedárselo**: la persona pasa a ser dueña de una copia, así que lo que Allfit publique después no la alcanza y lo que ella cambie no alcanza a nadie. La inmutabilidad de una versión publicada ya protegía del cambio; lo que la copia añade es la propiedad, que es lo que hace posible editarlo. Partir el acto en dos operaciones dejaría a alguien dueño de una copia sin asignación si fallara la segunda mitad. **El calendario se materializa por semanas de calendario**: la semana N del programa cae en la semana N contada desde la que contiene el día de la asignación |
 | **Falla cerrada** | — |
 
 #### `OP-PLN-012` — Reprogramar una sesión planificada
@@ -2534,7 +2535,24 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Cacheable para presentación |
 | **Información sensible** | Agenda, entrenamiento y peso corporal, cada uno con su categoría |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Cierra el hueco que `HU-SP-089` tenía anotado como `NEW-SP-TODAY`. **Compone, no centraliza**: Planificación responde por lo que hay agendado hoy, Ejecución por lo entrenado en la semana y por el historial, e Identidad por el peso vigente; la superficie los junta en una respuesta porque la pantalla no puede dibujar ninguno sin los otros. Ningún dominio lee las tablas de otro |
+| **Reglas** | Cierra el hueco que `HU-SP-089` tenía anotado como `NEW-SP-TODAY`. **Compone, no centraliza**: Planificación responde por lo que hay agendado esta semana, Ejecución por lo entrenado y por el historial, e Identidad por el peso vigente; la superficie los junta en una respuesta porque la pantalla no puede dibujar ninguno sin los otros. Ningún dominio lee las tablas de otro. **La unidad es la semana de calendario, de lunes a domingo**, y la sesión que se ofrece es la siguiente pendiente de esa semana, no la fechada hoy: el día es una sugerencia. Cumplida la semana no se adelanta la siguiente; se dice que está cumplida. Lo que quede sin hacer **no se arrastra** |
+| **Falla cerrada** | — |
+
+#### `OP-PLN-024` — Ordenar mis programas
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `PUT /space/v1/programs/mine/order` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Todas las asignaciones personales de la persona autenticada, sin faltar ni repetir ninguna |
+| **Transacción** | Reescribir el orden de presentación de todas sus asignaciones en una sola pasada |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; reenviar el mismo orden converge |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada |
+| **Información sensible** | Ninguna se comparte: es contenido personal |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | El orden **no es decoración**: el primero es el programa sobre el que abre la pestaña Entrenar, así que vive en la base y no en el dispositivo — reinstalar la aplicación no puede cambiar con qué programa se entrena. Es una escritura **entera**, como reemplazar los resultados de una sesión: el cliente manda el orden que está viendo completo, así que nunca hay un orden a medio aplicar. Un orden parcial se rechaza, porque dejaría lo omitido donde estuviera. **Una asignación nueva entra adelante**, de modo que tomar un programa es elegirlo sin un paso más |
 | **Falla cerrada** | — |
 
 #### `OP-PLN-021` — Consultar una versión publicada
@@ -2597,14 +2615,14 @@ Reglas que gobiernan todo el dominio:
 | **Tipo** | Comando |
 | **Superficie** | `POST /space/v1/planned-sessions/{id}/attempts` |
 | **Actor** | `A2`, dueño de la asignación |
-| **Filtros obligatorios** | La sesión planificada pertenece a una asignación **propia**; la asignación no está desacoplada y pausada |
+| **Filtros obligatorios** | La sesión planificada pertenece a una asignación **propia**; la asignación no está desacoplada y pausada. **Una sesión ya cerrada admite otro intento**: rechaza `cancelled` y `paused`, no `completed` |
 | **Transacción** | Una sola: crear `EXECUTED_SESSION` en estado iniciado congelando disciplina, tipo de actividad, contrato de resultados vigente y su versión, zona horaria y procedencia de captura; crear el `PLANNED_SESSION_EXECUTION` con `attempt_number` único y monotónico |
 | **Idempotencia** | `Command-Id = EXECUTED_SESSION.id`; replay HTTP por `Idempotency-Key`. Doble toque o recuperación offline no crean otro intento |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Admite `draft_local`: el dispositivo puede iniciar sin conexión y sincronizar después con el mismo `Command-Id`. La numeración de intentos se serializa en el servidor |
 | **Información sensible** | Entrenamiento de la persona |
 | **Evento de dominio** | `execution.attempt_started.v1` |
-| **Reglas** | Una persona **no puede ejecutar una asignación ajena**. Los intentos son históricos y no se borran para "limpiar" el historial |
+| **Reglas** | Una persona **no puede ejecutar una asignación ajena**. Los intentos son históricos y no se borran para "limpiar" el historial. **Repetir una sesión hecha es legítimo** y crea otro intento; el primero válido sigue siendo el primario y es el que cuenta para la adherencia de la semana, de modo que repetir no infla el conteo |
 | **Falla cerrada** | Asignación desacoplada y pausada, rechazo |
 
 #### `OP-EXE-002` — Reanudar el intento activo

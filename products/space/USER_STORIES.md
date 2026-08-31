@@ -843,10 +843,12 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 **Criterios**
 
 1. Puedo asignarme un programa propio o uno global publicado.
-2. Mi agenda queda creada completa en el momento de asignarme el programa, no cuando un proceso corra más tarde.
-3. Nadie administra esta asignación: no tiene profesional a cargo.
-4. Ninguna organización la ve, salvo que yo comparta explícitamente esa categoría.
-5. Si se solapa con otro programa activo, se me advierte pero no se me bloquea.
+2. **Al tomar un programa de Allfit me queda una copia mía.** Lo que Allfit publique después no me toca, y lo que yo cambie no le toca a nadie más. El programa aparece entre los míos porque lo es, no porque se lo esté tomando prestado.
+3. Mi agenda queda creada completa en el momento de asignarme el programa, no cuando un proceso corra más tarde.
+4. **Mi agenda se organiza por semanas de calendario**, de lunes a domingo. La semana 1 del programa es la semana en la que lo tomo, así que empezar un viernes deja esa semana corta: lo que no alcance no se arrastra.
+5. Nadie administra esta asignación: no tiene profesional a cargo.
+6. Ninguna organización la ve, salvo que yo comparta explícitamente esa categoría.
+7. Si se solapa con otro programa activo, se me advierte pero no se me bloquea.
 
 ### HU-SP-041 — Decidir qué pasa con mi plan cuando termina la relación
 
@@ -1010,7 +1012,8 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 2. Si el programa quedó pausado por una relación terminada, no puedo empezar hasta decidir qué hacer con él.
 3. Puedo empezar sin conexión y sincronizar después.
 4. Si toco dos veces o se corta la red, sigo teniendo **un solo** intento, no dos.
-5. Al empezar queda fijado con qué reglas se va a validar mi sesión, y esas reglas no cambian después.
+5. **Puedo repetir una sesión que ya cerré.** Queda como otro intento en mi historial y no reemplaza al primero, que es el que cuenta para la semana.
+6. Al empezar queda fijado con qué reglas se va a validar mi sesión, y esas reglas no cambian después.
 
 ### HU-SP-052 — Entrenar algo que no estaba planificado
 
@@ -1682,11 +1685,13 @@ y lo sigue viendo.
 
 **Criterios**
 
-1. Al abrir la aplicación veo mi entrenamiento de hoy y puedo empezarlo desde ahí, sin pasar por otras pantallas.
-2. Si no tengo nada planeado, se me ofrece elegir un programa (`HU-SP-100`) y también registrar un entrenamiento libre. **Nunca veo una pantalla vacía sin salida.**
-3. Veo lo que quedó pendiente: una sesión sin cerrar, una propuesta de mi coach esperando respuesta, un permiso que me pidieron.
-4. Si mi plan con el gimnasio está suspendido, lo veo aquí con claridad y sé qué hacer.
-5. Todo se muestra en mi zona horaria.
+1. Al abrir la aplicación veo **la siguiente sesión pendiente de mi semana** y puedo empezarla desde ahí, sin pasar por otras pantallas.
+2. **El día es una sugerencia, no una obligación.** Puedo hacer cualquier sesión de la semana el día que quiera; la semana es la unidad y el orden orienta.
+3. **Si ya cumplí la semana se me dice**, y se me ofrece entrenar libre en vez de adelantar la semana siguiente.
+4. Si no tengo nada planeado, se me ofrece elegir un programa (`HU-SP-100`) y también registrar un entrenamiento libre. **Nunca veo una pantalla vacía sin salida.**
+5. Veo lo que quedó pendiente: una sesión sin cerrar, una propuesta de mi coach esperando respuesta, un permiso que me pidieron.
+6. Si mi plan con el gimnasio está suspendido, lo veo aquí con claridad y sé qué hacer.
+7. Todo se muestra en mi zona horaria.
 
 ### HU-SP-100 — Elegir mi primer programa
 
