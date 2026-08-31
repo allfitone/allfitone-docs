@@ -1702,10 +1702,11 @@ y lo sigue viendo.
 2. **Elijo cuántos días por semana puedo comprometer.** Se me ofrecen tres, cuatro y cinco días para mi objetivo y mi nivel, y ninguna de esas opciones es contenido pensado para otro nivel.
 3. Uno viene marcado como sugerido, y puedo elegir otro sin fricción. La sugerencia orienta, no decide.
 4. De cada programa veo antes de elegir cuántos días son, cuántas semanas dura, para qué nivel es y qué zonas trabaja.
-5. Puedo ver el catálogo completo, no solo lo que me proponen.
-6. **Al elegir uno, tengo sesiones en mi agenda desde hoy**, en mi zona horaria. Elegir no es una intención: es un plan.
-7. Nunca estoy obligada a elegir: entrenar libre y crear mi propio programa siguen disponibles desde aquí.
-8. El programa que elijo es mío. Ninguna organización lo administra ni lo ve.
+5. **Antes de comprometerme veo el contenido completo**: cada día del reparto, con sus ejercicios y sus series. Ocho semanas no se deciden con un resumen.
+6. Puedo ver el catálogo completo, no solo lo que me proponen.
+7. **Al elegir uno, tengo sesiones en mi agenda desde hoy**, en mi zona horaria. Elegir no es una intención: es un plan.
+8. Nunca estoy obligada a elegir: entrenar libre y crear mi propio programa siguen disponibles desde aquí.
+9. El programa que elijo es mío. Ninguna organización lo administra ni lo ve.
 
 **Por qué existe esta historia.** La escribimos el 31 de agosto de 2026, después de
 detectar —como con `HU-SP-099`— que el diseño tenía la pantalla y ninguna historia la

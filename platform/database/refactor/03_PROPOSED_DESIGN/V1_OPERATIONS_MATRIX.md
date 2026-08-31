@@ -2210,6 +2210,7 @@ Reglas que gobiernan todo el dominio:
 | `OP-PLN-019` | Listar plantillas y versiones | Consulta | `A2`, `A3`–`A5` |
 | `OP-PLN-020` | Listar programas y versiones | Consulta | `A2`, `A3`–`A5` |
 | `OP-PLN-021` | Consultar una versión publicada | Consulta | `A2`, `A3`–`A5` |
+| `OP-PLN-022` | Consultar mi día | Consulta | `A2` |
 
 ---
 
@@ -2519,21 +2520,38 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | Distingue explícitamente borrador de versiones publicadas. Los programas maestros de una organización **no** son visibles bajo `prior_training_history` de otra. El contenido `global` lo lee cualquier persona autenticada y **no** pertenece a ninguna organización, que es lo que `OP-PLN-011` ya asumía al admitir una versión «propia o global» |
 | **Falla cerrada** | — |
 
+#### `OP-PLN-022` — Consultar mi día
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/today` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Lo propio de la persona autenticada, en su zona horaria |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Cacheable para presentación |
+| **Información sensible** | Agenda, entrenamiento y peso corporal, cada uno con su categoría |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Cierra el hueco que `HU-SP-089` tenía anotado como `NEW-SP-TODAY`. **Compone, no centraliza**: Planificación responde por lo que hay agendado hoy, Ejecución por lo entrenado en la semana y por el historial, e Identidad por el peso vigente; la superficie los junta en una respuesta porque la pantalla no puede dibujar ninguno sin los otros. Ningún dominio lee las tablas de otro |
+| **Falla cerrada** | — |
+
 #### `OP-PLN-021` — Consultar una versión publicada
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /studio/v1/organizations/{orgId}/session-templates/{id}/versions/{v}` · `GET /space/v1/assignments/{id}/program-version` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/session-templates/{id}/versions/{v}` · `GET /space/v1/assignments/{id}/program-version` · `GET /space/v1/programs/{programVersionId}` |
 | **Actor** | `A2`, `A3`–`A5` |
-| **Filtros obligatorios** | La versión pertenece al contexto del actor, o le fue asignada a la persona autenticada |
+| **Filtros obligatorios** | La versión pertenece al contexto del actor, le fue asignada a la persona autenticada, **o es contenido `global` publicado**. Una versión que se puede asignar se puede leer: son la misma regla de acceso que `OP-PLN-011`, y decidir sin ver el contenido no es decidir |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Cacheable: es contenido inmutable |
 | **Información sensible** | Contenido de entrenamiento |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Una persona puede leer íntegramente la versión que le fue asignada, aunque pertenezca a una organización: es el contenido que va a ejecutar. Eso **no** le da acceso al resto del catálogo de esa organización |
+| **Reglas** | Una persona puede leer íntegramente la versión que le fue asignada, aunque pertenezca a una organización: es el contenido que va a ejecutar. Eso **no** le da acceso al resto del catálogo de esa organización. Ausente y prohibido responden igual: distinguirlos haría enumerable el catálogo ajeno de identificador en identificador |
 | **Falla cerrada** | — |
 
 ### 7.7 Ejecución
