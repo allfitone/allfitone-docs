@@ -2509,14 +2509,14 @@ Reglas que gobiernan todo el dominio:
 | **Tipo** | Consulta |
 | **Superficie** | `GET /studio/v1/organizations/{orgId}/session-templates` · `.../programs` · equivalentes en `/space/v1` |
 | **Actor** | `A3`–`A5` en Studio; `A2` para contenido propio |
-| **Filtros obligatorios** | Contenido del contexto del actor: su organización o su persona. **Nunca** de otra organización |
+| **Filtros obligatorios** | Contenido del contexto del actor: su organización o su persona, **más el contenido `global` publicado**. **Nunca** de otra organización |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
-| **Paginación y orden** | Cursor. Orden: actualización descendente, desempate por identificador |
+| **Paginación y orden** | Cursor. Orden: actualización descendente, desempate por identificador. En `/space` el catálogo global se ordena por correspondencia con lo declarado en el onboarding —objetivo, nivel, zonas y sexo— antes que por fecha |
 | **Offline / concurrencia** | Cacheable para presentación |
-| **Información sensible** | Contenido de entrenamiento de la organización |
+| **Información sensible** | Contenido de entrenamiento de la organización. El catálogo `global` no lo es: es contenido publicado de Allfit |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Distingue explícitamente borrador de versiones publicadas. Los programas maestros de una organización **no** son visibles bajo `prior_training_history` de otra |
+| **Reglas** | Distingue explícitamente borrador de versiones publicadas. Los programas maestros de una organización **no** son visibles bajo `prior_training_history` de otra. El contenido `global` lo lee cualquier persona autenticada y **no** pertenece a ninguna organización, que es lo que `OP-PLN-011` ya asumía al admitir una versión «propia o global» |
 | **Falla cerrada** | — |
 
 #### `OP-PLN-021` — Consultar una versión publicada

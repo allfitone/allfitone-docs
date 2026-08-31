@@ -1683,10 +1683,43 @@ y lo sigue viendo.
 **Criterios**
 
 1. Al abrir la aplicación veo mi entrenamiento de hoy y puedo empezarlo desde ahí, sin pasar por otras pantallas.
-2. Si no tengo nada planeado, se me ofrece registrar un entrenamiento libre. **Nunca veo una pantalla vacía sin salida.**
+2. Si no tengo nada planeado, se me ofrece elegir un programa (`HU-SP-100`) y también registrar un entrenamiento libre. **Nunca veo una pantalla vacía sin salida.**
 3. Veo lo que quedó pendiente: una sesión sin cerrar, una propuesta de mi coach esperando respuesta, un permiso que me pidieron.
 4. Si mi plan con el gimnasio está suspendido, lo veo aquí con claridad y sé qué hacer.
 5. Todo se muestra en mi zona horaria.
+
+### HU-SP-100 — Elegir mi primer programa
+
+**Como** persona que acaba de activar su Fitness ID y no tiene nada planeado
+**quiero** que me propongan programas que encajen conmigo
+**para** empezar hoy sin tener que armar un plan desde cero.
+
+`E-SP-16` · imprescindible
+
+**Criterios**
+
+1. Veo programas que corresponden a lo que conté en el onboarding: mi objetivo y cuánto he entrenado. No es un catálogo genérico.
+2. **Elijo cuántos días por semana puedo comprometer.** Se me ofrecen tres, cuatro y cinco días para mi objetivo y mi nivel, y ninguna de esas opciones es contenido pensado para otro nivel.
+3. Uno viene marcado como sugerido, y puedo elegir otro sin fricción. La sugerencia orienta, no decide.
+4. De cada programa veo antes de elegir cuántos días son, cuántas semanas dura, para qué nivel es y qué zonas trabaja.
+5. Puedo ver el catálogo completo, no solo lo que me proponen.
+6. **Al elegir uno, tengo sesiones en mi agenda desde hoy**, en mi zona horaria. Elegir no es una intención: es un plan.
+7. Nunca estoy obligada a elegir: entrenar libre y crear mi propio programa siguen disponibles desde aquí.
+8. El programa que elijo es mío. Ninguna organización lo administra ni lo ve.
+
+**Por qué existe esta historia.** La escribimos el 31 de agosto de 2026, después de
+detectar —como con `HU-SP-099`— que el diseño tenía la pantalla y ninguna historia la
+describía. `HU-SP-089` criterio 2 solo ofrecía entrenamiento libre cuando no había
+nada planeado, que es una salida pero no un plan; se enmendó en el mismo cambio.
+
+**De dónde sale el catálogo.** Los programas son contenido **global**, propiedad de
+Allfit: no pertenecen a ninguna organización ni a ninguna persona. `OP-PLN-011` ya
+preveía esto al exigir «versión de programa publicada y accesible para la persona:
+propia o global». En V1 el catálogo es curado y precargado; **no hay IA generando
+programas**, y la correspondencia con la persona se resuelve con lo que declaró.
+
+**Qué hace el sexo declarado.** Ordena, no filtra. Todos ven el mismo catálogo y
+quien declinó no recibe una lista distinta ni necesita una regla aparte.
 
 ### HU-SP-090 — Moverme por la aplicación
 
@@ -1783,7 +1816,7 @@ y lo sigue viendo.
 | `E-SP-13` Mi plan con el gimnasio | `HU-SP-079` – `HU-SP-082` | 4 de 4 |
 | `E-SP-14` Qué pasa si no pago | `HU-SP-083` | 0 de 1 |
 | `E-SP-15` Allfit Premium | `HU-SP-084` – `HU-SP-088` | 5 de 5 |
-| `E-SP-16` Hoy y navegación | `HU-SP-089` – `HU-SP-094` | 3 de 6 |
+| `E-SP-16` Hoy y navegación | `HU-SP-089` – `HU-SP-094`, `HU-SP-100` | 4 de 7 |
 | **Total** | **98 historias** | **52 imprescindibles** |
 
 El camino mínimo para lanzar es: crear cuenta y entrar, activar el Fitness ID,

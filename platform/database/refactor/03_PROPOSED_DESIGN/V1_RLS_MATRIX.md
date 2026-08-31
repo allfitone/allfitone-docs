@@ -814,17 +814,20 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
-| `A2` | Los personales propios | Propios | Propios | — |
-| `A3` | Los de su organización | Sí | Sí | — |
-| `A4`, `A5` | Los de su organización | Sí | Sí, más deprecar | — |
+| `A2` | Los personales propios **y todo el catálogo `global` publicado** | Propios | Propios | — |
+| `A3` | Los de su organización, más el `global` | Sí | Sí | — |
+| `A4`, `A5` | Los de su organización, más el `global` | Sí | Sí, más deprecar | — |
 | `A6` | — | — | — | — |
 | Personas ajenas | — | — | — | — |
+| Curaduría de plataforma | El `global` | El `global` | El `global` | — |
 
-- **Condición RLS** — (`owner_organization_id = access_control.org()` **AND** `access_control.has_membership(owner_organization_id)`) **OR** `owner_person_id = access_control.person()`. Un constraint garantiza que exactamente uno de los dos owners es no nulo.
-- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE`. Sin `DELETE`.
-- **Índice para la policy** — sobre `(owner_organization_id, status)` y `(owner_person_id, status)`.
+- **Condición RLS** — `content_scope = 'global'` **OR** (`content_scope = 'organization'` **AND** `owner_organization_id = access_control.org()` **AND** `access_control.has_membership(owner_organization_id)`) **OR** (`content_scope = 'person'` **AND** `owner_person_id = access_control.person()`). Es literalmente la condición que §7.x ya usa para `catalog.movements`, y un constraint garantiza que el owner corresponde al scope: `global` no tiene ninguno.
+- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE`. Sin `DELETE`. El contenido `global` **no** se escribe desde el runtime: lo publica la curaduría de plataforma.
+- **Índice para la policy** — sobre `(content_scope, owner_organization_id, status)` y `(content_scope, owner_person_id, status)`.
 - **`T-TPL-1` (negativa)** — Un borrador **nunca** es referenciable por un programa ni por una asignación.
 - **`T-TPL-2` (negativa)** — Los programas maestros de una organización **no** son visibles bajo `prior_training_history` de otra.
+- **`T-TPL-3` (positiva)** — Una persona sin organización lee el catálogo `global` completo.
+- **`T-TPL-4` (negativa)** — Leer el catálogo `global` **no** abre nada de ninguna organización: el vecino sigue sin ver el contenido privado del otro.
 
 #### `SESSION_TEMPLATE_VERSION` · `PLANNED_STEP` · targets · `PROGRAM_VERSION` · `PROGRAM_VERSION_SESSION`
 
@@ -834,7 +837,7 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 | `A2` destinataria | La versión que le fue **asignada** | — | — | — |
 | Resto | — | — | — | — |
 
-- **Condición RLS** — Owner del contenido, **OR** existe una `PROGRAM_ASSIGNMENT` de `access_control.person()` que referencia esa versión. Los pasos y targets heredan de su versión.
+- **Condición RLS** — Contenido `global`, **OR** owner del contenido, **OR** existe una `PROGRAM_ASSIGNMENT` de `access_control.person()` que referencia esa versión. Los pasos y targets heredan de su versión, y la segmentación (`PROGRAM_VERSION_GOAL`, `..._LEVEL`, `..._EMPHASIS`) también: es parte de la versión y es inmutable con ella.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`. **Sin `UPDATE` ni `DELETE` para ningún rol de runtime**: es la garantía de inmutabilidad de las versiones publicadas.
 - **Índice para la policy** — sobre `(template_id, version_number)` único, y sobre `program_version_id` en la asignación.
 - **`T-VER-1` (negativa)** — Ninguna vía permite editar una versión publicada.

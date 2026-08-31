@@ -1109,11 +1109,11 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Propósito:** identidad estable de una plantilla de sesión; borradores y versiones no se mezclan.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad de la identidad y ownership estable de cada plantilla.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `owner_organization_id uuid` (nullable) · `owner_person_id uuid` (nullable) · `discipline_code text` · `status catalog.publication_status`.
+- **Columnas:** `id` · `content_scope catalog.content_scope` · `owner_organization_id uuid` (nullable) · `owner_person_id uuid` (nullable) · `author_person_id uuid` (nullable) · `discipline_code text` · `status catalog.publication_status`.
 - **FKs y borrado:** owners → sus tablas `RESTRICT`; `discipline_code → catalog.disciplines(code) RESTRICT`.
-- **Uniques y checks:** `CHECK (num_nonnulls(owner_organization_id, owner_person_id) = 1)`.
-- **Actores:** owner del contexto; sin acceso entre organizaciones.
-- **RLS:** owner org con membresía **OR** owner person.
+- **Uniques y checks:** `CHECK` de un solo owner según `content_scope`, idéntico al de `catalog.movements`: `global` sin ningún owner, `organization` solo con organización, `person` solo con persona. `CHECK (author_person_id IS NULL) = (content_scope = 'global')` — el contenido global no lo firma una persona, lo publica la plataforma.
+- **Actores:** owner del contexto; sin acceso entre organizaciones. El contenido `global` lo escribe solo la curaduría de plataforma.
+- **RLS:** `content_scope = 'global'` **OR** owner org con membresía **OR** owner person.
 - **Consultas / índices:** `(owner_organization_id, status)`, `(owner_person_id, status)`.
 - **Retención:** con el owner.
 - **Eventos:** `planning.session_template_created.v1`.
@@ -1221,11 +1221,11 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Propósito:** identidad estable de un programa.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad de la identidad y ownership estable de cada programa.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `owner_organization_id uuid` (nullable) · `owner_person_id uuid` (nullable) · `status catalog.publication_status`.
+- **Columnas:** `id` · `content_scope catalog.content_scope` · `owner_organization_id uuid` (nullable) · `owner_person_id uuid` (nullable) · `author_person_id uuid` (nullable) · `status catalog.publication_status`.
 - **FKs y borrado:** owners → sus tablas `RESTRICT`.
-- **Uniques y checks:** `CHECK (num_nonnulls(owner_organization_id, owner_person_id) = 1)`.
-- **Actores:** owner personal u organización con membresía/capacidad vigente; sin acceso de otras organizaciones.
-- **RLS:** owner del contexto.
+- **Uniques y checks:** `CHECK` de un solo owner según `content_scope`, idéntico al de `catalog.movements`. `CHECK (author_person_id IS NULL) = (content_scope = 'global')`.
+- **Actores:** owner personal u organización con membresía/capacidad vigente; sin acceso de otras organizaciones. El contenido `global` lo escribe solo la curaduría de plataforma y **cualquier persona autenticada lo lee**: es el catálogo que `OP-PLN-011` ya llamaba «global» al exigir «versión publicada y accesible para la persona: propia o global».
+- **RLS:** `content_scope = 'global'` **OR** owner del contexto.
 - **Consultas / índices:** `(owner_organization_id, status)`, `(owner_person_id, status)`.
 - **Retención:** se archiva cuando deja de usarse; se conserva mientras una versión o asignación lo referencie.
 - **Eventos:** `planning.program_created.v1`.
@@ -1342,7 +1342,56 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Retención:** se conserva como evidencia del periodo bloqueado junto con el evento causal; su cierre no altera ni revive grants, relaciones, membresías, asignaciones o sesiones.
 - **Eventos:** ninguno propio; la transición causal emite el evento de suscripción u organización correspondiente.
 
-Nota de conteo: `planning` tiene 17 tablas y 17 fichas; §9.5–9.8 son cuatro tablas físicas independientes.
+### 9.18 `planning.program_version_goals`
+
+- **Propósito:** para qué objetivos sirve una versión de programa. Es lo que permite proponer un catálogo sin IA.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad de la segmentación con la que se publicó una versión.
+- **Clasificación:** `training`.
+- **Columnas:** `program_version_id uuid` · `goal_code text`.
+- **FKs y borrado:** `program_version_id → program_versions(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `PRIMARY KEY (program_version_id, goal_code)`; `CHECK` cerrado sobre los cinco objetivos que el contrato admite. `improve_performance` queda fuera porque `PrimaryTrainingGoal` ya lo excluye.
+- **Actores:** lectura autenticada junto con la versión; escritura solo por la curaduría de plataforma.
+- **RLS:** vía la versión.
+- **Consultas / índices:** `(goal_code, program_version_id)` para resolver el catálogo desde el objetivo declarado.
+- **Retención:** con la versión. **Es inmutable como ella**: una versión publicada queda fija, y la segmentación con la que se publicó también.
+- **Eventos:** ninguno propio.
+
+### 9.19 `planning.program_version_levels`
+
+- **Propósito:** para qué nivel de experiencia sirve una versión.
+- **Dominio / fuente de verdad:** Planificación.
+- **Clasificación:** `training`.
+- **Columnas:** `program_version_id uuid` · `experience_code text`.
+- **FKs y borrado:** `program_version_id → program_versions(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `PRIMARY KEY (program_version_id, experience_code)`; `CHECK` cerrado sobre `starting`, `some_practice`, `experienced`, el vocabulario de `training_experience` en `identity.profile_attributes`.
+- **Actores:** igual que §9.18.
+- **RLS:** vía la versión.
+- **Consultas / índices:** `(experience_code, program_version_id)`.
+- **Retención:** con la versión, inmutable.
+- **Eventos:** ninguno propio.
+
+### 9.20 `planning.program_version_emphases`
+
+- **Propósito:** qué zonas trabaja una versión. Ordena el catálogo contra las zonas declaradas y es lo que la tarjeta muestra antes de elegir.
+- **Dominio / fuente de verdad:** Planificación.
+- **Clasificación:** `training`.
+- **Columnas:** `program_version_id uuid` · `focus_area_code text`.
+- **FKs y borrado:** `program_version_id → program_versions(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `PRIMARY KEY (program_version_id, focus_area_code)`; `CHECK` cerrado sobre las ocho zonas de `focus_areas`.
+- **Actores:** igual que §9.18.
+- **RLS:** vía la versión.
+- **Consultas / índices:** `(focus_area_code, program_version_id)`.
+- **Retención:** con la versión, inmutable.
+- **Eventos:** ninguno propio.
+
+**Sobre la afinidad de sexo y sobre lo que no se guarda.** La afinidad vive como
+columna `sex_affinity` nullable en `program_versions`, no como tabla: es un valor y no
+un conjunto, y **ordena sin filtrar** —todos ven el mismo catálogo, y quien declinó no
+necesita una regla aparte—. Los días por semana y las semanas de duración **no se
+guardan**: se derivan de `program_version_sessions`, porque guardarlos sería una
+segunda verdad del mismo número y la frecuencia es justo el eje sobre el que se elige.
+
+Nota de conteo: `planning` tiene 20 tablas y 20 fichas; §9.5–9.8 son cuatro tablas físicas independientes.
 
 ---
 
