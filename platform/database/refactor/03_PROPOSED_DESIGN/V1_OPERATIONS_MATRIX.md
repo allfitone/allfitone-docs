@@ -265,6 +265,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-045` | Declarar el sexo biológico | Comando | `A2` |
 | `OP-IDN-046` | Declarar las zonas de énfasis | Comando | `A2` |
 | `OP-IDN-047` | Saltarse un paso del onboarding | Comando | `A2` |
+| `OP-IDN-048` | Cerrar sesión Space | Comando idempotente | sesión presente o ausente |
 
 ---
 
@@ -1023,6 +1024,23 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno en V1 |
 | **Reglas** | **Saltar no es declinar.** Declinar el sexo biológico deja el sello en el intento con valor ausente, porque declinar **es** una respuesta a esa pregunta; saltar es no responderla. Coinciden en que el paso deja de pedirse. Un salto **no impide volver**: el paso sigue siendo editable desde la flecha atrás y responderlo después lo deja respondido |
 | **Falla cerrada** | Paso no saltable o código desconocido: `invalid-request`. Intento cerrado, vencido o ajeno: `forbidden` |
+
+#### `OP-IDN-048` — Cerrar sesión Space
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando idempotente |
+| **Superficie** | `DELETE /space/v1/auth/sessions` |
+| **Actor** | Sesión Space presente o ausente |
+| **Filtros obligatorios** | Ninguno más allá del token. Un token vencido o ausente **también** cierra sesión: el teléfono ya no tiene nada que consultar, y negarse dejaría a la persona dentro sin poder salir |
+| **Transacción** | Ninguna en PostgreSQL. Space es *bearer* sin estado: `identity.access_sessions` proyecta las sesiones por cookie de Studio y ninguna petición de Space la consulta, así que no hay fila local que revocar. La única revocación posible es la del `sid` en el proveedor |
+| **Idempotencia** | Sin recibo durable, porque no hay cuerpo que un replay pudiera contradecir. Revocar dos veces responde `204` igual que la primera |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | **El dispositivo cierra sesión aunque la revocación falle.** Un teléfono sin red que no pueda borrar lo suyo es exactamente lo que `HU-SP-003` prohíbe; el `sid` se manda a outbox y el worker lo reintenta |
+| **Información sensible** | Métrica sólo con desencadenante y resultado. Nunca el `sid`, que identifica una sesión concreta |
+| **Evento de dominio** | Ninguno en V1 |
+| **Reglas** | **Revocar el `sid` no invalida el token de acceso ya emitido**, que sigue verificando hasta vencer: lo que muere es el refresco, y con él la sesión. Por eso el borrado en el dispositivo es la mitad que no puede fallar. El criterio 2 de `HU-SP-003` obliga a **avisar antes** cuando queda un entrenamiento sin sincronizar, y ese aviso es del cliente: el servidor no sabe qué guarda el teléfono |
+| **Falla cerrada** | Nada. Esta operación no tiene rechazo: cerrar sesión siempre se concede |
 
 ### 7.2 Organizaciones
 
@@ -2237,7 +2255,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `PUT /studio/v1/organizations/{orgId}/session-templates/{id}/draft` |
+| **Superficie** | `PUT /studio/v1/organizations/{orgId}/session-templates/{id}/draft` · `PUT /space/v1/session-templates/{id}/draft` |
 | **Actor** | `A3`–`A5` con membresía vigente; `A2` sobre contenido propio |
 | **Filtros obligatorios** | La plantilla pertenece al contexto del actor |
 | **Transacción** | Reemplazar el contenido del borrador: pasos planificados, targets tipados por modalidad y referencias a movimientos |
@@ -2254,7 +2272,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/organizations/{orgId}/session-templates/{id}/versions` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/session-templates/{id}/versions` · `POST /space/v1/session-templates/{id}/versions` |
 | **Actor** | `A3`–`A5`; `A2` sobre contenido propio |
 | **Filtros obligatorios** | Borrador completo y válido: disciplina, tipo de actividad, al menos un paso, targets compatibles y unidades resueltas |
 | **Transacción** | Crear `SESSION_TEMPLATE_VERSION` inmutable con sus `PLANNED_STEP` y targets, y asignar el número de versión |
@@ -2305,7 +2323,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/organizations/{orgId}/programs` · `PUT .../programs/{id}/draft` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/programs` · `PUT .../programs/{id}/draft` · `POST /space/v1/programs` · `PUT /space/v1/programs/{id}/draft` |
 | **Actor** | `A3`–`A5`; `A2` para programas personales |
 | **Filtros obligatorios** | Un solo contexto de ownership. Cada posición del borrador referencia una **versión exacta** de plantilla accesible para el actor |
 | **Transacción** | Crear `PROGRAM` y su `PROGRAM_DRAFT`; al editar, reemplazar la composición |
@@ -2322,7 +2340,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/organizations/{orgId}/programs/{id}/versions` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/programs/{id}/versions` · `POST /space/v1/programs/{id}/versions` |
 | **Actor** | `A3`–`A5`; `A2` para programas personales |
 | **Filtros obligatorios** | Borrador con al menos una posición; cada posición apunta a una versión de plantilla **publicada** |
 | **Transacción** | Crear `PROGRAM_VERSION` inmutable con sus `PROGRAM_VERSION_SESSION` y su numeración |

@@ -1165,9 +1165,10 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Propósito:** prescripción tipada de fuerza para un paso planificado.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del target de fuerza del paso.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `planned_step_id uuid` · `target_sets integer` · `target_reps integer` (nullable) · `target_load_value numeric` (nullable) · `target_load_unit_code text` (nullable) · `target_rpe numeric` (nullable).
+- **Columnas:** `id` · `planned_step_id uuid` · `target_sets integer` · `target_reps integer` (nullable) · `target_load_value numeric` (nullable) · `target_load_unit_code text` (nullable) · `target_rpe numeric` (nullable) · `target_rest_seconds integer` (nullable).
+- **`target_rest_seconds` es prescripción, no medición.** Es el descanso que el paso pide entre series, y quien entrena lo ve como referencia; lo que de verdad descansó no se registra en V1. Nullable porque un paso puede no decir nada al respecto, y un cero significaría «sin descanso», que es una instrucción distinta a «no se dijo».
 - **FKs y borrado:** `planned_step_id → planned_steps(id) ON DELETE CASCADE`; `target_load_unit_code → catalog.units(code) RESTRICT`.
-- **Uniques y checks:** `UNIQUE (planned_step_id)`; `target_sets > 0`; `target_reps > 0` si existe; load y unidad aparecen juntos y load es `>=0`; RPE entre 0 y 10. `planning.enforce_target_family_ct` exige familia `strength` (`IX-22`).
+- **Uniques y checks:** `UNIQUE (planned_step_id)`; `target_sets > 0`; `target_reps > 0` si existe; load y unidad aparecen juntos y load es `>=0`; RPE entre 0 y 10; `target_rest_seconds` entre 0 y 3600 si existe. `planning.enforce_target_family_ct` exige familia `strength` (`IX-22`).
 - **Actores:** los mismos de la versión de plantilla.
 - **RLS:** `EXISTS` por `planned_step_id → session_template_versions → session_templates`.
 - **Consultas / índices:** único `(planned_step_id)`.
