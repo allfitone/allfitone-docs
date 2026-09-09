@@ -217,6 +217,35 @@ movilidad no se organizan en series y repeticiones.
 2. Esta vista no muestra mis permisos concedidos ni mis relaciones: cada cosa tiene su propio lugar.
 3. Puedo consultarla sin conexión sobre lo ya descargado, pero nunca se usa para decidir qué puedo hacer.
 
+### HU-SP-101 — Decir qué disciplina entreno
+
+**Como** persona que acaba de activar su cuenta
+**quiero** decir qué disciplina entreno
+**para** que todo lo que la aplicación me pregunte después vaya de eso.
+
+`E-SP-01` · imprescindible
+
+**Criterios**
+
+1. Elijo **una** disciplina principal, antes de decir mi objetivo.
+2. Veo todas las disciplinas que Allfit va a cubrir, no solo las que ya están listas, y en cada una reconozco lo que practico por lo que la disciplina contiene.
+3. **Solo puedo elegir una que esté disponible.** Las demás se ven y se leen, y dicen sin rodeos que todavía no se pueden elegir.
+4. Puedo cambiarla cuando quiera desde mi perfil.
+
+**Por qué una y no varias.** `HU-SP-012` preguntaba «una o varias disciplinas» junto
+con la experiencia. Con varias no habría **de cuál** puede depender el objetivo, que es
+lo que esta pregunta existe para resolver: la principal es la dirección, y «también
+practico» es una lista. Se separaron el 8 de septiembre de 2026 y quedaron en dos
+historias distintas.
+
+**Alcance del lanzamiento inicial.** Solo **fuerza** está disponible. Las otras cinco
+—alta intensidad, resistencia y cardio, deportes de combate, bienestar y control,
+ritmos y clases— se muestran porque saber qué viene es parte de la promesa, y el
+criterio 3 es lo que impide que eso se convierta en una promesa falsa: no se dejan
+elegir, y **no se ofrece ningún aviso**, porque no se registra el interés de nadie. El
+catálogo de atributos guarda las seis desde el principio; lo que el contrato ofrece es
+una, igual que hace con `improve_performance` en `HU-SP-010`.
+
 ### HU-SP-010 — Decirle a Allfit qué quiero lograr
 
 **Como** persona que acaba de activar su cuenta
@@ -228,8 +257,9 @@ movilidad no se organizan en series y repeticiones.
 **Criterios**
 
 1. Elijo mi objetivo principal de una lista clara: bajar de peso, ganar músculo, ponerme en forma, mejorar mi rendimiento, correr una carrera, mantenerme.
-2. Puedo elegir solo uno como principal, para que la aplicación tenga una dirección.
-3. Puedo cambiarlo cuando quiera desde mi perfil.
+2. **La lista depende de la disciplina que dije entrenar**: solo veo los objetivos que esa disciplina persigue, para no elegir uno que su entrenamiento no puede darme.
+3. Puedo elegir solo uno como principal, para que la aplicación tenga una dirección.
+4. Puedo cambiarlo cuando quiera desde mi perfil.
 
 **Alcance del lanzamiento inicial.** Decidido el 23 de agosto de 2026: **mejorar mi
 rendimiento no se ofrece en el lanzamiento inicial de V1**. Entra más adelante y por
@@ -237,6 +267,17 @@ eso sigue declarado en el catálogo de atributos, pero la lista del criterio 1 a
 con cinco. La razón es de producto: es el único de los seis cuyo avance no se ve en el
 cuerpo, así que la pantalla no puede mostrar lo que promete y ninguna de las otras
 cinco tiene ese problema.
+
+**El objetivo depende de la disciplina.** Decidido el 8 de septiembre de 2026, cuando
+`HU-SP-101` puso la disciplina delante de esta pregunta. Con **fuerza** —la única
+disponible en el lanzamiento inicial— la lista pierde **correr una carrera**: es el
+único de los cinco que el entrenamiento de fuerza no persigue, y ofrecerlo sería
+prometer un plan que esa disciplina no va a escribir. Quedan cuatro.
+
+El mapa vive en el cliente y no en PostgreSQL, a propósito. No es un invariante ni una
+frontera de seguridad —nada se rompe si conviven fuerza y correr una carrera— y es una
+decisión de curaduría que va a cambiar cada vez que entre una disciplina; grabada en la
+base rechazaría mañana un valor histórico que fue legítimo cuando se declaró.
 
 ### HU-SP-011 — Registrar mis datos físicos
 
@@ -276,7 +317,7 @@ objetos distintos competían, como un objeto repetido se leen como pareja.
 
 **Criterios**
 
-1. Elijo una o varias disciplinas: fuerza, running, movilidad, híbrido y las demás disponibles.
+1. Además de mi disciplina principal (`HU-SP-101`), digo qué **otras** practico: fuerza, running, movilidad, híbrido y las demás disponibles.
 2. Digo cuánta experiencia tengo, en términos simples: empezando, con algo de práctica, con experiencia.
 3. Digo cuántos días a la semana puedo entrenar y cuánto tiempo tengo por sesión.
 
@@ -290,6 +331,14 @@ disciplina no tiene sobre qué colgarse. El argumento de producto apunta al mism
 sitio: si las cargas se ajustan desde la primera semana, la precisión por disciplina
 en el momento de registrarse compra poco. El criterio 1 espera por la misma razón, y
 el criterio 3 es otra pregunta y merece su propia pantalla.
+
+**El criterio 1 dejó de ser la disciplina principal.** Corregido el 8 de septiembre de
+2026: decía «elijo una o varias disciplinas», y desde que existe `HU-SP-101` esa
+pregunta ya está contestada antes del objetivo. Con varias no habría **de cuál** puede
+depender el objetivo, así que la principal es una y se pregunta aparte; lo que queda
+aquí es «también practico», que es una lista y no una dirección. Sigue esperando por lo
+mismo que el resto de este criterio: hoy solo hay una disciplina disponible, y una lista
+de una no es una lista.
 
 **Pendiente de confirmar.** Los niveles de volumen que la pantalla anuncia —poco,
 medio, alto— y los cortes de tiempo —seis meses, años— vienen de un prototipo y **no
@@ -1807,7 +1856,7 @@ quien declinó no recibe una lista distinta ni necesita una regla aparte.
 | Épica | Historias | Imprescindibles |
 | --- | --- | ---: |
 | `E-SP-00` Entrar a la aplicación | `HU-SP-001` – `HU-SP-005` | 4 de 5 |
-| `E-SP-01` Registro y onboarding | `HU-SP-006` – `HU-SP-015`, `HU-SP-096` – `HU-SP-098` | 10 de 13 |
+| `E-SP-01` Registro y onboarding | `HU-SP-006` – `HU-SP-015`, `HU-SP-096` – `HU-SP-098`, `HU-SP-101` | 11 de 14 |
 | `E-SP-02` Invitaciones y relaciones | `HU-SP-016` – `HU-SP-020`, `HU-SP-095` | 3 de 6 |
 | `E-SP-03` Perfil, cuerpo y salud | `HU-SP-021` – `HU-SP-028` | 2 de 8 |
 | `E-SP-04` Mis datos y quién los ve | `HU-SP-029` – `HU-SP-036` | 6 de 8 |
@@ -1823,7 +1872,7 @@ quien declinó no recibe una lista distinta ni necesita una regla aparte.
 | `E-SP-14` Qué pasa si no pago | `HU-SP-083` | 0 de 1 |
 | `E-SP-15` Allfit Premium | `HU-SP-084` – `HU-SP-088` | 5 de 5 |
 | `E-SP-16` Hoy y navegación | `HU-SP-089` – `HU-SP-094`, `HU-SP-100` | 4 de 7 |
-| **Total** | **98 historias** | **52 imprescindibles** |
+| **Total** | **99 historias** | **53 imprescindibles** |
 
 El camino mínimo para lanzar es: crear cuenta y entrar, activar el Fitness ID,
 ver qué toca hoy, entrenar y registrarlo aunque no haya señal, ver el historial,
