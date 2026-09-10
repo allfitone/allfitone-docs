@@ -878,7 +878,7 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **FKs y borrado:** ninguna saliente; es una raíz de catálogo y las referencias entrantes usan `ON DELETE RESTRICT`.
 - **Uniques y checks:** `UNIQUE code`.
 - **Actores:** lectura autenticada; escritura curaduría.
-- **RLS:** lectura autenticada solo para filas `status='published'`; escritura exclusiva de la plataforma por la función de publicación.
+- **RLS:** lectura autenticada solo para filas `status='published'`; escritura exclusiva de la plataforma por la función de publicación. `/catalog/v1` la lee por `catalog.list_disciplines()`, cerrada tras `catalog.require_catalog_reader()`, que exige una persona autenticada **y activa**: el catálogo es global, no público.
 - **Consultas / índices:** por `code`; único `code`; `(status)` para la policy de publicación.
 - **Retención:** permanente; una disciplina referenciada se depreca o archiva, no se elimina.
 - **Eventos:** ninguno.
@@ -1004,8 +1004,8 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **FKs y borrado:** ninguna saliente; asociaciones y ejecuciones lo referencian con `ON DELETE RESTRICT`.
 - **Uniques y checks:** `UNIQUE (contract_code, version_number)`; inmutable. Los JSONB `envelope`/`minimums` describen la regla del contrato, no datos de negocio consultables por campo.
 - **Actores:** lectura autenticada; escritura curaduría.
-- **RLS:** lectura autenticada de contratos publicados; publicación exclusiva de plataforma y sin `UPDATE`/`DELETE` de versiones publicadas.
-- **Consultas / índices:** por `(contract_code, version_number)`.
+- **RLS:** lectura autenticada de contratos publicados; publicación exclusiva de plataforma y sin `UPDATE`/`DELETE` de versiones publicadas, garantizado por `catalog.prevent_published_result_contract_mutation` (`errcode 55000`). `catalog.publish_result_contract` y `catalog.deprecate_result_contract` son las únicas escrituras; el número de versión lo asigna el servidor, nunca el cliente.
+- **Consultas / índices:** por `(contract_code, version_number)`. `minimums` es un documento opaco: puede organizarse por nivel de completitud (`partial`, `summary`, `detailed`, `sensor_enriched`), pero **hoy nada lo valida** — ni el esquema, ni `publish_result_contract`, ni la pantalla de curaduría. Queda a cargo de quien publica.
 - **Retención:** permanente (ejecuciones lo congelan).
 - **Eventos:** `catalog.result_contract_published.v1`.
 
@@ -1018,8 +1018,8 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **FKs y borrado:** `activity_type_id → activity_types(id) RESTRICT`; `result_contract_id → result_contracts(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE parcial (activity_type_id) WHERE is_default AND valid_to is null`.
 - **Actores:** lectura para quien pueda leer el tipo de actividad; escritura exclusiva de curaduría de plataforma.
-- **RLS:** hereda la visibilidad de `activity_types`; solo permite asociar contratos publicados y escritura de plataforma.
-- **Consultas / índices:** por `activity_type_id`.
+- **RLS:** hereda la visibilidad de `activity_types`; solo permite asociar contratos publicados y escritura de plataforma. La lectura efectiva escondía la fila en cuanto pasaba `valid_to`, y PostgreSQL exige que una fila actualizada siga siendo visible, así que cerrar una asociación fallaba: lo resuelve `activity_type_result_contracts_select_platform`, acotada a `access_control.actor_kind() = 'support'`. La política del actor de producto no se tocó.
+- **Consultas / índices:** por `activity_type_id`. `/catalog/v1` la lee por `catalog.list_activity_type_result_contracts(uuid)`, que devuelve **solo asociaciones vigentes**: una superseded conserva su ventana para las ejecuciones congeladas bajo ella, pero no se ofrece para un borrador nuevo.
 - **Retención:** historial permanente de vigencias; una asociación deja de ser efectiva con `valid_to`, no se sobrescribe.
 - **Eventos:** ninguno propio.
 
