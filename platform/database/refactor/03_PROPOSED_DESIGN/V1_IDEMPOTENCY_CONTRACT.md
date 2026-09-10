@@ -60,7 +60,7 @@ Esto permite repetir una misma clave accidental en otro actor u operación sin m
 ### 3.1 Tipos
 
 ```text
-system.command_surface       = space | studio | system
+system.command_surface       = space | studio | backoffice | system
 system.idempotency_status    = processing | succeeded | rejected_final
 ```
 
