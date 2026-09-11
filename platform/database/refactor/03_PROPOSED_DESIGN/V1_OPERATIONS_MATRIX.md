@@ -1982,7 +1982,7 @@ Reglas que gobiernan todo el dominio:
 
 ### 7.5 Catálogo
 
-Dueño de `DISCIPLINE`, `ACTIVITY_TYPE`, `ACTIVITY_TYPE_ALIAS`, `MOVEMENT`, `MOVEMENT_ALIAS`, `MOVEMENT_VARIANT`, `EQUIPMENT`, `MOVEMENT_EQUIPMENT`, `UNIT`, `RESULT_CONTRACT`, `ACTIVITY_TYPE_RESULT_CONTRACT` y `CONTRACT_FIXTURE`.
+Dueño de `DISCIPLINE`, `ACTIVITY_TYPE`, `ACTIVITY_TYPE_ALIAS`, `MOVEMENT`, `MOVEMENT_ALIAS`, `MOVEMENT_VARIANT`, `EQUIPMENT`, `MOVEMENT_EQUIPMENT`, `MUSCLE`, `MOVEMENT_MUSCLE`, `UNIT`, `RESULT_CONTRACT`, `ACTIVITY_TYPE_RESULT_CONTRACT` y `CONTRACT_FIXTURE`.
 
 Reglas que gobiernan todo el dominio:
 
@@ -2004,6 +2004,7 @@ Reglas que gobiernan todo el dominio:
 | `OP-CAT-012` | Consultar contratos de resultados de un tipo de actividad | Consulta | Autenticado |
 | `OP-CAT-013` | Listar especialidades profesionales | Consulta | Autenticado |
 | `OP-CAT-014` | Listar tipos de credencial profesional | Consulta | Autenticado |
+| `OP-CAT-015` | Listar músculos | Consulta | Autenticado |
 
 ---
 
@@ -2097,7 +2098,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /catalog/v1/movements?discipline=&q=` · `GET /studio/v1/organizations/{orgId}/movements?q=` |
+| **Superficie** | `GET /catalog/v1/movements?discipline=&q=&muscle=&equipment=` · `GET /studio/v1/organizations/{orgId}/movements?q=` |
 | **Actor** | Cualquier cuenta autenticada |
 | **Filtros obligatorios** | En `/catalog`: solo alcance global. En `/studio`: global **más** los privados de `{orgId}` y nada de otras organizaciones |
 | **Transacción** | Ninguna |
@@ -2106,7 +2107,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | El subconjunto global es cacheable en Space |
 | **Información sensible** | Ninguna categoría personal. El contenido privado de una organización **es** confidencial frente a las demás |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | La búsqueda cubre nombre y alias. Un movimiento archivado no aparece salvo petición explícita |
+| **Reglas** | La búsqueda cubre nombre y alias. Un movimiento archivado no aparece salvo petición explícita. `muscle` y `equipment` son repetibles: varios valores de un mismo filtro son `or`, y entre filtros distintos es `and` |
 | **Falla cerrada** | Sin `{orgId}` no se devuelve ningún privado |
 
 #### `OP-CAT-010` — Consultar un movimiento
@@ -2193,6 +2194,23 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno |
 | **Reglas** | El tipo gobierna nuevas declaraciones; deprecarlo conserva credenciales históricas y evita nuevas declaraciones o revisiones con ese código |
 | **Falla cerrada** | Códigos draft, deprecados o archivados no se devuelven para nuevas declaraciones |
+
+#### `OP-CAT-015` — Listar músculos
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /catalog/v1/muscles` |
+| **Actor** | Cualquier cuenta autenticada |
+| **Filtros obligatorios** | Solo `status='published'` |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Sin paginación en V1; `region` y luego `display_order`, desempate por código |
+| **Offline / concurrencia** | Cacheable con `ETag` |
+| **Información sensible** | Ninguna. Un músculo del catálogo describe un movimiento, **nunca** el cuerpo de una persona: la composición corporal vive en `identity` y es dato de salud |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Vocabulario global y único: un músculo no tiene alcance de organización, porque dos gimnasios no pueden discrepar sobre qué es un cuádriceps. `body_slug`, cuando existe, es la parte que la figura del cuerpo ya dibuja, de modo que el filtro y el onboarding hablan un solo idioma |
+| **Falla cerrada** | Códigos draft o deprecados no se devuelven |
 
 ### 7.6 Planificación
 

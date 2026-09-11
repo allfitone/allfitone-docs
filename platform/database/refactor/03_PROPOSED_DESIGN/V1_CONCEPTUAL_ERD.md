@@ -307,6 +307,8 @@ erDiagram
     MOVEMENT ||--o{ MOVEMENT_VARIANT : es_variante
     MOVEMENT ||--o{ MOVEMENT_EQUIPMENT : utiliza
     EQUIPMENT ||--o{ MOVEMENT_EQUIPMENT : participa
+    MOVEMENT ||--o{ MOVEMENT_MUSCLE : trabaja
+    MUSCLE ||--o{ MOVEMENT_MUSCLE : es_trabajado
 
     ACTIVITY_TYPE ||--o{ ACTIVITY_TYPE_RESULT_CONTRACT : admite
     RESULT_CONTRACT ||--o{ ACTIVITY_TYPE_RESULT_CONTRACT : aplica
@@ -324,6 +326,8 @@ erDiagram
 | `MOVEMENT_ALIAS` | Nombre alternativo o traducción | No crea identidad semántica duplicada |
 | `MOVEMENT_VARIANT` | Relación curatorial entre definiciones | Conserva base, variante y procedencia sin sobrescribir |
 | `EQUIPMENT` | Recurso físico compatible o requerido | Conserva alcance/owner y no representa inventario ni reservas |
+| `MUSCLE` | Músculo o región contra la que se etiqueta un movimiento | Vocabulario global y publicado; no describe anatomía de una persona ni su composición corporal |
+| `MOVEMENT_MUSCLE` | Qué trabaja un movimiento, y si es principal | Etiqueta curatorial: no es prescripción ni medición |
 | `UNIT` | Código y conversión dentro de una dimensión | Todo valor físico conserva unidad canónica y, cuando aplique, original |
 | `RESULT_CONTRACT` | Contrato publicado/versionado de envelope, mínimos y detalle | Una versión futura no reinterpreta ejecuciones previas |
 | `ACTIVITY_TYPE_RESULT_CONTRACT` | Asociación vigente/default entre actividad y contrato | Congela compatibilidad sin codificarla en el frontend |

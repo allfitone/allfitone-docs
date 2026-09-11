@@ -1100,6 +1100,49 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Retención:** permanente; deprecar evita nuevas declaraciones y conserva referencias existentes.
 - **Eventos:** ninguno.
 
+### 8.15 `catalog.muscles`
+
+- **Propósito:** taxonomía global de músculos y regiones contra la que se etiqueta un movimiento, para que la persona pueda buscar por lo que quiere trabajar.
+- **Dominio / fuente de verdad:** Catálogo. Es la fuente de verdad del vocabulario muscular del producto.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `code text` · `name text` · `region text` (`upper`, `lower`, `general`) · `body_slug text` (nullable) · `status catalog.publication_status` · `display_order integer`.
+- **FKs y borrado:** ninguna.
+- **Uniques y checks:** `UNIQUE code`; código con la forma de los demás códigos de catálogo; nombre no vacío; orden no negativo.
+- **Actores:** lectura autenticada de publicados; escritura solo `A11/curate_global_catalog`.
+- **RLS:** autenticados leen `status='published'`; el runtime de producto no escribe.
+- **Consultas / índices:** `(status, display_order, code)`.
+- **Retención:** permanente; deprecar retira un músculo de las búsquedas y conserva las etiquetas existentes.
+- **Eventos:** ninguno.
+
+`body_slug` es el puente con la figura del cuerpo que Space ya dibuja en su
+onboarding: cuando existe, es la misma parte que la persona tocó al declarar qué
+quiere trabajar, de modo que el filtro y la figura hablan un solo vocabulario.
+Es nullable porque no todo lo que se filtra es una parte dibujable: `cardio` y
+`cuerpo completo` etiquetan los movimientos que no son de fuerza, y sin ellos
+esos movimientos no tendrían ninguna etiqueta.
+
+`region` existe para agrupar las fichas del filtro en dos bloques legibles, que
+es como se lee una lista de diecinueve.
+
+### 8.16 `catalog.movement_muscles`
+
+- **Propósito:** qué trabaja un movimiento, N:M contra la taxonomía.
+- **Dominio / fuente de verdad:** Catálogo. Es la fuente de verdad de la relación entre un movimiento y los músculos que entrena.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `movement_id uuid` · `muscle_id uuid` · `is_primary boolean`.
+- **FKs y borrado:** `movement_id → movements(id) ON DELETE CASCADE`; `muscle_id → muscles(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (movement_id, muscle_id)`.
+- **Actores:** los actores autorizados para administrar el movimiento; lectura solo si movimiento y músculo son visibles.
+- **RLS:** hereda del movimiento mediante `movement_id`; además exige visibilidad del `muscle_id` asociado.
+- **Consultas / índices:** por `movement_id`; por `muscle_id` para el filtro inverso.
+- **Retención:** se elimina con el movimiento padre.
+- **Eventos:** ninguno.
+
+`is_primary` distingue lo que un movimiento entrena de lo que además usa: una
+sentadilla es cuádriceps y glúteos como principal y espalda baja como
+acompañante. El filtro devuelve ambos, porque quien busca «glúteos» quiere la
+sentadilla; el orden puede preferir lo principal.
+
 ---
 
 ## 9. Schema `planning`

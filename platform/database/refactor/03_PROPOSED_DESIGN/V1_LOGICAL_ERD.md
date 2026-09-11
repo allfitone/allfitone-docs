@@ -14,7 +14,7 @@ Cada tabla aplica las convenciones de [`POSTGRES_MODELING_STANDARD.md`](./POSTGR
 
 ## 2. Del concepto a la tabla
 
-El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **127 tablas de dominio** en once schemas. El inventario vigente incluye las tres tablas AAL2, `organizations.organization_type_transitions` y `system.invitation_rate_windows`, que ya tenía ficha individual pero estaba omitida del resumen. Enums, vistas, funciones y particiones hijas no cuentan como tablas adicionales.
+El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **129 tablas de dominio** en once schemas. El inventario vigente incluye las tres tablas AAL2, `organizations.organization_type_transitions` y `system.invitation_rate_windows`, que ya tenía ficha individual pero estaba omitida del resumen. Enums, vistas, funciones y particiones hijas no cuentan como tablas adicionales.
 
 | Entidad conceptual | Tablas físicas | Por qué se expande |
 | --- | --- | --- |
@@ -33,14 +33,14 @@ El ERD conceptual tiene ~85 entidades. El modelo físico las expande a **127 tab
 | `organizations` | `organizations`, `organization_types`, `organization_type_transitions`, `organization_sites`, `organization_memberships`, `organization_roles`, `organization_capabilities`, `role_capabilities`, `membership_roles`, `organization_events`, `membership_events` | 11 |
 | `relationships` | `service_relationships`, `responsible_party_snapshots`, `relationship_professional_assignments`, `professional_assignment_events`, `relationship_events`, `relationship_termination_requests` | 6 |
 | `privacy` | `data_classifications`, `scope_definitions`, `scope_resource_rules`, `consent_events`, `invitation_scope_options`, `data_grants`, `session_visibility_denials`, `historical_access_cases`, `access_events`, `retention_policies`, `erasure_requests`, `disposition_cases`, `disposition_items`, `disposition_events`, `legal_holds`, `hold_applications` | 16 |
-| `catalog` | `disciplines`, `activity_types`, `activity_type_aliases`, `movements`, `movement_aliases`, `movement_variants`, `equipment`, `movement_equipment`, `units`, `result_contracts`, `activity_type_result_contracts`, `contract_fixtures`, `professional_specialties`, `professional_credential_types` | 14 |
+| `catalog` | `disciplines`, `activity_types`, `activity_type_aliases`, `movements`, `movement_aliases`, `movement_variants`, `equipment`, `movement_equipment`, `units`, `result_contracts`, `activity_type_result_contracts`, `contract_fixtures`, `professional_specialties`, `professional_credential_types`, `muscles`, `movement_muscles` | 16 |
 | `planning` | `session_templates`, `session_template_drafts`, `session_template_versions`, `planned_steps`, `strength_targets`, `endurance_targets`, `interval_targets`, `mobility_targets`, `programs`, `program_drafts`, `program_versions`, `program_version_sessions`, `program_assignments`, `assignment_management_periods`, `prescription_revisions`, `planned_sessions`, `service_access_blocks` | 17 |
 | `execution` | `executed_sessions`, `planned_session_executions`, `session_segments`, `strength_sets`, `endurance_laps`, `interval_results`, `round_results`, `mobility_results`, `metric_samples`, `professional_observations`, `correction_proposals`, `revision_events`, `result_validation_events`, `derived_results` | 14 |
 | `nutrition` | `nutrient_definitions`, `meals`, `meal_items`, `meal_nutrient_values`, `goal_sets`, `goal_versions`, `goal_targets`, `goal_decisions` | 8 |
 | `payments` | `gateway_connections`, `organization_plans`, `plan_versions`, `plan_subscriptions`, `payment_records`, `subscription_events`, `platform_plans`, `platform_plan_versions`, `platform_features`, `platform_plan_features`, `platform_subscriptions`, `organization_premium_entitlements` | 12 |
 | `system` | `outbox_events`, `idempotency_keys`, `job_runs`, `invitation_rate_windows` | 4 |
 | `support` | `platform_role_assignments`, `platform_duty_assignments`, `break_glass_requests`, `break_glass_approvals`, `break_glass_events` | 5 |
-| **Total** | | **127** |
+| **Total** | | **129** |
 
 Nota: el total anterior del ERD era 122. La recertificación incorpora las tres tablas AAL2 que ya estaban en el diccionario, el catálogo de transiciones de AFO-39 y `system.invitation_rate_windows`, cuya ficha ya existía pero faltaba en el inventario resumido. No se introducen modelos para capacidades diferidas ni se convierten vistas, funciones o tipos enumerados en tablas.
 
@@ -249,6 +249,8 @@ erDiagram
     movements ||--o{ movement_variants : "variant_movement_id"
     movements ||--o{ movement_equipment : "movement_id"
     equipment ||--o{ movement_equipment : "equipment_id"
+    movements ||--o{ movement_muscles : "movement_id"
+    muscles ||--o{ movement_muscles : "muscle_id"
     activity_types ||--o{ activity_type_result_contracts : "activity_type_id"
     result_contracts ||--o{ activity_type_result_contracts : "result_contract_id"
     result_contracts ||--|{ contract_fixtures : "result_contract_id"
@@ -264,6 +266,8 @@ erDiagram
 | `movement_variants` | `id` | `base_movement_id`, `variant_movement_id`; relación curatorial |
 | `equipment` | `id` | `content_scope`, owner; compatibilidad, no inventario |
 | `movement_equipment` | `id` | `UNIQUE (movement_id, equipment_id)` |
+| `muscles` | `id` | `UNIQUE code`; global, solo plataforma; `body_slug` nullable une con la figura del cuerpo |
+| `movement_muscles` | `id` | `UNIQUE (movement_id, muscle_id)`; `is_primary` separa lo que trabaja de lo que acompaña |
 | `units` | `id` | `UNIQUE code`; dimensión y conversión canónica |
 | `result_contracts` | `id` | `UNIQUE (contract_code, version_number)`; inmutable; niveles de completitud |
 | `activity_type_result_contracts` | `id` | `activity_type_id`, `result_contract_id`, vigencia, default |
@@ -490,7 +494,7 @@ Cada invariante tiene una prueba negativa `T-INT-*` ejecutada con `BYPASSRLS`; p
 
 ## 16. Resolución física
 
-Columnas, nullability, índices, retención y eventos están en las 127 fichas individuales. Nombres, enums compartidos, JSONB y las dos tablas particionadas están cerrados en `V1_PHYSICAL_OBJECT_CATALOG.md`; ninguna de esas decisiones se reserva al DDL.
+Columnas, nullability, índices, retención y eventos están en las 129 fichas individuales. Nombres, enums compartidos, JSONB y las dos tablas particionadas están cerrados en `V1_PHYSICAL_OBJECT_CATALOG.md`; ninguna de esas decisiones se reserva al DDL.
 
 ## 17. Estado de salida
 

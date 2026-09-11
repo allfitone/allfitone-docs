@@ -764,18 +764,19 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 
 El catálogo es el único dominio con lectura amplia. Su riesgo no es la fuga de datos personales, sino la fuga de **contenido privado entre organizaciones**.
 
-#### `DISCIPLINE` · `ACTIVITY_TYPE` · `UNIT` · `EQUIPMENT` global · alias
+#### `DISCIPLINE` · `ACTIVITY_TYPE` · `UNIT` · `EQUIPMENT` global · `MUSCLE` · alias
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
 | Autenticado | Publicado | — | — | — |
 | `A11` | Todo | Sí | Estado | — |
 
-- **Condición RLS** — Por tabla: `disciplines.status='published'`; `activity_types.content_scope='global' AND status='published'` o contenido de `owner_organization_id=access_control.org()`; `units` tiene lectura autenticada completa; `equipment.content_scope='global'` o `owner_organization_id=access_control.org()`. Alias heredan mediante su FK al padre.
+- **Condición RLS** — Por tabla: `disciplines.status='published'`; `activity_types.content_scope='global' AND status='published'` o contenido de `owner_organization_id=access_control.org()`; `units` tiene lectura autenticada completa; `equipment.content_scope='global'` o `owner_organization_id=access_control.org()`; `muscles.status='published'`, que es global y no tiene alcance de organización porque el vocabulario muscular es uno solo para todos. Alias y `movement_muscles` heredan mediante su FK al padre.
 - **Grants mínimos** — `allfit_api`: `SELECT`, más `INSERT`/`UPDATE` restringidos a soporte.
-- **Índice para la policy** — `disciplines(code)` único y `(status)`; `activity_types(content_scope, owner_organization_id, status)`; `units(code)` único; `equipment(content_scope, owner_organization_id)`; cada alias indexa su FK padre.
+- **Índice para la policy** — `disciplines(code)` único y `(status)`; `activity_types(content_scope, owner_organization_id, status)`; `units(code)` único; `equipment(content_scope, owner_organization_id)`; `muscles(status, display_order, code)` y `movement_muscles(muscle_id)` para el filtro inverso; cada alias indexa su FK padre.
 - **`T-CAT-1` (negativa)** — Una organización no puede crear ni alterar disciplinas ni tipos de actividad globales.
 - **`T-CAT-2` (negativa)** — Un código retirado no se reutiliza: lo impide un único sobre el código, incluidos los archivados.
+- **`T-CAT-3` (negativa)** — El rol de runtime del producto no puede escribir `muscles` ni `movement_muscles`: el catálogo global lo publica solo Allfit, y una etiqueta muscular escrita desde Space sería contenido curatorial sin curaduría.
 
 #### `MOVEMENT` y su contenido privado
 
