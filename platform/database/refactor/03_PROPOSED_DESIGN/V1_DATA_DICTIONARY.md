@@ -624,6 +624,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Uniques y checks:** `UNIQUE code`.
 - **Actores:** lectura autenticada; escritura plataforma.
 - **RLS:** lectura abierta.
+- **Implementado:** las siete clasificaciones vienen sembradas por la migración, con `sensitivity_rank` creciente. `allfit_api` no tiene DML: agregar una clasificación es un cambio de esquema, no una operación.
 - **Consultas:** por `code`; por `sensitivity_rank` (para heredar la más restrictiva).
 - **Índices:** único `code`.
 - **Retención:** permanente.
@@ -639,6 +640,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Uniques y checks:** `UNIQUE (scope_code, version_number)`; clave portadora `UNIQUE (id, scope_code)`. `UPDATE`/`DELETE` revocados en runtime.
 - **Actores:** lectura autenticada; escritura plataforma.
 - **RLS:** `status='published'` para lectura.
+- **Implementado:** `privacy.publish_scope_definition` es la única escritura y **siempre agrega una versión**, nunca corrige una publicada: el número de versión lo asigna el servidor a partir del máximo existente. `privacy.list_scope_definitions` y `privacy.scope_definition_projection` son las lecturas. La inmutabilidad no depende de los grants: el trigger `privacy.prevent_published_scope_mutation` rechaza cualquier `UPDATE` o `DELETE` sobre una versión publicada, también al dueño de la tabla. Eso es lo que sostiene la promesa de que **quien aceptó una versión anterior la conserva**: un grant apunta a una versión congelada y esa fila no puede cambiar debajo.
 - **Consultas:** por `(scope_code, version_number)`; versión vigente.
 - **Índices:** único `(scope_code, version_number)`.
 - **Retención:** permanente (referenciada por grants históricos).
@@ -654,6 +656,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Uniques y checks:** `UNIQUE (scope_definition_id, resource, field)`. `CHECK` que todo campo tiene clasificación. `historical_readable` solo puede ser `true` cuando `is_excluded=false` y la acción máxima incluye lectura.
 - **Actores:** lectura autenticada; escritura plataforma.
 - **RLS:** lectura abierta de versiones publicadas.
+- **Implementado:** `privacy.access_level` es un enum (`read`, `contribute`), no texto con `CHECK`. Las reglas se insertan sólo dentro de `privacy.publish_scope_definition`, y `privacy.prevent_published_scope_rule_mutation` las congela con la versión. El duplicado de `(resource, field)` dentro de una misma publicación se rechaza en un trigger `before insert` y no en un `CHECK`: PostgreSQL no admite subconsultas en un `CHECK`, así que la comprobación que compara el arreglo contra su propio conjunto distinto no es expresable ahí.
 - **Consultas:** por `scope_definition_id`.
 - **Índices:** único compuesto.
 - **Retención:** con la versión.
@@ -752,6 +755,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `subject_person_id` y `actor_person_id` → `identity.people(id) RESTRICT`; `subject_organization_id → organizations.organizations(id) RESTRICT`. Las referencias de alto volumen a relación, grant y caso se validan en la entrada cerrada, no con FK dura sobre cada partición.
 - **Uniques y checks:** PK `(id,occurred_at)`; `CHECK (num_nonnulls(subject_person_id,subject_organization_id)=1)`; rango mensual; `access_events_id_partition_time_chk` exige UUIDv7 y `occurred_at=extensions.uuid_v7_timestamp(id)`. Actor humano obligatorio. La rama personal conserva sus reglas live/frozen/break-glass. La rama organización exige `access_mode='organization_operational'`, `actor_membership_id` activo del mismo tenant y de `actor_person_id`, `resource='organizations.organization_context'` y relación/grant/caso/scope/version nulos. `privacy.log_access_event` es la única entrada y `privacy.enforce_access_event_context_tg` valida `IX-23`.
 - **Actores:** la persona consulta las suyas mediante `privacy.v_my_access_events`; `A12` audita metadatos break-glass mediante `support.list_break_glass_audit_events`; `A10` consulta sus ejercicios en `support.break_glass_events`, no esta tabla. `privacy.log_access_event` inserta en la misma transacción de la lectura.
+- **Pendiente:** `support.list_break_glass_audit_events` **no existe todavía**. `support.exercise_break_glass` inserta aquí directamente, en la misma transacción que su propia evidencia, y desde `20260910170000` una FK exige que la fila exista — sin ella la evidencia del operador podía apuntar a una auditoría que nunca se escribió, y la persona no habría visto nunca el intento registrado en su contra. La lectura de `A12` sigue pendiente, junto con la revisión posterior de `12.3`.
 - **RLS:** en la tabla base, `SELECT` solo cuando `subject_person_id = access_control.person()`; `privacy.v_my_access_events` nunca incluye sujetos organización. `INSERT` directo revocado. Ninguna organización, `A10` o `A12` recibe `SELECT` directo.
 - **Consultas:** `(subject_person_id, occurred_at desc)` para la persona; `(subject_organization_id, occurred_at desc)` solo para investigación restringida de plataforma.
 - **Índices:** ambos compuestos anteriores por partición.
@@ -1640,11 +1644,13 @@ Nota de conteo: `planning` tiene 17 tablas y 17 fichas; §9.5–9.8 son cuatro t
 - **Propósito:** eventos de dominio escritos transaccionalmente; transportan identificadores, no contenido sensible.
 - **Dominio / fuente de verdad:** Sistema. Es la fuente de verdad del sobre transaccional y del estado de despacho de cada evento de dominio.
 - **Clasificación:** `operational`.
-- **Columnas:** `id` · `type text` · `aggregate_kind text` · `aggregate_id uuid` · `subject_person_id uuid` (nullable) · `organization_id uuid` (nullable) · `correlation_id uuid` · `payload_schema_version smallint` (`1`) · `payload jsonb` · `dispatched_at timestamptz` (nullable).
-- **FKs y borrado:** sin FK dura por excepción explícita: `aggregate_id` es un identificador opaco de sobre, no una relación navegable ni fuente de autorización; el evento debe sobrevivir al agregado. `INSERT` directo revocado; solo `system.enqueue_domain_event(...)` después de validar el contrato tipado.
+- **Columnas diseñadas:** `id` · `type text` · `aggregate_kind text` · `aggregate_id uuid` · `subject_person_id uuid` (nullable) · `organization_id uuid` (nullable) · `correlation_id uuid` · `payload_schema_version smallint` (`1`) · `payload jsonb` · `dispatched_at timestamptz` (nullable).
+- **Columnas implementadas:** `id` · `aggregate_type text` · `aggregate_id uuid` · `event_type text` · `payload_schema_version smallint` · `payload jsonb` · `occurred_at timestamptz` · `available_at timestamptz` · `published_at timestamptz` (nullable) · `attempt_count integer` · `last_error_code text` (nullable) · `dead_lettered_at timestamptz` (nullable). Los nombres difieren del diseño (`event_type` y `aggregate_type`, no `type` y `aggregate_kind`), no existen `subject_person_id`, `organization_id` ni `correlation_id`, y el despacho no es un solo `dispatched_at`: el reintento y la carta muerta son parte de la fila.
+- **FKs y borrado:** sin FK dura por excepción explícita: `aggregate_id` es un identificador opaco de sobre, no una relación navegable ni fuente de autorización; el evento debe sobrevivir al agregado. `INSERT` directo revocado; la única entrada es `system.enqueue_outbox_event(...)` — el diseño la nombraba `enqueue_domain_event`.
 - **Uniques y checks:** el `payload` nunca contiene datos sensibles (invariante documentada).
 - **Actores:** `allfit_api` inserta; `allfit_worker_outbox` despacha.
 - **RLS:** restringida a roles de sistema.
+- **Diagnóstico de Backoffice (`HU-BO-031`):** `support.list_operational_events` presenta esta tabla junto a `system.idempotency_keys` como una sola bandeja, y `support.outbox_event_state` deriva el estado que se muestra: `dead_lettered`, luego `delivered` si hay `published_at`, luego `retrying` si ya hubo un intento, y `pending` en otro caso. **`pending` y `retrying` se mantienen separados a propósito**, para que una cola sana no se lea como una pila de fallos. La proyección **nunca** entrega `payload`, y por eso el diagnóstico no necesita ventana break-glass ni deja registro de acceso: una cola de entrega no tiene sujeto.
 - **Consultas / índices:** `(dispatched_at, aggregate_id)` parcial sobre no despachados; orden por agregado.
 - **Retención:** se purga tras despacho confirmado + margen.
 - **Eventos:** es el mecanismo de eventos, no produce uno propio.
@@ -1659,11 +1665,14 @@ Nota de conteo: `planning` tiene 17 tablas y 17 fichas; §9.5–9.8 son cuatro t
 - **Uniques y checks:** uniques exactos de transporte `(principal_fingerprint,client_id,surface,operation_code,key)` y comando `(principal_fingerprint,surface,operation_code,command_id)`; hashes de 32 bytes; key/command UUIDv4/v7 para HTTP o UUIDv5 determinístico para `system`; aggregate tipo/ID emparejados; ventana de respuesta de 24 h. `system.enforce_idempotency_terminal_ct` impide confirmar `processing`; `system.expire_idempotency_response` es la única entrada que limpia response+versión tras expirar.
 - **Actores:** `allfit_api` crea/terminaliza en la transacción; `allfit_idempotency_worker` expira response y purga cuando `purge_after` lo permite.
 - **RLS:** restringida a API y worker dedicado; ningún runtime consulta receipts ajenos.
+- **Diagnóstico de Backoffice (`HU-BO-031`):** `support.command_state` deriva el estado visible desde `status` y `http_status`, y un comando que sigue `processing` **cinco minutos** después de empezar se lee `stalled`. Ese umbral es el único número inventado de la historia: ninguna fuente normativa lo fija, y queda aquí para que se discuta en vez de quedar enterrado en una función. La proyección no entrega `payload`, `response`, `principal_fingerprint` ni `request_hash`: un diagnóstico no abre los datos de nadie.
 - **Consultas / índices:** los dos uniques; `(response_expires_at,purge_after)`; parcial `(aggregate_type,aggregate_id) WHERE aggregate_id IS NOT NULL`.
 - **Retención:** response 24 h; tombstone mínimo durable mientras el actor o agregado sean invocables. Disposición marca el efecto y un retry devuelve `410`, sin recrearlo. Contrato completo en [`V1_IDEMPOTENCY_CONTRACT.md`](./V1_IDEMPOTENCY_CONTRACT.md).
 - **Eventos:** ninguno.
 
 ### 11.3 `system.job_runs`
+
+> **No implementada.** El esquema `system` en V1 tiene `outbox_events`, `outbox_delivery_circuits`, `idempotency_keys` e `invitation_rate_windows`. La idempotencia por ciclo de los workers se resuelve hoy con `system.idempotency_keys` y claves UUIDv5 determinísticas. Esta entrada queda como diseño, no como estado.
 
 - **Propósito:** registro de ejecución de workers; garantiza idempotencia de jobs por ciclo.
 - **Dominio / fuente de verdad:** Sistema. Es la fuente de verdad del estado y la idempotencia de cada ejecución de worker por ciclo.
@@ -1688,6 +1697,21 @@ Nota de conteo: `planning` tiene 17 tablas y 17 fichas; §9.5–9.8 son cuatro t
 - **Consultas / índices:** la PK resuelve cada ventana; el worker elimina por `expires_at` durante la expiración de invitaciones.
 - **Retención:** máximo siete días.
 - **Eventos:** ninguno; el límite produce métrica sin PII y respuesta `429` con `Retry-After`.
+
+---
+
+### 11.5 `system.outbox_delivery_circuits`
+
+- **Propósito:** estado del cortacircuitos por tipo de evento. Es lo que permite decir «un canal está caído» en vez de mostrar veinte fallos individuales y dejar que alguien deduzca la causa.
+- **Dominio / fuente de verdad:** Sistema.
+- **Clasificación:** `operational`.
+- **Columnas:** `event_type text` · `state text` (`closed`, `open`, `half_open`) · `window_started_at timestamptz` · `success_count integer` · `failure_count integer` · `opened_until timestamptz` (nullable).
+- **FKs y borrado:** ninguna; `event_type` es el mismo identificador opaco que en `outbox_events`.
+- **Actores:** el worker de outbox escribe; `A10` con deber de diagnóstico lee.
+- **RLS:** restringida a roles de sistema; la lectura de Backoffice pasa por función cerrada.
+- **Diagnóstico de Backoffice (`HU-BO-031`):** `support.list_delivery_circuits` es la lectura, y la pantalla **abre por aquí**, no por la bandeja de eventos: un canal abierto explica de golpe todos los eventos atascados que cuelgan de él, y mirarlos uno por uno es perder el tiempo.
+- **Retención:** estado vivo; no es historia.
+- **Eventos:** ninguno.
 
 ---
 
@@ -1732,10 +1756,19 @@ Nota de conteo: `planning` tiene 17 tablas y 17 fichas; §9.5–9.8 son cuatro t
 - **Uniques y checks:** requester ≠ subject; `request_expires_at = requested_at + interval '30 minutes'`; categorías no vacías, sin duplicados y del catálogo aprobable; tier/quorum/duración calculados (estándar 1/30, restringido 2/15); propósito cerrado y `case_reference` opaca/no vacía; forma exacta de ventana, cierre y revisión por estado; sujeto, alcance y propósito inmutables.
 - **Actores:** `A10/request_break_glass` crea y cierra sólo la propia; `A12` con deber compatible decide o revisa sin ejercer; la persona no consulta el expediente.
 - **RLS:** sin DML directo; `support.request_break_glass`, `decide_break_glass`, `close_break_glass` y `review_break_glass` revalidan rol base, deber exacto, AAL2, conflicto, quorum y timestamp. La falta de autoridad o de auditoría falla cerrada.
+- **Implementado:** `support.request_break_glass`, `decide_break_glass`, `exercise_break_glass`, `close_break_glass`, `list_break_glass_requests` y `break_glass_request_projection`. Derivan del alcance: `break_glass_category_tier`, `break_glass_scope_tier`, `break_glass_required_approvals`, `break_glass_duration_minutes`. La autoridad la comprueba `support.require_break_glass_duty`, sobre la que `allfit_api` **no** tiene `execute`: el runtime ejecuta las operaciones, nunca el guardia.
+- **Divergencias con el diseño, verificadas:**
+  - **`review_break_glass` no existe.** La revisión posterior por `A12` no está implementada, y las columnas `reviewed_by_person_id`, `reviewed_by_duty_assignment_id` y `review_outcome` sí existen: hoy las escribe la decisión, no una revisión aparte. La revisión sigue pendiente.
+  - **`status` nunca almacena `expired`.** El vencimiento no es una transición: nadie corre en el instante en que la ventana se cierra. `support.effective_break_glass_status(status, request_expires_at, window_ends_at)` lo **calcula** en cada lectura, así que una ventana pasada de hora y una solicitud que nadie decidió a tiempo leen `expired` sin que ningún proceso las haya tocado. Una lectura que confiara en la columna vería una ventana abierta que ya venció.
+  - `purpose` y `sensitivity_tier` son enums (`support.break_glass_purpose` con cinco propósitos, `support.break_glass_tier`), no texto con `CHECK`.
+  - Una **categoría prohibida no es un nivel más estricto: no tiene nivel**. `break_glass_scope_tier` lanza `42501` al encontrarla, así que no existe alcance ni precio que la conceda.
+  - El duplicado dentro de `categories` se rechaza en un trigger `before insert`, no en un `CHECK`: PostgreSQL no admite subconsultas en un `CHECK`.
+- **Retirada de deber:** `support.close_break_glass_for_withdrawn_duty(uuid)` cierra toda ventana efectiva del deber retirado y la invoca el comando de deber al suspender, revocar o vencer. `allfit_api` no tiene `execute` sobre ella — cerrar ventanas es consecuencia de administrar acceso, no algo que se pida desde la superficie de break-glass. Completa el criterio 5 de `HU-BO-028`.
 - **Consultas:** bandeja por estado/prioridad, solicitudes propias y vencimientos; nunca se usa como permiso sin revalidar aprobaciones y deber.
 - **Índices:** `(requester_person_id,status,request_expires_at)`; `(subject_person_id,requested_at desc)`; `(status,request_expires_at)`; `(status,window_ends_at)`; `(reviewed_at) WHERE status IN ('closed','expired')`.
 - **Retención:** clase `platform_security_access`; expediente e historia no se borran en runtime y su purga queda bloqueada por `DB-P5-015`.
-- **Eventos:** `support.break_glass_requested.v1`, `support.break_glass_window_opened.v1`, `support.break_glass_closed.v1`, `support.break_glass_expired.v1`, `support.break_glass_reviewed.v1`.
+- **Eventos diseñados:** `support.break_glass_requested.v1`, `support.break_glass_window_opened.v1`, `support.break_glass_closed.v1`, `support.break_glass_expired.v1`, `support.break_glass_reviewed.v1`.
+- **Eventos emitidos:** `support.break_glass_requested.v1`, `support.break_glass_decided.v1`, `support.break_glass_window_opened.v1`, `support.break_glass_closed.v1`. `break_glass_decided.v1` no estaba en el diseño y hace falta: un rechazo también es una decisión que alguien tiene que ver. **`break_glass_expired.v1` no se emite** porque el vencimiento se calcula y nadie corre en ese instante para emitirlo; si se quiere una notificación al vencer, hace falta un job que la produzca. `break_glass_reviewed.v1` espera a que exista la revisión.
 
 ### 12.4 `support.break_glass_approvals`
 
@@ -1747,6 +1780,7 @@ Nota de conteo: `planning` tiene 17 tablas y 17 fichas; §9.5–9.8 son cuatro t
 - **Uniques y checks:** `UNIQUE(request_id,approver_person_id)`; aprobador distinto de solicitante/sujeto y de todo aprobador previo, comprobado por trigger; decisión y columnas inmutables; un rechazo es terminal y una aprobación parcial no cambia la ventana.
 - **Actores:** sólo `A12/approve_break_glass` ajeno y sin conflicto inserta mediante función; auditor y A10 no insertan.
 - **RLS:** tabla base sin DML directo; lectura sólo por proyección de expediente para A12 autorizado. `support.decide_break_glass` serializa la solicitud y abre ventana únicamente al completar quorum.
+- **Implementado:** `support.enforce_break_glass_approver_independence` es el trigger que sostiene la separación de deberes, y `reject_break_glass_approval_rewrite` impide reescribir una decisión. La independencia vive ahí y **no se rederiva en la API ni en la pantalla**: `support.break_glass_viewer_projection` responde `viewer_is_requester`, `viewer_can_decide` y `viewer_can_exercise` para que el cliente no tenga una segunda copia de la regla que se desincronice. Son pistas, no autoridad: cada comando revalida por su cuenta. La sesión de Backoffice lleva `sub` y `sid` y ningún identificador de persona de dominio, así que sin esos tres campos el cliente no tendría forma de saberlo.
 - **Consultas:** quorum por solicitud y cola de solicitudes pendientes.
 - **Índices:** unique anterior; `(request_id,decision)`; `(approver_person_id,decided_at desc)`.
 - **Retención:** misma clase y plazo que la solicitud; sin `UPDATE`/`DELETE` runtime; purga bloqueada por `DB-P5-015`.
@@ -1758,10 +1792,14 @@ Nota de conteo: `planning` tiene 17 tablas y 17 fichas; §9.5–9.8 son cuatro t
 - **Dominio / fuente de verdad:** Soporte; `privacy.access_events` conserva el reflejo visible.
 - **Clasificación:** `highly_sensitive`.
 - **Columnas:** `id` · `request_id uuid` · `requester_person_id uuid` · `requester_duty_assignment_id uuid` · `subject_person_id uuid` · `category text` · `result text` (`allowed`, `denied`) · `resource_type text` · `resource_id uuid` (nullable) · `operation_code text` · `reason_code text` · `occurred_at timestamptz` · `access_event_id uuid` · `access_event_occurred_at timestamptz`.
-- **FKs y borrado:** FK compuesta `(request_id,requester_person_id,subject_person_id,requester_duty_assignment_id) → break_glass_requests(id,requester_person_id,subject_person_id,requester_duty_assignment_id) RESTRICT`; deber → `platform_duty_assignments(id) RESTRICT`; FK `(access_event_id,access_event_occurred_at) → privacy.access_events(id,occurred_at) RESTRICT`.
+- **FKs y borrado:** FK compuesta `(request_id,requester_person_id,subject_person_id,requester_duty_assignment_id) → break_glass_requests(id,requester_person_id,subject_person_id,requester_duty_assignment_id) RESTRICT`; deber → `platform_duty_assignments(id) RESTRICT`; FK `(access_event_occurred_at,access_event_id) → privacy.access_events(occurred_at,id) RESTRICT` — el orden de columnas va al revés de la lista porque `privacy.access_events` está particionada por `occurred_at` y su clave primaria es `(occurred_at, id)`, y una FK compuesta nombra las columnas en el orden que declara el unique.
 - **Uniques y checks:** `UNIQUE(access_event_id,access_event_occurred_at)`; categoría dentro del alcance de la solicitud; `occurred_at = access_event_occurred_at`; resultado/razón y recurso con forma exacta; append-only.
 - **Actores:** sólo el `A10` solicitante exacto genera el evento mediante la función de lectura; `A12/audit_break_glass` consulta metadatos; la persona ve el `access_event`, no esta tabla.
 - **RLS:** sin `INSERT` directo. La función de ejercicio revalida rol, deber, AAL2, solicitud, quorum, ventana, categoría y recurso, escribe ambos eventos y devuelve contenido sólo si `result='allowed'` y ambos inserts confirman.
+- **Implementado, y es la decisión más importante de la historia:** `support.exercise_break_glass` **nunca lanza excepción**, y eso es un requisito de correctitud, no de estilo. Un intento denegado tiene que dejar evidencia, y en PostgreSQL una excepción revierte la función completa — incluidas las dos filas que prueban que el intento ocurrió. La primera versión denegaba con `raise exception` y `T-SUP-BG-01` lo cazó: cuatro asserts fallaron porque la evidencia desaparecía junto con el error. La función devuelve su resultado, el contrato declara `denied` como resultado válido y la API responde **200 con la razón registrada** en vez de 403. **«Falla cerrada» significa no devolver contenido, no lanzar.**
+- **Escalera de denegación:** `not_the_requester` → `duty_not_effective` → `window_not_open` → `quorum_incomplete` → `category_out_of_scope`, en ese orden, para que a un impostor no se le informe que su categoría estaba fuera de alcance. Un intento autorizado escribe `reason_code='authorized_exercise'`.
+- **Contador:** `exercise_count` en la proyección cuenta sólo eventos con `result='allowed'`. Un intento denegado deja su fila pero no sube el contador.
+- **Sin contenido todavía:** `HU-BO-008` pide historial de sesiones, lo registrado y la agenda. Los esquemas `execution` y `nutrition` no existen, y `planning` sólo guarda `owner_person_id` y `author_person_id` — registra quién creó un programa, nunca a quién se le asignó, así que tampoco hay fuente de agenda. Hoy un ejercicio autorizado responde `content_unavailable` con `execution_and_nutrition_absent`: la ventana es válida, el intento queda registrado y no hay contenido. Es honesto, y no es el criterio cumplido.
 - **Consultas:** por solicitud, actor, sujeto, resultado y tiempo para revisión/incident response.
 - **Índices:** `(request_id,occurred_at)`; `(requester_person_id,occurred_at desc)`; `(subject_person_id,occurred_at desc)`; `(result,occurred_at desc)`.
 - **Retención:** misma clase y plazo que solicitud/aprobaciones; sin `UPDATE`/`DELETE` runtime; purga bloqueada por `DB-P5-015`.
