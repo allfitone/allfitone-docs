@@ -284,6 +284,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Consultas / índices:** `(professional_profile_id, status)`; `(supersedes_credential_id)`.
 - **Retención:** con la persona y las verificaciones asociadas.
 - **Eventos:** `identity.professional_credential_declared.v1`, `identity.professional_credential_revised.v1`, `identity.professional_credential_retired.v1`.
+- **Implementado (`HU-BO-021`):** declarar una credencial abre una solicitud de verificación pendiente para esa versión exacta (`trg_professional_credentials_open_verification_request`) y retirarla cancela la pendiente (`trg_professional_credentials_withdraw_verification_request`). Revisar es crear una versión nueva y retirar la anterior, así que el criterio 7 —una revisión abre su propia revisión y la verificación anterior queda intacta— sale de esos dos triggers en vez de ser una tercera regla. Nadie tiene que acordarse de pedir la verificación.
 
 ### 4.12 `identity.professional_credential_verifications`
 
@@ -299,6 +300,31 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Retención:** con la credencial verificada.
 - **Eventos:** `identity.professional_credential_verified.v1`, `identity.professional_credential_verification_revoked.v1`.
 - **Gobernanza:** ADR-026 y `T-VG-01..06`; solo credenciales profesionales y evidencia minimizada.
+- **Implementado (`HU-BO-021`):** `identity.decide_credential_verification` es `OP-IDN-011`. Añade `request_id` nullable con FK portadora `(request_id, professional_credential_id) → credential_verification_requests(id, professional_credential_id)`, y un único resultado por solicitud. Las decisiones anteriores a la cola conservan `request_id` nulo.
+  - **No hay resultado por defecto**: sin resultado la función responde `22023`. La política se deriva del método (`official_registry_lookup` ⇒ `professional_credential.registry.v1`, `issuer_confirmation` ⇒ `professional_credential.issuer.v1`) y no se acepta del cliente.
+  - **La vigencia se deriva, nunca se acepta**: la menor entre `decided_at + 12 meses`, `source_valid_to` y `expires_on` de la credencial. Una fuente que informa la credencial vencida no puede producir `verified`. El `CHECK` de la tabla sigue siendo una tercera defensa: al quitar la derivación en una prueba deliberada, fue el `CHECK` quien detuvo la inserción.
+  - `evidence_fingerprint` lo calcula la base como `sha256` de política, método, fuente, referencia, estado y `source_checked_at`. Ninguna proyección devuelve la huella ni `source_reference`.
+  - **Append-only real**: `identity.reject_credential_verification_rewrite` rechaza `UPDATE` y `DELETE` con `55000`, también para el dueño de la tabla. Renovar, revocar y apelar crean otra fila.
+  - **Conflictos (ADR-026 §2.4) comprobados contra los datos**: `identity.credential_verification_conflict` devuelve `verifier_is_holder` o `shared_active_membership`. Haber declarado o revisado es la misma persona que el titular en V1. **Pendientes**: la relación o asignación profesional efectiva no se puede comprobar porque `relationships` no existe —lo que también implica que hoy no puede existir ninguna—, y las apelaciones no están construidas. Cuando lleguen, su comprobación va en esa función.
+  - La autoridad la resuelve `identity.require_credential_verifier`: rol base más `verify_professional_credentials`. `curate_global_catalog` no la sustituye, y `T-IDN-VERIFY-01` lo asserta.
+- **Evento emitido:** `identity.professional_credential_verified.v1` sólo cuando el resultado es `verified`. Un `rejected` o `unverifiable` queda en la fila sin evento propio; la persona lo ve por la proyección de la credencial.
+
+### 4.12.1 `identity.credential_verification_requests`
+
+- **Propósito:** cola de trabajo de verificación: una solicitud por versión exacta de credencial. Cierra la brecha técnica de `HU-BO-021` que PRE_PHASE_5 §6 dejaba como `NEW-IDN-VERIFY-REQUEST`.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `identity_pii` (enlaza a la persona y a su credencial).
+- **Columnas:** `id uuid` · `professional_credential_id uuid` · `requested_by_person_id uuid` · `kind text` (`initial`, `renewal`) · `status text` (`pending`, `resolved`, `cancelled`) · `supersedes_request_id uuid` (nullable) · `created_at timestamptz` · `resolved_at timestamptz` (nullable) · `cancelled_at timestamptz` (nullable).
+- **Divergencia con PRE_PHASE_5 §6.2, deliberada:** el boceto incluía `verified`, `rejected`, `unverifiable`, `expired`, `appealed` e `in_review` entre los estados de la solicitud. Eso guardaría el resultado dos veces —aquí y en la verificación— y dos copias se desincronizan. **La solicitud no lleva resultado**: sólo `pending`, `resolved` o `cancelled`, y lo decidido vive únicamente en `professional_credential_verifications`. Tampoco se modelaron verificador asignado, `due_at` ni `in_review`: ningún criterio los exige y la concurrencia la resuelve el bloqueo de la fila al decidir.
+- **FKs y borrado:** credencial, solicitante y `supersedes_request_id` con `RESTRICT`. Clave portadora `UNIQUE (id, professional_credential_id)` para la verificación.
+- **Uniques y checks:** forma exacta de timestamps por estado; `UNIQUE (professional_credential_id) WHERE status = 'pending'` (una revisión vigente por versión, §6.3); sin auto-referencia. `identity.guard_credential_verification_request_transition` impide salir de un estado terminal o reescribir campos. **El borrado no se guarda**: el runtime no tiene DML sobre la tabla, y una solicitud decidida no puede borrarse porque su verificación la referencia.
+- **Actores:** los triggers de `professional_credentials` abren y cancelan; `A11/verify_professional_credentials` lee, decide y abre renovaciones mediante funciones cerradas.
+- **RLS:** sin DML de runtime; `force row level security` y política sólo para el dueño.
+- **Consultas:** `identity.list_credential_verification_requests` (cola pendiente; `viewer_can_decide` es pista para la pantalla, nunca autoridad) · `identity.list_due_credential_renewals` · `identity.open_credential_verification_renewal`. Las dos lecturas **escriben un `privacy.access_events` por titular devuelto** antes de devolverlo, porque muestran nombre, número de registro y dónde consultarlo.
+- **Renovación (criterio 4):** nadie corre en el instante en que una verificación vence, así que vencer no puede abrir una solicitud. La lista de renovaciones se calcula —credenciales activas cuya última verificación es `verified` y termina en menos de **30 días**— y un verificador abre la renovación, que es una solicitud nueva enlazada a la anterior y nunca extiende la verificación vieja. **Los 30 días son un número inventado**: ninguna fuente normativa fija esa ventana.
+- **Índices:** único parcial de pendientes; `(status, created_at, id)`.
+- **Retención:** con la credencial.
+- **Eventos:** ninguno propio; el evento es el de la verificación.
 
 ### 4.13 `identity.invitations`
 
