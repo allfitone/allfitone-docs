@@ -2209,7 +2209,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Cacheable con `ETag` |
 | **Información sensible** | Ninguna. Un músculo del catálogo describe un movimiento, **nunca** el cuerpo de una persona: la composición corporal vive en `identity` y es dato de salud |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Vocabulario global y único: un músculo no tiene alcance de organización, porque dos gimnasios no pueden discrepar sobre qué es un cuádriceps. `body_slug`, cuando existe, es la parte que la figura del cuerpo ya dibuja, de modo que el filtro y el onboarding hablan un solo idioma |
+| **Reglas** | Vocabulario global y único: un músculo no tiene alcance de organización, porque dos gimnasios no pueden discrepar sobre qué es un cuádriceps. `body_slug`, cuando existe, es la parte de la figura que **representa** al músculo —no siempre la que es exactamente él—, de modo que el filtro y el onboarding hablan un solo idioma. Dos músculos pueden compartir parte |
 | **Falla cerrada** | Códigos draft o deprecados no se devuelven |
 
 ### 7.6 Planificación

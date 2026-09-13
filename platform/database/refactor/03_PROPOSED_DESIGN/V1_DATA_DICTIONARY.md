@@ -1115,8 +1115,17 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Eventos:** ninguno.
 
 `body_slug` es el puente con la figura del cuerpo que Space ya dibuja en su
-onboarding: cuando existe, es la misma parte que la persona tocó al declarar qué
-quiere trabajar, de modo que el filtro y la figura hablan un solo vocabulario.
+onboarding: es **la parte que representa al músculo**, no necesariamente la que
+es exactamente él. La figura no tiene dorsal propio, así que toma la forma más
+cercana —la espalda superior— y la comparte con el músculo que la posee. Una
+parte puede por tanto encender dos músculos a la vez, y eso es lo honesto: el
+dibujo no los distingue, y fingir lo contrario dejándolo sin parte hacía que
+elegirlo pareciera roto.
+
+**Un músculo sin forma aproximadamente correcta no entra al vocabulario.** El
+abductor se probó sobre el glúteo y se leyó como otro músculo; un vocabulario de
+producto no puede contener una palabra que la interfaz responde mal.
+
 Es nullable porque no todo lo que se filtra es una parte dibujable: `cardio` y
 `cuerpo completo` etiquetan los movimientos que no son de fuerza, y sin ellos
 esos movimientos no tendrían ninguna etiqueta.
