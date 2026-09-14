@@ -962,6 +962,8 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | `OP-ORG-018` | Crear una organización y entregarla a su dueño | Comando | `A10` |
 | `OP-ORG-019` | Consultar catálogo de tipos de organización | Consulta | `A2` |
 | `OP-ORG-020` | Resolver el contexto de entrada de Studio | Consulta | `A1`, `A2` |
+| `OP-ORG-021` | Reenviar la invitación de propiedad | Comando | `A10` |
+| `OP-ORG-022` | Cancelar una organización que nadie reclamó | Comando | `A10` |
 
 ---
 
@@ -1328,6 +1330,39 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Evento de dominio** | `organization.created_unclaimed.v1` |
 | **Reglas** | Es la excepción acotada a la regla de que una organización la crea su dueño, y existe solo para venta asistida. Mientras esté `unclaimed` la organización **no opera**: no invita clientes, no publica planes, no recibe pagos y **no tiene membresías**. Allfit **no la administra** en ese intervalo: solo puede reenviar la invitación o cancelar la creación. Al aceptar, el destinatario obtiene la membresía `owner` y la organización pasa a `active`. Allfit **no crea las cuentas del equipo**: el dueño invita a los suyos con `OP-ORG-005` |
 | **Falla cerrada** | Si la invitación no puede crearse, no se crea la organización: no queda una organización huérfana sin destinatario |
+| **Implementación (`HU-BO-014`)** | `organizations.create_unclaimed_organization`. Una empresa se nombra al crear; una persona natural se nombra con su propia identidad al aceptar, así que el comando no acepta el nombre de una persona. La organización, su sede y la invitación registran a la persona de Allfit y la asignación de deber bajo la que actuó. Aceptar ocurre en `identity.decide_ownership_invitation` (`OP-IDN-009`); quien emitió la invitación no puede aceptarla |
+
+#### `OP-ORG-021` — Reenviar la invitación de propiedad
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/organizations/{orgId}/handover/resends` |
+| **Actor** | `A10` con rol base, `manage_organization_lifecycle`, AAL2 y deber vigente |
+| **Filtros obligatorios** | Organización `unclaimed` con una invitación de propiedad. El comando no lleva cuerpo: nunca cambia la dirección |
+| **Transacción** | Una invitación vigente se extiende y se reenvía tal cual, así que el enlace del primer correo sigue sirviendo. Una vencida o rechazada se reemplaza por una nueva a la misma dirección |
+| **Idempotencia** | `Idempotency-Key` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada; una organización ya reclamada o cancelada responde conflicto |
+| **Información sensible** | Contacto del futuro dueño, que la respuesta solo muestra enmascarado |
+| **Evento de dominio** | `organization.ownership_invited.v1` |
+| **Reglas** | Allfit no administra la organización en el intervalo: reenviar es una de sus dos únicas acciones (`HU-BO-014`, criterio 4) |
+
+#### `OP-ORG-022` — Cancelar una organización que nadie reclamó
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/organizations/{orgId}/cancellation` |
+| **Actor** | `A10` con rol base, `manage_organization_lifecycle`, AAL2 y deber vigente; no se deriva de `allfit_admin` |
+| **Filtros obligatorios** | Organización `unclaimed`. Una organización con dueño la cierra su propietario (`OP-ORG-012`), nunca Allfit desde aquí |
+| **Transacción** | Pasar a `cancelled` con `cancelled_at`, retirar las invitaciones pendientes y registrar `organization.cancelled.v1` con la persona y el deber de Allfit |
+| **Idempotencia** | `Idempotency-Key`. Cancelar una organización ya cancelada converge sin registrar una segunda cancelación |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada; una organización reclamada entretanto responde conflicto |
+| **Información sensible** | Ninguna |
+| **Evento de dominio** | `organization.cancelled.v1` |
+| **Reglas** | `HU-BO-015`. `cancelled` solo se alcanza desde `unclaimed` y conserva la auditoría |
 
 #### `OP-REL-001` — Invitar a una persona como cliente
 
