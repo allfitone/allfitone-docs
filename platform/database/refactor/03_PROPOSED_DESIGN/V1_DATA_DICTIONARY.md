@@ -958,8 +958,8 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Columnas:** `id` · `code text` · `name text` · `status catalog.publication_status`.
 - **FKs y borrado:** ninguna saliente; es una raíz de catálogo y las referencias entrantes usan `ON DELETE RESTRICT`.
 - **Uniques y checks:** `UNIQUE code`.
-- **Actores:** lectura autenticada; escritura curaduría.
-- **RLS:** lectura autenticada solo para filas `status='published'`; escritura exclusiva de la plataforma por la función de publicación. `/catalog/v1` la lee por `catalog.list_disciplines()`, cerrada tras `catalog.require_catalog_reader()`, que exige una persona autenticada **y activa**: el catálogo es global, no público.
+- **Actores:** lectura autenticada; escritura curaduría (`A11` con `curate_global_catalog`) por `catalog.publish_discipline` y `catalog.archive_discipline` (`OP-CAT-004`, `OP-CAT-005`). `catalog.list_global_catalog` es la única lectura que devuelve borradores y archivadas (`NEW-CAT-GLOBAL-PUBLISH`, `HU-BO-022`).
+- **RLS:** lectura autenticada solo para filas `status='published'`; escritura exclusiva de la plataforma por la función de publicación. `/catalog/v1` la lee por `catalog.list_disciplines()`, cerrada tras `catalog.require_catalog_reader()`, que exige una persona autenticada **y activa**: el catálogo es global, no público. Las policies `disciplines_select_platform`, `disciplines_insert_platform` y `disciplines_update_platform` habilitan la curaduría sólo cuando el actor es `support`.
 - **Consultas / índices:** por `code`; único `code`; `(status)` para la policy de publicación.
 - **Retención:** permanente; una disciplina referenciada se depreca o archiva, no se elimina.
 - **Eventos:** ninguno.
@@ -972,8 +972,8 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Columnas:** `id` · `discipline_code text` · `code text` · `name text` · `content_scope catalog.content_scope` · `owner_organization_id uuid` (nullable) · `status catalog.publication_status`.
 - **FKs y borrado:** `discipline_code → disciplines(code) RESTRICT`; `owner_organization_id → organizations.organizations(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE (code)` para globales; `CHECK (content_scope='global') = (owner_organization_id is null)`.
-- **Actores:** personas autenticadas leen tipos globales publicados; miembros autorizados leen contenido de su organización; solo plataforma o owner organizacional autorizado escriben según `content_scope`.
-- **RLS:** `global` publicado abierto; privado solo a su organización.
+- **Actores:** personas autenticadas leen tipos globales publicados; miembros autorizados leen contenido de su organización; solo plataforma o owner organizacional autorizado escriben según `content_scope`. La curaduría global (`OP-CAT-004`, `OP-CAT-005`) publica y archiva únicamente filas `global`, sin dueño, y `trg_activity_types_before_delete_global` rechaza (`55000`) borrar una de ellas: archivar retira de la búsqueda y conserva lo que ya la referenciaba (`HU-BO-022`, criterio 3).
+- **RLS:** `global` publicado abierto; privado solo a su organización. `activity_types_all_platform` añade la curaduría: actor `support` y `content_scope = 'global'` sin dueño, nunca contenido de un gimnasio.
 - **Consultas / índices:** `(content_scope, owner_organization_id, status)`; `(content_scope, discipline_code, status)`.
 - **Retención:** permanente para globales; el contenido organizacional se archiva y sigue la disposición de su organización cuando no está referenciado.
 - **Eventos:** ninguno propio.
@@ -999,9 +999,9 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Clasificación:** `operational`.
 - **Columnas:** `id` · `discipline_code text` · `name text` · `normalized_name text` · `content_scope catalog.content_scope` · `owner_organization_id uuid` (nullable) · `owner_person_id uuid` (nullable) · `successor_movement_id uuid` (nullable) · `status catalog.publication_status`.
 - **FKs y borrado:** `discipline_code → disciplines(code) RESTRICT`; `owner_organization_id → organizations.organizations(id) RESTRICT`; `owner_person_id → identity.people(id) RESTRICT`; `successor_movement_id → movements(id) RESTRICT`.
-- **Uniques y checks:** `CHECK` de un solo owner según `content_scope`; `UNIQUE parcial (owner_organization_id, normalized_name) WHERE content_scope='organization'`.
-- **Actores:** lectura autenticada de globales publicados; owner personal u organización con membresía vigente leen/escriben su contenido; la plataforma publica globales.
-- **RLS:** `global` abierto; `organization` solo a su organización con membresía; `person` solo a su dueño.
+- **Uniques y checks:** `CHECK` de un solo owner según `content_scope`; `UNIQUE parcial (owner_organization_id, normalized_name) WHERE content_scope='organization'`; `uidx_movements_global_name`, único parcial sobre `normalized_name WHERE content_scope='global'`: dos movimientos globales con el mismo nombre son el mismo escrito dos veces (`HU-BO-022`).
+- **Actores:** lectura autenticada de globales publicados; owner personal u organización con membresía vigente leen/escriben su contenido; la plataforma publica y archiva globales (`OP-CAT-004`, `OP-CAT-005`), y `trg_movements_before_delete_global` rechaza (`55000`) borrar uno.
+- **RLS:** `global` abierto; `organization` solo a su organización con membresía; `person` solo a su dueño. `movements_all_platform` añade la curaduría: actor `support` y `content_scope = 'global'` sin dueño.
 - **Consultas / índices:** `(content_scope, owner_organization_id, status)`; `(content_scope, discipline_code, status)`; índice sobre `normalized_name`.
 - **Retención:** archivado, no borrado, si está referenciado.
 - **Eventos:** `catalog.private_movement_created.v1`, `catalog.private_movement_updated.v1`, `catalog.private_movement_archived.v1`.

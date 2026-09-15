@@ -1990,6 +1990,8 @@ Reglas que gobiernan todo el dominio:
 | `OP-CAT-001` | Crear un movimiento privado | Comando | `A3`, `A4`, `A5` |
 | `OP-CAT-002` | Actualizar un movimiento privado | Comando | `A3`, `A4`, `A5` |
 | `OP-CAT-003` | Archivar un movimiento privado | Comando | `A4`, `A5` |
+| `OP-CAT-004` | Publicar contenido del catálogo global | Comando | `A11` |
+| `OP-CAT-005` | Archivar contenido del catálogo global | Comando | `A11` |
 | `OP-CAT-006` | Publicar o deprecar un contrato de resultados | Comando | `A11` |
 | `OP-CAT-007` | Listar disciplinas | Consulta | Autenticado |
 | `OP-CAT-008` | Listar tipos de actividad | Consulta | Autenticado |
@@ -2052,6 +2054,38 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `catalog.private_movement_archived.v1` |
 | **Reglas** | Archivar lo retira de la búsqueda para contenido nuevo, pero **no** lo elimina: las versiones publicadas y las ejecuciones que lo referencian siguen resolviéndolo. Un movimiento referenciado nunca se borra físicamente mientras exista historial |
 | **Falla cerrada** | — |
+
+#### `OP-CAT-004` — Publicar contenido del catálogo global
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/catalogue/disciplines` · `POST /backoffice/v1/catalogue/activity-types` · `POST /backoffice/v1/catalogue/movements`; la lectura previa es `GET /backoffice/v1/catalogue` (`NEW-CAT-GLOBAL-PUBLISH`) |
+| **Actor** | `A11` con rol base, `curate_global_catalog`, AAL2 y deber vigente |
+| **Filtros obligatorios** | El cuerpo lleva sólo código y nombre (el movimiento, disciplina y nombre). No hay campo de alcance ni de dueño: lo que publica Allfit es global por construcción. Un tipo de actividad o un movimiento exigen una disciplina publicada |
+| **Transacción** | `catalog.publish_discipline`, `publish_activity_type` o `publish_global_movement`: inserta la entrada como `published`, o vuelve a publicar una archivada **con el mismo nombre**. El nombre del movimiento se normaliza (minúsculas, espacios colapsados) y ese normalizado es único entre los globales |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; el reintento devuelve la entrada sin publicar otra vez |
+| **Paginación y orden** | La lectura devuelve el catálogo completo: es pequeño y cerrado. Orden por código |
+| **Offline / concurrencia** | Falla cerrada. Un código ya publicado, uno que ya nombra otra cosa o un movimiento duplicado responden `409` |
+| **Información sensible** | Ninguna categoría personal: el catálogo no es dato de nadie, así que no escribe `access_events` |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | `HU-BO-022`, criterios 1, 2 y 4. Un gimnasio crea movimientos privados y nunca los sube al global: estas rutas no encuentran contenido con dueño. El equipamiento no tiene tabla en V1 y la lectura lo declara ausente en vez de devolver una lista vacía |
+
+#### `OP-CAT-005` — Archivar contenido del catálogo global
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/catalogue/disciplines/{code}/archival` · `.../activity-types/{code}/archival` · `.../movements/{movementId}/archival` |
+| **Actor** | Igual que `OP-CAT-004` |
+| **Filtros obligatorios** | La entrada es global y está publicada. El comando no lleva cuerpo |
+| **Transacción** | `catalog.archive_discipline`, `archive_activity_type` o `archive_global_movement`: pasa la entrada a `archived`. Archivar una disciplina exige que su contenido global ya lo esté: no hay cascada |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Una entrada que ya no está publicada, o una disciplina con contenido publicado, responden `409`; el contenido privado de un gimnasio responde `404` |
+| **Información sensible** | Ninguna categoría personal |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | `HU-BO-022`, criterio 3. Archivar retira de `/catalog/v1` pero **no borra**: un trigger rechaza (`55000`) borrar una entrada global y las FKs impiden dejar huérfano lo que la referencia, así que las sesiones y plantillas que ya la usaban siguen resolviéndola |
 
 #### `OP-CAT-006` — Publicar o deprecar un contrato de resultados
 
