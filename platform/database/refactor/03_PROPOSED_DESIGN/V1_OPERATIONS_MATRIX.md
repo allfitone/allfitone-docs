@@ -260,6 +260,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-040` | Iniciar sesión en Space | Comando | `A0` → `A1`, `A2` |
 | `OP-IDN-041` | Renovar la sesión de Space | Comando | `A1`, `A2` |
 | `OP-IDN-042` | Pedir el restablecimiento de contraseña de Space | Comando | `A0` |
+| `OP-IDN-045` | Reenviar una invitación de equipo desde Backoffice | Comando | `A10` |
 
 ---
 
@@ -934,6 +935,22 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | **Responde `202` siempre**, exista o no la cuenta y esté o no el proveedor en pie: HU-SP-004 criterio 2. Un fallo del proveedor tampoco es público, porque distinguirlo delataría igualmente qué direcciones existen. **Límite de intentos obligatorio**: sin él, este endpoint envía correos a cualquier dirección que le pidan |
 | **Falla cerrada** | Cualquier error se traga y se responde `202`; nada se crea |
 
+#### `OP-IDN-045` — Reenviar una invitación de equipo desde Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/organizations/{orgId}/team-invitations/{invitationId}/resends`; la lectura previa es `GET /backoffice/v1/organizations/{orgId}/team-invitations` (`NEW-IDN-RESEND`) |
+| **Actor** | `A10` con rol base, `diagnose_support_metadata`, AAL2 y deber vigente |
+| **Filtros obligatorios** | Invitación de equipo de esa organización, y organización `active`. El comando no lleva cuerpo: el contacto, el rol y la organización salen de la invitación |
+| **Transacción** | `identity.resend_team_invitation`. Una invitación vigente se extiende y se reenvía tal cual. Una vencida se reemite: invitación nueva idéntica, firmada por la persona de Allfit y su asignación de deber, con `reissues_invitation_id` hacia la vencida, que sigue vencida. Cada reenvío escribe `identity.invitation_resends` |
+| **Idempotencia** | `Idempotency-Key`; el reintento devuelve la invitación entregada sin reenviar |
+| **Paginación y orden** | La lectura devuelve las 50 invitaciones más recientes con `truncated` |
+| **Offline / concurrencia** | Falla cerrada. Aceptada, rechazada, revocada, ya reemitida o con una igual pendiente responde `409` |
+| **Información sensible** | Contacto del invitado, que solo viaja enmascarado; no revela persona, así que no escribe `access_events` |
+| **Evento de dominio** | `organization.staff_invited.v1` (y `identity.invitation_expired.v1` si la vencida seguía pendiente) |
+| **Reglas** | `HU-BO-011`, criterios 2 a 6. La ventana por destino que usa Studio (tres al día por organización y dirección) cuenta también los reenvíos de soporte: `429`. Un trigger rechaza una reemisión con otra organización, canal, contacto, propuesta o rol |
+
 ### 7.2 Organizaciones
 
 Dueño de `ORGANIZATION`, `ORGANIZATION_TYPE`, `ORGANIZATION_SITE`, `ORGANIZATION_MEMBERSHIP`, `MEMBERSHIP_ROLE`, `ORGANIZATION_ROLE`, `ORGANIZATION_CAPABILITY`, `ROLE_CAPABILITY` y sus eventos.
@@ -1346,7 +1363,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Offline / concurrencia** | Falla cerrada; una organización ya reclamada o cancelada responde conflicto |
 | **Información sensible** | Contacto del futuro dueño, que la respuesta solo muestra enmascarado |
 | **Evento de dominio** | `organization.ownership_invited.v1` |
-| **Reglas** | Allfit no administra la organización en el intervalo: reenviar es una de sus dos únicas acciones (`HU-BO-014`, criterio 4) |
+| **Reglas** | Allfit no administra la organización en el intervalo: reenviar es una de sus dos únicas acciones (`HU-BO-014`, criterio 4). Cada reenvío queda en `identity.invitation_resends` (`HU-BO-011`, criterio 6), y la invitación nueva de una reemisión apunta a la reemplazada con `reissues_invitation_id` |
 
 #### `OP-ORG-022` — Cancelar una organización que nadie reclamó
 
