@@ -261,6 +261,9 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-041` | Renovar la sesión de Space | Comando | `A1`, `A2` |
 | `OP-IDN-042` | Pedir el restablecimiento de contraseña de Space | Comando | `A0` |
 | `OP-IDN-045` | Reenviar una invitación de equipo desde Backoffice | Comando | `A10` |
+| `OP-IDN-046` | Enviar a una persona el flujo oficial de recuperación desde Backoffice | Comando | `A10` |
+| `OP-IDN-047` | Reenviar una recuperación en curso desde Backoffice | Comando | `A10` |
+| `OP-IDN-048` | Cancelar una recuperación sospechosa desde Backoffice | Comando | `A10` |
 
 ---
 
@@ -950,6 +953,54 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Información sensible** | Contacto del invitado, que solo viaja enmascarado; no revela persona, así que no escribe `access_events` |
 | **Evento de dominio** | `organization.staff_invited.v1` (y `identity.invitation_expired.v1` si la vencida seguía pendiente) |
 | **Reglas** | `HU-BO-011`, criterios 2 a 6. La ventana por destino que usa Studio (tres al día por organización y dirección) cuenta también los reenvíos de soporte: `429`. Un trigger rechaza una reemisión con otra organización, canal, contacto, propuesta o rol |
+
+#### `OP-IDN-046` — Enviar a una persona el flujo oficial de recuperación desde Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/people/{personId}/account-recoveries`; la lectura previa es `GET /backoffice/v1/people/{personId}/account-recovery?case_reference=` (`NEW-IDN-ACTION`) |
+| **Actor** | `A10` con rol base, `diagnose_support_metadata`, AAL2 y deber vigente; nunca sobre su propia persona (`42501`) |
+| **Filtros obligatorios** | Persona activa, con cuenta de acceso y correo verificado. El cuerpo lleva solo `case_reference`: la persona, el correo y el flujo salen de la base |
+| **Transacción** | `identity.start_account_recovery`: bloquea la persona, marca vencidas las solicitudes cuyo enlace caducó, crea `identity.identity_action_requests` en `initiated` con fingerprint y pista del correo, escribe `identity.identity_action_events` (`initiated`), encola `identity.account_recovery_requested.v1` y registra `privacy.access_events` |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; el `Command-Id` es el identificador de la solicitud y el reintento devuelve la misma sin encolar otro correo |
+| **Paginación y orden** | La lectura devuelve las diez solicitudes más recientes |
+| **Offline / concurrencia** | Falla cerrada. Sin cuenta, sin correo verificado, persona no activa o con una recuperación en curso responde `409` y no escribe nada. Tres correos de recuperación por persona en 24 horas: `429` |
+| **Información sensible** | El correo solo viaja enmascarado; el worker lo lee para entregarlo al proveedor. Enlace, token e identificador del reset de WorkOS nunca se guardan ni se devuelven |
+| **Evento de dominio** | `identity.account_recovery_requested.v1` (payload: `request_id`). El worker llama al proveedor, registra `delivered` con el vencimiento del enlace o `failed`; `identity.process_password_reset_succeeded` confirma la solicitud cuando la persona cambia su contraseña |
+| **Reglas** | `HU-BO-010`, criterios 3, 4, 5, 10 y 12. Solo la persona confirma. No hay recuperación por teléfono: V1 no tiene canal SMS |
+
+#### `OP-IDN-047` — Reenviar una recuperación en curso desde Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/people/{personId}/account-recoveries/{requestId}/resends` |
+| **Actor** | Igual que `OP-IDN-046` |
+| **Filtros obligatorios** | Solicitud de esa persona en `awaiting_verification` y con enlace vigente. El cuerpo lleva solo `case_reference` |
+| **Transacción** | `identity.resend_account_recovery`: comprueba que el correo verificado sigue siendo aquel con el que empezó (fingerprint), escribe `delivery_requested` y encola otra entrega de la misma solicitud |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; el reintento devuelve la solicitud sin encolar otro correo |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Una solicitud que todavía no salió, vencida, cancelada, confirmada, fallida o cuyo correo verificado cambió responde `409`; una vencida nunca revive y la reemplaza una nueva con `OP-IDN-046`. Comparte el límite diario: `429` |
+| **Información sensible** | Igual que `OP-IDN-046` |
+| **Evento de dominio** | `identity.account_recovery_requested.v1` |
+| **Reglas** | `HU-BO-011`, criterios 2 a 6, para la recuperación: reenviar no cambia sujeto, destino, finalidad ni acción |
+
+#### `OP-IDN-048` — Cancelar una recuperación sospechosa desde Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/people/{personId}/account-recoveries/{requestId}/cancellation` |
+| **Actor** | Igual que `OP-IDN-046` |
+| **Filtros obligatorios** | Solicitud de esa persona en `initiated` o `awaiting_verification` y con enlace vigente. El cuerpo lleva solo `case_reference` |
+| **Transacción** | `identity.cancel_account_recovery`: pasa la solicitud a `cancelled` y escribe `cancelled` con persona, deber y caso |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Una solicitud que ya no está vigente responde `409`. Si la entrega estaba en cola, el worker ya no la envía; si el correo ya salió, se registra pero no reabre la solicitud |
+| **Información sensible** | Igual que `OP-IDN-046` |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | `HU-BO-010`, criterio 10. Un correo que ya salió no se puede retirar del buzón de la persona: un cambio de contraseña posterior ya no confirma la solicitud cancelada |
 
 ### 7.2 Organizaciones
 

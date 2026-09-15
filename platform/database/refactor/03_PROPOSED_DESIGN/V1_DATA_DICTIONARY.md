@@ -107,7 +107,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Columnas:** `id uuid` UUIDv7 · `provider text` (`workos`) · `issuer text` · `provider_event_id text` · `occurred_at timestamptz` · `access_account_id uuid` (nullable) · `result identity.password_reset_receipt_result` (nullable solo dentro de la transacción) · `revoked_session_count integer` · `received_at timestamptz` · `processed_at timestamptz` (nullable solo mientras se procesa).
 - **FKs y borrado:** `access_account_id → identity.access_accounts(id) ON DELETE RESTRICT`; queda nulo si el subject firmado no tiene cuenta local.
 - **Uniques y checks:** `UNIQUE (provider, issuer, provider_event_id)`; proveedor cerrado a `workos`; issuer y evento no vacíos; conteo no negativo; resultado y fecha de procesamiento aparecen juntos.
-- **Actores:** ninguna lectura ni escritura directa desde runtime. `allfit_api` solo ejecuta `identity.process_password_reset_succeeded`; `PUBLIC` no ejecuta la función.
+- **Actores:** ninguna lectura ni escritura directa desde runtime. `allfit_api` solo ejecuta `identity.process_password_reset_succeeded`; `PUBLIC` no ejecuta la función. En la misma transacción la función confirma la recuperación en curso de la persona de esa cuenta (`identity.identity_action_requests`, `HU-BO-010`).
 - **RLS:** habilitada y forzada, con policy exclusiva de `allfit_owner`.
 - **Consultas:** reconocimiento de replay por `(provider, issuer, provider_event_id)`; asociación opcional por `access_account_id`.
 - **Índices:** unique anterior; parcial por `access_account_id WHERE access_account_id IS NOT NULL`.
@@ -152,6 +152,36 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Consultas / índices:** historia por `(factor_id, occurred_at DESC, id DESC)`.
 - **Retención:** evidencia durable de seguridad; no se elimina en runtime.
 - **Eventos:** la misma transacción solicita revocar sesiones/intentos y eliminar el factor externo.
+
+### 4.2.6 `identity.identity_action_requests`
+
+- **Propósito:** solicitud durable de una acción sobre la identidad que solo la persona confirma (PRE_PHASE_5 §5). El corte físico cubre solo `account_recovery`: la recuperación de acceso que soporte inicia para una persona que no puede entrar (`HU-BO-010`). Los cambios de contacto que la persona inicia desde Space llegarán como nuevos valores de `identity.identity_action_kind`, con las columnas de propuesta que necesiten.
+- **Dominio / fuente de verdad:** Identidad para el estado y la autoría; WorkOS conserva el enlace de recuperación, su token y el cambio de contraseña.
+- **Clasificación:** `identity_pii` minimizada; no guarda el contacto en claro, el enlace, el token ni un código.
+- **Columnas:** `id uuid` (Command-Id del comando que la abrió) · `person_id uuid` · `access_account_id uuid` · `action_kind identity.identity_action_kind` (`account_recovery`) · `status identity.identity_action_status` (`initiated`, `awaiting_verification`, `confirmed`, `expired`, `cancelled`, `failed`) · `initiated_by_kind text` (`support`) · `initiated_by_person_id uuid` · `initiated_by_duty_assignment_id uuid` · `case_reference text` · `delivery_channel text` (`email`) · `contact_fingerprint bytea` (SHA-256 del correo en minúsculas) · `contact_hint text` (enmascarado) · `expires_at timestamptz` · `delivered_at`, `confirmed_at`, `cancelled_at`, `failed_at timestamptz` (nullable) · `failure_code text` (`contact_changed`, `delivery_failed`; nullable) · `created_at` · `updated_at`.
+- **FKs y borrado:** `person_id` e `initiated_by_person_id → identity.people(id) RESTRICT`; `access_account_id → identity.access_accounts(id) RESTRICT`; `initiated_by_duty_assignment_id → support.platform_duty_assignments(id) RESTRICT`.
+- **Uniques y checks:** único parcial `(person_id, action_kind) WHERE status IN ('initiated','awaiting_verification')`: una sola solicitud en curso por persona y tipo, también para el dueño de la tabla. `ck_identity_action_requests_initiator`: la inicia soporte con asignación de deber y referencia de caso trazable, y nunca sobre su propia persona. `ck_identity_action_requests_lifecycle`: cada fecha terminal aparece exactamente con su estado, `awaiting_verification` y `confirmed` exigen `delivered_at` y `failure_code` existe solo en `failed`. Fingerprint de 32 bytes. `trg_identity_action_requests_transition` rechaza (`55000`) borrar, cambiar sujeto, destino o autoría, mover un estado terminal o volver de `awaiting_verification` a `initiated`.
+- **Actores:** Allfit (`A10` con `diagnose_support_metadata`) lee, inicia, reenvía y cancela (`NEW-IDN-ACTION`, `OP-IDN-046..048`). El worker prepara la entrega, la registra con el vencimiento que informa el proveedor o la da por fallida. `identity.process_password_reset_succeeded` la confirma cuando el proveedor informa que la persona cambió su contraseña. Nadie la confirma por la persona.
+- **RLS:** `FORCE ROW LEVEL SECURITY` con política única para `allfit_owner`; `allfit_api` sin privilegios de tabla. Entradas cerradas: `read_account_recovery`, `start_account_recovery`, `resend_account_recovery`, `cancel_account_recovery`, `prepare_account_recovery_delivery`, `record_account_recovery_delivery` y `fail_account_recovery_delivery`; cada lectura y cada comando de soporte escribe `privacy.access_events` (`support_metadata`) antes de devolver contenido.
+- **Consultas:** las diez más recientes de una persona; la solicitud en curso de una persona; por persona de la cuenta al confirmar.
+- **Índices:** PK; único parcial en curso; `(person_id, created_at DESC, id DESC)`; `(access_account_id)`.
+- **Retención:** evidencia de soporte; sigue la disposición de la identidad de la persona.
+- **Eventos:** `identity.account_recovery_requested.v1`, con solo `request_id` en el payload, al iniciar y al reenviar.
+- **Divergencias con PRE_PHASE_5 §5:** no guarda `provider_challenge_ref`, porque el identificador del reset de WorkOS devuelve el token por la API y es, por tanto, un camino al secreto. `person_id` no es nullable: la recuperación de soporte siempre parte de una persona resuelta. `idempotency_command_id` es el propio `id`.
+
+### 4.2.7 `identity.identity_action_events`
+
+- **Propósito:** historial append-only de cada transición y cada pedido de envío de una solicitud de identidad (`HU-BO-010`, criterio 12).
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `operational`; sin contacto, enlace, token ni código.
+- **Columnas:** `id uuid` · `request_id uuid` · `event_type text` (`initiated`, `delivery_requested`, `delivered`, `confirmed`, `expired`, `cancelled`, `failed`) · `actor_kind text` (`support`, `worker`, `person`, `system`) · `actor_person_id uuid` (nullable) · `actor_duty_assignment_id uuid` (nullable) · `case_reference text` (nullable) · `delivery_channel text` (`email`; nullable) · `result_code text` (nullable) · `occurred_at timestamptz`.
+- **FKs y borrado:** `request_id → identity.identity_action_requests(id) RESTRICT`; `actor_person_id → identity.people(id) RESTRICT`; `actor_duty_assignment_id → support.platform_duty_assignments(id) RESTRICT`.
+- **Uniques y checks:** `ck_identity_action_events_actor`: soporte inicia, pide reenvío y cancela con persona, deber y caso; el worker entrega o falla; la persona confirma; el sistema vence. `ck_identity_action_events_channel` y `ck_identity_action_events_result` cierran el canal y el código de falla. `trg_identity_action_events_append_only` rechaza (`55000`) toda actualización o borrado, también para el dueño.
+- **Actores:** escriben solo las funciones de la solicitud. El límite de tres correos de recuperación por persona en 24 horas se cuenta sobre `initiated` y `delivery_requested`.
+- **RLS:** igual que la solicitud.
+- **Consultas / índices:** por `(request_id, occurred_at, id)`.
+- **Retención:** con la solicitud.
+- **Eventos:** ninguno propio.
 
 ### 4.3 `identity.onboarding_attempts`
 
