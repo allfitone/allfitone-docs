@@ -65,6 +65,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Actores:** lee la propia persona; escribe solo `activate_person` (INSERT) y el worker de privacidad (anonimización/cierre). Ningún profesional lee esta tabla directamente: usa `identity.v_client_identity`.
 - **RLS:** `access_control.is_self(id)` para lectura y update; INSERT bloqueado salvo función de activación.
 - **Consultas:** por `id`; join desde casi todos los dominios.
+- **Panel de negocio (`HU-BO-004`, `NEW-SUP-DASHBOARD`):** `support.read_business_panel` cuenta las personas registradas (todo estado salvo `closed`) y las que llegaron en los últimos siete días. Solo cuenta: no lee nombre ni contacto, no devuelve identificadores y no escribe `privacy.access_events`. Un conteo de personas menor que `minimum_aggregate` (5, número inventado y declarado) sale `below_threshold` sin valor; un cero verdadero se publica.
 - **Índices:** PK. `status` no se indexa (baja cardinalidad).
 - **Retención:** el cierre elimina PII —nombre, apellido, correo y teléfono— y deja tombstone técnico sin PII (`OP-SYS-008`); nunca `deleted_at`. El contacto es dato personal bajo la Ley 1581: clasificación `identity_pii`, misma política de disposición que el resto de la identidad.
 - **Eventos:** `identity.person_activated.v1`, `identity.contact_changed.v1`, `identity.contact_verified.v1`.
@@ -96,6 +97,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **RLS:** habilitada y forzada, sin policies de acceso directo para runtime.
 - **Consultas:** por `token_hash + surface`; reemplazo por `surface + provider_session_id`; sesiones activas por cuenta. La carga Backoffice revalida persona, rol, AAL2, quince minutos de inactividad y ocho horas absolutas, y actualiza actividad dentro de la función cerrada.
 - **Índices:** uniques anteriores; `(access_account_id)`; parcial `(access_account_id, surface) WHERE revoked_at IS NULL`.
+- **Panel de negocio (`HU-BO-004`):** es la única actividad que la plataforma registra. `support.read_business_panel` cuenta personas distintas con una sesión `studio` activa en los últimos siete días, y la etiqueta como profesionales trabajando en Studio. Space no persiste sesiones aquí, así que «personas activas esta semana» no tiene señal y se devuelve `not_modelled` con razón `space_sessions_not_recorded`, nunca cero ni el conteo de Studio en su lugar.
 - **Retención:** hasta revocación y purga operativa; cambiar `SESSION_ENCRYPTION_KEY` invalida los ciphertext existentes y fuerza reautenticación.
 - **Eventos:** ninguno de dominio.
 
@@ -432,6 +434,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **RLS:** la función `organizations.read_organization` aplica `access_control.has_membership(id)` y devuelve columnas cerradas. `allfit_api` no recibe `SELECT` ni DML sobre la tabla base y escribe únicamente por funciones cerradas. El directorio de Backoffice exige el deber dentro de la función (`42501`) y no escribe `privacy.access_events`, porque no alcanza datos de ninguna persona.
 - **Consultas:** por `id`; por membresía del actor; directorio de Backoffice por `display_name` (búsqueda literal, desde 2 caracteres, sin tocar `legal_name`) y por estado, paginado por `(lower(display_name), id)`.
 - **Índices:** PK; `idx_organizations_directory (lower(display_name), id)`; `idx_organizations_status_created (status, created_at)`.
+- **Panel de negocio (`HU-BO-004`):** `support.read_business_panel` cuenta todas las organizaciones, las `unclaimed` y las que **operan**: `active` con al menos una membresía `active`. Una organización no es una persona, así que estos conteos no se someten al umbral mínimo.
 - **Retención:** el cierre termina relaciones y abre disposición; conserva activos propios.
 - **Eventos:** `organization.created.v1`, `organization.updated.v1`, `organization.ownership_transferred.v1`, `organization.closed.v1`.
 
