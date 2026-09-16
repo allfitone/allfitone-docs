@@ -369,6 +369,8 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | El despojo de metadatos ocurre en el servidor, no en el cliente. La galería del dispositivo nunca se expone: solo la selección explícita |
 | **Falla cerrada** | Si el despojo de metadatos falla, no se almacena la imagen |
 
+**Implementado (`identity.record_body_progress`, `POST /space/v1/body-progress` → 201).** El cuerpo trae exactamente `metric_code`, `value`, `unit_code` y `measured_on`; cualquier otro campo, incluido uno de imagen, responde 422 en vez de ignorarse. **La imagen todavía no se acepta:** el despojo de metadatos en el servidor es su propia pieza, y hasta entonces ningún registro dice tener una. El valor se convierte a la unidad canónica de la dimensión y lo que la persona escribió se conserva a su lado; una unidad de otra dimensión o un valor sobre el tope de la medida responde 422. Un replay con la misma llave devuelve el mismo registro con `Idempotent-Replay: true`; la misma llave con otro cuerpo responde 409. No hay `draft_local` ni `pending_sync` en el servidor: el dispositivo guarda el comando y lo reenvía con el mismo `Command-Id`.
+
 #### `OP-IDN-007` — Eliminar un registro de progreso corporal
 
 | Campo | Valor |
@@ -385,6 +387,8 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | `privacy.disposition_case_opened.v1` |
 | **Reglas** | Eliminar un dato propio no es una revocación de scope y no altera los grants. Un profesional que ya lo vio conserva su `ACCESS_EVENT`, no el dato |
 | **Falla cerrada** | Si el borrado del binario no puede confirmarse, el caso queda abierto y reintenta; no se reporta como completado |
+
+**Implementado (`identity.delete_body_progress`, `DELETE /space/v1/body-progress/{recordId}` → 200).** Todo ocurre en una transacción: abre el caso con origen `request` y su ítem bajo la política `body`/`CO` vigente, encola `privacy.disposition_case_opened.v1`, registra el evento de disposición, marca el ítem ejecutado soltando su target, borra la fila y cierra el caso. Responde `{body_progress_record_id, disposition_case_id, status: "deleted"}`. Como aún no hay binarios, no hay nada que propagar y el caso no queda abierto. Un replay con la misma llave devuelve la misma respuesta; **un segundo borrado con otra llave responde 404**, igual que el registro de otra persona, porque la fila ya no existe. El mismo estado final sí converge.
 
 #### `OP-IDN-008` — Declarar contexto de salud fitness
 
@@ -522,6 +526,8 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Las URLs de imagen son firmadas, de vigencia corta y no enumerables |
 | **Falla cerrada** | — |
+
+**Implementado (`identity.list_body_progress`).** `limit` entre 1 y 200 (50 por defecto); el cursor es el par `before_measured_on` + `before_id`, los dos o ninguno. Responde `{items, has_more}`. Cada ítem trae el valor normalizado, el original, la fecha, `has_media` y `recorded_at`; nunca `person_id` ni la referencia del medio. Todavía no hay URLs de imagen porque todavía no hay imágenes.
 
 #### `OP-IDN-016` — Consultar una invitación por token protegido
 
@@ -3655,6 +3661,8 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | Ninguno; los registros de acceso son la evidencia |
 | **Reglas** | Sólo lectura. Otro A10, un A12 o el mismo actor con otra solicitud no puede ejercer |
 | **Falla cerrada** | Cualquier falla de autorización o auditoría devuelve cero contenido |
+
+**Contenido implementado (`HU-BO-009`, mediciones).** Con `body_progress`, una lectura permitida responde `outcome: "allowed"` y `content.body_progress`, con hasta 500 mediciones de la persona del expediente, las más recientes primero, y la misma proyección que ve la persona: `has_media` sin referencia. `body_progress` lee sólo `identity.body_progress_records`; apuntarla a otro `resource_type` se registra y responde `denied` con `resource_out_of_scope`. Las categorías cuyos datos la plataforma todavía no guarda siguen respondiendo `content_unavailable`.
 
 #### `OP-SUP-004` — Cerrar mi ventana break-glass
 

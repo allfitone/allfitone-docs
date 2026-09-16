@@ -250,15 +250,29 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** medición, composición o foto corporal elegida por la persona.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `body`.
-- **Columnas:** `id uuid` (**Command-Id UUIDv7 del dispositivo para `OP-IDN-006`**) · `person_id uuid` · `metric_code text` · `value_numeric numeric` · `unit_code text` · `original_value numeric` (nullable) · `original_unit_code text` (nullable) · `measured_on date` · `media_ref text` (nullable, sin EXIF) · `has_media boolean`.
-- **FKs y borrado:** `person_id → people(id) RESTRICT`; `unit_code → catalog.units(code) RESTRICT`.
-- **Uniques y checks:** `CHECK (has_media = (media_ref is not null))`.
+- **Columnas:** `id uuid` (**Command-Id UUIDv7 del dispositivo para `OP-IDN-006`**) · `person_id uuid` · `metric_code text` · `value_numeric numeric(12,3)` (en la unidad canónica de su dimensión) · `unit_code text` · `original_value numeric(12,3)` (nullable) · `original_unit_code text` (nullable) · `measured_on date` · `media_ref text` (nullable, sin EXIF) · `has_media boolean` · `created_at timestamptz`.
+- **FKs y borrado:** `person_id → people(id) RESTRICT`; `metric_code → body_progress_metrics(code) RESTRICT`; `unit_code` y `original_unit_code → catalog.units(code) RESTRICT`.
+- **Uniques y checks:** `CHECK (has_media = (media_ref is not null))`; `value_numeric > 0`; el valor original y su unidad van juntos o no van, y el original es positivo.
+- **Implementado (`HU-SP-025`, `HU-SP-026`, `HU-SP-027`, `HU-BO-009`):** el trigger `identity.body_progress_record_guard_tg` rechaza cualquier `UPDATE` (una medición se conserva o se borra, nunca se reescribe) y exige que `unit_code` sea la unidad canónica de la dimensión de la medida y que `original_unit_code` mida lo mismo. El tope por medida vive en `body_progress_metrics` y lo aplica `identity.record_body_progress`. **Fotos todavía no:** ningún comando escribe `media_ref`, así que ningún registro dice tener una; el despojo de metadatos en el servidor es su propia pieza. La tabla tiene RLS forzado y el runtime no tiene privilegios sobre ella: la persona entra sólo por `identity.record_body_progress`, `identity.list_body_progress` e `identity.delete_body_progress`, que resuelven el sujeto del token a la persona dentro de la transacción (`identity.require_space_person`), y soporte sólo por `support.exercise_break_glass`. La lectura profesional por `body_progress` llega con `relationships`.
 - **Actores:** la persona (lee, escribe, borra); el profesional con `body_progress` **read**; worker de privacidad.
 - **RLS:** `access_control.is_self(person_id)` **OR** `access_control.can_access(person_id,'body_progress','read')`. `relationship_training` **no** alcanza; Studio usa `identity.v_client_body_progress`.
 - **Consultas:** `(person_id, measured_on desc)`.
 - **Índices:** `(person_id, measured_on desc)`.
 - **Retención:** categoría `body`; borrado propio abre `disposition_case` unitario; imágenes con borrado propagado.
-- **Eventos:** `identity.body_progress_recorded.v1`.
+- **Eventos:** `identity.body_progress_recorded.v1`, cuyo payload lleva sólo `body_progress_record_id`: ni el valor ni la unidad salen al outbox.
+
+### 4.7.1 `identity.body_progress_metrics`
+
+- **Propósito:** las medidas corporales que Space acepta, con su dimensión y un tope que rechaza errores de tipeo, no cuerpos inusuales.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `operational`.
+- **Columnas:** `code text` (PK) · `name text` · `dimension text` (`mass`, `length`, `ratio`) · `maximum_value numeric` (en la unidad canónica) · `created_at timestamptz`.
+- **FKs y borrado:** ninguna saliente; `body_progress_records.metric_code` la referencia con `RESTRICT`.
+- **Uniques y checks:** código `^[a-z][a-z0-9_]{1,31}$`; nombre no vacío de hasta 60 caracteres; tope positivo.
+- **Contenido V1:** `weight` (700 kg), `muscle_mass` (400 kg), `body_fat` (100 %), `waist`, `hip` y `chest` (5 m), `arm` y `thigh` (3 m). Cambia sólo por migración.
+- **Actores / RLS:** RLS forzado y sin privilegios de runtime; las funciones de progreso corporal la leen.
+- **Retención:** permanente; una medida referenciada no se elimina.
+- **Eventos:** ninguno.
 
 ### 4.8 `identity.health_context_claims`
 
@@ -856,6 +870,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** único compuesto.
 - **Retención:** permanente (gobierna a las demás).
 - **Eventos:** ninguno.
+- **Implementado (`HU-SP-027`):** checks de jurisdicción ISO de dos letras, versión positiva, periodo no negativo y `trigger` como código. `privacy.reject_disposition_policy_rewrite_tg` impide editar o borrar una política publicada: se publica otra versión. La única política sembrada es la que la operación ya declara: `body`, `CO`, versión 1, `delete`, periodo cero, `owner_request`. La retención por cualquier otro disparador es DB-P5-015 y no se decide aquí.
 
 ### 7.11 `privacy.erasure_requests`
 
@@ -886,6 +901,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** `(subject_person_id, status)`.
 - **Retención:** auditoría.
 - **Eventos:** `privacy.disposition_case_opened.v1`.
+- **Implementado (`HU-SP-027`):** suma `requested_by_person_id uuid` (nullable, `→ identity.people(id) RESTRICT`): un caso con origen `request` nombra a quien lo pidió y hoy sólo lo pide el propio sujeto (`CHECK`). `CHECK (status = 'closed') = (closed_at is not null)`. `erasure_request_id` y su FK llegan con `privacy.erasure_requests`. `privacy.disposition_case_guard_tg` impide borrar un caso, reabrir uno cerrado o cambiar su sujeto, origen, solicitante o apertura. El runtime no tiene privilegios: hoy sólo `identity.delete_body_progress` abre y cierra casos, en la misma transacción.
 
 ### 7.13 `privacy.disposition_items`
 
@@ -901,6 +917,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** `(status, due_at)`; sobre cada `target_*`.
 - **Retención:** auditoría de la disposición.
 - **Eventos:** ninguno propio (los produce el evento de ejecución).
+- **Implementado (`HU-SP-027`), con una desviación deliberada:** los targets entran por tipo a medida que su tabla existe; hoy sólo `target_body_progress_id`, acompañado de `target_kind text` (`body_progress`), `executed_at timestamptz` y `created_at timestamptz`. **Un ítem ejecutado con acción `delete` suelta su target:** el `CHECK` exige exactamente un target en cualquier otro estado y ninguno en ese. Con `ON DELETE RESTRICT` y «siempre uno no nulo», el borrado físico que el ítem existe para ejecutar sería imposible; así, un ítem pendiente retiene la fila y uno ejecutado conserva `target_kind` sin apuntar a una fila que ya no existe. `privacy.disposition_item_guard_tg` cubre `IX-26` (el target pertenece a `subject_person_id` y la política corresponde a la clasificación) y las transiciones (`pending → executed | suspended`, `suspended → pending | executed`; un ejecutado no se mueve, un target sólo cambia al soltarse y un ítem no se borra).
 
 ### 7.14 `privacy.disposition_events`
 
@@ -916,6 +933,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** `(disposition_item_id, executed_at)` por partición.
 - **Retención:** auditoría prolongada.
 - **Eventos:** `privacy.disposition_executed.v1`, `privacy.disposition_reapplied.v1`.
+- **Implementado (`HU-SP-027`):** `result` en (`deleted`, `anonymized`, `retained`, `failed`) y `actor` en (`owner_request`, `privacy_worker`). La constraint de tiempo se llama `ck_disposition_events_time`, con el prefijo del repositorio. Particiones mensuales de 2026-09 a 2027-12 más una `default`, todas con RLS forzado. `privacy.reject_disposition_event_rewrite_tg` impide `UPDATE` y `DELETE`, también al dueño. Todavía no emite eventos de outbox: el borrado propio se ejecuta en la misma transacción que abre el caso, y ese caso ya emite `privacy.disposition_case_opened.v1`.
 
 ### 7.15 `privacy.legal_holds`
 
@@ -1078,6 +1096,7 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Consultas / índices:** por `code`; por `dimension`.
 - **Retención:** permanente; una unidad referenciada no se elimina.
 - **Eventos:** ninguno.
+- **Sembrado por el progreso corporal:** `kg` (canónica) y `lb` en `mass`, `m` (canónica), `cm` e `in` en `length`, y `percent` (canónica) en `ratio`. Es SI donde lo hay: una cintura se guarda en metros para que la longitud tenga una sola unidad canónica, sea una cintura o una carrera.
 
 ### 8.10 `catalog.result_contracts`
 
