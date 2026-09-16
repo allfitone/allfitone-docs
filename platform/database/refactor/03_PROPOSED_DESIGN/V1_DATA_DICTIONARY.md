@@ -871,7 +871,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** único compuesto.
 - **Retención:** permanente (gobierna a las demás).
 - **Eventos:** ninguno.
-- **Implementado (`HU-SP-027`):** checks de jurisdicción ISO de dos letras, versión positiva, periodo no negativo y `trigger` como código. `privacy.reject_disposition_policy_rewrite_tg` impide editar o borrar una política publicada: se publica otra versión. La única política sembrada es la que la operación ya declara: `body`, `CO`, versión 1, `delete`, periodo cero, `owner_request`. La retención por cualquier otro disparador es DB-P5-015 y no se decide aquí. `20260920120000` publica la segunda con la misma forma para `health`.
+- **Implementado (`HU-SP-027`):** checks de jurisdicción ISO de dos letras, versión positiva, periodo no negativo y `trigger` como código. `privacy.reject_disposition_policy_rewrite_tg` impide editar o borrar una política publicada: se publica otra versión. La única política sembrada es la que la operación ya declara: `body`, `CO`, versión 1, `delete`, periodo cero, `owner_request`. La retención por cualquier otro disparador es DB-P5-015 y no se decide aquí. `20260920120000` publica la segunda con la misma forma para `health`, y `20260921120000` la tercera para `nutrition`.
 
 ### 7.11 `privacy.erasure_requests`
 
@@ -920,6 +920,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Eventos:** ninguno propio (los produce el evento de ejecución).
 - **Implementado (`HU-SP-027`), con una desviación deliberada:** los targets entran por tipo a medida que su tabla existe; hoy sólo `target_body_progress_id`, acompañado de `target_kind text` (`body_progress`), `executed_at timestamptz` y `created_at timestamptz`. **Un ítem ejecutado con acción `delete` suelta su target:** el `CHECK` exige exactamente un target en cualquier otro estado y ninguno en ese. Con `ON DELETE RESTRICT` y «siempre uno no nulo», el borrado físico que el ítem existe para ejecutar sería imposible; así, un ítem pendiente retiene la fila y uno ejecutado conserva `target_kind` sin apuntar a una fila que ya no existe. `privacy.disposition_item_guard_tg` cubre `IX-26` (el target pertenece a `subject_person_id` y la política corresponde a la clasificación) y las transiciones (`pending → executed | suspended`, `suspended → pending | executed`; un ejecutado no se mueve, un target sólo cambia al soltarse y un ítem no se borra).
 - **Segundo tipo de target (`HU-SP-028`):** `target_health_context_id` (`→ identity.health_context_claims(id) RESTRICT`, indexado) y `target_kind` en (`body_progress`, `health_context`). El `CHECK` exige que el target no nulo sea el de su tipo, y el guard exige la clasificación de ese tipo (`body` o `health`) y que el target sea del sujeto. El borrado a pedido del dueño es ahora una sola función, `privacy.dispose_on_owner_request(sujeto, clasificación, tipo, target)`: toma la política `owner_request` vigente de esa clasificación, abre el caso y el ítem, encola `privacy.disposition_case_opened.v1`, registra el evento, ejecuta el ítem soltando el target y cierra el caso. Quien la llama borra su propia fila en la misma transacción. El runtime no puede ejecutarla.
+- **Tercer tipo de target (`HU-SP-070`):** `target_nutrition_meal_id` (`→ nutrition.meals(id) RESTRICT`, indexado), `target_kind` `nutrition_meal` y clasificación `nutrition`, con las mismas reglas que los otros dos.
 
 ### 7.14 `privacy.disposition_events`
 
@@ -1099,6 +1100,7 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Retención:** permanente; una unidad referenciada no se elimina.
 - **Eventos:** ninguno.
 - **Sembrado por el progreso corporal:** `kg` (canónica) y `lb` en `mass`, `m` (canónica), `cm` e `in` en `length`, y `percent` (canónica) en `ratio`. Es SI donde lo hay: una cintura se guarda en metros para que la longitud tenga una sola unidad canónica, sea una cintura o una carrera.
+- **Sembrado por las comidas:** `g` en `mass` (factor 0,001), `kcal` (canónica) en `energy` y `ml` (canónica) en `volume`.
 
 ### 8.10 `catalog.result_contracts`
 
@@ -1630,6 +1632,7 @@ Nota de conteo: `planning` tiene 17 tablas y 17 fichas; §9.5–9.8 son cuatro t
 - **Índices:** único `(code)`; `(status,code)`.
 - **Retención:** permanente; referenciado por historial.
 - **Eventos:** ninguno; ampliar códigos exige nueva versión de `nutrition_intake`.
+- **Implementado (`20260921120000`):** suma `maximum_value numeric` (tope por ítem en la unidad canónica: 10 000 kcal, 1 000 g de proteína y de grasa, 2 000 g de carbohidratos, 500 g de fibra, 10 000 ml de agua) y `created_at`. El `CHECK` cierra cada código con su única unidad, y `nutrition.reject_nutrient_rewrite_tg` impide editar o borrar una definición: el historial la usa. Las seis se siembran publicadas. RLS forzado; el runtime no tiene privilegios y las funciones de comida la leen.
 
 ### 10A.2 `nutrition.meals`
 
@@ -1645,6 +1648,7 @@ Nota de conteo: `planning` tiene 17 tablas y 17 fichas; §9.5–9.8 son cuatro t
 - **Índices:** `(person_id,occurred_at DESC,id DESC)`; `(person_id,local_date)`.
 - **Retención:** mientras cuenta activa o hasta borrado personal; disposición elimina hijos, media, vistas/derivados; hold suspende.
 - **Eventos:** `nutrition.meal_recorded.v1`, `nutrition.meal_revised.v1`, `nutrition.meal_deleted.v1`.
+- **Implementado (`HU-SP-067`, `HU-SP-068`, `HU-SP-070`, `HU-BO-009`):** `note` no queda vacía y tiene hasta 1 000 caracteres; `timezone` de 3 a 100. `nutrition.meal_guard_tg` exige que la zona exista en `pg_timezone_names` y que `local_date` sea el día de `occurred_at` en esa zona, lo escriba quien lo escriba. **Revisar no existe todavía** (`OP-NUT-003`), así que el mismo trigger rechaza cualquier `UPDATE` y `revision_number` queda en 0. Ningún comando escribe `media_ref`. Los eventos llevan sólo `meal_id`. RLS forzado y sin privilegios de runtime: la persona entra sólo por `nutrition.record_meal`, `nutrition.list_meals` y `nutrition.delete_meal`, y soporte sólo por `support.exercise_break_glass`. Las vistas `v_my_meals` y `v_client_*` no existen: la lectura propia va por función, y la profesional llega con `relationships`. Borrar una comida pasa por `privacy.dispose_on_owner_request` con la política `nutrition` y elimina en cascada ítems y valores.
 
 ### 10A.3 `nutrition.meal_items`
 
@@ -1654,6 +1658,7 @@ Nota de conteo: `planning` tiene 17 tablas y 17 fichas; §9.5–9.8 son cuatro t
 - **Columnas:** `id uuid` · `meal_id uuid` · `person_id uuid` · `position integer` · `name text` · `quantity_numeric numeric` (nullable) · `quantity_unit_code text` (nullable) · `created_at timestamptz`.
 - **FKs y borrado:** `(meal_id,person_id) → meals(id,person_id) ON DELETE CASCADE`; `quantity_unit_code → catalog.units(code) RESTRICT`; claves portadoras `UNIQUE(id,meal_id,person_id)` y `UNIQUE(id,person_id)` (`IX-28`).
 - **Uniques y checks:** `UNIQUE(meal_id,position)`; `position>0`; cantidad/unidad aparecen juntas y cantidad `>0`.
+- **Implementado:** `position` de 1 a 100 y la pone el cliente, como pide el contrato; `name` hasta 160 caracteres; `quantity_numeric numeric(12,3)`. `nutrition.meal_item_guard_tg` exige que la unidad de cantidad sea una masa o un volumen y rechaza cualquier `UPDATE`. Índice `(meal_id, person_id)` para la FK portadora.
 - **Actores:** solo funciones de revisión de la persona.
 - **RLS:** hereda del meal mediante `EXISTS`; sin lectura profesional directa.
 - **Consultas:** por `meal_id` ordenado por posición.
@@ -1669,6 +1674,7 @@ Nota de conteo: `planning` tiene 17 tablas y 17 fichas; §9.5–9.8 son cuatro t
 - **Columnas:** `id uuid` · `meal_item_id uuid` · `meal_id uuid` · `person_id uuid` · `nutrient_definition_id uuid` · `value_numeric numeric` · `unit_code text` · `created_at timestamptz`.
 - **FKs y borrado:** `(meal_item_id,meal_id,person_id) → meal_items(id,meal_id,person_id) ON DELETE CASCADE`; `(meal_id,person_id) → meals(id,person_id) ON DELETE CASCADE`; `nutrient_definition_id → nutrient_definitions(id) RESTRICT`; `unit_code → catalog.units(code) RESTRICT` (`IX-28`).
 - **Uniques y checks:** `UNIQUE(meal_item_id,nutrient_definition_id)`; `value_numeric>=0`; unidad igual a la canónica mediante `nutrition.enforce_nutrient_unit_ct` (`IX-29`).
+- **Implementado:** `value_numeric numeric(12,3)`. El constraint trigger de `IX-29` es `deferrable initially immediate`: una revisión futura puede diferirlo, y hoy rechaza en el acto. `nutrition.reject_nutrient_value_rewrite_tg` rechaza cualquier `UPDATE`. Índices sobre cada FK.
 - **Actores:** solo funciones de comida.
 - **RLS:** hereda desde item→meal; sin lectura profesional directa.
 - **Consultas:** por ítem/nutriente; agregación por meal/persona mediante joins autorizados.

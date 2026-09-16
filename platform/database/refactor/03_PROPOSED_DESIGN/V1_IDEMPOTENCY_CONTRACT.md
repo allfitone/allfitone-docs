@@ -182,6 +182,7 @@ Un `PUT` semánticamente idempotente no sustituye la identidad del comando: evit
 - A las 24 horas `system.expire_idempotency_response` limpia response y versión; permanece el tombstone durable con hashes, scope, command ID, outcome y referencia operativa mínima.
 - Un tombstone durable no se purga mientras el principal pueda autenticarse o el agregado pueda recibir reintentos.
 - La disposición del agregado pone `effect_disposed_at`, elimina juntos `aggregate_type`/`aggregate_id` cuando corresponda y conserva la identidad del comando. Un retry devuelve `410`; nunca recrea el dato.
+  - **Implementado para `OP-IDN-006`, `OP-IDN-008` y `OP-NUT-001`, con una diferencia:** la disposición todavía no escribe `effect_disposed_at`. El replay comprueba si el agregado del receipt sigue existiendo y, si no, levanta `AF410`, que el API responde como `410 command-effect-disposed`. El resultado es el que pide esta regla; la columna queda para cuando haya una disposición que no borre la fila.
 - Cuando el principal queda cerrado de forma irreversible y terminó la ventana de propagación/backups, el worker fija `purge_after`.
 - `purge_after` no puede preceder `response_expires_at`.
 

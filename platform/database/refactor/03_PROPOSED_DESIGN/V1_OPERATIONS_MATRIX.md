@@ -390,7 +390,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | Eliminar un dato propio no es una revocación de scope y no altera los grants. Un profesional que ya lo vio conserva su `ACCESS_EVENT`, no el dato |
 | **Falla cerrada** | Si el borrado del binario no puede confirmarse, el caso queda abierto y reintenta; no se reporta como completado |
 
-**Implementado (`identity.delete_body_progress`, `DELETE /space/v1/body-progress/{recordId}` → 200).** Todo ocurre en una transacción: abre el caso con origen `request` y su ítem bajo la política `body`/`CO` vigente, encola `privacy.disposition_case_opened.v1`, registra el evento de disposición, marca el ítem ejecutado soltando su target, borra la fila y cierra el caso. Responde `{body_progress_record_id, disposition_case_id, status: "deleted"}`. Como aún no hay binarios, no hay nada que propagar y el caso no queda abierto. Un replay con la misma llave devuelve la misma respuesta; **un segundo borrado con otra llave responde 404**, igual que el registro de otra persona, porque la fila ya no existe. El mismo estado final sí converge.
+**Implementado (`identity.delete_body_progress`, `DELETE /space/v1/body-progress/{recordId}` → 200).** Todo ocurre en una transacción: abre el caso con origen `request` y su ítem bajo la política `body`/`CO` vigente, encola `privacy.disposition_case_opened.v1`, registra el evento de disposición, marca el ítem ejecutado soltando su target, borra la fila y cierra el caso. Responde `{body_progress_record_id, disposition_case_id, status: "deleted"}`. Como aún no hay binarios, no hay nada que propagar y el caso no queda abierto. Desde `20260922120000`, reintentar el registro de una medición ya borrada (`OP-IDN-006`) responde `410` en vez de un resultado vacío; lo mismo `OP-IDN-008` con una declaración. Un replay con la misma llave devuelve la misma respuesta; **un segundo borrado con otra llave responde 404**, igual que el registro de otra persona, porque la fila ya no existe. El mismo estado final sí converge.
 
 #### `OP-IDN-008` — Declarar contexto de salud fitness
 
@@ -3704,6 +3704,8 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 
 **Contexto de salud implementado (`HU-BO-009`).** Con `health_context`, una lectura permitida devuelve `content.health_context` con hasta 500 declaraciones de la persona del expediente, la de inicio más reciente primero, con tipo, descripción, zona, procedencia y vigencia, y nunca `person_id`. `health_context` lee sólo `identity.health_context_claims`, y apuntarla a otro recurso se registra y responde `denied` con `resource_out_of_scope`.
 
+**Comidas implementadas (`HU-BO-009`).** Con `nutrition_intake`, una lectura permitida devuelve `content.nutrition_intake` con hasta 500 comidas de la persona del expediente, la más reciente primero, con sus ítems y valores y `has_media`, nunca la foto ni sus scopes (`BreakGlassMeal`). Lee sólo `nutrition.meals`. Con esto, las tres categorías restringidas devuelven contenido; `relationship_training`, `prior_training_history` y `nutrition_guidance` siguen en `content_unavailable`.
+
 #### `OP-SUP-004` — Cerrar mi ventana break-glass
 
 | Campo | Valor |
@@ -3879,6 +3881,8 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Reglas** | Al menos un ítem; `occurred_at`, zona y `local_date` quedan congelados; resúmenes se invalidan dentro del commit |
 | **Falla cerrada** | Sujeto, nutriente, unidad o payload inválido revierte todo |
 
+**Implementado (`nutrition.record_meal`, `POST /space/v1/nutrition/meals` → 201 con `Location` y `ETag` `"nutrition-meal:{id}:r0"`).** Sigue el contrato publicado: el cliente numera los ítems (1 a 100, sin repetir), cada nutriente lleva su `unit` y debe ser la única de su código, y una cantidad lleva su `quantity_unit` (una masa o un volumen del catálogo). Nota de hasta 1 000 caracteres; `occurred_at` no posterior a mañana. Cualquier campo fuera del contrato, incluida una foto, responde 422. **No hay foto ni resúmenes diarios en esta versión**, así que no hay nada que invalidar dentro del commit. Un replay devuelve la misma comida; si la comida se borró después, responde `410 command-effect-disposed` (`AF410`) y no la recrea.
+
 #### `OP-NUT-002` — Listar mis comidas
 
 | Campo | Valor |
@@ -3895,6 +3899,8 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Incluye URL firmada solo si existe medio; nunca devuelve `media_ref` |
 | **Falla cerrada** | Una fila ajena produce `404` en detalle y nunca aparece en lista |
+
+**Implementado (`nutrition.list_meals`).** `from` y `to` son días locales (`local_date`), de uno a 31 por lectura; `limit` de 1 a 100 (25 por defecto). El cursor opaco codifica el rango y la última comida, y no sirve para otro rango. No existe `v_my_meals`: la lectura es una función que resuelve el sujeto. `photo` es siempre `null` y `applied_scopes` vacío, porque la vista es la de la dueña y no hay fotos.
 
 #### `OP-NUT-003` — Revisar una comida o adjuntar/reemplazar su foto
 
@@ -3929,6 +3935,8 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Evento de dominio** | `nutrition.meal_deleted.v1` |
 | **Reglas** | No conserva snapshot navegable; holds suspenden la disposición |
 | **Falla cerrada** | No confirma si DB, disposición o outbox no convergen |
+
+**Implementado (`nutrition.delete_meal`, `DELETE /space/v1/nutrition/meals/{mealId}` → 204).** En una transacción: `privacy.dispose_on_owner_request` abre y cierra el caso bajo la política `nutrition`, se encola `nutrition.meal_deleted.v1` con sólo `meal_id`, y la comida se borra con sus ítems y valores en cascada. Un reintento con la misma llave responde 204 con `Idempotent-Replay`; con otra llave, 404. Holds, resúmenes y medios no existen todavía, así que no hay nada que suspender, recalcular ni propagar.
 
 #### `OP-NUT-005` — Consultar mis resúmenes diarios
 
