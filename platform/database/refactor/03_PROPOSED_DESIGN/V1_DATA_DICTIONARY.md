@@ -1993,9 +1993,9 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 - **Propósito:** identidad estable de un plan que **Allfit** le vende a una persona. El precio vive en la versión.
 - **Dominio / fuente de verdad:** Pagos.
 - **Clasificación:** `operational`.
-- **Columnas:** `id` · `code text` · `name text` · `plan_kind text` (`free`, `paid`) · `status catalog.publication_status` · `created_at timestamptz`.
+- **Columnas:** `id` · `code text` · `name text` · `plan_kind text` (`free`, `paid`) · `status catalog.publication_status` (`draft` hasta publicar su primera versión, luego `published`) · `created_by_person_id uuid` · `created_by_duty_assignment_id uuid` · `created_at timestamptz`.
 - **FKs y borrado:** ninguna saliente. Es contenido global de plataforma.
-- **Uniques y checks:** `UNIQUE (code)`; `CHECK (plan_kind in ('free','paid'))`; **`UNIQUE (plan_kind) WHERE plan_kind = 'free' AND status = 'published'`** — existe exactamente un plan gratuito publicado. **El plan gratuito es un plan como cualquier otro**: sus límites son datos, no código, y cambiarlos no exige desplegar nada.
+- **Uniques y checks:** `UNIQUE (code)`; `UNIQUE (id, plan_kind)` como clave portadora hacia las versiones; `CHECK (plan_kind in ('free','paid'))`; **`uidx_platform_plans_single_free`, `UNIQUE (plan_kind) WHERE plan_kind = 'free'`** — existe un solo plan gratuito, siempre, más estricto que «uno publicado»: sus límites cambian con versiones suyas. **El plan gratuito es un plan como cualquier otro**: sus límites son datos, no código, y cambiarlos no exige desplegar nada. Un trigger impide cambiar código, nombre, tipo o autor, despublicar o borrar.
 - **Actores:** solo `A11`. Ninguna organización crea planes de plataforma.
 - **RLS:** `SELECT` para cualquier cuenta autenticada sobre `status = 'published'`; `INSERT` solo con deber de plataforma.
 - **Consultas / índices:** por `code`.
@@ -2009,9 +2009,9 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 - **Propósito:** versión publicada e inmutable del plan de Allfit, con su precio y periodo, y el conjunto de funciones que habilita.
 - **Dominio / fuente de verdad:** Pagos.
 - **Clasificación:** `operational`.
-- **Columnas:** `id` · `platform_plan_id uuid` · `version_number integer` · `amount_minor bigint` · `currency_code text` · `billing_period text` (`month`, `year`) · `status catalog.publication_status` · `published_at timestamptz` · `deprecated_at timestamptz` (nullable).
+- **Columnas:** `id` · `platform_plan_id uuid` · `plan_kind text` (portado desde el plan) · `version_number integer` · `amount_minor bigint` · `currency_code text` (nullable en el plan gratuito) · `billing_period text` (`month`, `year`) · `status catalog.publication_status` (`draft` es una propuesta en revisión; `archived`, una propuesta retirada) · `supersedes_version_id uuid` (nullable) · `proposed_by_person_id uuid` · `proposed_by_duty_assignment_id uuid` · `proposed_at timestamptz` · `published_by_person_id uuid` · `published_by_duty_assignment_id uuid` · `published_at timestamptz` · `deprecated_at timestamptz` · `withdrawn_by_person_id uuid` · `withdrawn_by_duty_assignment_id uuid` · `withdrawn_at timestamptz` (los de publicación, retiro y deprecación son nullable).
 - **FKs y borrado:** `platform_plan_id → platform_plans(id) RESTRICT`.
-- **Uniques y checks:** `UNIQUE (platform_plan_id, version_number)`; `CHECK (billing_period in ('month','year'))`; `CHECK (amount_minor >= 0)`; `billing_period` es nullable cuando el plan es gratuito. **`IX-41`** exige que una versión de plan `paid` tenga monto mayor que cero y que una de plan `free` tenga monto cero. Sin `UPDATE` en runtime salvo deprecación.
+- **Uniques y checks:** `UNIQUE (platform_plan_id, version_number)`; FK compuesta `(platform_plan_id, plan_kind) → platform_plans(id, plan_kind)`; **`IX-41`** como `CHECK` sobre el tipo portado: una versión `paid` tiene monto positivo (hasta 10^11), moneda ISO 4217 y periodo `month` o `year`; una `free` tiene monto cero, sin moneda ni periodo. Únicos parciales: una versión `published` y una `draft` por plan. `CHECK` de revisión: quien publica no es quien propuso (`HU-BO-025`, criterio 5), y cada paso lleva su autor y su asignación de deber. Un trigger solo permite `draft → published`, `draft → archived` y `published → deprecated`, nunca reescribe lo que la versión ofrece ni su autoría, y rechaza borrar.
 - **Actores:** solo `A11`.
 - **RLS:** `SELECT` de versiones publicadas para cualquier autenticado.
 - **Consultas / índices:** `(platform_plan_id, status)`.
@@ -2027,7 +2027,7 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 - **Clasificación:** `operational`.
 - **Columnas:** `code text` (PK) · `name text` · `unit text` (nullable; por ejemplo `weeks`, `items`) · `created_at timestamptz`.
 - **FKs y borrado:** ninguna.
-- **Uniques y checks:** `CHECK (code = lower(code))`. **Ninguna función de privacidad, consentimiento, portabilidad o supresión puede existir en este catálogo**, y hay una prueba negativa que lo verifica.
+- **Uniques y checks:** `CHECK (code ~ '^[a-z][a-z0-9_]{1,63}$')`. **Ninguna función de privacidad, consentimiento, portabilidad o supresión puede existir en este catálogo**: `ck_platform_features_not_privacy` rechaza los códigos que nombran una, y `T-PAY-PLAN-01` lo verifica. El catálogo cambia **solo por migración**, junto con el código que hace cumplir el límite; el runtime no tiene privilegio sobre la tabla. Se publicó vacío porque producto no ha decidido qué incluye cada plan (`HU-SP-084`).
 - **Actores:** solo `A11`.
 - **RLS:** legible por cualquier autenticado.
 - **Consultas / índices:** PK.
@@ -2043,7 +2043,7 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 - **Clasificación:** `operational`.
 - **Columnas:** `id` · `platform_plan_version_id uuid` · `feature_code text` · `limit_value integer` (nullable = ilimitado) · `enabled boolean`.
 - **FKs y borrado:** `platform_plan_version_id → platform_plan_versions(id) ON DELETE CASCADE`; `feature_code → platform_features(code) RESTRICT`.
-- **Uniques y checks:** `UNIQUE (platform_plan_version_id, feature_code)`; `CHECK (limit_value IS NULL OR limit_value >= 0)`.
+- **Uniques y checks:** `UNIQUE (platform_plan_version_id, feature_code)`; `CHECK (limit_value IS NULL OR limit_value >= 0)`; `CHECK (enabled OR limit_value IS NULL)`. Una versión declara cada función del catálogo. Un trigger solo admite filas mientras la versión es una propuesta y rechaza cambiarlas o borrarlas.
 - **Actores:** solo `A11`, dentro de la publicación de la versión.
 - **RLS:** vía la versión.
 - **Consultas / índices:** `(platform_plan_version_id, feature_code)`.

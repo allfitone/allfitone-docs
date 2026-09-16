@@ -2979,6 +2979,9 @@ Reglas que gobiernan todo el dominio:
 | `OP-PAY-021` | Cancelar mi Premium | Comando | `A2` |
 | `OP-PAY-022` | Habilitar o revocar el Premium de una organización | Comando | `A11` |
 | `OP-PAY-023` | Registrar el resultado de un cobro de plataforma | Comando | `A9` |
+| `OP-PAY-024` | Crear un plan de plataforma | Comando | `A11` |
+| `OP-PAY-025` | Proponer una versión de plan de plataforma | Comando | `A11` |
+| `OP-PAY-026` | Retirar una propuesta de versión de plan de plataforma | Comando | `A11` |
 
 ---
 
@@ -3208,15 +3211,15 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /backoffice/v1/platform-plans/{id}/versions` |
-| **Actor** | `A11` con rol base, `manage_platform_commercial`, AAL2 y deber vigente |
-| **Filtros obligatorios** | Monto positivo, moneda ISO 4217, periodo `month` o `year`; cada función referenciada existe en el catálogo |
-| **Transacción** | Crear `platform_plan_versions` inmutable con sus `platform_plan_features` |
-| **Idempotencia** | `Idempotency-Key` |
+| **Superficie** | `POST /backoffice/v1/platform-plans/{planId}/versions/{versionId}/publication`, sin cuerpo; la versión se propone antes con `OP-PAY-025` y la lectura es `GET /backoffice/v1/platform-plans` (`NEW-PAY-PLATFORM-PLAN`) |
+| **Actor** | `A11` con rol base, `manage_platform_commercial`, AAL2 y deber vigente, **distinto de quien propuso la versión** (`HU-BO-025`, criterio 5) |
+| **Filtros obligatorios** | La versión es la propuesta abierta del plan |
+| **Transacción** | `payments.publish_platform_plan_version`: retira (`deprecated`) la versión en vigor, publica la propuesta con su autor y la asignación de deber, y publica el plan si era su primera versión |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id` |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada; numeración serializada |
-| **Información sensible** | Ninguna categoría personal |
-| **Evento de dominio** | `payments.platform_plan_version_published.v1` |
+| **Offline / concurrencia** | Falla cerrada. Una propuesta abierta por plan (índice parcial), así que la versión contra la que se revisó sigue en vigor al publicar. Publicar la propia propuesta responde `403`; una que ya no está abierta, `409` |
+| **Información sensible** | Ninguna categoría personal: no escribe `access_events` |
+| **Evento de dominio** | `payments.platform_plan_version_published.v1`; `payments.platform_plan_published.v1` la primera vez |
 | **Reglas** | Una versión publicada no se edita jamás y **quien ya está suscrito conserva la suya**. Ninguna función de privacidad, consentimiento, portabilidad o supresión puede limitarse: el catálogo no las contiene y la publicación las rechaza |
 | **Falla cerrada** | Función desconocida o límite negativo: rechazo |
 
@@ -3321,6 +3324,57 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `payments.platform_subscription_suspended.v1` · `.reactivated.v1` |
 | **Reglas** | Igual que en el plan de organización: **este worker no puede terminar nada**, y la suspensión es indefinida hasta que se pague. Bajar a gratis **nunca elimina datos** |
 | **Falla cerrada** | Firma inválida o suscripción inexistente: se descarta y se registra el intento |
+
+#### `OP-PAY-024` — Crear un plan de plataforma
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/platform-plans` |
+| **Actor** | `A11` con rol base, `manage_platform_commercial`, AAL2 y deber vigente |
+| **Filtros obligatorios** | Código estable (`^[a-z][a-z0-9_]{1,39}$`), nombre y tipo `free` o `paid` |
+| **Transacción** | `payments.create_platform_plan`: el plan nace `draft`, sin nada en vigor, con su autor y asignación de deber |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Un código tomado o un segundo plan gratuito responden `409` |
+| **Información sensible** | Ninguna categoría personal |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | `HU-BO-025`, criterio 2. Hay **un solo plan gratuito**, siempre: sus límites cambian publicando versiones suyas, no reemplazándolo. Es más estricto que «un plan gratuito publicado» y hace innecesaria esa regla |
+| **Falla cerrada** | — |
+
+#### `OP-PAY-025` — Proponer una versión de plan de plataforma
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/platform-plans/{planId}/versions` |
+| **Actor** | Igual que `OP-PAY-024` |
+| **Filtros obligatorios** | Plan de pago: monto positivo en unidades menores, moneda ISO 4217 y periodo `month` o `year`. Plan gratuito: monto cero, sin moneda ni periodo (`IX-41`). Cada función del catálogo aparece exactamente una vez; ninguna fuera de él; una excluida no lleva límite; un límite es entero y no negativo |
+| **Transacción** | `payments.propose_platform_plan_version`: crea la versión `draft` con el siguiente número (nunca reutilizado), sus `platform_plan_features` y la versión que reemplazaría; rechaza la propuesta si no cambia nada frente a la versión en vigor |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Una propuesta abierta por plan: una segunda responde `409`, y también una que no cambia nada |
+| **Información sensible** | Ninguna categoría personal |
+| **Evento de dominio** | Ninguno: la versión no está en vigor hasta `OP-PAY-017` |
+| **Reglas** | `HU-BO-025` criterios 1 y 3, `HU-BO-026` criterios 1 a 4. La lectura devuelve con la propuesta qué cambia —precio, moneda, periodo y el estado de cada función— frente a la versión en vigor, para que quien revisa lea una diferencia y no dos versiones |
+| **Falla cerrada** | Función desconocida, omitida o repetida, o forma de precio inválida: `422` |
+
+#### `OP-PAY-026` — Retirar una propuesta de versión de plan de plataforma
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/platform-plans/{planId}/versions/{versionId}/withdrawal`, sin cuerpo |
+| **Actor** | Igual que `OP-PAY-024`: quien la propuso o quien la revisa |
+| **Filtros obligatorios** | La versión es la propuesta abierta del plan |
+| **Transacción** | `payments.withdraw_platform_plan_version`: la propuesta pasa a `archived` con quién la retiró y su asignación de deber |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Una propuesta que ya no está abierta responde `409` |
+| **Información sensible** | Ninguna categoría personal |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Quien propuso y cambió de idea y quien revisa y no está de acuerdo terminan igual. La propuesta retirada queda en el historial y nunca se publica |
+| **Falla cerrada** | — |
 
 ### 7.8 Procesos de sistema
 
