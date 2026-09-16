@@ -287,7 +287,8 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Consultas:** `(person_id, valid_from desc)`.
 - **Índices:** `(person_id, valid_from desc)`.
 - **Retención:** categoría `health`; disposición por su política.
-- **Eventos:** `identity.health_context_declared.v1`.
+- **Eventos:** `identity.health_context_declared.v1`, cuyo payload lleva sólo `health_context_claim_id`: lo declarado nunca sale al outbox.
+- **Implementado (`HU-SP-014`, `HU-SP-028`, `HU-BO-009`):** suma `created_at timestamptz`. `description` no queda vacía y tiene como máximo 500 caracteres (la función la guarda sin espacios alrededor); `body_area` es nula o una de catorce zonas (`neck`, `shoulder`, `upper_back`, `lower_back`, `chest`, `abdomen`, `arm`, `elbow`, `wrist_hand`, `hip`, `thigh`, `knee`, `lower_leg`, `ankle_foot`); `valid_to`, si existe, es posterior a `valid_from`. No hay columna para un diagnóstico, un examen ni un documento. `identity.provenance` se crea aquí con las cinco procedencias del glosario, y Space sólo escribe `person_declared`. `identity.health_context_claim_guard_tg` rechaza cualquier `UPDATE`: una declaración se conserva o se borra, y una posterior dice qué cambió. Índice `(person_id, valid_from desc, id desc)`, que es también el orden del cursor. La tabla tiene RLS forzado y el runtime no tiene privilegios sobre ella: la persona entra sólo por `identity.record_health_context`, `identity.list_health_context` e `identity.delete_health_context`, y soporte sólo por `support.exercise_break_glass`. La lectura profesional por `health_context` llega con `relationships`.
 
 ### 4.9 `identity.professional_profiles`
 
@@ -870,7 +871,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** único compuesto.
 - **Retención:** permanente (gobierna a las demás).
 - **Eventos:** ninguno.
-- **Implementado (`HU-SP-027`):** checks de jurisdicción ISO de dos letras, versión positiva, periodo no negativo y `trigger` como código. `privacy.reject_disposition_policy_rewrite_tg` impide editar o borrar una política publicada: se publica otra versión. La única política sembrada es la que la operación ya declara: `body`, `CO`, versión 1, `delete`, periodo cero, `owner_request`. La retención por cualquier otro disparador es DB-P5-015 y no se decide aquí.
+- **Implementado (`HU-SP-027`):** checks de jurisdicción ISO de dos letras, versión positiva, periodo no negativo y `trigger` como código. `privacy.reject_disposition_policy_rewrite_tg` impide editar o borrar una política publicada: se publica otra versión. La única política sembrada es la que la operación ya declara: `body`, `CO`, versión 1, `delete`, periodo cero, `owner_request`. La retención por cualquier otro disparador es DB-P5-015 y no se decide aquí. `20260920120000` publica la segunda con la misma forma para `health`.
 
 ### 7.11 `privacy.erasure_requests`
 
@@ -918,6 +919,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Retención:** auditoría de la disposición.
 - **Eventos:** ninguno propio (los produce el evento de ejecución).
 - **Implementado (`HU-SP-027`), con una desviación deliberada:** los targets entran por tipo a medida que su tabla existe; hoy sólo `target_body_progress_id`, acompañado de `target_kind text` (`body_progress`), `executed_at timestamptz` y `created_at timestamptz`. **Un ítem ejecutado con acción `delete` suelta su target:** el `CHECK` exige exactamente un target en cualquier otro estado y ninguno en ese. Con `ON DELETE RESTRICT` y «siempre uno no nulo», el borrado físico que el ítem existe para ejecutar sería imposible; así, un ítem pendiente retiene la fila y uno ejecutado conserva `target_kind` sin apuntar a una fila que ya no existe. `privacy.disposition_item_guard_tg` cubre `IX-26` (el target pertenece a `subject_person_id` y la política corresponde a la clasificación) y las transiciones (`pending → executed | suspended`, `suspended → pending | executed`; un ejecutado no se mueve, un target sólo cambia al soltarse y un ítem no se borra).
+- **Segundo tipo de target (`HU-SP-028`):** `target_health_context_id` (`→ identity.health_context_claims(id) RESTRICT`, indexado) y `target_kind` en (`body_progress`, `health_context`). El `CHECK` exige que el target no nulo sea el de su tipo, y el guard exige la clasificación de ese tipo (`body` o `health`) y que el target sea del sujeto. El borrado a pedido del dueño es ahora una sola función, `privacy.dispose_on_owner_request(sujeto, clasificación, tipo, target)`: toma la política `owner_request` vigente de esa clasificación, abre el caso y el ítem, encola `privacy.disposition_case_opened.v1`, registra el evento, ejecuta el ítem soltando el target y cierra el caso. Quien la llama borra su propia fila en la misma transacción. El runtime no puede ejecutarla.
 
 ### 7.14 `privacy.disposition_events`
 

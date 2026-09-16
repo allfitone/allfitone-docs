@@ -264,6 +264,8 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-046` | Enviar a una persona el flujo oficial de recuperación desde Backoffice | Comando | `A10` |
 | `OP-IDN-047` | Reenviar una recuperación en curso desde Backoffice | Comando | `A10` |
 | `OP-IDN-048` | Cancelar una recuperación sospechosa desde Backoffice | Comando | `A10` |
+| `OP-IDN-049` | Consultar mi contexto de salud | Consulta | `A2` |
+| `OP-IDN-050` | Eliminar una declaración de contexto de salud | Comando | `A2` |
 
 ---
 
@@ -406,6 +408,8 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | `identity.health_context_declared.v1` |
 | **Reglas** | No representa historia clínica, diagnósticos, laboratorios, biometría continua ni documentos médicos. Un dolor registrado dentro de una sesión hereda esta clasificación y permanece oculto sin el scope, aunque la sesión sea visible |
 | **Falla cerrada** | Tipo fuera del catálogo minimizado, rechazo |
+
+**Implementado (`identity.record_health_context`, `POST /space/v1/health-context` → 201).** El cuerpo trae `context_type`, `description` y `valid_from`, y opcionalmente `body_area` y `valid_to`; cualquier otro campo responde 422 en vez de ignorarse. La descripción tiene hasta 500 caracteres y se guarda sin espacios alrededor; la zona sale de una lista cerrada de catorce; `valid_from` no es posterior a mañana y `valid_to`, si llega, es posterior a `valid_from`. La procedencia la fija el servidor en `person_declared`. Un campo opcional ausente viaja y se resume como `null`, así que un reintento que lo envía explícito repite el mismo registro. No hay `draft_local` en el servidor: el dispositivo guarda el comando y lo reenvía con el mismo `Command-Id`.
 
 #### `OP-IDN-009` — Decidir las intenciones de una invitación
 
@@ -1007,6 +1011,40 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Información sensible** | Igual que `OP-IDN-046` |
 | **Evento de dominio** | Ninguno |
 | **Reglas** | `HU-BO-010`, criterio 10. Un correo que ya salió no se puede retirar del buzón de la persona: un cambio de contraseña posterior ya no confirma la solicitud cancelada |
+
+#### `OP-IDN-049` — Consultar mi contexto de salud
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/health-context` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Persona = sujeto del token |
+| **Transacción** | `identity.list_health_context` resuelve el sujeto y lee sólo sus declaraciones |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Cursor `before_valid_from` + `before_id`, los dos o ninguno; `limit` de 1 a 200 (50 por defecto). Orden: inicio descendente, desempate por identificador |
+| **Offline / concurrencia** | Cacheable para presentación en el dispositivo; la respuesta es `no-store` |
+| **Información sensible** | **Contexto de salud.** Nunca devuelve `person_id` |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | `HU-SP-014`, `HU-SP-028`. La persona ve lo que declaró; la vista profesional es `OP-IDN-020` |
+| **Falla cerrada** | Un token que no resuelve a una persona activa responde `403` |
+
+#### `OP-IDN-050` — Eliminar una declaración de contexto de salud
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `DELETE /space/v1/health-context/{claimId}` |
+| **Actor** | `A2`, dueño de la declaración |
+| **Filtros obligatorios** | La declaración pertenece a la persona autenticada |
+| **Transacción** | `identity.delete_health_context`: `privacy.dispose_on_owner_request` abre y cierra el caso unitario bajo la política `health`, y la fila se borra en la misma transacción |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`. Un reintento devuelve el mismo caso; un segundo borrado con otra llave responde `404` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada: una eliminación no se confirma desde el dispositivo |
+| **Información sensible** | Contexto de salud. Lo que queda es el caso: qué clase de dato se borró, bajo qué política y cuándo |
+| **Evento de dominio** | `privacy.disposition_case_opened.v1` |
+| **Reglas** | Hace para el contexto de salud lo que `OP-IDN-007` hace para el progreso corporal. Borrar un dato propio no revoca ningún grant. La declaración de otra persona y una que no existe responden igual, `404` |
+| **Falla cerrada** | Sin política `health`/`owner_request` publicada, el borrado se rechaza y no escribe nada |
 
 ### 7.2 Organizaciones
 
@@ -3663,6 +3701,8 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Falla cerrada** | Cualquier falla de autorización o auditoría devuelve cero contenido |
 
 **Contenido implementado (`HU-BO-009`, mediciones).** Con `body_progress`, una lectura permitida responde `outcome: "allowed"` y `content.body_progress`, con hasta 500 mediciones de la persona del expediente, las más recientes primero, y la misma proyección que ve la persona: `has_media` sin referencia. `body_progress` lee sólo `identity.body_progress_records`; apuntarla a otro `resource_type` se registra y responde `denied` con `resource_out_of_scope`. Las categorías cuyos datos la plataforma todavía no guarda siguen respondiendo `content_unavailable`.
+
+**Contexto de salud implementado (`HU-BO-009`).** Con `health_context`, una lectura permitida devuelve `content.health_context` con hasta 500 declaraciones de la persona del expediente, la de inicio más reciente primero, con tipo, descripción, zona, procedencia y vigencia, y nunca `person_id`. `health_context` lee sólo `identity.health_context_claims`, y apuntarla a otro recurso se registra y responde `denied` con `resource_out_of_scope`.
 
 #### `OP-SUP-004` — Cerrar mi ventana break-glass
 
