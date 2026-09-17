@@ -111,6 +111,8 @@ Todas las columnas de una clave portadora son `NOT NULL`. Una referencia opciona
 | `IX-43` | `break_glass_approvals` | Cada aprobador usa su propio deber A12 vigente, es distinto de solicitante/sujeto y no repite decisión | FK a `platform_duty_assignments`; `UNIQUE(request_id,approver_person_id)`; trigger bajo lock valida actor, modo, vigencia y conflictos antes de insertar |
 | `IX-44` | revisión de `break_glass_requests` | Revisor A12 es distinto del solicitante y de todos los aprobadores y conserva la asignación de deber exacta | `reviewed_by_duty_assignment_id` FK; constraint trigger diferible valida persona/deber/conflictos y forma terminal de revisión |
 | `IX-45` | actualización de `organizations.type_code` | El tipo solo cambia por una transición activa y gobernada; incorporar equipo no modifica el tipo | Tabla `organizations.organization_type_transitions` con FKs a ambos tipos y trigger `organizations.enforce_type_transition_tg` sobre `organizations`; `UPDATE(type_code)` directo revocado y función cerrada valida old/new bajo lock |
+| `IX-46` | `planned_steps` | Los pasos que comparten `superset_group` ocupan posiciones consecutivas dentro de su versión | Constraint trigger `planning.enforce_superset_contiguity_ct`: una cadena que salta un ejercicio describe un orden que nadie puede ejecutar, y encadenar el primero con el quinto sería eso |
+| `IX-47` | `strength_targets` frente a `planned_sets` | El resumen es derivado: `target_sets` es el conteo de series y `target_reps` existe sólo cuando todas coinciden | Se calcula dentro de `planning.materialize_target` durante la publicación atómica; ningún rol de runtime escribe la fila, así que la única verdad son las series (`ADR-030`) |
 
 ## 5. Formas normativas
 

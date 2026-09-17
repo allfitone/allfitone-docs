@@ -832,8 +832,11 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 - **`T-TPL-2` (negativa)** — Los programas maestros de una organización **no** son visibles bajo `prior_training_history` de otra.
 - **`T-TPL-3` (positiva)** — Una persona sin organización lee el catálogo `global` completo.
 - **`T-TPL-4` (negativa)** — Leer el catálogo `global` **no** abre nada de ninguna organización: el vecino sigue sin ver el contenido privado del otro.
+- **`T-TPL-5` (negativa)** — El borrador de una persona no lo lee otra por `OP-PLN-023`: ajeno e inexistente responden igual, de modo que la respuesta no revela cuál de las dos cosas es.
+- **`T-TPL-6` (negativa)** — `OP-PLN-028` no descarta una plantilla con versión publicada. Programas y asignaciones pueden referenciarla, y retirar de usos nuevos ya tiene su operación.
+- **`T-TPL-7` (positiva)** — Descartar lleva la plantilla a `archived` y retira su borrador **sin borrar ninguna fila**: el grant de arriba no tiene `DELETE` y el descarte no lo necesita.
 
-#### `SESSION_TEMPLATE_VERSION` · `PLANNED_STEP` · targets · `PROGRAM_VERSION` · `PROGRAM_VERSION_SESSION`
+#### `SESSION_TEMPLATE_VERSION` · `PLANNED_STEP` · `PLANNED_SET` · targets · `PROGRAM_VERSION` · `PROGRAM_VERSION_SESSION`
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
@@ -841,10 +844,11 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 | `A2` destinataria | La versión que le fue **asignada** | — | — | — |
 | Resto | — | — | — | — |
 
-- **Condición RLS** — Contenido `global`, **OR** owner del contenido, **OR** existe una `PROGRAM_ASSIGNMENT` de `access_control.person()` que referencia esa versión. Los pasos y targets heredan de su versión, y la segmentación (`PROGRAM_VERSION_GOAL`, `..._LEVEL`, `..._EMPHASIS`) también: es parte de la versión y es inmutable con ella.
+- **Condición RLS** — Contenido `global`, **OR** owner del contenido, **OR** existe una `PROGRAM_ASSIGNMENT` de `access_control.person()` que referencia esa versión. Los pasos, sus series y los targets heredan de su versión, y la segmentación (`PROGRAM_VERSION_GOAL`, `..._LEVEL`, `..._EMPHASIS`) también: es parte de la versión y es inmutable con ella.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`. **Sin `UPDATE` ni `DELETE` para ningún rol de runtime**: es la garantía de inmutabilidad de las versiones publicadas.
 - **Índice para la policy** — sobre `(template_id, version_number)` único, y sobre `program_version_id` en la asignación.
 - **`T-VER-1` (negativa)** — Ninguna vía permite editar una versión publicada.
+- **`T-VER-6` (negativa)** — Una serie planificada no se inserta, edita ni borra fuera de la publicación atómica: `PLANNED_SET` lleva las mismas tres protecciones que sus hermanas, o sería la única grieta en la inmutabilidad de la versión.
 - **`T-VER-2` (positiva)** — Publicar o retirar una versión de plantilla **no** altera programas ni asignaciones históricas.
 - **`T-VER-3` (positiva)** — Un programa v1 fijado a plantilla v1 sigue en v1 aunque exista v2.
 - **`T-VER-4` (positiva)** — La persona lee íntegramente la versión que le fue asignada, y **solo** esa: el resto del catálogo de la organización permanece invisible.
@@ -1237,7 +1241,7 @@ Cada ficha aporta al menos una prueba positiva y una negativa, según exige el p
 | Relaciones | 4 | 11 | 15 |
 | Privacidad | 22 | 27 | 49 |
 | Catálogo | 4 | 4 | 8 |
-| Planificación | 9 | 9 | 18 |
+| Planificación | 12 | 12 | 24 |
 | Ejecución | 12 | 16 | 28 |
 | Nutrición | 9 | 15 | 24 |
 | Soporte | 2 | 5 | 7 |

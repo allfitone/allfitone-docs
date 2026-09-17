@@ -948,6 +948,67 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 3. Los objetivos de cada paso deben corresponder al tipo de actividad; si no, no se acepta.
 4. Este trabajo requiere conexión: no hay modo local para editar contenido.
 
+### HU-SP-102 — Retomar el borrador que dejé a medias
+
+**Como** persona
+**quiero** volver a la rutina que estaba armando
+**para** no empezar de cero cada vez que salgo de la pantalla.
+
+`E-SP-06` · imprescindible
+
+**Criterios**
+
+1. Al volver a crear una rutina, si tengo un borrador sin publicar, se abre ese.
+2. Lo que veo es lo que guardé: el nombre, los ejercicios y sus series.
+3. **La pantalla no escribe nada hasta haber cargado.** Un editor que se abre vacío sobre un borrador existente y guarda solo reemplaza mi trabajo con nada.
+4. Si el borrador no se puede cargar, se me dice, y no se guarda encima.
+
+### HU-SP-103 — Descartar una rutina que no quiero
+
+**Como** persona
+**quiero** decidir al salir si guardo o descarto lo que llevaba
+**para** no acumular borradores que nunca voy a terminar.
+
+`E-SP-06` · imprescindible
+
+**Criterios**
+
+1. Al salir de una rutina con nombre pero sin publicar, elijo entre guardarla como borrador o descartarla.
+2. Descartar la retira de mi contenido; no aparece más en mis rutinas.
+3. Una rutina ya publicada no se descarta por esta vía: para eso está retirar la versión.
+4. Descartar dos veces la misma rutina no es un error.
+
+### HU-SP-104 — Definir mis series una por una
+
+**Como** persona
+**quiero** decir qué hace cada serie de un ejercicio
+**para** que la rutina describa lo que realmente voy a entrenar.
+
+`E-SP-06` · imprescindible
+
+**Criterios**
+
+1. Cada ejercicio se abre y puedo poner cuántas series, con cuántas repeticiones y con qué carga.
+2. Cada serie tiene un tipo: normal, calentamiento, al fallo o descendente.
+3. Una serie al fallo no lleva número de repeticiones, porque el número es el que salga.
+4. Puedo elegir el descanso entre series del ejercicio.
+5. Hay esquemas listos —4×8, 3×12, 5×5, pirámide, descendente— que rellenan la tabla de una vez y después puedo retocar cualquier serie.
+
+### HU-SP-105 — Encadenar dos ejercicios en superserie
+
+**Como** persona
+**quiero** encadenar un ejercicio con el siguiente
+**para** hacerlos seguidos sin descanso entre medias.
+
+`E-SP-06` · importante
+
+**Criterios**
+
+1. Solo puedo encadenar con un ejercicio contiguo; para encadenar otro, lo muevo antes.
+2. La rutina muestra qué ejercicios están encadenados y con cuál.
+3. El descanso de una cadena se aplica al terminarla, no entre sus ejercicios.
+4. Puedo deshacer la cadena sin perder las series de ninguno de los dos.
+
 ### HU-SP-044 — Publicar una versión de mi plantilla
 
 **Como** persona

@@ -3,12 +3,12 @@
 **Versión de revisión:** 8
 **Fecha:** 17 de agosto de 2026
 **Fase:** 4 — Modelo lógico y diccionario de datos
-**Estado:** 131 fichas; el catálogo gana instrucciones y demostración de movimiento
+**Estado:** 136 fichas; la planificación de fuerza gana detalle por serie
 **Deriva de:** [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md), [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md), [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
 
 ## 1. Propósito
 
-La ficha obligatoria de cada una de las **131 tablas físicas** de V1. El inventario vigente incluye `organizations.organization_type_transitions` y `system.invitation_rate_windows`; `identity.access_sessions` conserva evidencia por superficie sin confiar en claims. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
+La ficha obligatoria de cada una de las **136 tablas físicas** de V1. El inventario vigente incluye `organizations.organization_type_transitions` y `system.invitation_rate_windows`; `identity.access_sessions` conserva evidencia por superficie sin confiar en claims. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
 
 Cada ficha responde los quince campos exigidos por [`DATABASE_REFACTOR_PHASES.md` §Fase 4](../04_EXECUTION/DATABASE_REFACTOR_PHASES.md). El diccionario, el ERD lógico y el SQL de Fase 5 deben coincidir; cualquier divergencia es un defecto que se corrige aquí antes de escribir la migración.
 
@@ -38,12 +38,12 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 | Schema | Tablas | Sección |
 | --- | --- | --- |
-| `identity` | 20 | §4 |
+| `identity` | 21 | §4 |
 | `organizations` | 11 | §5 |
 | `relationships` | 6 | §6 |
 | `privacy` | 16 | §7 |
 | `catalog` | 18 | §8 |
-| `planning` | 17 | §9 |
+| `planning` | 21 | §9 |
 | `execution` | 14 | §10 |
 | `nutrition` | 8 | §10A |
 | `system` | 4 | §11 |
@@ -1262,14 +1262,25 @@ crece, y el producto dibuja la figura del cuerpo en su lugar.
 - **Propósito:** paso planificado de una versión de plantilla; movimiento opcional.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del orden y contenido estructural de los pasos de una versión.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `template_version_id uuid` · `position integer` · `movement_id uuid` (nullable) · `activity_type_id uuid` (nullable, más específico para híbrido) · `notes text` (nullable).
+- **Columnas:** `id` · `template_version_id uuid` · `position integer` · `movement_id uuid` (nullable) · `activity_type_id uuid` (nullable, más específico para híbrido) · `superset_group smallint` (nullable) · `notes text` (nullable).
 - **FKs y borrado:** `template_version_id → session_template_versions(id) ON DELETE CASCADE`; `movement_id → catalog.movements(id) RESTRICT`; `activity_type_id → catalog.activity_types(id) RESTRICT`.
-- **Uniques y checks:** `UNIQUE (template_version_id, position)`.
+- **Uniques y checks:** `UNIQUE (template_version_id, position)`; `superset_group > 0` si existe. `planning.enforce_superset_contiguity_ct` exige que los pasos de un mismo grupo ocupen posiciones consecutivas (`IX-46`).
 - **Actores:** los mismos actores con lectura de la versión; escritura solo durante la publicación atómica de la versión.
 - **RLS:** vía la versión.
 - **Consultas / índices:** por `template_version_id`.
 - **Retención:** con la versión publicada; inmutable una vez publicada.
 - **Eventos:** ninguno propio.
+
+**`superset_group` encadena pasos contiguos**, no cualesquiera. Dos ejercicios en
+superserie se hacen seguidos, sin descanso entre medias, y eso sólo tiene sentido si
+están uno al lado del otro en la sesión: encadenar el primero con el quinto describiría
+un orden que nadie puede ejecutar. Por eso es una columna con un trigger de
+contigüidad y no una tabla de grupos — con la regla puesta, una tabla diría exactamente
+lo mismo por más dinero. Nullable porque la mayoría de los pasos no está encadenada, y
+un cero no significaría nada.
+
+El descanso de una cadena es el del **último** paso del grupo, porque el descanso ocurre
+al terminarla. Los de los pasos intermedios no se aplican; `ADR-030` lo fija.
 
 ### 9.5 `planning.strength_targets`
 
@@ -1277,6 +1288,11 @@ crece, y el producto dibuja la figura del cuerpo en su lugar.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del target de fuerza del paso.
 - **Clasificación:** `training`.
 - **Columnas:** `id` · `planned_step_id uuid` · `target_sets integer` · `target_reps integer` (nullable) · `target_load_value numeric` (nullable) · `target_load_unit_code text` (nullable) · `target_rpe numeric` (nullable) · `target_rest_seconds integer` (nullable).
+- **`target_sets` y `target_reps` son resumen derivado, no autoría.** Desde `ADR-030` la
+  verdad de una prescripción de fuerza son las filas de `planned_sets`; al publicar,
+  `target_sets` es su conteo y `target_reps` existe sólo cuando todas las series
+  coinciden. Se conserva para que la agenda, el día y la semana sigan leyendo lo que
+  siempre leyeron, y ningún actor de runtime puede escribirlo a mano (`IX-47`).
 - **`target_rest_seconds` es prescripción, no medición.** Es el descanso que el paso pide entre series, y quien entrena lo ve como referencia; lo que de verdad descansó no se registra en V1. Nullable porque un paso puede no decir nada al respecto, y un cero significaría «sin descanso», que es una instrucción distinta a «no se dijo».
 - **FKs y borrado:** `planned_step_id → planned_steps(id) ON DELETE CASCADE`; `target_load_unit_code → catalog.units(code) RESTRICT`.
 - **Uniques y checks:** `UNIQUE (planned_step_id)`; `target_sets > 0`; `target_reps > 0` si existe; load y unidad aparecen juntos y load es `>=0`; RPE entre 0 y 10; `target_rest_seconds` entre 0 y 3600 si existe. `planning.enforce_target_family_ct` exige familia `strength` (`IX-22`).
@@ -1504,7 +1520,42 @@ necesita una regla aparte—. Los días por semana y las semanas de duración **
 guardan**: se derivan de `program_version_sessions`, porque guardarlos sería una
 segunda verdad del mismo número y la frecuencia es justo el eje sobre el que se elige.
 
-Nota de conteo: `planning` tiene 20 tablas y 20 fichas; §9.5–9.8 son cuatro tablas físicas independientes.
+### 9.21 `planning.planned_sets`
+
+- **Propósito:** cada serie de un paso de fuerza, con lo que esa serie pide y de qué tipo es.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad de la prescripción de fuerza; `strength_targets` sólo la resume.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `planned_step_id uuid` · `set_order integer` · `kind planning.set_kind` · `target_reps integer` (nullable) · `target_load_value numeric` (nullable) · `target_load_unit_code text` (nullable) · `target_rpe numeric` (nullable).
+- **FKs y borrado:** `planned_step_id → planned_steps(id) ON DELETE CASCADE`; `target_load_unit_code → catalog.units(code) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (planned_step_id, set_order)`; `set_order > 0` y consecutivo desde 1 dentro del paso; `target_reps > 0` si existe; **`kind = 'to_failure'` exige `target_reps IS NULL`**; load y unidad aparecen juntos y load es `>=0`; RPE entre 0 y 10.
+- **Actores:** los mismos de la versión de plantilla; escritura sólo durante la publicación atómica.
+- **RLS:** `EXISTS` por `planned_step_id → planned_steps → session_template_versions → session_templates`, igual que los targets.
+- **Consultas / índices:** único `(planned_step_id, set_order)`, que es también el orden de lectura.
+- **Retención:** con la versión publicada; inmutable tras publicación.
+- **Eventos:** ninguno propio.
+
+**Por qué filas y no dos números.** Nadie hace cuatro series idénticas: la primera es de
+calentamiento con carga ligera, las del medio son de trabajo, la última va al fallo y su
+número de repeticiones es el que salga. Guardar «4 × 8» describe mal lo que la persona
+va a hacer, y una rutina que describe mal no se usa dos veces. `ADR-003` ya lo anticipa
+al cerrar que «los targets consultados o validados frecuentemente no se almacenan
+únicamente en JSONB».
+
+**Una serie al fallo no lleva repeticiones**, y el modelo lo prohíbe en lugar de dejarlo
+a la interfaz. «Hasta no poder más» y «hasta ocho» son instrucciones distintas; un
+número ahí sería una contradicción guardada.
+
+**`kind` vive en `planning` y no en `catalog`.** El catálogo guarda vocabulario de
+contenido que una persona explora —disciplinas, movimientos, equipamiento, músculos—.
+El tipo de serie es estructura de la prescripción: nadie lo busca ni lo filtra, lo
+declara. Su vocabulario es cerrado: `normal`, `warmup`, `to_failure`, `drop`.
+
+**Es hija de una versión publicada y hereda su inmutabilidad.** `ADR-009` es tajante en
+que sólo el borrador es mutable, así que esta tabla lleva las mismas tres protecciones
+que sus hermanas: sin mutación de hija inmutable, inserción sólo durante la publicación,
+y política de fila heredada del padre. Sin ellas sería la única grieta en esa garantía.
+
+Nota de conteo: `planning` tiene 21 tablas y 21 fichas; §9.5–9.8 son cuatro tablas físicas independientes.
 
 ---
 
@@ -2170,18 +2221,18 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 
 | Schema | Tablas fichadas |
 | --- | --- |
-| `identity` | 20 |
+| `identity` | 21 |
 | `organizations` | 11 |
 | `relationships` | 6 |
 | `privacy` | 16 |
 | `catalog` | 18 |
-| `planning` | 17 |
+| `planning` | 21 |
 | `execution` | 14 |
 | `nutrition` | 8 |
 | `payments` | 12 |
 | `system` | 4 |
 | `support` | 5 |
-| **Total** | **131** |
+| **Total** | **136** |
 
 ### 14.2 Invariantes transversales confirmadas por el diccionario
 
@@ -2212,7 +2263,7 @@ P0-07 cerró objetos/JSONB/particiones y P0-08 cerró receipts, PKs offline y re
 
 Entregable principal de detalle de la Fase 4, complementado por el catálogo de objetos físicos. Se considera completo cuando la revisión confirme que:
 
-1. las 131 tablas tienen ficha completa en sus quince campos;
+1. las 136 tablas tienen ficha completa en sus quince campos;
 2. el diccionario, el ERD lógico y las cardinalidades coinciden;
 3. cada tabla tiene responsabilidad clara, integridad y justificación en operaciones reales;
 4. ninguna tabla podría no existir sin romper una operación de la matriz;

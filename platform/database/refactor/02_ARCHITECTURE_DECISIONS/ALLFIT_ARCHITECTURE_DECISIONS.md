@@ -37,6 +37,7 @@
 | ADR-027 | Nutrición personal y guía profesional no clínica en V1 |
 | ADR-028 | Backoffice con rol base, deberes temporales y separación break-glass |
 | ADR-029 | Monorepo de implementación con deployables independientes |
+| ADR-030 | Detalle por serie y superseries en la planificación de fuerza |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -3624,3 +3625,133 @@ allfitone-landing-page/  sitio público de marketing
 5. Un OpenAPI inválido o una diferencia entre la especificación canónica y los DTOs generados falla en CI.
 6. Un token emitido para una Application sigue siendo rechazado en otra superficie aunque ambas vivan en el mismo repositorio.
 7. Un fallo o rollback de un deployable no obliga a publicar una versión nueva de los otros cuatro.
+
+---
+
+## ADR-030 — Detalle por serie y superseries en la planificación de fuerza
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 17 de septiembre de 2026
+
+### Contexto
+
+El modelo de planificación describe un paso de fuerza con dos números agregados:
+`target_sets` y `target_reps`. Cuatro series de ocho repeticiones son literalmente el
+entero `4` y el entero `8` colgando del paso.
+
+Eso alcanzaba mientras el catálogo tenía treinta y ocho movimientos y la aplicación
+servía para anotar una rutina. Con cuatrocientos movimientos y personas que entrenan
+de verdad, no alcanza: nadie hace cuatro series idénticas. La primera es de
+calentamiento con carga ligera, las dos del medio son de trabajo, y la última va al
+fallo sin número de repeticiones porque el número es el que salga. Una rutina que no
+sabe distinguirlas describe mal lo que la persona va a hacer, y una rutina que
+describe mal no se usa dos veces.
+
+Lo mismo con las superseries. Encadenar dos ejercicios para hacerlos seguidos sin
+descanso entre medias no es un adorno: cambia el estímulo y cambia la duración de la
+sesión. Hoy no hay forma de decirlo, y quien lo quiere lo escribe en la nota, que es
+texto que ningún lector entiende.
+
+**Esta decisión no contradice `ADR-021`.** Sus listas de capacidades diferidas cubren
+otros dominios —reservas, comercio, marketplace, wearables, nutrición clínica, IA— y,
+en entrenamiento, «especialización completa de todas las disciplinas». Profundizar la
+única disciplina que Space publica no aparece ahí. Lo que `ADR-021` sí impone es una
+puerta de ocho pasos para cualquier ampliación y la exigencia de que su primera
+entrega sea «una rebanada vertical coherente»: este ADR es el paso 6 de esa puerta, y
+la entrega incluye migración, RLS, contrato, pruebas y pantalla.
+
+`ADR-003` ya sancionó el concepto: su modelo de `planned_steps` enumera «orden y
+bloque/superset» y «recuperación» entre los atributos del paso. Lo que faltaba era el
+modelo físico y el permiso explícito para construirlo.
+
+### Decisión
+
+**1. Las series de un paso de fuerza se modelan una por una.** `planning.planned_sets`
+cuelga de `planned_steps`, con `set_order`, un tipo, y las repeticiones, carga y RPE
+que esa serie pide.
+
+**2. El tipo de serie es un vocabulario cerrado de cuatro:** `normal`, `warmup`,
+`to_failure` y `drop`. Vive en `planning` y no en `catalog` porque `catalog` guarda
+vocabulario de **contenido** que una persona explora —disciplinas, movimientos,
+equipamiento, músculos— y el tipo de serie es estructura de la prescripción.
+
+**3. Una serie al fallo no lleva repeticiones.** Es lo que significa: hasta no poder
+más. Un número ahí sería una instrucción distinta, así que el modelo lo prohíbe en vez
+de dejarlo a la interfaz.
+
+**4. `strength_targets` pasa a ser resumen derivado, nunca autoría.** Al publicar,
+`target_sets` es el conteo de series y `target_reps` existe solo cuando todas
+coinciden. La verdad son las filas; el resumen es una comodidad para quien ya lo leía.
+Se hace así para que **ningún lector existente se rompa**: la agenda, el día de hoy,
+la semana y todo el lado de ejecución siguen leyendo lo que siempre leyeron.
+
+**5. La superserie es una agrupación de pasos contiguos**, expresada como una columna
+en `planned_steps` y no como una tabla. Sólo se encadena con el ejercicio de al lado;
+con esa regla, una columna dice exactamente lo que diría una tabla de grupos, y la
+contigüidad se impone con un trigger de restricción.
+
+**6. El descanso no se mueve.** `strength_targets.target_rest_seconds` ya existe, es
+prescripción y no medición, y es genuinamente por ejercicio. Dentro de una superserie
+sólo cuenta el del último paso de la cadena, porque el descanso ocurre al terminarla.
+
+**7. `planned_sets` es hija de una versión publicada y hereda su inmutabilidad.**
+`ADR-009` es tajante: sólo el borrador es mutable y una versión publicada no se edita.
+La tabla nueva lleva las mismas tres familias de protección que sus hermanas —sin
+mutación de hija inmutable, inserción sólo durante la publicación, y política de fila
+heredada del padre— o sería la única grieta en esa garantía.
+
+### Lo que esta decisión no hace
+
+- **La ejecución no aprende de series planificadas.** `execution.strength_sets`
+  seguirá apuntando al paso y no a la serie prescrita. Enlazar lo ejecutado con la
+  serie que lo pidió es otra decisión, con su propio ADR.
+- **Las revisiones de prescripción siguen operando a nivel de paso.** Un profesional
+  adapta el ejercicio, no la tercera serie; el vocabulario cerrado de
+  `override_kind` no se amplía aquí.
+- **Las demás disciplinas no cambian.** Resistencia, intervalos y movilidad conservan
+  su target único por paso. Esto es profundidad en fuerza, no una reforma del núcleo
+  multidisciplina.
+- **Nada de esto funciona sin conexión.** `DT-007` reserva el borrador local para el
+  registro de ejecución y la edición de perfil.
+
+### Invariantes
+
+1. Un paso de fuerza publicado tiene al menos una serie.
+2. `set_order` es único y consecutivo dentro de su paso.
+3. Una serie `to_failure` no declara repeticiones.
+4. El resumen de `strength_targets` es derivado: ningún actor de runtime lo escribe.
+5. Los pasos que comparten grupo de superserie ocupan posiciones consecutivas.
+6. Una serie planificada no se edita ni se borra una vez publicada su versión.
+7. El contenido del borrador entra al hash de publicación con sus series dentro: dos
+   rutinas que difieren en una serie no publican la misma versión.
+8. El descanso de una superserie es el del último paso de la cadena.
+
+### Consecuencias
+
+#### Positivas
+
+- La rutina describe lo que la persona realmente va a hacer.
+- Los lectores existentes no cambian: el detalle entra como añadido.
+- El tipo de serie queda disponible para que la ejecución lo aproveche cuando se
+  decida enlazarlas.
+
+#### Costos
+
+- Una tabla más bajo una versión inmutable, con las tres protecciones que eso exige.
+- El validador del borrador, la función canónica de hash y la materialización tienen
+  que moverse juntas o el hash y las filas se separan.
+- Lo ya publicado necesita relleno: cada `strength_targets` existente se convierte en
+  N series iguales.
+- Studio recibe el modelo y el contrato, pero su interfaz es trabajo aparte.
+
+### Escenarios de prueba obligatorios
+
+1. Una serie `to_failure` con repeticiones se rechaza.
+2. Un grupo de superserie con posiciones no contiguas se rechaza.
+3. El rol de runtime no puede escribir el resumen de `strength_targets`.
+4. Una versión publicada no admite insertar, editar ni borrar una serie.
+5. Publicar dos veces el mismo contenido sigue sin crear dos versiones, con las series
+   dentro del hash.
+6. Cambiar una sola serie del borrador sí produce una versión nueva.
+7. El relleno deja cada paso publicado con tantas series como decía su `target_sets`.
+8. La agenda, el día de hoy y la semana devuelven lo mismo antes y después del cambio.
