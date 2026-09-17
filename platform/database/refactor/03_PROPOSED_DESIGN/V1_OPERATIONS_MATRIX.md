@@ -1982,7 +1982,7 @@ Reglas que gobiernan todo el dominio:
 
 ### 7.5 Catálogo
 
-Dueño de `DISCIPLINE`, `ACTIVITY_TYPE`, `ACTIVITY_TYPE_ALIAS`, `MOVEMENT`, `MOVEMENT_ALIAS`, `MOVEMENT_VARIANT`, `EQUIPMENT`, `MOVEMENT_EQUIPMENT`, `MUSCLE`, `MOVEMENT_MUSCLE`, `UNIT`, `RESULT_CONTRACT`, `ACTIVITY_TYPE_RESULT_CONTRACT` y `CONTRACT_FIXTURE`.
+Dueño de `DISCIPLINE`, `ACTIVITY_TYPE`, `ACTIVITY_TYPE_ALIAS`, `MOVEMENT`, `MOVEMENT_ALIAS`, `MOVEMENT_VARIANT`, `MOVEMENT_INSTRUCTION`, `EQUIPMENT`, `MOVEMENT_EQUIPMENT`, `MUSCLE`, `MOVEMENT_MUSCLE`, `UNIT`, `RESULT_CONTRACT`, `ACTIVITY_TYPE_RESULT_CONTRACT` y `CONTRACT_FIXTURE`.
 
 Reglas que gobiernan todo el dominio:
 
@@ -2103,11 +2103,11 @@ Reglas que gobiernan todo el dominio:
 | **Filtros obligatorios** | En `/catalog`: solo alcance global. En `/studio`: global **más** los privados de `{orgId}` y nada de otras organizaciones |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
-| **Paginación y orden** | Cursor. Orden: relevancia y nombre normalizado, desempate por identificador |
-| **Offline / concurrencia** | El subconjunto global es cacheable en Space |
+| **Paginación y orden** | Cursor opaco. Orden: relevancia y nombre normalizado, desempate por identificador. El cursor es obligatorio, no una comodidad: el catálogo global pasó de decenas a centenares, y un tope sin cursor devuelve una página que parece el catálogo entero |
+| **Offline / concurrencia** | El subconjunto global es cacheable en Space, que pagina una vez y se queda con la copia completa |
 | **Información sensible** | Ninguna categoría personal. El contenido privado de una organización **es** confidencial frente a las demás |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | La búsqueda cubre nombre y alias. Un movimiento archivado no aparece salvo petición explícita. `muscle` y `equipment` son repetibles: varios valores de un mismo filtro son `or`, y entre filtros distintos es `and` |
+| **Reglas** | La búsqueda cubre nombre y alias. Un movimiento archivado no aparece salvo petición explícita. `muscle` y `equipment` son repetibles: varios valores de un mismo filtro son `or`, y entre filtros distintos es `and`. Cada fila trae la dirección de su demostración cuando existe; un movimiento sin ella no es un error |
 | **Falla cerrada** | Sin `{orgId}` no se devuelve ningún privado |
 
 #### `OP-CAT-010` — Consultar un movimiento
@@ -2124,7 +2124,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Cacheable |
 | **Información sensible** | Ninguna categoría personal |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Incluye variantes, equipamiento compatible y sucesor global si fue promovido |
+| **Reglas** | Incluye alias, músculos con su principal, equipamiento compatible, los pasos de ejecución en orden, variantes con el porqué de cada una, la demostración visual cuando existe, y sucesor global si fue promovido. Los pasos son contenido curado y revisado: se leen aquí y no se escriben desde ninguna superficie de producto. La demostración viaja como dirección absoluta compuesta al proyectar, nunca como una URL almacenada: el origen es configuración, no dato |
 | **Falla cerrada** | Privado de otra organización: misma respuesta que "no existe" |
 
 #### `OP-CAT-011` — Listar equipamiento

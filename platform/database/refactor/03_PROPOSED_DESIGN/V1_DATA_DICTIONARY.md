@@ -3,12 +3,12 @@
 **Versión de revisión:** 8
 **Fecha:** 17 de agosto de 2026
 **Fase:** 4 — Modelo lógico y diccionario de datos
-**Estado:** 127 fichas; AFO-39 agrega transiciones organizacionales gobernadas y recertifica el inventario
+**Estado:** 131 fichas; el catálogo gana instrucciones y demostración de movimiento
 **Deriva de:** [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md), [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md), [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
 
 ## 1. Propósito
 
-La ficha obligatoria de cada una de las **127 tablas físicas** de V1. El inventario vigente incluye `organizations.organization_type_transitions` y `system.invitation_rate_windows`; `identity.access_sessions` conserva evidencia por superficie sin confiar en claims. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
+La ficha obligatoria de cada una de las **131 tablas físicas** de V1. El inventario vigente incluye `organizations.organization_type_transitions` y `system.invitation_rate_windows`; `identity.access_sessions` conserva evidencia por superficie sin confiar en claims. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
 
 Cada ficha responde los quince campos exigidos por [`DATABASE_REFACTOR_PHASES.md` §Fase 4](../04_EXECUTION/DATABASE_REFACTOR_PHASES.md). El diccionario, el ERD lógico y el SQL de Fase 5 deben coincidir; cualquier divergencia es un defecto que se corrige aquí antes de escribir la migración.
 
@@ -42,7 +42,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 | `organizations` | 11 | §5 |
 | `relationships` | 6 | §6 |
 | `privacy` | 16 | §7 |
-| `catalog` | 14 | §8 |
+| `catalog` | 18 | §8 |
 | `planning` | 17 | §9 |
 | `execution` | 14 | §10 |
 | `nutrition` | 8 | §10A |
@@ -980,7 +980,7 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Propósito:** relación curatorial base↔variante; conserva procedencia sin sobrescribir.
 - **Dominio / fuente de verdad:** Catálogo. Es la fuente de verdad de las relaciones curatoriales entre movimientos.
 - **Clasificación:** `operational`.
-- **Columnas:** `id` · `base_movement_id uuid` · `variant_movement_id uuid` · `relation text`.
+- **Columnas:** `id` · `base_movement_id uuid` · `variant_movement_id uuid` · `relation text` · `note text` (nullable).
 - **FKs y borrado:** ambos `→ movements(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE (base_movement_id, variant_movement_id)`; `CHECK (base_movement_id <> variant_movement_id)`.
 - **Actores:** lectura para quien pueda leer ambos movimientos; escritura de plataforma o del owner autorizado de ambos movimientos privados.
@@ -988,6 +988,10 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Consultas / índices:** por `base_movement_id`.
 - **Retención:** permanece mientras cualquiera de los movimientos esté referenciado; se elimina solo al retirar ambos sin referencias.
 - **Eventos:** ninguno.
+
+`relation` dice **qué tipo** de relación es; `note` dice **por qué le importa a quien
+lee**, en una frase — «más pectoral superior», «menos técnica». Son cosas distintas y
+por eso son dos columnas: un código no se muestra y una frase no se consulta.
 
 ### 8.7 `catalog.equipment`
 
@@ -1151,6 +1155,61 @@ es como se lee una lista de diecinueve.
 sentadilla es cuádriceps y glúteos como principal y espalda baja como
 acompañante. El filtro devuelve ambos, porque quien busca «glúteos» quiere la
 sentadilla; el orden puede preferir lo principal.
+
+### 8.17 `catalog.movement_instructions`
+
+- **Propósito:** cómo se ejecuta un movimiento, paso a paso y en orden.
+- **Dominio / fuente de verdad:** Catálogo. La fuente de verdad sigue siendo el movimiento padre.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `movement_id uuid` · `locale text` · `position integer` · `text text`.
+- **FKs y borrado:** `movement_id → movements(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `UNIQUE (movement_id, locale, position)`; posición positiva; texto no vacío.
+- **Actores:** los mismos actores autorizados sobre el movimiento padre.
+- **RLS:** hereda visibilidad y escritura del padre mediante `movement_id → movements(id)`.
+- **Consultas / índices:** por `(movement_id, locale, position)`, que es también el orden en que se leen.
+- **Retención:** se elimina con el movimiento padre.
+- **Eventos:** ninguno.
+
+**Esto es instrucción de ejercicio, y eso tiene consecuencias.** Un paso mal escrito
+no es una errata: es alguien cargando mal la espalda. El texto se cura como el resto
+del catálogo global —solo Allfit lo publica— y **no se publica sin revisión de
+alguien con criterio técnico**. El control es la revisión del cambio, no una columna
+de estado: un `status` aquí solo movería la pregunta de sitio.
+
+`position` ordena y `locale` separa idiomas, de modo que traducir es añadir filas y
+nunca reescribir las que ya se leyeron.
+
+### 8.18 `catalog.movement_media`
+
+- **Propósito:** la demostración visual de un movimiento, para quien no lo conoce y no puede deducirlo del nombre.
+- **Dominio / fuente de verdad:** Catálogo. La fuente de verdad sigue siendo el movimiento padre; el binario vive fuera de la base.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `movement_id uuid` · `kind text` · `object_key text` · `content_type text` · `width integer` · `height integer` · `byte_size integer` · `checksum text`.
+- **FKs y borrado:** `movement_id → movements(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `UNIQUE (movement_id, kind)`; `kind` en un conjunto cerrado (`demo`); clave de objeto y checksum no vacíos; tipo de contenido de imagen; dimensiones y tamaño positivos.
+- **Actores:** los mismos actores autorizados sobre el movimiento padre.
+- **RLS:** hereda visibilidad del padre mediante `movement_id → movements(id)`. Escritura solo de curaduría, como el resto del catálogo global.
+- **Consultas / índices:** por `movement_id`, que es como se proyecta.
+- **Retención:** se elimina con el movimiento padre; el objeto se retira aparte.
+- **Eventos:** ninguno.
+
+**La base guarda la clave, no la URL.** Una URL absoluta almacenada ata el contenido
+al origen que lo servía el día que se escribió: cambiar de proveedor obligaría a
+migrar filas. La API compone la dirección desde configuración al proyectar, así que
+mudar el origen es una variable de entorno.
+
+**Tampoco guarda el binario.** Una demostración es idéntica para todo el mundo,
+inmutable y grande; sirve desde un CDN con caché largo, no desde una fila. Esto la
+separa deliberadamente de la foto de comida, que es dato personal y por eso **sí** pasa
+por un endpoint que reevalúa autorización en cada petición: allí el control es la
+autorización, aquí es la inmutabilidad.
+
+**El `checksum` es lo que hace reproducible la curaduría.** Dice qué bytes se
+revisaron; si el objeto del almacén no coincide, alguien cambió el contenido sin pasar
+por la revisión del cambio.
+
+Un movimiento sin fila aquí no es un error: es el estado normal de un catálogo que
+crece, y el producto dibuja la figura del cuerpo en su lugar.
 
 ---
 
@@ -2115,14 +2174,14 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 | `organizations` | 11 |
 | `relationships` | 6 |
 | `privacy` | 16 |
-| `catalog` | 14 |
+| `catalog` | 18 |
 | `planning` | 17 |
 | `execution` | 14 |
 | `nutrition` | 8 |
 | `payments` | 12 |
 | `system` | 4 |
 | `support` | 5 |
-| **Total** | **127** |
+| **Total** | **131** |
 
 ### 14.2 Invariantes transversales confirmadas por el diccionario
 
@@ -2153,7 +2212,7 @@ P0-07 cerró objetos/JSONB/particiones y P0-08 cerró receipts, PKs offline y re
 
 Entregable principal de detalle de la Fase 4, complementado por el catálogo de objetos físicos. Se considera completo cuando la revisión confirme que:
 
-1. las 127 tablas tienen ficha completa en sus quince campos;
+1. las 131 tablas tienen ficha completa en sus quince campos;
 2. el diccionario, el ERD lógico y las cardinalidades coinciden;
 3. cada tabla tiene responsabilidad clara, integridad y justificación en operaciones reales;
 4. ninguna tabla podría no existir sin romper una operación de la matriz;

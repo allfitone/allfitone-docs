@@ -2,7 +2,7 @@
 
 **Fecha:** 17 de agosto de 2026
 **Fase:** 4 — cierre de especificación física
-**Estado:** inventario recertificado de 129 tablas
+**Estado:** inventario recertificado de 131 tablas
 **Deriva de:** [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`V1_DATA_DICTIONARY.md`](./V1_DATA_DICTIONARY.md)
 
 ## 1. Propósito
@@ -15,7 +15,7 @@ Este catálogo cierra las decisiones que no pueden dejarse a quien escriba la pr
 - forma, versión y validación de cada JSONB;
 - identidad global y mantenimiento de tablas particionadas.
 
-No sustituye las fichas de las 129 tablas. Fija las reglas mecánicas que todas consumen.
+No sustituye las fichas de las 131 tablas. Fija las reglas mecánicas que todas consumen.
 
 ## 2. Inventario recertificado
 
@@ -25,16 +25,16 @@ No sustituye las fichas de las 129 tablas. Fija las reglas mecánicas que todas 
 | `organizations` | 11 |
 | `relationships` | 6 |
 | `privacy` | 16 |
-| `catalog` | 16 |
+| `catalog` | 18 |
 | `planning` | 17 |
 | `execution` | 14 |
 | `nutrition` | 8 |
 | `payments` | 12 |
 | `system` | 4 |
 | `support` | 5 |
-| **Total** | **129** |
+| **Total** | **131** |
 
-El conteo se obtiene de 129 fichas únicas del diccionario. Incluye `identity.access_sessions` como sesión técnica multi-superficie; `identity.password_reset_receipts`; `identity.access_account_mfa_factors`, `identity.backoffice_authentication_attempts` e `identity.mfa_factor_recovery_events`; `organizations.organization_type_transitions`; `planning.service_access_blocks`; `system.invitation_rate_windows`; y las tablas normalizadas de especialidades, tipos de credencial y credenciales profesionales. Incluye cuatro targets, cinco resultados tipados, ocho tablas nutricionales y las cinco tablas de soporte de ADR-028 como tablas independientes. Excluye:
+El conteo se obtiene de 131 fichas únicas del diccionario. Incluye `identity.access_sessions` como sesión técnica multi-superficie; `identity.password_reset_receipts`; `identity.access_account_mfa_factors`, `identity.backoffice_authentication_attempts` e `identity.mfa_factor_recovery_events`; `organizations.organization_type_transitions`; `planning.service_access_blocks`; `system.invitation_rate_windows`; y las tablas normalizadas de especialidades, tipos de credencial y credenciales profesionales. Incluye cuatro targets, cinco resultados tipados, ocho tablas nutricionales y las cinco tablas de soporte de ADR-028 como tablas independientes. Excluye:
 
 - enums;
 - vistas y funciones;
@@ -186,7 +186,7 @@ La migración inicial crea el mes actual más tres meses futuros. Una escritura 
 
 | ID | Demostración |
 | --- | --- |
-| `T-SCHEMA-01` | ERD, diccionario e inventario reportan exactamente 129 tablas y el diccionario contiene 129 fichas únicas. |
+| `T-SCHEMA-01` | ERD, diccionario e inventario reportan exactamente 131 tablas y el diccionario contiene 131 fichas únicas. |
 | `T-SCHEMA-02` | Cada tabla/columna/FK/check/índice de las fichas se compara con `pg_catalog`; falta o nombre distinto falla CI. |
 | `T-SCHEMA-03` | Cada tabla con RLS tiene exactamente las policies esperadas por comando y ninguna policy extra permisiva. |
 | `T-SCHEMA-04` | Cada JSONB acepta fixtures V1 válidos y rechaza versión, claves, tipos y campos adicionales inválidos. |

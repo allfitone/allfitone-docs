@@ -308,6 +308,8 @@ erDiagram
     MOVEMENT ||--o{ MOVEMENT_EQUIPMENT : utiliza
     EQUIPMENT ||--o{ MOVEMENT_EQUIPMENT : participa
     MOVEMENT ||--o{ MOVEMENT_MUSCLE : trabaja
+    MOVEMENT ||--o{ MOVEMENT_INSTRUCTION : explica
+    MOVEMENT ||--o| MOVEMENT_MEDIA : demuestra
     MUSCLE ||--o{ MOVEMENT_MUSCLE : es_trabajado
 
     ACTIVITY_TYPE ||--o{ ACTIVITY_TYPE_RESULT_CONTRACT : admite
@@ -328,6 +330,8 @@ erDiagram
 | `EQUIPMENT` | Recurso físico compatible o requerido | Conserva alcance/owner y no representa inventario ni reservas |
 | `MUSCLE` | Músculo o región contra la que se etiqueta un movimiento | Vocabulario global y publicado; no describe anatomía de una persona ni su composición corporal |
 | `MOVEMENT_MUSCLE` | Qué trabaja un movimiento, y si es principal | Etiqueta curatorial: no es prescripción ni medición |
+| `MOVEMENT_INSTRUCTION` | Cómo se ejecuta, paso a paso y en orden | Contenido curado y revisado: un paso mal escrito es una lesión, no una errata |
+| `MOVEMENT_MEDIA` | La demostración visual del movimiento | Referencia a un objeto externo, no el binario: contenido idéntico para todos e inmutable, que sirve desde caché y no desde una fila |
 | `UNIT` | Código y conversión dentro de una dimensión | Todo valor físico conserva unidad canónica y, cuando aplique, original |
 | `RESULT_CONTRACT` | Contrato publicado/versionado de envelope, mínimos y detalle | Una versión futura no reinterpreta ejecuciones previas |
 | `ACTIVITY_TYPE_RESULT_CONTRACT` | Asociación vigente/default entre actividad y contrato | Congela compatibilidad sin codificarla en el frontend |

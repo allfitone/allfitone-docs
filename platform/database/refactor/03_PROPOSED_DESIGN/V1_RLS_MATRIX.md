@@ -778,7 +778,7 @@ El catálogo es el único dominio con lectura amplia. Su riesgo no es la fuga de
 - **`T-CAT-2` (negativa)** — Un código retirado no se reutiliza: lo impide un único sobre el código, incluidos los archivados.
 - **`T-CAT-3` (negativa)** — El rol de runtime del producto no puede escribir `muscles` ni `movement_muscles`: el catálogo global lo publica solo Allfit, y una etiqueta muscular escrita desde Space sería contenido curatorial sin curaduría.
 
-#### `MOVEMENT` y su contenido privado
+#### `MOVEMENT` y su contenido privado · alias · variantes · instrucciones
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
@@ -788,6 +788,9 @@ El catálogo es el único dominio con lectura amplia. Su riesgo no es la fuga de
 | `A11` | Todo | Globales | Globales | — |
 
 - **Condición RLS** — `content_scope = 'global'` **OR** (`content_scope = 'organization'` **AND** `owner_organization_id = access_control.org()` **AND** `access_control.has_membership(owner_organization_id)`) **OR** (`content_scope = 'person'` **AND** `owner_person_id = access_control.person()`).
+- **Hijas del movimiento** — `movement_aliases`, `movement_instructions`, `movement_muscles` y `movement_media` heredan con `EXISTS` sobre `movement_id`; `movement_variants` exige visibilidad de **ambos** extremos y no amplía la de ninguno. `allfit_api` tiene `SELECT` y nada más sobre las cinco: el catálogo global lo publica solo Allfit.
+- **`T-MOV-4` (negativa)** — El rol de runtime no puede escribir una instrucción. Es contenido curado y revisado; escribirlo desde el producto sería saltarse la revisión que lo hace seguro.
+- **`T-MOV-5` (negativa)** — El rol de runtime no puede escribir `movement_media`. La fila dice qué bytes se revisaron; escribirla desde el producto permitiría cambiar la demostración de un movimiento sin pasar por la revisión del cambio.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE`. **Sin `DELETE`**: un movimiento referenciado por una versión publicada o una ejecución nunca se borra; se archiva.
 - **Índice para la policy** — `(content_scope, owner_organization_id, status)`, `(content_scope, discipline_code, status)` y textual sobre `normalized_name`.
 - **`T-MOV-1` (negativa)** — Una organización **no** ve los movimientos privados de otra, ni por búsqueda, ni por identificador directo, ni por conteo de resultados.
