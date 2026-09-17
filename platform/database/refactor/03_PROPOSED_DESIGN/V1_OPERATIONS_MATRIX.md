@@ -2728,6 +2728,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Admite `draft_local`: es el caso más común de uso sin conexión |
 | **Información sensible** | Entrenamiento. Por defecto es actividad **autónoma**: ninguna organización la ve sin `prior_training_history` |
 | **Evento de dominio** | `execution.session_started.v1` |
+| **Implementado** | `execution.start_session` sobre `/space/v1/executions` (`POST`). El `Command-Id` es el identificador de la sesión, de modo que el dispositivo la puede empezar sin conexión y reintentar sin crear dos. Devuelve `201` con `Location`, `ETag` `"execution:{id}:r0"` y el contrato congelado. |
 | **Reglas** | Existe sin planificación, sin relación y sin organización. Es el escenario Space-only completo |
 | **Falla cerrada** | Tipo de actividad sin contrato vigente, rechazo |
 
@@ -2762,6 +2763,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | El cliente puede finalizar offline y sincronizar. Escrituras concurrentes sobre la misma ejecución no la corrompen: la validación y el cierre ocurren bajo lock de la ejecución |
 | **Información sensible** | Entrenamiento, y las categorías heredadas por los datos capturados |
 | **Evento de dominio** | `execution.finalized.v1`, `execution.primary_resolved.v1` cuando aplica |
+| **Implementado** | `execution.finalize_session` sobre `/space/v1/executions/{id}/finalize` (`POST`), con `If-Match` de la revisión vista. Cierra `completed` y `pending`; no resuelve primaria porque no hay plan, y no certifica nivel mientras ADR-013 siga en revisión. |
 | **Reglas** | Solo una ejecución **completada y válida** puede ser primaria, y hay como máximo una por sesión planificada. La adherencia cuenta **un** cumplimiento como máximo; V1 rechaza el cumplimiento dividido entre varias ejecuciones. Niveles superiores cumplen los mínimos de los inferiores. Una ingesta `partial` no satisface `summary` ni alimenta progresión precisa. `sensor_enriched` exige un detalle válido, no muestras huérfanas |
 | **Falla cerrada** | Mínimos incumplidos, unidad incompatible o resultado de otra familia: rechazo con errores tipados y la ejecución permanece abierta |
 

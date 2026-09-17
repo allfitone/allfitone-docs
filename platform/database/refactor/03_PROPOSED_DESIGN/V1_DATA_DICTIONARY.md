@@ -1431,6 +1431,7 @@ Nota de conteo: `planning` tiene 17 tablas y 17 fichas; §9.5–9.8 son cuatro t
 - **Consultas / índices:** `(person_id, started_at desc)`, `(context_relationship_id, started_at desc)`.
 - **Retención:** categoría `training`; disposición por política; cierre anonimiza `person_id`.
 - **Eventos:** `execution.attempt_started.v1`, `execution.session_started.v1`, `execution.finalized.v1`, `execution.revised.v1`, `execution.annulled.v1`.
+- **Implementado (sesión libre):** la tabla existe con todas sus columnas, pero hasta que haya `relationships` toda sesión nace `is_autonomous=true` y con los dos IDs de contexto en `NULL`; el `CHECK` de contexto ya los exige juntos. `execution.start_session` congela el contrato por defecto vigente de la actividad, `replace_session_results` reemplaza el conjunto entero bajo la revisión que el dispositivo vio (`AF409` si ya no es la actual) y `finalize_session` cierra con `execution_status='completed'` y `validation_status='pending'`. `achieved_level` queda `NULL` a propósito: certificar el nivel depende de ADR-013, que sigue en revisión. Sólo se emiten `session_started.v1` y `finalized.v1`; `OP-EXE-005` no produce evento.
 
 ### 10.2 `execution.planned_session_executions`
 
@@ -1445,6 +1446,7 @@ Nota de conteo: `planning` tiene 17 tablas y 17 fichas; §9.5–9.8 son cuatro t
 - **Consultas / índices:** `(planned_session_id, attempt_number)`.
 - **Retención:** con la ejecución y la sesión planificada; los intentos históricos y el cambio de primaria no se borran.
 - **Eventos:** `execution.primary_resolved.v1`, `execution.primary_changed.v1`.
+- **Implementado:** nada todavía. Sin planificación no hay intento contra un plan, así que `OP-EXE-001` no está montado y la sesión libre no pasa por aquí.
 
 ### 10.3 `execution.session_segments`
 
