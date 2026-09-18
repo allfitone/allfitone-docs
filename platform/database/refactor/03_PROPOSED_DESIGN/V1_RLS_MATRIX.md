@@ -835,6 +835,9 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 - **`T-TPL-5` (negativa)** — El borrador de una persona no lo lee otra por `OP-PLN-023`: ajeno e inexistente responden igual, de modo que la respuesta no revela cuál de las dos cosas es.
 - **`T-TPL-6` (negativa)** — `OP-PLN-028` no descarta una plantilla con versión publicada. Programas y asignaciones pueden referenciarla, y retirar de usos nuevos ya tiene su operación.
 - **`T-TPL-7` (positiva)** — Descartar lleva la plantilla a `archived` y retira su borrador **sin borrar ninguna fila**: el grant de arriba no tiene `DELETE` y el descarte no lo necesita.
+- **`T-TPL-8` (negativa)** — `OP-PLN-029` no descarta un programa con versión publicada. Hay asignaciones que la referencian y sesiones materializadas contra ella.
+- **`T-TPL-9` (positiva)** — Descartar un programa lo lleva a `archived` y retira su borrador, y lo saca de lo que la persona puede retomar. Mismo grant, misma ausencia de `DELETE`.
+- **`T-TPL-10` (negativa)** — `OP-PLN-030` no devuelve el borrador de otra persona ni uno archivado: retomar lo propio no puede convertirse en enumerar lo ajeno.
 
 #### `SESSION_TEMPLATE_VERSION` · `PLANNED_STEP` · `PLANNED_SET` · targets · `PROGRAM_VERSION` · `PROGRAM_VERSION_SESSION`
 
@@ -1241,7 +1244,7 @@ Cada ficha aporta al menos una prueba positiva y una negativa, según exige el p
 | Relaciones | 4 | 11 | 15 |
 | Privacidad | 22 | 27 | 49 |
 | Catálogo | 4 | 4 | 8 |
-| Planificación | 12 | 12 | 24 |
+| Planificación | 14 | 13 | 27 |
 | Ejecución | 12 | 16 | 28 |
 | Nutrición | 9 | 15 | 24 |
 | Soporte | 2 | 5 | 7 |

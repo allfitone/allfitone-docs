@@ -978,6 +978,36 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 3. Una rutina ya publicada no se descarta por esta vía: para eso está retirar la versión.
 4. Descartar dos veces la misma rutina no es un error.
 
+### HU-SP-107 — Retomar el programa que dejé a medias
+
+**Como** persona
+**quiero** que al volver a «programa nuevo» aparezca lo que llevaba
+**para** no empezar de cero cada vez que salgo de la pantalla.
+
+`E-SP-06` · imprescindible
+
+**Criterios**
+
+1. Si dejé un programa sin publicar, al entrar a crear uno aparece ese con lo que llevaba.
+2. Si no dejé ninguno, empiezo en blanco.
+3. Un programa descartado no se retoma.
+4. Nunca se retoma el de otra persona.
+
+### HU-SP-106 — Descartar un programa que no quiero
+
+**Como** persona
+**quiero** decidir al salir si guardo o descarto el programa que llevaba
+**para** no acumular programas a medias que nunca voy a usar.
+
+`E-SP-06` · imprescindible
+
+**Criterios**
+
+1. Al salir de un programa con nombre pero sin publicar, elijo entre guardarlo como borrador o descartarlo.
+2. Descartar lo retira de mi contenido y deja de ofrecerse para retomar.
+3. Un programa ya publicado no se descarta por esta vía: hay asignaciones que dependen de él.
+4. Descartar dos veces el mismo programa no es un error.
+
 ### HU-SP-104 — Definir mis series una por una
 
 **Como** persona
@@ -992,7 +1022,8 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 2. Cada serie tiene un tipo: normal, calentamiento, al fallo o descendente.
 3. Una serie al fallo no lleva número de repeticiones, porque el número es el que salga.
 4. Puedo elegir el descanso entre series del ejercicio.
-5. Hay esquemas listos —4×8, 3×12, 5×5, pirámide, descendente— que rellenan la tabla de una vez y después puedo retocar cualquier serie.
+5. Puedo poner el peso de cada serie, y elegir si lo digo en kilos o en libras para ese ejercicio.
+6. Una serie sin peso dicho se queda sin peso: cero es una carga que alguien quiso poner, no una ausencia.
 
 ### HU-SP-105 — Encadenar dos ejercicios en superserie
 
@@ -1004,10 +1035,12 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 
 **Criterios**
 
-1. Solo puedo encadenar con un ejercicio contiguo; para encadenar otro, lo muevo antes.
-2. La rutina muestra qué ejercicios están encadenados y con cuál.
-3. El descanso de una cadena se aplica al terminarla, no entre sus ejercicios.
-4. Puedo deshacer la cadena sin perder las series de ninguno de los dos.
+1. Puedo encadenar con cualquier ejercicio de la rutina; el que elijo queda al lado de este.
+2. Una cadena puede tener más de dos: encadenar con uno que ya está en una cadena entra en esa cadena.
+3. La rutina muestra qué ejercicios están encadenados y en cuál, con la misma marca y el mismo color.
+4. El descanso de una cadena se aplica al terminarla, no entre sus ejercicios.
+5. Puedo salir de una cadena sin perder mis series, y los que quedan siguen encadenados si todavía son dos.
+6. Reordenar la rutina nunca deshace una cadena: se mueve entera y nada puede caer dentro de ella.
 
 ### HU-SP-044 — Publicar una versión de mi plantilla
 

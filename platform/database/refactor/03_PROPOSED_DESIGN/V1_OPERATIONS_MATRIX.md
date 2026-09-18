@@ -198,13 +198,13 @@ Toda sesión conserva la zona horaria de la persona en el momento del hecho. La 
 | Relaciones | 9 | 5 | 14 |
 | Privacidad | 13 | 7 | 20 |
 | Catálogo | 4 | 8 | 12 |
-| Planificación | 17 | 8 | 25 |
+| Planificación | 18 | 9 | 27 |
 | Ejecución | 13 | 7 | 20 |
 | Nutrición | 8 | 5 | 13 |
 | Pagos | 16 | 7 | 23 |
 | Sistema | 10 | 1 | 11 |
 | Soporte | 6 | 5 | 11 |
-| **Total** | **127** | **67** | **194** |
+| **Total** | **128** | **68** | **196** |
 
 Algunas fichas cubren dos identificadores cuando la operación es simétrica —crear y editar un borrador, listar y consultar el detalle—. En esos casos el encabezado nombra ambos y el contenido aplica a los dos.
 
@@ -2250,6 +2250,8 @@ Reglas que gobiernan todo el dominio:
 | `OP-PLN-023` | Consultar el borrador de una plantilla | Consulta | `A2`, `A3`–`A5` |
 | `OP-PLN-024` | Ordenar mis programas | Comando | `A2` |
 | `OP-PLN-028` | Descartar una plantilla propia | Comando | `A2` |
+| `OP-PLN-029` | Descartar un programa propio | Comando | `A2` |
+| `OP-PLN-030` | Consultar mi programa sin publicar | Consulta | `A2` |
 
 ---
 
@@ -2626,6 +2628,40 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `planning.session_template_discarded.v1` |
 | **Reglas** | **Es un estado, no un borrado.** `allfit_api` no tiene `DELETE` sobre este recurso y no va a tenerlo: lo que una persona escribió no se destruye desde el runtime, y un descarte tiene que poder explicarse después. Una plantilla con versión publicada **no se descarta**, porque programas y asignaciones pueden referenciarla; para retirarla de usos nuevos está `OP-PLN-005`, que no toca el historial |
 | **Falla cerrada** | Con versión publicada, rechazo |
+
+#### `OP-PLN-029` — Descartar un programa propio
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/programs/{programId}/discard` |
+| **Actor** | `A2` sobre contenido propio |
+| **Filtros obligatorios** | El programa es de la persona autenticada y no tiene ninguna versión publicada |
+| **Transacción** | Llevar el programa a `archived` y retirar su borrador |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; descartar dos veces converge |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada |
+| **Información sensible** | Contenido de entrenamiento |
+| **Evento de dominio** | `planning.program_discarded.v1` |
+| **Reglas** | El gemelo de `OP-PLN-028` y por las mismas razones. **Es un estado, no un borrado**, y un programa con versión publicada **no se descarta**: hay asignaciones que la referencian y sesiones ya materializadas contra ella. Sin esta operación, un programa que alguien empieza y abandona queda huérfano — existe, cuenta y nadie puede alcanzarlo, que es exactamente el hueco que `OP-PLN-023` cerró del lado de las rutinas |
+| **Falla cerrada** | Con versión publicada, rechazo |
+
+#### `OP-PLN-030` — Consultar mi programa sin publicar
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/programs/unpublished` |
+| **Actor** | `A2` sobre contenido propio |
+| **Filtros obligatorios** | Programas de la persona autenticada, no archivados y **sin ninguna versión publicada** |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | El más reciente por `updated_at` del borrador; responde uno o ninguno |
+| **Offline / concurrencia** | `no-store`: es un borrador que cambia al escribirlo |
+| **Información sensible** | Contenido de entrenamiento |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | **Sin esto un borrador de programa no se puede retomar.** `OP-PLN-022` lista los programas que la persona sigue, y parte de las asignaciones: uno que nunca se publicó no tiene versión ni asignación, así que no aparece en ninguna consulta y queda huérfano — existe, ocupa y nadie puede volver a él. Es el mismo hueco que `OP-PLN-023` cerró del lado de las rutinas, con la diferencia de que allí la plantilla sí se listaba y aquí no se listaba nada |
+| **Falla cerrada** | Ausente y ajeno responden igual |
 
 #### `OP-PLN-021` — Consultar una versión publicada
 
@@ -4053,7 +4089,7 @@ Un evento se escribe en el outbox dentro de la transacción de su comando. Trans
 | Relaciones | `client_invited`, `professional_assigned`, `professional_reassigned`, `substitution_proposed`, `substitution_decided`, `substitution_ended`, `substitution_expired`, `termination_requested`, `terminated` |
 | Privacidad | `grant_created`, `grant_rejected`, `grant_frozen`, `grant_revoked`, `grant_review_due`, `scope_definition_published`, `session_visibility_denied`, `session_visibility_restored`, `erasure_requested`, `erasure_resolved`, `disposition_case_opened`, `disposition_executed`, `disposition_reapplied`, `legal_hold_applied`, `legal_hold_released` |
 | Catálogo | `private_movement_created`, `private_movement_updated`, `private_movement_archived`, `result_contract_published` |
-| Planificación | `session_template_created`, `session_template_draft_updated`, `session_template_version_published`, `session_template_version_derived`, `session_template_version_deprecated`, `program_created`, `program_draft_updated`, `program_version_published`, `program_version_deprecated`, `assignment_created`, `assignment_detached`, `assignment_cancelled`, `assignment_continued`, `assignment_ended`, `session_rescheduled`, `prescription_revised`, `session_template_discarded` |
+| Planificación | `session_template_created`, `session_template_draft_updated`, `session_template_version_published`, `session_template_version_derived`, `session_template_version_deprecated`, `program_created`, `program_draft_updated`, `program_version_published`, `program_version_deprecated`, `assignment_created`, `assignment_detached`, `assignment_cancelled`, `assignment_continued`, `assignment_ended`, `session_rescheduled`, `prescription_revised`, `session_template_discarded`, `program_discarded` |
 | Ejecución | `attempt_started`, `attempt_resumed`, `attempt_abandoned`, `session_started`, `finalized`, `primary_resolved`, `primary_changed`, `revised`, `annulled`, `observation_created`, `observation_revised`, `correction_proposed`, `correction_decided`, `correction_expired`, `derived_recomputed` |
 | Nutrición | `meal_recorded`, `meal_revised`, `meal_deleted`, `goal_version_proposed`, `goal_version_activated`, `goal_version_accepted`, `goal_version_rejected`, `goal_proposals_cancelled` |
 | Pagos | `gateway_connected`, `gateway_revoked`, `plan_created`, `plan_version_published`, `plan_version_deprecated`, `subscription_started`, `subscription_suspended`, `subscription_reactivated`, `subscription_ended`, `payment_recorded`, `platform_plan_published`, `platform_plan_version_published`, `platform_subscription_started`, `platform_subscription_suspended`, `platform_subscription_reactivated`, `platform_subscription_ended`, `organization_premium_granted`, `organization_premium_revoked` |
