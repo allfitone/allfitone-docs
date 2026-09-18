@@ -31,12 +31,14 @@ Este compromiso no afirma que las 86 HU estén implementadas. Una HU cuenta como
 > aquel hecho: son el registro de una aprobación fechada.
 >
 > Allfit Space ha crecido desde entonces y hoy `products/space/USER_STORIES.md`
-> declara **98 historias y 52 imprescindibles**. Las tres añadidas son
+> declara **109 historias y 60 imprescindibles**. Las primeras tres añadidas son
 > `HU-SP-096` y `HU-SP-097` el 17 de agosto de 2026, y `HU-SP-098` el 20 de
-> agosto de 2026. Las tres tienen su fila en la sección 4; dos de ellas con la
-> brecha abierta, porque los atributos de perfil que necesitan no están
-> declarados en ningún documento. El inventario global vuelve a cuadrar cuando se
-> cierren esas brechas y se recertifique en `DB-P5-014`.
+> agosto de 2026; dos de ellas con la brecha abierta, porque los atributos de
+> perfil que necesitan no están declarados en ningún documento. Las once
+> siguientes son `HU-SP-099` a `HU-SP-109`, escritas entre el 8 y el 18 de
+> septiembre de 2026 mientras se construía el recorrido de Space. Todas tienen su
+> fila en la sección 4. El inventario global vuelve a cuadrar cuando se cierren
+> esas brechas y se recertifique en `DB-P5-014`.
 
 ## 2. Reglas de clasificación
 
@@ -276,6 +278,8 @@ Lectura de columnas:
 | `HU-SP-103 — Descartar una rutina que no quiero` | `imprescindible` | `included_v1` | `OP-PLN-028` | planning: programas, sesiones y asignaciones | PR-016; positivo, rechazo con versión publicada y reintento | Transición de estado, nunca `DELETE`. |
 | `HU-SP-104 — Definir mis series una por una` | `imprescindible` | `included_v1` | `OP-PLN-002`, `OP-PLN-003` | planning: programas, sesiones y asignaciones | PR-016; IX-47 y al fallo sin repeticiones | Requiere ADR-030 y `planning.planned_sets`. |
 | `HU-SP-105 — Encadenar dos ejercicios en superserie` | `importante` | `included_v1` | `OP-PLN-002`, `OP-PLN-003` | planning: programas, sesiones y asignaciones | PR-016; IX-46 contigüidad | Requiere ADR-030 y `planned_steps.superset_group`. |
+| `HU-SP-108 — Ponerle portada a mi rutina` | `importante` | `included_v1` | `OP-PLN-002`, `OP-PLN-003` | planning: programas, sesiones y asignaciones | PR-016; portada y carga concuerdan, y la bifurcación la conserva | Sin ADR: atributo de plantilla sobre operaciones V1 existentes. |
+| `HU-SP-109 — Poner una foto mía de portada` | `importante` | `included_v1` | `OP-PLN-031`, `OP-PLN-032` | planning: programas, sesiones y asignaciones · privacy | PR-016; T-TPL-11 y T-TPL-12, más el saneado que falla cerrado | Requiere ADR-031 y `planning.session_template_cover_photos`. |
 | `HU-SP-044 — Publicar una versión de mi plantilla` | `importante` | `included_v1` | `OP-PLN-003` | planning: programas, sesiones y asignaciones | PR-016; positivo, denegación, tenant y reintento | Sin brecha de alcance; recertificar en DB-P5-014. |
 | `HU-SP-045 — Partir de una versión anterior` | `después` | `deferred` | `OP-PLN-004` | Sin objetos V1 | N/A V1; probar ausencia de DDL, permisos y rutas | No incluir la operación de derivación ni un enlace de procedencia exclusivo; conservar el versionado personal requerido por publicación. |
 | `HU-SP-046 — Retirar una versión de mi plantilla` | `después` | `deferred` | `OP-PLN-005` | Sin objetos V1 | N/A V1; probar ausencia de DDL, permisos y rutas | No incluir `OP-PLN-005` ni el estado/transición de retiro para plantillas personales. |

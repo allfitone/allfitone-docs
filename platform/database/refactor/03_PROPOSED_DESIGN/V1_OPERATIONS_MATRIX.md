@@ -198,13 +198,13 @@ Toda sesión conserva la zona horaria de la persona en el momento del hecho. La 
 | Relaciones | 9 | 5 | 14 |
 | Privacidad | 13 | 7 | 20 |
 | Catálogo | 4 | 8 | 12 |
-| Planificación | 18 | 9 | 27 |
+| Planificación | 19 | 10 | 29 |
 | Ejecución | 13 | 7 | 20 |
 | Nutrición | 8 | 5 | 13 |
 | Pagos | 16 | 7 | 23 |
 | Sistema | 10 | 1 | 11 |
 | Soporte | 6 | 5 | 11 |
-| **Total** | **128** | **68** | **196** |
+| **Total** | **129** | **69** | **198** |
 
 Algunas fichas cubren dos identificadores cuando la operación es simétrica —crear y editar un borrador, listar y consultar el detalle—. En esos casos el encabezado nombra ambos y el contenido aplica a los dos.
 
@@ -2252,6 +2252,8 @@ Reglas que gobiernan todo el dominio:
 | `OP-PLN-028` | Descartar una plantilla propia | Comando | `A2` |
 | `OP-PLN-029` | Descartar un programa propio | Comando | `A2` |
 | `OP-PLN-030` | Consultar mi programa sin publicar | Consulta | `A2` |
+| `OP-PLN-031` | Subir la portada de una rutina | Comando | `A2` |
+| `OP-PLN-032` | Consultar la portada de una rutina | Consulta | `A2` |
 
 ---
 
@@ -2662,6 +2664,40 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno |
 | **Reglas** | **Sin esto un borrador de programa no se puede retomar.** `OP-PLN-022` lista los programas que la persona sigue, y parte de las asignaciones: uno que nunca se publicó no tiene versión ni asignación, así que no aparece en ninguna consulta y queda huérfano — existe, ocupa y nadie puede volver a él. Es el mismo hueco que `OP-PLN-023` cerró del lado de las rutinas, con la diferencia de que allí la plantilla sí se listaba y aquí no se listaba nada |
 | **Falla cerrada** | Ausente y ajeno responden igual |
+
+#### `OP-PLN-031` — Subir la portada de una rutina
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/session-templates/{templateId}/cover-photo` |
+| **Actor** | `A2` sobre plantilla propia |
+| **Filtros obligatorios** | La plantilla pertenece a la persona |
+| **Transacción** | Sanear la imagen y guardar los bytes resultantes contra la plantilla |
+| **Idempotencia** | `Idempotency-Key`. Reintentar devuelve el mismo identificador y no guarda una segunda copia |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Sin modo offline. Subir no cambia la portada: el borrador la nombra después, así que una subida a medias no deja la rutina apuntando a algo que no está |
+| **Información sensible** | Imagen personal. `identity_pii` por clasificación del contenido, nunca legible históricamente (`ADR-005`, `ADR-023`) |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | **El servidor nunca guarda lo que recibió.** `ADR-031` obliga a decodificar y volver a codificar, que es lo que borra EXIF y geolocalización por construcción en vez de intentar recortarlos. Los bytes viven en PostgreSQL y no en un bucket, porque `ADR-012` exige que la supresión alcance el almacén y con los bytes dentro de la transacción el borrado **es** esa confirmación. Una foto que una versión publicada referencia no se destruye jamás: la versión es inmutable y su portada tiene que seguir existiendo |
+| **Falla cerrada** | Si la imagen no decodifica, excede el límite de píxeles o no puede recodificarse, se rechaza y **no se escribe una sola fila** |
+
+#### `OP-PLN-032` — Consultar la portada de una rutina
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/routine-covers/{photoId}` |
+| **Actor** | `A2` sobre contenido propio |
+| **Filtros obligatorios** | La foto cuelga de una plantilla de la persona |
+| **Transacción** | Lectura |
+| **Idempotencia** | No aplica |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Sin modo offline |
+| **Información sensible** | Imagen personal; respuesta `private, no-store` |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Es el modo *authenticated api proxy* de `x-allfit-media-url-policy`: la autorización se reevalúa en cada petición y **ninguna respuesta expone una referencia de almacenamiento**. La otra mitad de esa política —la URL firmada de trescientos segundos— sigue descrita para cuando exista un bucket, que `ADR-031` deja condicionado al volumen |
+| **Falla cerrada** | La foto de otra persona responde `404` y no `403`: distinguirlas permitiría recorrer identificadores hasta dar con uno que existe |
 
 #### `OP-PLN-021` — Consultar una versión publicada
 

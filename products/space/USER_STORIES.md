@@ -1042,6 +1042,41 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 5. Puedo salir de una cadena sin perder mis series, y los que quedan siguen encadenados si todavía son dos.
 6. Reordenar la rutina nunca deshace una cadena: se mueve entera y nada puede caer dentro de ella.
 
+### HU-SP-108 — Ponerle portada a mi rutina
+
+**Como** persona
+**quiero** elegir cómo se ve mi rutina en la lista
+**para** reconocerla de un vistazo sin leer el nombre.
+
+`E-SP-06` · importante
+
+**Criterios**
+
+1. Puedo dejar la rutina sin portada, y entonces se sigue reconociendo por su nombre.
+2. Puedo elegir la figura de los músculos que la rutina entrena, y se dibuja sola con los ejercicios que tenga.
+3. Puedo elegir uno de doce iconos que dicen de qué va la rutina: fuerza, correr, bici, intervalos, cardio, quemar, explosivo, reto, montaña, tiempo, movilidad o nadar.
+4. Puedo quitar la portada cuando quiera y volver al estado de no haber dicho nada.
+5. La portada elegida se ve en la lista de mis rutinas y en las tarjetas del programa que las incluye.
+6. Cambiar sólo la portada es un cambio de la rutina: se guarda como borrador y se publica como cualquier otro.
+
+### HU-SP-109 — Poner una foto mía de portada
+
+**Como** persona
+**quiero** usar una foto propia como portada de mi rutina
+**para** reconocerla por algo que significa algo para mí.
+
+`E-SP-06` · importante
+
+**Criterios**
+
+1. Puedo elegir una foto de mi galería y recortarla cuadrada antes de usarla.
+2. La foto se guarda sin los datos de dónde y cuándo la tomé.
+3. Una imagen que no se puede leer se rechaza y no se guarda nada a medias.
+4. Sólo yo veo mi foto: nadie más puede pedirla ni sabe que existe.
+5. Cambiar la portada destruye la foto anterior, salvo que una versión ya publicada la use.
+6. Descartar la rutina se lleva sus fotos con ella.
+7. Necesito ponerle nombre a la rutina antes de elegir la foto, porque la foto se guarda contra la rutina.
+
 ### HU-SP-044 — Publicar una versión de mi plantilla
 
 **Como** persona

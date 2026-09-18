@@ -838,6 +838,8 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 - **`T-TPL-8` (negativa)** — `OP-PLN-029` no descarta un programa con versión publicada. Hay asignaciones que la referencian y sesiones materializadas contra ella.
 - **`T-TPL-9` (positiva)** — Descartar un programa lo lleva a `archived` y retira su borrador, y lo saca de lo que la persona puede retomar. Mismo grant, misma ausencia de `DELETE`.
 - **`T-TPL-10` (negativa)** — `OP-PLN-030` no devuelve el borrador de otra persona ni uno archivado: retomar lo propio no puede convertirse en enumerar lo ajeno.
+- **`T-TPL-11` (negativa)** — La foto de portada de una persona no la lee otra, y un borrador no puede nombrar una foto que cuelga de la plantilla de alguien más. La política de `planning.session_template_cover_photos` se hereda de la plantilla, igual que la de los pasos y los targets, y la clave foránea compuesta `(id, template_id)` impide que una versión publicada llegue a apuntar a una foto ajena.
+- **`T-TPL-12` (negativa)** — `OP-PLN-032` responde lo mismo para una foto inexistente y para una que pertenece a otra persona. Distinguirlas permitiría recorrer identificadores; el modo *authenticated api proxy* de `ADR-031` reevalúa la autorización en cada petición y nunca devuelve una referencia de almacenamiento.
 
 #### `SESSION_TEMPLATE_VERSION` · `PLANNED_STEP` · `PLANNED_SET` · targets · `PROGRAM_VERSION` · `PROGRAM_VERSION_SESSION`
 
@@ -1235,7 +1237,7 @@ Un índice que solo existe para consultas de negocio no basta: la condición RLS
 
 ## 9. Catálogo de pruebas
 
-Cada ficha aporta al menos una prueba positiva y una negativa, según exige el plan. El total actual es de **186 pruebas funcionales/RLS tipadas** distribuidas así:
+Cada ficha aporta al menos una prueba positiva y una negativa, según exige el plan. El total actual es de **188 pruebas funcionales/RLS tipadas** distribuidas así:
 
 | Dominio | Positivas | Negativas | Total |
 | --- | --- | --- | --- |
@@ -1244,13 +1246,13 @@ Cada ficha aporta al menos una prueba positiva y una negativa, según exige el p
 | Relaciones | 4 | 11 | 15 |
 | Privacidad | 22 | 27 | 49 |
 | Catálogo | 4 | 4 | 8 |
-| Planificación | 14 | 13 | 27 |
+| Planificación | 14 | 15 | 29 |
 | Ejecución | 12 | 16 | 28 |
 | Nutrición | 9 | 15 | 24 |
 | Soporte | 2 | 5 | 7 |
-| **Total** | **73** | **113** | **186** |
+| **Total** | **73** | **115** | **188** |
 
-El conteo incluye únicamente los casos individuales marcados como `(positiva)` o `(negativa)` en esta matriz. Las series `T-VG-01..06` y `T-BGG-01..12` se referencian aquí, pero pertenecen al catálogo separado de 18 pruebas de gobernanza de verificación y break-glass definido en `V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`; no se suman de nuevo a las 186 pruebas funcionales/RLS.
+El conteo incluye únicamente los casos individuales marcados como `(positiva)` o `(negativa)` en esta matriz. Las series `T-VG-01..06` y `T-BGG-01..12` se referencian aquí, pero pertenecen al catálogo separado de 18 pruebas de gobernanza de verificación y break-glass definido en `V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`; no se suman de nuevo a las 188 pruebas funcionales/RLS.
 
 La proporción no es casual: en un modelo de privacidad, lo que hay que demostrar sobre todo es lo que **no** debe ocurrir.
 

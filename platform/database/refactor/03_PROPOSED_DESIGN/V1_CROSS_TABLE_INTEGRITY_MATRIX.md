@@ -113,6 +113,7 @@ Todas las columnas de una clave portadora son `NOT NULL`. Una referencia opciona
 | `IX-45` | actualización de `organizations.type_code` | El tipo solo cambia por una transición activa y gobernada; incorporar equipo no modifica el tipo | Tabla `organizations.organization_type_transitions` con FKs a ambos tipos y trigger `organizations.enforce_type_transition_tg` sobre `organizations`; `UPDATE(type_code)` directo revocado y función cerrada valida old/new bajo lock |
 | `IX-46` | `planned_steps` | Los pasos que comparten `superset_group` ocupan posiciones consecutivas dentro de su versión | Constraint trigger `planning.enforce_superset_contiguity_ct`: una cadena que salta un ejercicio describe un orden que nadie puede ejecutar, y encadenar el primero con el quinto sería eso |
 | `IX-47` | `strength_targets` frente a `planned_sets` | El resumen es derivado: `target_sets` es el conteo de series y `target_reps` existe sólo cuando todas coinciden | Se calcula dentro de `planning.materialize_target` durante la publicación atómica; ningún rol de runtime escribe la fila, así que la única verdad son las series (`ADR-030`) |
+| `IX-48` | portada de `session_template_versions` | La clase de portada y su carga concuerdan, y un icono es uno de los doce que el vocabulario declara | `CHECK` de que `cover_icon` existe si y sólo si `cover_kind = 'icon'`, con el tipo enumerado cerrando el conjunto; `planning.session_content_errors` rechaza además un borrador que mezcle las dos clases o nombre un icono que el enumerado no tiene |
 
 ## 5. Formas normativas
 

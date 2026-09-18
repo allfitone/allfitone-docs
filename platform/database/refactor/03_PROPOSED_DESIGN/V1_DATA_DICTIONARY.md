@@ -41,7 +41,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 | `identity` | 21 | §4 |
 | `organizations` | 11 | §5 |
 | `relationships` | 6 | §6 |
-| `privacy` | 16 | §7 |
+| `privacy` | 17 | §7 |
 | `catalog` | 18 | §8 |
 | `planning` | 21 | §9 |
 | `execution` | 14 | §10 |
@@ -901,6 +901,31 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 ---
 
+### 7.17 `privacy.binary_disposals`
+
+- **Propósito:** la prueba de que unos bytes personales dejaron de existir, escrita por la misma transacción que los destruyó.
+- **Dominio / fuente de verdad:** Privacidad.
+- **Clasificación:** `audit`.
+- **Columnas:** `id uuid` · `subject_person_id uuid` · `object_kind text` (`routine_cover_photo`) · `object_id uuid` · `byte_size integer` · `reason text` (`replaced`, `removed`, `content_discarded`) · `disposed_at timestamptz`.
+- **FKs y borrado:** `subject_person_id → identity.people(id) RESTRICT`.
+- **Uniques y checks:** vocabulario cerrado de clase y de motivo; tamaño positivo.
+- **Actores:** lo escribe el disparador de borrado de la tabla de binarios; ningún rol de runtime inserta a mano.
+- **RLS:** como `privacy.access_events`, la tabla base no la lee el runtime; se expondría por una función `security definer` cuando haga falta.
+- **Consultas / índices:** `(subject_person_id, disposed_at desc)`.
+- **Retención:** auditoría prolongada; no contiene los bytes ni nada que los reconstruya.
+- **Eventos:** ninguno propio.
+
+**No es `privacy.disposition_events`** (§7.14), que es el registro de ejecución del
+pipeline de retención programada —particionado, colgando de `disposition_items` y escrito
+por un worker— y que sigue sin modelo físico junto a `retention_policies`,
+`erasure_requests` y `legal_holds`. Esto es más pequeño y más inmediato: la destrucción que
+alguien pide, no la que un calendario dispara. Cuando ese pipeline se construya, esta tabla
+será una de sus fuentes.
+
+**Existe porque `ADR-031` guarda binarios personales en PostgreSQL.** Con los bytes dentro
+de la transacción el borrado es cierto en el instante en que ocurre; lo que faltaba era
+poder demostrarlo después sin conservar nada de lo que se destruyó.
+
 ## 8. Schema `catalog`
 
 Salvo indicación, todas las tablas de catálogo tienen **clasificación `operational`**, **RLS de lectura autenticada** para contenido `global` publicado (el contenido `organization`/`person` se restringe a su owner) y **retención permanente** salvo archivado.
@@ -1234,7 +1259,7 @@ crece, y el producto dibuja la figura del cuerpo en su lugar.
 - **Propósito:** contenido editable de una plantilla; nunca referenciable por un programa.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del único borrador editable de la plantilla padre.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `template_id uuid` · `content_schema_version smallint` (`1`) · `content jsonb` · `updated_at timestamptz`.
+- **Columnas:** `id` · `template_id uuid` · `content_schema_version smallint` (`1`) · `content jsonb` · `updated_at timestamptz`. El contenido admite `title`, `activity_type_id`, `steps` y `cover`; cualquier otra clave invalida el borrador entero.
 - **FKs y borrado:** `template_id → session_templates(id) ON DELETE CASCADE`.
 - **Uniques y checks:** `UNIQUE template_id` (un borrador vivo por plantilla).
 - **Actores:** owner personal u organizacional de la plantilla; ninguna persona asignada puede editar el borrador.
@@ -1248,7 +1273,7 @@ crece, y el producto dibuja la figura del cuerpo en su lugar.
 - **Propósito:** versión publicada, completa e inmutable de una plantilla.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad histórica de cada versión publicada de una plantilla.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `template_id uuid` · `version_number integer` · `discipline_code text` · `activity_type_id uuid` · `derived_from_version_id uuid` (nullable) · `status catalog.publication_status` · `published_at timestamptz`.
+- **Columnas:** `id` · `template_id uuid` · `version_number integer` · `discipline_code text` · `activity_type_id uuid` · `derived_from_version_id uuid` (nullable) · `title text` · `content_hash bytea` · `cover_kind planning.routine_cover` (nullable) · `cover_icon planning.routine_cover_icon` (nullable) · `cover_photo_id uuid` (nullable) · `status catalog.publication_status` · `published_at timestamptz`.
 - **FKs y borrado:** `template_id → session_templates(id) RESTRICT`; `activity_type_id → catalog.activity_types(id) RESTRICT`; `derived_from_version_id → session_template_versions(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE (template_id, version_number)`; sin `UPDATE`/`DELETE` en runtime.
 - **Actores:** el owner publica; owner y personas con asignaciones que la referencian leen; ningún runtime actualiza una versión publicada.
@@ -1256,6 +1281,39 @@ crece, y el producto dibuja la figura del cuerpo en su lugar.
 - **Consultas / índices:** `(template_id, version_number)`.
 - **Retención:** permanente si referenciada.
 - **Eventos:** `planning.session_template_version_published.v1`, `planning.session_template_version_deprecated.v1`.
+
+**La portada es opcional y por eso `cover_kind` es nullable.** Una rutina sin portada no
+está incompleta: se reconoce por su nombre, que es como se reconocía hasta ahora. Nulo
+significa «no se dijo», no «vacío elegido», y las dos cosas se ven igual en pantalla
+precisamente porque la pregunta nunca es obligatoria.
+
+**Dos vocabularios cerrados.** `planning.routine_cover` dice de qué clase es la portada
+—`muscles`, `icon` o `photo`— y `planning.routine_cover_icon` enumera los iconos
+disponibles. Nació con doce y hoy tiene treinta y dos; **se amplía por el final y nunca se
+reordena ni se reutiliza un identificador**, porque una rutina guardada con `strength`
+tiene que seguir dibujando lo mismo dentro de un año. Qué orden usa la rejilla lo decide la
+aplicación, no el enumerado.
+
+**Los iconos no son el catálogo de equipamiento.** Un icono dice de qué va la rutina, no
+con qué se hace: una rutina de fondos en paralelas tiene derecho a la mancuerna, porque
+la mancuerna ahí significa «fuerza». Por eso viven en `planning` y no en `catalog`, por
+la misma razón que `planning.set_kind`: el catálogo guarda contenido que una persona
+explora, y esto es cómo se presenta una rutina que ya es suya. Nadie lo busca ni lo
+filtra, lo declara.
+
+**`muscles` no guarda nada más que la decisión.** Es una portada derivada: los músculos
+salen de los movimientos que la versión ya referencia, así que copiarlos aquí sería una
+segunda verdad que envejece cuando se edita la rutina. `icon` sí guarda cuál, porque es
+una elección que nada más puede reconstruir.
+
+**Entra al hash de publicación.** Dos rutinas que sólo difieren en la portada son dos
+rutinas: se ven distintas en la lista, que es el único sitio donde la portada hace algo.
+Dejarla fuera del hash publicaría la segunda como si fuera la primera y el cambio no
+llegaría a ninguna parte.
+
+**Se hereda al bifurcar.** `planning.fork_program_version` copia versiones de plantilla
+para que alguien se quede con un programa propio; una portada que no viajara en esa copia
+convertiría la bifurcación en una pérdida silenciosa de lo que la persona eligió.
 
 ### 9.4 `planning.planned_steps`
 
@@ -1377,7 +1435,7 @@ al terminarla. Los de los pasos intermedios no se aplican; `ADR-030` lo fija.
 - **Propósito:** versión publicada e inmutable de un programa.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad histórica de cada versión publicada del programa.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `program_id uuid` · `version_number integer` · `status catalog.publication_status` · `published_at timestamptz`.
+- **Columnas:** `id` · `program_id uuid` · `version_number integer` · `title text` · `notes text` (nullable) · `content_hash bytea` · `sex_affinity identity.biological_sex` (nullable) · `status catalog.publication_status` · `published_at timestamptz`.
 - **FKs y borrado:** `program_id → programs(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE (program_id, version_number)`; inmutable.
 - **Actores:** el owner publica; owner y personas con asignaciones que la referencian leen; ningún runtime actualiza una versión publicada.
@@ -1555,7 +1613,34 @@ que sólo el borrador es mutable, así que esta tabla lleva las mismas tres prot
 que sus hermanas: sin mutación de hija inmutable, inserción sólo durante la publicación,
 y política de fila heredada del padre. Sin ellas sería la única grieta en esa garantía.
 
-Nota de conteo: `planning` tiene 21 tablas y 21 fichas; §9.5–9.8 son cuatro tablas físicas independientes.
+### 9.22 `planning.session_template_cover_photos`
+
+- **Propósito:** los bytes de una portada que la persona subió para una rutina suya.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad de la imagen, que no vive en ningún otro sitio.
+- **Clasificación:** `identity_pii`.
+- **Columnas:** `id` · `template_id uuid` · `content_type text` (`image/webp`) · `byte_size integer` · `checksum bytea` · `bytes bytea` · `created_at timestamptz`.
+- **FKs y borrado:** `template_id → session_templates(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `UNIQUE (id, template_id)`, que es lo que sostiene la clave foránea compuesta de la versión; `content_type = 'image/webp'`; tamaño entre 1 byte y 1 MiB; checksum de 32 bytes; `octet_length(bytes) = byte_size`.
+- **Actores:** sólo la dueña de la plantilla. Ningún profesional, ninguna organización.
+- **RLS:** heredada de la plantilla, igual que `planned_steps` y los targets.
+- **Consultas / índices:** `(template_id, created_at desc)`.
+- **Retención:** con la plantilla. Se destruye en cuanto ni el borrador ni ninguna versión publicada la referencian.
+- **Eventos:** ninguno propio; su destrucción escribe en `privacy.disposition_events`.
+
+**Un solo tipo de contenido porque el servidor lo produce.** `ADR-031` obliga a decodificar
+la imagen recibida y codificar una nueva; aceptar aquí lo que llegue sería aceptar que los
+bytes no pasaron por ese saneado. El checksum es del resultado, no del original.
+
+**Los bytes están en la base y no en un bucket.** La razón de peso es el borrado: `ADR-012`
+exige que la supresión alcance el almacén, y con los bytes dentro de la transacción el
+`delete` **es** esa confirmación. La alternativa necesita un worker, reintentos y un estado
+en el que el dato ya se dijo borrado y todavía existe.
+
+**Una foto que una versión publicada referencia no se destruye.** La versión es inmutable y
+su portada tiene que seguir existiendo; la clave foránea lo impediría de todos modos, y
+excluirla de la recolección convierte esa negativa en una decisión escrita.
+
+Nota de conteo: `planning` tiene 22 tablas y 22 fichas; §9.5–9.8 son cuatro tablas físicas independientes.
 
 ---
 
@@ -2224,15 +2309,15 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 | `identity` | 21 |
 | `organizations` | 11 |
 | `relationships` | 6 |
-| `privacy` | 16 |
+| `privacy` | 17 |
 | `catalog` | 18 |
-| `planning` | 21 |
+| `planning` | 22 |
 | `execution` | 14 |
 | `nutrition` | 8 |
 | `payments` | 12 |
 | `system` | 4 |
 | `support` | 5 |
-| **Total** | **136** |
+| **Total** | **138** |
 
 ### 14.2 Invariantes transversales confirmadas por el diccionario
 

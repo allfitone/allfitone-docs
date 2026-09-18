@@ -38,6 +38,7 @@
 | ADR-028 | Backoffice con rol base, deberes temporales y separación break-glass |
 | ADR-029 | Monorepo de implementación con deployables independientes |
 | ADR-030 | Detalle por serie y superseries en la planificación de fuerza |
+| ADR-031 | Binarios personales en PostgreSQL, servidos por la API |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -3755,3 +3756,142 @@ heredada del padre— o sería la única grieta en esa garantía.
 6. Cambiar una sola serie del borrador sí produce una versión nueva.
 7. El relleno deja cada paso publicado con tantas series como decía su `target_sets`.
 8. La agenda, el día de hoy y la semana devuelven lo mismo antes y después del cambio.
+
+---
+
+## ADR-031 — Binarios personales en PostgreSQL, servidos por la API
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 18 de septiembre de 2026
+
+### Contexto
+
+`ADR-002` eligió Supabase **únicamente como PostgreSQL administrado** y dejó dicho que
+«Storage, Realtime o Edge Functions requerirían un ADR separado antes de incorporarse».
+Desde entonces nadie lo pidió, y el estado de la plataforma lo confirma: `[storage]` está
+`enabled = false` en la configuración local, el esquema `storage` existe sin una sola
+tabla, la API sólo habla `postgres` y Hono, y no hay una sola operación de subida en el
+contrato implementado.
+
+Pero la baseline **sí describe imágenes personales**. La foto de comida tiene contrato
+cerrado —`NutritionPhotoUpload` en base64, `SignedMediaUrl` de trescientos segundos para
+Space, proxy autenticado para Studio— y nunca se construyó. `identity.body_progress_records`
+lleva `media_ref` y `has_media` con su check, y ninguna función los escribe. Es decir:
+la doctrina está escrita y el mecanismo no existe.
+
+La portada de una rutina es lo primero que lo necesita de verdad. `HU-SP-108` la pide y
+el resto de la portada —figura de músculos e iconos— ya está construido: falta la foto.
+
+Lo único **implementado** hoy que se parece es `catalog.movement_media`, y su propio
+comentario de cabecera explica por qué no sirve de molde: guarda una clave de objeto
+hacia un origen estático público, la demostración de un ejercicio es idéntica para todo
+el mundo y se cachea un año. Su cabecera lo contrasta a propósito con la foto de comida,
+«que sí se sirve por petición precisamente porque es un dato personal cuya autorización
+hay que reevaluar cada vez».
+
+### Decisión
+
+**1. Los binarios personales se guardan en PostgreSQL, no en un bucket.** Una tabla
+dedicada por tipo de binario, con los bytes en `bytea` junto a su tipo de contenido, su
+tamaño y su checksum.
+
+Se decide así, y no adoptando Supabase Storage, por cuatro razones y en este orden:
+
+- **El borrado se propaga solo.** `ADR-012` exige que la supresión alcance «cachés,
+  índices, réplicas, **storage** y sistemas derivados», y la matriz de operaciones exige
+  además que una eliminación no se reporte completa hasta confirmar la del binario. Con
+  los bytes dentro de la transacción, el `delete` **es** esa confirmación. Con un bucket
+  hace falta un worker de disposición, reintentos y un estado intermedio en el que el
+  dato ya se dijo borrado y todavía existe.
+- **No aparece una credencial nueva con poderes totales.** Un bucket privado obliga a
+  una clave de servicio en el entorno de la API.
+- **No se crea una dependencia de orden entre nuestras migraciones y las del servicio.**
+  Insertar en `storage.buckets` exige que las migraciones del propio Storage hayan corrido
+  antes; en local hoy no han corrido.
+- **El volumen no lo justifica.** Una portada saneada pesa del orden de ciento cincuenta
+  kilobytes y hay como mucho una por rutina.
+
+**2. Se sirven por la API, nunca por una URL de almacenamiento.** Es el modo
+*authenticated api proxy* que `x-allfit-media-url-policy` ya define para Studio: la
+autorización se reevalúa en cada petición, la respuesta va con `private, no-store`, y
+una petición sin acceso efectivo responde `404` y no `403`, para no revelar existencia.
+El modo de URL firmada sigue descrito en el contrato y queda para cuando haya bucket.
+
+**3. El saneado falla cerrado.** El servidor no acepta los bytes que recibe: los
+decodifica y los vuelve a codificar a un formato y un tamaño máximo propios. Recodificar
+elimina EXIF, geolocalización y cualquier metadato por construcción, en vez de intentar
+recortarlos. Si la imagen no decodifica, si excede el límite de píxeles o si la
+recodificación falla, **la petición se rechaza y no se guarda nada**. El cliente puede
+reducir antes de enviar; el servidor no se fía.
+
+**4. Se registra la destrucción de cada binario.** `privacy.disposition_events` recibe su
+modelo físico —la pieza mínima del modelo lógico de `ADR-012`— y la escribe la misma
+transacción que destruye los bytes. No es especulativo: nace con escritor y con lector.
+
+**5. Mudarse a un bucket después es mover bytes, no rehacer el modelo.** La tabla guarda
+identidad de objeto, tipo, tamaño y checksum: exactamente lo que una clave de objeto
+necesita. El día que el volumen lo justifique, la columna de bytes se sustituye por una
+clave y el proxy pasa a firmar; las operaciones, los permisos y la doctrina de borrado no
+cambian.
+
+**6. Lo que generaliza es el patrón, no la tabla.** La foto de comida y la de progreso
+corporal seguirán este mismo camino cuando se construyan, cada una con su tabla en su
+dominio. `ADR-021` prohíbe el modelo genérico «por si acaso», así que no se crea un
+almacén de medios compartido antes de tener el segundo caso.
+
+### Lo que esta decisión no hace
+
+- **No adopta Supabase Storage.** El diferimiento de `ADR-002` sigue vigente para
+  Realtime y Edge Functions, y para Storage queda condicionado al volumen.
+- **No construye la nutrición ni el progreso corporal.** Sus contratos ya existen; sus
+  operaciones siguen sin implementarse y no entran aquí.
+- **No modela retención programada.** `privacy.retention_policies`, `erasure_requests` y
+  `legal_holds` siguen sin modelo físico: la purga por calendario espera a `DB-P5-015`.
+  Lo que este ADR cubre es la destrucción que alguien pide explícitamente.
+- **No hace la foto legible históricamente.** `ADR-005` y `ADR-023` siguen mandando: las
+  fotos no entran en la ventana histórica de un grant congelado.
+- **No admite más de una foto por portada.** Sustituir destruye la anterior.
+
+### Invariantes
+
+1. Los bytes que se guardan son los que produjo el saneado del servidor, nunca los que
+   llegaron.
+2. Un binario que no pudo sanearse no se guarda: no hay camino que escriba el original.
+3. Sólo la persona dueña del contenido lee su binario; para cualquier otra, ausente y
+   prohibido responden igual.
+4. Un binario se destruye cuando nada lo referencia, y su destrucción deja un evento de
+   disposición en la misma transacción.
+5. Un binario referenciado por una versión publicada **no** se destruye: la versión es
+   inmutable y su portada tiene que seguir existiendo.
+6. Ninguna respuesta expone una referencia de almacenamiento ni una ruta interna.
+7. El registro de disposición no se edita ni se borra en runtime.
+
+### Consecuencias
+
+#### Positivas
+
+- La supresión de datos personales deja de necesitar un worker para ser cierta.
+- No entra ninguna credencial nueva ni ningún servicio nuevo a la superficie de ataque.
+- El contrato de medios que la baseline ya describía empieza a tener una implementación
+  contra la cual probarlo.
+
+#### Costos
+
+- La base de datos crece con bytes que no son relacionales, y los respaldos con ella.
+- La API gasta cómputo en decodificar y recodificar cada imagen, y necesita una
+  dependencia nativa de procesamiento de imagen.
+- Servir por proxy gasta ancho de banda de la API en cada lectura, sin la caché que una
+  URL firmada permitiría.
+- El día que se mude a un bucket habrá que mover los bytes ya guardados.
+
+### Escenarios de prueba obligatorios
+
+1. Una imagen con EXIF y geolocalización se guarda sin ninguno de los dos.
+2. Un archivo que no es una imagen se rechaza y no escribe fila.
+3. Una imagen que excede el límite de píxeles se rechaza antes de decodificarse entera.
+4. El binario de una persona no lo lee otra, y el intento responde lo mismo que uno
+   inexistente.
+5. Sustituir una portada destruye la anterior y deja su evento de disposición.
+6. Sustituir una portada que una versión publicada referencia **no** destruye la anterior.
+7. Descartar la plantilla destruye sus binarios no referenciados.
+8. Ninguna respuesta de la API contiene la referencia interna del objeto.
