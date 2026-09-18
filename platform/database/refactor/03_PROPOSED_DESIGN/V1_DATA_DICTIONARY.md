@@ -1275,10 +1275,10 @@ crece, y el producto dibuja la figura del cuerpo en su lugar.
 - **Clasificación:** `training`.
 - **Columnas:** `id` · `template_id uuid` · `version_number integer` · `discipline_code text` · `activity_type_id uuid` · `derived_from_version_id uuid` (nullable) · `title text` · `content_hash bytea` · `cover_kind planning.routine_cover` (nullable) · `cover_icon planning.routine_cover_icon` (nullable) · `cover_photo_id uuid` (nullable) · `status catalog.publication_status` · `published_at timestamptz`.
 - **FKs y borrado:** `template_id → session_templates(id) RESTRICT`; `activity_type_id → catalog.activity_types(id) RESTRICT`; `derived_from_version_id → session_template_versions(id) RESTRICT`.
-- **Uniques y checks:** `UNIQUE (template_id, version_number)`; sin `UPDATE`/`DELETE` en runtime.
+- **Uniques y checks:** `UNIQUE (template_id, version_number)`; sin `UPDATE`/`DELETE` en runtime. **`content_hash` no es único por plantilla**: dos versiones pueden repetir contenido porque deshacer un cambio es una versión nueva y no un regreso a la anterior (`ADR-009`). La unicidad que hubo hasta el 18 de septiembre de 2026 obligaba a devolver la versión antigua, y su identificador viaja en semanas de programa que lo resolverían contra nada. La portada y su carga concuerdan: `cover_icon` existe si y sólo si `cover_kind = 'icon'`, y `cover_photo_id` si y sólo si `cover_kind = 'photo'`. La clave foránea hacia la foto es **compuesta** —`(cover_photo_id, template_id)`— para que una versión no pueda apuntar a la foto de otra plantilla.
 - **Actores:** el owner publica; owner y personas con asignaciones que la referencian leen; ningún runtime actualiza una versión publicada.
 - **RLS:** owner del contexto, **OR** persona con asignación que la referencia.
-- **Consultas / índices:** `(template_id, version_number)`.
+- **Consultas / índices:** `(template_id, version_number)`, que sirve tanto la última versión publicada como la comparación de contenido al publicar. No hay índice por `content_hash`: nadie busca por él desde que la deduplicación mira sólo a la última versión.
 - **Retención:** permanente si referenciada.
 - **Eventos:** `planning.session_template_version_published.v1`, `planning.session_template_version_deprecated.v1`.
 
@@ -1437,7 +1437,7 @@ al terminarla. Los de los pasos intermedios no se aplican; `ADR-030` lo fija.
 - **Clasificación:** `training`.
 - **Columnas:** `id` · `program_id uuid` · `version_number integer` · `title text` · `notes text` (nullable) · `content_hash bytea` · `sex_affinity identity.biological_sex` (nullable) · `status catalog.publication_status` · `published_at timestamptz`.
 - **FKs y borrado:** `program_id → programs(id) RESTRICT`.
-- **Uniques y checks:** `UNIQUE (program_id, version_number)`; inmutable.
+- **Uniques y checks:** `UNIQUE (program_id, version_number)`; inmutable. **`content_hash` no es único por programa**, por la misma razón que en `§9.3`: publicar una composición idéntica a una versión anterior crea la siguiente y no devuelve la vieja, cuyo identificador vive en asignaciones y sesiones planificadas.
 - **Actores:** el owner publica; owner y personas con asignaciones que la referencian leen; ningún runtime actualiza una versión publicada.
 - **RLS:** owner, **OR** persona asignada.
 - **Consultas / índices:** `(program_id, version_number)`.

@@ -1171,7 +1171,8 @@ Las referencias vinculantes no viven únicamente en JSONB. El modelo lógico deb
 ## ADR-009 — Versionado independiente e inmutable de plantillas de sesión
 
 **Estado:** aceptada para V1<br>
-**Fecha:** 18 de julio de 2026; ratificada el 17 de agosto de 2026
+**Fecha:** 18 de julio de 2026; ratificada el 17 de agosto de 2026<br>
+**Enmendada:** 18 de septiembre de 2026 — alcance de la deduplicación por contenido
 
 ### Contexto
 
@@ -1218,7 +1219,15 @@ draft mutable → published immutable → retired para nuevos usos
 
 No se crea una versión por autosave. El borrador usa control de concurrencia/optimistic locking. La publicación es una operación explícita y transaccional que valida estructura, targets, unidades y referencias, calcula `content_hash` y asigna el siguiente `version_number`.
 
-La numeración es un entero por plantilla con `UNIQUE (template_id, version_number)`; no se usa SemVer. `change_kind` puede registrar `correction`, `progression`, `adaptation` o `localization` sin alterar la numeración.
+La numeración es un entero por plantilla con `UNIQUE (template_id, version_number)`; no se usa SemVer.
+
+**La deduplicación por contenido alcanza sólo a la última versión publicada.** Publicar un borrador idéntico a ella no crea nada y devuelve esa versión, que es lo que evita una versión por cada pulsación sobre un contenido que no cambió. Publicar un borrador que coincide con una versión **anterior** —deshacer un cambio, quitar una portada que se acababa de poner— crea la versión siguiente: nunca se devuelve una versión que ya fue superada.
+
+La razón es que el identificador de versión viaja fuera de la plantilla. Una semana de programa, una sesión planificada y una asignación guardan `session_template_version_id`, y el resto del producto resuelve el contenido vigente por la última versión publicada; entregar un identificador anterior al publicar deja esas referencias apuntando a una versión que ninguna consulta de biblioteca nombra. También destruye la cronología: una misma fila representaría dos épocas distintas y `version_number` dejaría de ordenar en el tiempo.
+
+El coste aceptado es almacenamiento —cada versión materializa sus pasos, series y targets— y no latencia: los lectores toman la última versión por el índice `(template_id, version_number)` sin recorrer la historia.
+
+`change_kind` —`correction`, `progression`, `adaptation`, `localization`— queda **fuera de V1**: se documenta como intención y no tiene columna física mientras ninguna operación lo escriba, según `ADR-021`.
 
 ### Relación con programas y personas
 
@@ -1240,6 +1249,7 @@ La numeración es un entero por plantilla con `UNIQUE (template_id, version_numb
 7. `derived_from_version_id` conserva procedencia sin compartir filas mutables.
 8. Las adaptaciones personales son revisiones de prescripción auditables y no nuevas ediciones silenciosas de la biblioteca.
 9. Un proceso/IA puede crear borradores, pero publicar requiere actor autorizado y auditable.
+10. Publicar devuelve la última versión de la plantilla o una nueva, jamás una anterior.
 
 ### Consecuencias
 
@@ -1266,8 +1276,10 @@ La numeración es un entero por plantilla con `UNIQUE (template_id, version_numb
 5. Retirar v1 no rompe programas, asignaciones o sesiones que ya la referencian.
 6. Una adaptación crea una versión nueva con `derived_from_version_id` y pasos propios.
 7. Personalizar la sesión de una persona conserva template/programa de origen y registra una revisión de prescripción.
-8. Reintentos concurrentes de publicación no asignan el mismo `version_number` ni crean dos versiones equivalentes.
+8. Reintentos concurrentes de publicación no asignan el mismo `version_number` ni crean dos versiones equivalentes a la última.
 9. Ningún endpoint histórico cambia de contenido al aparecer una versión más reciente.
+10. Publicar un contenido idéntico a la última versión no crea ninguna y devuelve esa; idéntico a una anterior crea la siguiente.
+11. Una copia hecha por bifurcación conserva `derived_from_version_id` hacia la versión de origen.
 
 ---
 

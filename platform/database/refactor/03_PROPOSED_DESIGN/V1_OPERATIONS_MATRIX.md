@@ -2317,7 +2317,7 @@ Reglas que gobiernan todo el dominio:
 | **Actor** | `A3`–`A5`; `A2` sobre contenido propio |
 | **Filtros obligatorios** | Borrador completo y válido: disciplina, tipo de actividad, al menos un paso, targets compatibles y unidades resueltas |
 | **Transacción** | Crear `SESSION_TEMPLATE_VERSION` inmutable con sus `PLANNED_STEP` y targets, y asignar el número de versión |
-| **Idempotencia** | `Idempotency-Key`. Publicar dos veces el mismo contenido no crea dos versiones: la segunda petición devuelve la primera |
+| **Idempotencia** | `Idempotency-Key`. Publicar un borrador idéntico a la **última** versión no crea otra y devuelve esa. Idéntico a una versión **anterior** crea la siguiente: publicar nunca devuelve una versión ya superada, porque su identificador viaja en semanas de programa y sesiones planificadas que lo resolverían contra nada (`ADR-009`) |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. La numeración es monotónica y se serializa: dos publicaciones concurrentes no producen el mismo número |
 | **Información sensible** | Contenido de entrenamiento |
@@ -2435,13 +2435,13 @@ Reglas que gobiernan todo el dominio:
 | **Superficie** | `POST /space/v1/assignments` |
 | **Actor** | `A2` |
 | **Filtros obligatorios** | Versión de programa publicada y accesible para la persona: propia o global |
-| **Transacción** | Igual que `OP-PLN-010`, **sin** relación de origen y sin periodo de gestión. Si la versión es `global`, **bifurca primero**: copia el programa, sus plantillas, sus pasos y sus targets a contenido de la persona y asigna la copia. Todo en la misma transacción y bajo un solo recibo |
+| **Transacción** | Igual que `OP-PLN-010`, **sin** relación de origen y sin periodo de gestión. Si la versión es `global`, **bifurca primero**: copia el programa, sus plantillas, sus pasos y sus targets a contenido de la persona y asigna la copia. Cada versión de plantilla copiada guarda `derived_from_version_id` hacia la de Allfit de la que salió (`ADR-009`, invariante 7). Todo en la misma transacción y bajo un solo recibo |
 | **Idempotencia** | `Idempotency-Key` |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Ninguna se comparte: es contenido personal |
 | **Evento de dominio** | `planning.assignment_created.v1` |
-| **Reglas** | Una asignación personal no tiene gestor y nadie la administra. Ninguna organización la ve, salvo que un grant la incluya explícitamente. **Tomar un programa global es quedárselo**: la persona pasa a ser dueña de una copia, así que lo que Allfit publique después no la alcanza y lo que ella cambie no alcanza a nadie. La inmutabilidad de una versión publicada ya protegía del cambio; lo que la copia añade es la propiedad, que es lo que hace posible editarlo. Partir el acto en dos operaciones dejaría a alguien dueño de una copia sin asignación si fallara la segunda mitad. **El calendario se materializa por semanas de calendario**: la semana N del programa cae en la semana N contada desde la que contiene el día de la asignación |
+| **Reglas** | La copia es una plantilla nueva con identidad propia, así que las métricas por rutina de la persona cuentan su copia; la procedencia es lo único que permite agregar cuánta gente entrena algo derivado de un programa de Allfit. Una asignación personal no tiene gestor y nadie la administra. Ninguna organización la ve, salvo que un grant la incluya explícitamente. **Tomar un programa global es quedárselo**: la persona pasa a ser dueña de una copia, así que lo que Allfit publique después no la alcanza y lo que ella cambie no alcanza a nadie. La inmutabilidad de una versión publicada ya protegía del cambio; lo que la copia añade es la propiedad, que es lo que hace posible editarlo. Partir el acto en dos operaciones dejaría a alguien dueño de una copia sin asignación si fallara la segunda mitad. **El calendario se materializa por semanas de calendario**: la semana N del programa cae en la semana N contada desde la que contiene el día de la asignación |
 | **Falla cerrada** | — |
 
 #### `OP-PLN-012` — Reprogramar una sesión planificada
