@@ -838,8 +838,7 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 - **`T-TPL-8` (negativa)** — `OP-PLN-029` no descarta un programa con versión publicada. Hay asignaciones que la referencian y sesiones materializadas contra ella.
 - **`T-TPL-9` (positiva)** — Descartar un programa lo lleva a `archived` y retira su borrador, y lo saca de lo que la persona puede retomar. Mismo grant, misma ausencia de `DELETE`.
 - **`T-TPL-10` (negativa)** — `OP-PLN-030` no devuelve el borrador de otra persona ni uno archivado: retomar lo propio no puede convertirse en enumerar lo ajeno.
-- **`T-TPL-11` (negativa)** — La foto de portada de una persona no la lee otra, y un borrador no puede nombrar una foto que cuelga de la plantilla de alguien más. La política de `planning.session_template_cover_photos` se hereda de la plantilla, igual que la de los pasos y los targets, y la clave foránea compuesta `(id, template_id)` impide que una versión publicada llegue a apuntar a una foto ajena.
-- **`T-TPL-12` (negativa)** — `OP-PLN-032` responde lo mismo para una foto inexistente y para una que pertenece a otra persona. Distinguirlas permitiría recorrer identificadores; el modo *authenticated api proxy* de `ADR-031` reevalúa la autorización en cada petición y nunca devuelve una referencia de almacenamiento.
+- **`T-TPL-11` y `T-TPL-12` — retiradas.** Cubrían la fotografía personal de portada, que la segunda revisión de `ADR-031` retiró junto con su tabla. La portada de clase `foto` es ahora una imagen del catálogo, pública e idéntica para todo el mundo: no hay nada que aislar por persona. La tercera revisión mudó además el estilo de portada a `planning.programs`, que ya está cubierta por la política de fila del programa: vestir un programa no alcanza a ninguna tabla nueva.
 
 #### `SESSION_TEMPLATE_VERSION` · `PLANNED_STEP` · `PLANNED_SET` · targets · `PROGRAM_VERSION` · `PROGRAM_VERSION_SESSION`
 

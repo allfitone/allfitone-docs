@@ -38,7 +38,7 @@
 | ADR-028 | Backoffice con rol base, deberes temporales y separación break-glass |
 | ADR-029 | Monorepo de implementación con deployables independientes |
 | ADR-030 | Detalle por serie y superseries en la planificación de fuerza |
-| ADR-031 | Binarios personales en PostgreSQL, servidos por la API |
+| ADR-031 | La portada de una rutina la pone su programa, y sale del catálogo |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -422,6 +422,8 @@ Un registro iniciado por la persona puede producir temporalmente un usuario Work
 - PostgREST/Data API como frontera pública de las aplicaciones.
 
 Storage, Realtime o Edge Functions requerirían un ADR separado antes de incorporarse; no forman parte de esta decisión.
+
+**Storage estuvo autorizado durante un día y volvió a quedar diferido.** `ADR-031` lo abrió el 19 de septiembre de 2026 para los binarios personales y lo cerró el mismo día, cuando el único caso que lo pedía —la fotografía de portada de una rutina— dejó de existir. El diferimiento de este ADR vuelve a estar íntegro: Storage, Realtime y Edge Functions siguen fuera hasta que un ADR los traiga con un caso construido detrás.
 
 ### Referencias de WorkOS
 
@@ -3771,10 +3773,19 @@ heredada del padre— o sería la única grieta en esa garantía.
 
 ---
 
-## ADR-031 — Binarios personales en PostgreSQL, servidos por la API
+## ADR-031 — La portada de una rutina la pone su programa, y sale del catálogo
 
 **Estado:** aceptada para V1<br>
-**Fecha:** 18 de septiembre de 2026
+**Fecha:** 18 de septiembre de 2026<br>
+**Enmendada:** 19 de septiembre de 2026 — los bytes salen de PostgreSQL a un bucket privado<br>
+**Enmendada:** 19 de septiembre de 2026 — se revierte la fotografía personal entera y con ella el bucket<br>
+**Enmendada:** 19 de septiembre de 2026 — la portada deja de ser de la rutina y pasa a ser del programa<br>
+**Enmienda a:** `ADR-002`, cuyo diferimiento de Storage queda restituido
+
+> **Léase de abajo arriba.** Las tres primeras secciones son el rastro de cómo se llegó
+> aquí y no describen lo vigente: la primera revisión midió el volumen, la segunda retiró
+> la fotografía personal y la tercera mudó la decisión de la rutina al programa. La
+> decisión en vigor empieza en «Tercera revisión».
 
 ### Contexto
 
@@ -3801,109 +3812,216 @@ el mundo y se cachea un año. Su cabecera lo contrasta a propósito con la foto 
 «que sí se sirve por petición precisamente porque es un dato personal cuya autorización
 hay que reevaluar cada vez».
 
+### Revisión del 19 de septiembre de 2026
+
+La cuarta razón de la decisión original —«el volumen no lo justifica»— se midió y es
+falsa. El error fue el modelo de uso: se supuso como mucho una foto por rutina y alguna
+rutina con foto. El modelo real del producto es **dos programas por persona, seis rutinas
+por programa y foto en todas**: doce fotos de unos setenta kilobytes, **822 KB por
+persona**.
+
+Contra las cuotas del plan, eso es:
+
+| Cuota | Personas que caben |
+| --- | --- |
+| Base de datos, 500 MB (plan gratuito) | **~600** |
+| Almacenamiento, 1 GB (plan gratuito) | ~1 300 |
+| Almacenamiento incluido en Pro, 100 GB | ~128 000 |
+| Egreso incluido en Pro, 250 GB/mes | ~107 000 |
+
+Seiscientas personas llenan la base de datos entera, y esa cuota es para los datos del
+producto: rutinas, programas, sesiones e historial de entrenamiento. Las imágenes no
+compiten con el producto por su espacio.
+
+Las otras tres razones siguen siendo ciertas y se pagan a conciencia: aparece una
+credencial, aparece una dependencia de orden con el servicio, y el borrado deja de ser
+una sola sentencia. Lo que cambió no es el razonamiento, es un número.
+
+
+### Segunda revisión del 19 de septiembre de 2026
+
+**El caso desapareció.** La fotografía de portada se construyó entera —selector, saneado,
+subida, proxy autenticado, bucket privado y cola de borrado— y la lectura del producto es
+que **nadie la va a usar**. Una portada existe para reconocer una rutina entre seis en una
+lista; para eso, la figura de los músculos y el icono ya responden, y hacen algo que una
+fotografía propia no hace: se dibujan solas.
+
+Pedir una fotografía es pedir trabajo. Es abrir la galería, encuadrar y esperar una
+subida, cada vez, para decorar una fila. La revisión de la mañana midió bien el volumen y
+corrigió dónde debían vivir los bytes; lo que no se preguntó es si alguien iba a producir
+esos bytes. La respuesta es no.
+
+Así que lo que se revierte no es el bucket contra PostgreSQL: es la fotografía personal
+entera. Y con ella se va todo lo que existía **sólo** para sostenerla.
+
+### Tercera revisión del 19 de septiembre de 2026
+
+**La portada no era una decisión de la rutina; era una decisión de quien las ve juntas.**
+La pantalla Hoy abre con las rutinas de la semana en un carrusel, una al lado de otra. Si
+cada rutina eligiera su propio estilo, esa fila mezclaría una figura de músculos, un icono
+y una fotografía, y lo que se lee entonces no es una semana: es un muestrario. El problema
+no se arregla pidiéndole gusto a quien escribe una rutina, porque quien escribe una rutina
+la está mirando sola. Sólo quien arma el programa ve las seis a la vez, y por eso la
+decisión es suya.
+
+Así que la portada cambia de dueño. **El estilo lo declara el programa y vale para todas
+sus rutinas; la imagen la sigue poniendo cada rutina**, porque dentro de un mismo estilo
+lo que se dibuja depende de lo que cada una trabaja. El carrusel habla un idioma y aun así
+una tarjeta se distingue de la de al lado sin leer el rótulo, que era lo único que una
+portada tenía que conseguir.
+
+Lo que la segunda revisión decidió sigue en pie entero: nadie sube nada, la clase `photo`
+toma una imagen del catálogo público y la elige la región dominante de los músculos. Lo
+que esta revisión mueve es **dónde se toma la decisión**, no de dónde sale la imagen.
+
 ### Decisión
 
-**1. Los binarios personales se guardan en PostgreSQL, no en un bucket.** Una tabla
-dedicada por tipo de binario, con los bytes en `bytea` junto a su tipo de contenido, su
-tamaño y su checksum.
+**1. En V1 no hay binarios personales.** Ninguna operación acepta bytes de una persona.
+El diferimiento de `ADR-002` vuelve a estar íntegro: Storage, Realtime y Edge Functions
+quedan fuera hasta que un ADR los traiga con un caso construido detrás.
 
-Se decide así, y no adoptando Supabase Storage, por cuatro razones y en este orden:
+**2. El estilo de portada es del programa; la imagen es de la rutina.** Un programa
+declara `muscles`, `icon` o `photo`, y esa clase vale para todas las rutinas que lo
+componen. Dentro de la clase, cada rutina se dibuja con lo suyo:
 
-- **El borrado se propaga solo.** `ADR-012` exige que la supresión alcance «cachés,
-  índices, réplicas, **storage** y sistemas derivados», y la matriz de operaciones exige
-  además que una eliminación no se reporte completa hasta confirmar la del binario. Con
-  los bytes dentro de la transacción, el `delete` **es** esa confirmación. Con un bucket
-  hace falta un worker de disposición, reintentos y un estado intermedio en el que el
-  dato ya se dijo borrado y todavía existe.
-- **No aparece una credencial nueva con poderes totales.** Un bucket privado obliga a
-  una clave de servicio en el entorno de la API.
-- **No se crea una dependencia de orden entre nuestras migraciones y las del servicio.**
-  Insertar en `storage.buckets` exige que las migraciones del propio Storage hayan corrido
-  antes; en local hoy no han corrido.
-- **El volumen no lo justifica.** Una portada saneada pesa del orden de ciento cincuenta
-  kilobytes y hay como mucho una por rutina.
+- **músculos**, la figura de lo que *esa* rutina trabaja, calculada de sus ejercicios;
+- **foto**, la del catálogo público que corresponde a lo que *esa* rutina trabaja, elegida
+  por la región dominante de sus músculos;
+- **icono**, el mismo para todas, porque un icono **se elige y no se calcula**: no hay nada
+  en los ejercicios de una rutina que diga cuál de los treinta y dos le toca.
 
-**2. Se sirven por la API, nunca por una URL de almacenamiento.** Es el modo
-*authenticated api proxy* que `x-allfit-media-url-policy` ya define para Studio: la
-autorización se reevalúa en cada petición, la respuesta va con `private, no-store`, y
-una petición sin acceso efectivo responde `404` y no `403`, para no revelar existencia.
-El modo de URL firmada sigue descrito en el contrato y queda para cuando haya bucket.
+La fotografía se sigue pidiendo sin decir *cuál*, por la misma razón de la segunda
+revisión: la región dominante ya está en los ejercicios, y **lo que se ve en la imagen y lo
+que se entrena hablan de lo mismo** sin que nadie elija. Es el mecanismo de
+`pick_program_cover`, aplicado ahora rutina a rutina bajo el estilo que el programa fijó.
 
-**3. El saneado falla cerrado.** El servidor no acepta los bytes que recibe: los
-decodifica y los vuelve a codificar a un formato y un tamaño máximo propios. Recodificar
-elimina EXIF, geolocalización y cualquier metadato por construcción, en vez de intentar
-recortarlos. Si la imagen no decodifica, si excede el límite de píxeles o si la
-recodificación falla, **la petición se rechaza y no se guarda nada**. El cliente puede
-reducir antes de enviar; el servidor no se fía.
+**3. Vive en `planning.programs`, no en `planning.program_versions`.** Por la misma razón
+que `planning.programs.cover_object_key`: una versión publicada es inmutable porque **es lo
+que alguien entrenó**, y cambiar cómo se ve una tarjeta no cambia lo que se entrena. Las
+columnas son `routine_cover_kind planning.routine_cover` (nullable) y
+`routine_cover_icon planning.routine_cover_icon` (nullable), con un check de que el icono
+existe si y sólo si la clase es `icon`. Se llaman `routine_`*algo* a propósito: `cover_object_key` ya vive en
+esa tabla y significa otra cosa —la cara del programa en su propia tarjeta—, y dos columnas
+parecidas con sentidos distintos se confunden a la primera.
 
-**4. Se registra la destrucción de cada binario.** `privacy.disposition_events` recibe su
-modelo físico —la pieza mínima del modelo lógico de `ADR-012`— y la escribe la misma
-transacción que destruye los bytes. No es especulativo: nace con escritor y con lector.
+**4. `planning.session_template_versions` pierde la portada.** Se van `cover_kind`,
+`cover_icon` y `cover_object_key`, y la clave `cover` sale del contenido del borrador
+(`SessionTemplateDraftContent`) y por tanto del hash canónico. **Consecuencia declarada:**
+toda rutina que llevara portada dirá «cambios sin publicar» hasta que se publique una vez,
+y es cierto — su contenido cambió.
 
-**5. Mudarse a un bucket después es mover bytes, no rehacer el modelo.** La tabla guarda
-identidad de objeto, tipo, tamaño y checksum: exactamente lo que una clave de objeto
-necesita. El día que el volumen lo justifique, la columna de bytes se sustituye por una
-clave y el proxy pasa a firmar; las operaciones, los permisos y la doctrina de borrado no
-cambian.
+**5. Una rutina suelta no lleva portada.** Una rutina que no está en ningún programa se
+reconoce por su letra inicial, que es como se reconocía antes de que la portada existiera.
+No hay estilo que aplicarle porque no hay nadie que lo haya declarado, y dejarla elegir uno
+propio devolvería exactamente el muestrario que esta revisión retira. Una rutina que está
+en **varios** programas se viste del primero, por el orden que la persona ya eligió para
+sus programas: el mismo con el que abre la pestaña Entrenar (`OP-PLN-024`).
 
-**6. Lo que generaliza es el patrón, no la tabla.** La foto de comida y la de progreso
-corporal seguirán este mismo camino cuando se construyan, cada una con su tabla en su
-dominio. `ADR-021` prohíbe el modelo genérico «por si acaso», así que no se crea un
-almacén de medios compartido antes de tener el segundo caso.
+**6. Vestir un programa surte efecto al momento y no acuña versión de nada.** Es
+`OP-PLN-033`, `PUT /space/v1/programs/{programId}/cover`, un comando idempotente sobre
+programa propio. No publica una versión de programa ni de rutina, igual que `OP-PLN-024` no
+publica nada por reordenar: **la presentación no es contenido**. Un programa tomado de
+Allfit no se puede revestir, porque se ve como Allfit lo armó.
+
+**7. Esas imágenes no son personales, así que no heredan nada de lo anterior.** Viven en
+el origen estático público del catálogo, se cachean un año y son idénticas para todo el
+mundo: es exactamente el molde de `catalog.movement_media`. La fila guarda **la clave del
+objeto**, jamás una URL, y la base del endpoint vive en configuración —`CATALOG_MEDIA_BASE_URL`—
+como ya hacía. No hay autorización que reevaluar, no hay proxy, no hay credencial nueva.
+
+**8. `privacy.binary_disposals` se retira.** Era la cola y el recibo de la destrucción de
+un binario personal, y se queda sin un solo escritor. `ADR-021` prohíbe el modelo «por si
+acaso», y una tabla de disposiciones sin nada que disponer es justo eso. `ADR-012` no
+pierde nada: sin bytes personales fuera de la transacción, no hay nada que propagar más
+allá de ella, y el borrado vuelve a ser una sola sentencia.
+
+**9. Lo que se escribió sigue escrito, para cuando vuelva.** La foto de comida y el
+progreso corporal conservan su contrato en la baseline y siguen sin construirse. Cuando
+se construyan, la revisión de la mañana y sus tres condiciones de portabilidad —protocolo
+S3 y no el cliente de Supabase, la clave del objeto y nunca una URL, y la autorización en
+nuestra API— son el punto de partida, no un ADR nuevo desde cero. Lo que este documento
+guarda es el razonamiento; lo que retira es el código que no tenía usuario.
 
 ### Lo que esta decisión no hace
 
-- **No adopta Supabase Storage.** El diferimiento de `ADR-002` sigue vigente para
-  Realtime y Edge Functions, y para Storage queda condicionado al volumen.
-- **No construye la nutrición ni el progreso corporal.** Sus contratos ya existen; sus
-  operaciones siguen sin implementarse y no entran aquí.
+- **No quita la portada.** Sigue habiendo tres maneras de ver una rutina, y una de ellas
+  sigue siendo una fotografía. Lo que desaparece es que sea *tuya* y que la elija la
+  rutina.
+- **No toca las portadas del catálogo.** Las veinticuatro de los programas globales son
+  contenido curado y se despliegan como siempre.
+- **No cambia la cara del programa en su propia tarjeta.** `cover_object_key` sigue
+  significando lo que significaba y se decide igual.
+- **No cierra la puerta a los binarios personales.** La cierra para V1 y deja el camino
+  descrito.
 - **No modela retención programada.** `privacy.retention_policies`, `erasure_requests` y
-  `legal_holds` siguen sin modelo físico: la purga por calendario espera a `DB-P5-015`.
-  Lo que este ADR cubre es la destrucción que alguien pide explícitamente.
-- **No hace la foto legible históricamente.** `ADR-005` y `ADR-023` siguen mandando: las
-  fotos no entran en la ventana histórica de un grant congelado.
-- **No admite más de una foto por portada.** Sustituir destruye la anterior.
+  `legal_holds` siguen sin modelo físico, y ahora sin nada personal que purgar tampoco lo
+  necesitan antes de `DB-P5-015`.
 
 ### Invariantes
 
-1. Los bytes que se guardan son los que produjo el saneado del servidor, nunca los que
-   llegaron.
-2. Un binario que no pudo sanearse no se guarda: no hay camino que escriba el original.
-3. Sólo la persona dueña del contenido lee su binario; para cualquier otra, ausente y
-   prohibido responden igual.
-4. Un binario se destruye cuando nada lo referencia, y su destrucción deja un evento de
-   disposición en la misma transacción.
-5. Un binario referenciado por una versión publicada **no** se destruye: la versión es
-   inmutable y su portada tiene que seguir existiendo.
-6. Ninguna respuesta expone una referencia de almacenamiento ni una ruta interna.
-7. El registro de disposición no se edita ni se borra en runtime.
+1. Ninguna operación de V1 acepta bytes subidos por una persona.
+2. Ninguna fila guarda una URL de un almacén: sólo la clave del objeto.
+3. **La portada de una rutina no se decide en la rutina.** El estilo lo declara el programa
+   que la usa, y ninguna fila de plantilla ni de versión de plantilla lo guarda.
+4. El mismo programa y la misma rutina reciben siempre la misma fotografía: la elección es
+   determinista.
+5. Una rutina sin ejercicios no recibe fotografía, y eso no es un error: es una rutina
+   que todavía no dice qué trabaja.
+6. Una rutina fuera de todo programa no lleva portada, y se reconoce por su letra inicial.
+7. Ninguna respuesta expone el endpoint del origen estático; expone la dirección
+   compuesta, que es pública.
 
 ### Consecuencias
 
 #### Positivas
 
-- La supresión de datos personales deja de necesitar un worker para ser cierta.
-- No entra ninguna credencial nueva ni ningún servicio nuevo a la superficie de ataque.
-- El contrato de medios que la baseline ya describía empieza a tener una implementación
-  contra la cual probarlo.
+- **El carrusel de la semana se lee como una semana.** Seis tarjetas con el mismo idioma
+  visual y distinto contenido se recorren de un vistazo; seis estilos mezclados obligan a
+  leer cada rótulo.
+- La decisión se toma una vez por programa y no seis veces por semana, y la toma quien
+  tiene delante el resultado.
+- Desaparecen una credencial de almacenamiento, una dependencia de orden con Supabase,
+  un trabajo programado al que vigilarle la antigüedad y la ventana de borrado que
+  `ADR-012` obligaba a medir.
+- La base de datos no guarda ni un byte de imagen, y el bucket no existe: el techo de
+  personas deja de depender del almacenamiento.
+- **La portada sale del contenido versionado.** Vestir un programa deja de acuñar
+  versiones de rutina que no cambian nada de lo que se entrena, y el hash canónico vuelve
+  a describir sólo entrenamiento.
+- El saneado de imágenes sale del camino de una petición, y con él `sharp`.
 
 #### Costos
 
-- La base de datos crece con bytes que no son relacionales, y los respaldos con ella.
-- La API gasta cómputo en decodificar y recodificar cada imagen, y necesita una
-  dependencia nativa de procesamiento de imagen.
-- Servir por proxy gasta ancho de banda de la API en cada lectura, sin la caché que una
-  URL firmada permitiría.
-- El día que se mude a un bucket habrá que mover los bytes ya guardados.
+- **Toda rutina que llevara portada dirá «cambios sin publicar»** hasta que se publique una
+  vez. Es correcto y está declarado: su contenido cambió al salir la clave `cover` del
+  borrador.
+- Se construyó y se retira: la subida, el proxy, el bucket, el paquete de acceso S3, la
+  cola de disposición y las tres columnas de portada en la versión de plantilla dejan de
+  existir. El razonamiento queda aquí; el código no.
+- Quien quisiera una rutina con un estilo propio dentro de un programa no puede tenerlo, y
+  quien quisiera una fotografía suya tampoco.
+- Una rutina que está en dos programas de estilos distintos se ve con el del primero, y no
+  hay manera de decir «en este programa quiero verla de otra forma».
+- Dos rutinas de la misma región pueden salir con caras parecidas; el desempate por
+  identificador las reparte, pero el catálogo son veinticuatro imágenes.
 
 ### Escenarios de prueba obligatorios
 
-1. Una imagen con EXIF y geolocalización se guarda sin ninguno de los dos.
-2. Un archivo que no es una imagen se rechaza y no escribe fila.
-3. Una imagen que excede el límite de píxeles se rechaza antes de decodificarse entera.
-4. El binario de una persona no lo lee otra, y el intento responde lo mismo que uno
-   inexistente.
-5. Sustituir una portada destruye la anterior y deja su evento de disposición.
-6. Sustituir una portada que una versión publicada referencia **no** destruye la anterior.
-7. Descartar la plantilla destruye sus binarios no referenciados.
-8. Ninguna respuesta de la API contiene la referencia interna del objeto.
+1. Un programa con estilo `photo` da a cada una de sus rutinas la clave que corresponde a
+   la región dominante de *esa* rutina, y dos rutinas de regiones distintas no reciben la
+   misma.
+2. Un programa con estilo `icon` da el **mismo** icono a todas sus rutinas.
+3. El mismo programa y la misma rutina reciben siempre la misma fotografía, y volver a
+   vestir el programa con la misma clase no la cambia.
+4. Una rutina sin ejercicios en un programa con estilo `photo` no recibe clave y la
+   pantalla dibuja el estado vacío.
+5. Una rutina que no está en ningún programa se responde sin portada y la pantalla la
+   dibuja con su letra inicial.
+6. Una rutina que está en dos programas se responde con el estilo del primero según el
+   orden de `OP-PLN-024`, y cambia de cara al reordenarlos.
+7. Vestir un programa no crea una versión de programa ni una versión de plantilla, y la
+   pantalla lo refleja al momento.
+8. Un programa de `content_scope = 'person'` se puede vestir; uno tomado de Allfit
+   responde lo mismo que uno inexistente.
+9. Ninguna respuesta ni ninguna fila contiene una URL del almacén.
+10. Ninguna ruta del contrato acepta una imagen.

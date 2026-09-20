@@ -2249,11 +2249,11 @@ Reglas que gobiernan todo el dominio:
 | `OP-PLN-022` | Consultar mi día | Consulta | `A2` |
 | `OP-PLN-023` | Consultar el borrador de una plantilla | Consulta | `A2`, `A3`–`A5` |
 | `OP-PLN-024` | Ordenar mis programas | Comando | `A2` |
+| `OP-PLN-025` | Consultar mi contenido | Consulta | `A2` |
 | `OP-PLN-028` | Descartar una plantilla propia | Comando | `A2` |
 | `OP-PLN-029` | Descartar un programa propio | Comando | `A2` |
 | `OP-PLN-030` | Consultar mi programa sin publicar | Consulta | `A2` |
-| `OP-PLN-031` | Subir la portada de una rutina | Comando | `A2` |
-| `OP-PLN-032` | Consultar la portada de una rutina | Consulta | `A2` |
+| `OP-PLN-033` | Vestir mi programa | Comando | `A2` |
 
 ---
 
@@ -2614,6 +2614,23 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | El orden **no es decoración**: el primero es el programa sobre el que abre la pestaña Entrenar, así que vive en la base y no en el dispositivo — reinstalar la aplicación no puede cambiar con qué programa se entrena. Es una escritura **entera**, como reemplazar los resultados de una sesión: el cliente manda el orden que está viendo completo, así que nunca hay un orden a medio aplicar. Un orden parcial se rechaza, porque dejaría lo omitido donde estuviera. **Una asignación nueva entra adelante**, de modo que tomar un programa es elegirlo sin un paso más |
 | **Falla cerrada** | — |
 
+#### `OP-PLN-025` — Consultar mi contenido
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/my-content` |
+| **Actor** | `A2` sobre contenido propio |
+| **Filtros obligatorios** | Plantillas de la persona que no estén archivadas |
+| **Transacción** | Lectura |
+| **Idempotencia** | No aplica |
+| **Paginación y orden** | Sin paginar, ordenado por lo último tocado. Es la biblioteca de una persona, no un catálogo: no crece sin límite |
+| **Offline / concurrencia** | Sin modo offline |
+| **Información sensible** | Contenido de entrenamiento propio |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Cada rutina se responde con lo que hace falta para dibujarla sin una segunda petición: **la portada del programa que la usa** —el estilo lo declaró el programa, no la rutina, y una rutina que no está en ninguno no lleva ninguna y se reconoce por su letra inicial; cuando es una fotografía se responde **la dirección compuesta y nunca la clave**—, los músculos que trabaja, sus cifras, si tiene cambios sin publicar, y **en qué programas de la persona está**. Esto último no se puede deducir en el cliente —`OP-PLN-026` responde los programas sin su composición, y un programa tomado de Allfit ni siquiera tiene borrador que abrir—, así que deducirlo obligaría a una petición por programa y aun así mentiría. La versión que se nombra es **la última publicada**: una rutina sin publicar todavía no está en ningún programa |
+| **Falla cerrada** | — |
+
 #### `OP-PLN-028` — Descartar una plantilla propia
 
 | Campo | Valor |
@@ -2622,14 +2639,14 @@ Reglas que gobiernan todo el dominio:
 | **Superficie** | `POST /space/v1/session-templates/{id}/discard` |
 | **Actor** | `A2` sobre contenido propio |
 | **Filtros obligatorios** | La plantilla es de la persona autenticada y no tiene ninguna versión publicada |
-| **Transacción** | Llevar la plantilla a `archived` y retirar su borrador |
+| **Transacción** | Llevar la plantilla a `archived`, retirar su borrador, y **republicar cada programa propio que la usaba sin ella**, mudando la asignación a la versión nueva. Todo en la misma transacción: partirlo dejaría a alguien con una rutina descartada que su programa sigue pidiendo |
 | **Idempotencia** | `Idempotency-Key` + `Command-Id`; descartar dos veces converge |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Contenido de entrenamiento |
 | **Evento de dominio** | `planning.session_template_discarded.v1` |
-| **Reglas** | **Es un estado, no un borrado.** `allfit_api` no tiene `DELETE` sobre este recurso y no va a tenerlo: lo que una persona escribió no se destruye desde el runtime, y un descarte tiene que poder explicarse después. Una plantilla con versión publicada **no se descarta**, porque programas y asignaciones pueden referenciarla; para retirarla de usos nuevos está `OP-PLN-005`, que no toca el historial |
-| **Falla cerrada** | Con versión publicada, rechazo |
+| **Reglas** | **Es un estado, no un borrado.** `allfit_api` no tiene `DELETE` sobre este recurso y no va a tenerlo: lo que una persona escribió no se destruye desde el runtime, y un descarte tiene que poder explicarse después. **Una plantilla publicada sí se descarta**, y los programas propios que la componen se republican sin ella — la versión anterior de cada programa queda intacta, porque es lo que alguien entrenó, y la asignación se muda sola a la nueva. El contenido de Allfit no se toca: no es de la persona, y tomarlo ya le dio una copia que sí lo es. Las fotos que ninguna versión referencia se destruyen con la rutina; las que una versión publicada congeló sobreviven, porque la versión sobrevive |
+| **Falla cerrada** | **Un programa no se vacía.** Si la plantilla es la única sesión que le queda a alguno, el descarte se rechaza nombrándolo: un programa sin sesiones no se puede publicar, y dejar a alguien con uno que ya no se puede tocar es peor que no borrar la rutina |
 
 #### `OP-PLN-029` — Descartar un programa propio
 
@@ -2665,39 +2682,22 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | **Sin esto un borrador de programa no se puede retomar.** `OP-PLN-022` lista los programas que la persona sigue, y parte de las asignaciones: uno que nunca se publicó no tiene versión ni asignación, así que no aparece en ninguna consulta y queda huérfano — existe, ocupa y nadie puede volver a él. Es el mismo hueco que `OP-PLN-023` cerró del lado de las rutinas, con la diferencia de que allí la plantilla sí se listaba y aquí no se listaba nada |
 | **Falla cerrada** | Ausente y ajeno responden igual |
 
-#### `OP-PLN-031` — Subir la portada de una rutina
+#### `OP-PLN-033` — Vestir mi programa
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/session-templates/{templateId}/cover-photo` |
-| **Actor** | `A2` sobre plantilla propia |
-| **Filtros obligatorios** | La plantilla pertenece a la persona |
-| **Transacción** | Sanear la imagen y guardar los bytes resultantes contra la plantilla |
-| **Idempotencia** | `Idempotency-Key`. Reintentar devuelve el mismo identificador y no guarda una segunda copia |
+| **Superficie** | `PUT /space/v1/programs/{programId}/cover` |
+| **Actor** | `A2` sobre programa propio |
+| **Filtros obligatorios** | El programa es de la persona autenticada y su `content_scope` es `person` |
+| **Transacción** | Reescribir el estilo de portada del programa —`muscles`, `icon` con cuál, `photo`, o ninguno— sobre `planning.programs`, en una sola sentencia |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; reenviar el mismo estilo converge |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Sin modo offline. Subir no cambia la portada: el borrador la nombra después, así que una subida a medias no deja la rutina apuntando a algo que no está |
-| **Información sensible** | Imagen personal. `identity_pii` por clasificación del contenido, nunca legible históricamente (`ADR-005`, `ADR-023`) |
+| **Offline / concurrencia** | Falla cerrada |
+| **Información sensible** | Ninguna se comparte: es contenido personal |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | **El servidor nunca guarda lo que recibió.** `ADR-031` obliga a decodificar y volver a codificar, que es lo que borra EXIF y geolocalización por construcción en vez de intentar recortarlos. Los bytes viven en PostgreSQL y no en un bucket, porque `ADR-012` exige que la supresión alcance el almacén y con los bytes dentro de la transacción el borrado **es** esa confirmación. Una foto que una versión publicada referencia no se destruye jamás: la versión es inmutable y su portada tiene que seguir existiendo |
-| **Falla cerrada** | Si la imagen no decodifica, excede el límite de píxeles o no puede recodificarse, se rechaza y **no se escribe una sola fila** |
-
-#### `OP-PLN-032` — Consultar la portada de una rutina
-
-| Campo | Valor |
-| --- | --- |
-| **Tipo** | Consulta |
-| **Superficie** | `GET /space/v1/routine-covers/{photoId}` |
-| **Actor** | `A2` sobre contenido propio |
-| **Filtros obligatorios** | La foto cuelga de una plantilla de la persona |
-| **Transacción** | Lectura |
-| **Idempotencia** | No aplica |
-| **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Sin modo offline |
-| **Información sensible** | Imagen personal; respuesta `private, no-store` |
-| **Evento de dominio** | Ninguno |
-| **Reglas** | Es el modo *authenticated api proxy* de `x-allfit-media-url-policy`: la autorización se reevalúa en cada petición y **ninguna respuesta expone una referencia de almacenamiento**. La otra mitad de esa política —la URL firmada de trescientos segundos— sigue descrita para cuando exista un bucket, que `ADR-031` deja condicionado al volumen |
-| **Falla cerrada** | La foto de otra persona responde `404` y no `403`: distinguirlas permitiría recorrer identificadores hasta dar con uno que existe |
+| **Reglas** | **El estilo es del programa y vale para todas sus rutinas**, porque la pantalla Hoy las abre en un carrusel y seis estilos mezclados se leen como un muestrario y no como una semana: la decisión es de quien ve las seis juntas, no de quien escribe una. Dentro del estilo, `muscles` dibuja lo que cada rutina trabaja y `photo` toma del catálogo la que corresponde a la región dominante de sus músculos; `icon` sí es el mismo para todas, porque un icono se elige y no se calcula. **Surte efecto al momento y no acuña versión de nada** —ni de programa ni de rutina—, igual que `OP-PLN-024` no publica nada por reordenar: la presentación no es contenido. Vive en `planning.programs` y no en la versión publicada, porque una versión es lo que alguien entrenó y cambiar cómo se ve una tarjeta no cambia lo que se entrena (`ADR-031`) |
+| **Falla cerrada** | **Un programa tomado de Allfit no se reviste**, porque se ve como Allfit lo armó: `content_scope` distinto de `person`, programa ajeno o inexistente responden lo mismo, para no revelar cuál de las tres cosas es |
 
 #### `OP-PLN-021` — Consultar una versión publicada
 

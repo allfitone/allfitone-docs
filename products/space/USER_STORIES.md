@@ -1042,40 +1042,33 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 5. Puedo salir de una cadena sin perder mis series, y los que quedan siguen encadenados si todavía son dos.
 6. Reordenar la rutina nunca deshace una cadena: se mueve entera y nada puede caer dentro de ella.
 
-### HU-SP-108 — Ponerle portada a mi rutina
+### HU-SP-108 — Ponerle portada a mi programa
 
 **Como** persona
-**quiero** elegir cómo se ve mi rutina en la lista
-**para** reconocerla de un vistazo sin leer el nombre.
+**quiero** elegir cómo se ven las rutinas de mi programa
+**para** reconocer la de cada día de un vistazo sin leer el nombre.
 
 `E-SP-06` · importante
 
 **Criterios**
 
-1. Puedo dejar la rutina sin portada, y entonces se sigue reconociendo por su nombre.
-2. Puedo elegir la figura de los músculos que la rutina entrena, y se dibuja sola con los ejercicios que tenga.
-3. Puedo elegir uno de doce iconos que dicen de qué va la rutina: fuerza, correr, bici, intervalos, cardio, quemar, explosivo, reto, montaña, tiempo, movilidad o nadar.
-4. Puedo quitar la portada cuando quiera y volver al estado de no haber dicho nada.
-5. La portada elegida se ve en la lista de mis rutinas y en las tarjetas del programa que las incluye.
-6. Cambiar sólo la portada es un cambio de la rutina: se guarda como borrador y se publica como cualquier otro.
+1. Elijo la portada **una vez para el programa entero**, y vale para todas sus rutinas: la semana se ve como una semana y no como una colección de estilos sueltos.
+2. Puedo elegir la figura de los músculos, y cada rutina dibuja los suyos con los ejercicios que tenga.
+3. Puedo elegir uno de treinta y dos iconos que dicen de qué va el programa —fuerza, correr, bici, intervalos, cardio, quemar, explosivo, reto, montaña, tiempo, movilidad, nadar y los demás—, y ese icono es el mismo para todas sus rutinas.
+4. Puedo elegir fotografía, y no elijo cuál: a cada rutina le toca la del catálogo que corresponde a lo que **esa** rutina trabaja.
+5. Al elegir veo **cómo se verá mi Home esa semana**, con las rutinas una al lado de otra, no un cuadradito suelto.
+6. Puedo quitar la portada cuando quiera y volver al estado de no haber dicho nada.
+7. Una rutina que no está en ningún programa no lleva portada y se reconoce por su nombre.
+8. Cambiar la portada se ve al momento y **no publica una versión nueva** del programa ni de sus rutinas: es cómo se presenta, no lo que se entrena.
 
-### HU-SP-109 — Poner una foto mía de portada
+### HU-SP-109 — Poner una foto mía de portada — retirada
 
-**Como** persona
-**quiero** usar una foto propia como portada de mi rutina
-**para** reconocerla por algo que significa algo para mí.
-
-`E-SP-06` · importante
-
-**Criterios**
-
-1. Puedo elegir una foto de mi galería y recortarla cuadrada antes de usarla.
-2. La foto se guarda sin los datos de dónde y cuándo la tomé.
-3. Una imagen que no se puede leer se rechaza y no se guarda nada a medias.
-4. Sólo yo veo mi foto: nadie más puede pedirla ni sabe que existe.
-5. Cambiar la portada destruye la foto anterior, salvo que una versión ya publicada la use.
-6. Descartar la rutina se lleva sus fotos con ella.
-7. Necesito ponerle nombre a la rutina antes de elegir la foto, porque la foto se guarda contra la rutina.
+Pedía elegir una foto de la galería y usarla como portada. Se construyó entera y se
+retiró el 19 de septiembre de 2026: **nadie iba a hacerlo**. Una portada sirve para
+reconocer una rutina entre seis, y para eso la figura de los músculos y el icono ya
+responden sin pedir nada. `HU-SP-108` conserva la fotografía como tercera opción, con la
+diferencia de que la elige el contenido y no la persona. La razón entera está en la
+segunda revisión de `ADR-031`.
 
 ### HU-SP-044 — Publicar una versión de mi plantilla
 

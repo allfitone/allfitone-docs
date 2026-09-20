@@ -901,30 +901,17 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 ---
 
-### 7.17 `privacy.binary_disposals`
+### 7.17 `privacy.binary_disposals` — retirada
 
-- **Propósito:** la prueba de que unos bytes personales dejaron de existir, escrita por la misma transacción que los destruyó.
-- **Dominio / fuente de verdad:** Privacidad.
-- **Clasificación:** `audit`.
-- **Columnas:** `id uuid` · `subject_person_id uuid` · `object_kind text` (`routine_cover_photo`) · `object_id uuid` · `byte_size integer` · `reason text` (`replaced`, `removed`, `content_discarded`) · `disposed_at timestamptz`.
-- **FKs y borrado:** `subject_person_id → identity.people(id) RESTRICT`.
-- **Uniques y checks:** vocabulario cerrado de clase y de motivo; tamaño positivo.
-- **Actores:** lo escribe el disparador de borrado de la tabla de binarios; ningún rol de runtime inserta a mano.
-- **RLS:** como `privacy.access_events`, la tabla base no la lee el runtime; se expondría por una función `security definer` cuando haga falta.
-- **Consultas / índices:** `(subject_person_id, disposed_at desc)`.
-- **Retención:** auditoría prolongada; no contiene los bytes ni nada que los reconstruya.
-- **Eventos:** ninguno propio.
+Existió el 18 y el 19 de septiembre de 2026 para probar la destrucción de un binario
+personal, primero como recibo y después también como cola del borrado en el bucket. La
+segunda revisión de `ADR-031` retiró la fotografía personal entera, así que la tabla se
+quedó sin un solo escritor y `ADR-021` prohíbe dejarla puesta por si acaso.
 
-**No es `privacy.disposition_events`** (§7.14), que es el registro de ejecución del
-pipeline de retención programada —particionado, colgando de `disposition_items` y escrito
-por un worker— y que sigue sin modelo físico junto a `retention_policies`,
-`erasure_requests` y `legal_holds`. Esto es más pequeño y más inmediato: la destrucción que
-alguien pide, no la que un calendario dispara. Cuando ese pipeline se construya, esta tabla
-será una de sus fuentes.
-
-**Existe porque `ADR-031` guarda binarios personales en PostgreSQL.** Con los bytes dentro
-de la transacción el borrado es cierto en el instante en que ocurre; lo que faltaba era
-poder demostrarlo después sin conservar nada de lo que se destruyó.
+El registro de la retención programada sigue siendo `privacy.disposition_events` (§7.14),
+que nunca tuvo modelo físico y sigue esperando a `DB-P5-015`. Si algún día vuelve un
+binario personal —la foto de comida y el progreso corporal conservan su contrato en la
+baseline—, esta ficha y `ADR-031` son el punto de partida.
 
 ## 8. Schema `catalog`
 
@@ -1259,7 +1246,7 @@ crece, y el producto dibuja la figura del cuerpo en su lugar.
 - **Propósito:** contenido editable de una plantilla; nunca referenciable por un programa.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del único borrador editable de la plantilla padre.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `template_id uuid` · `content_schema_version smallint` (`1`) · `content jsonb` · `updated_at timestamptz`. El contenido admite `title`, `activity_type_id`, `steps` y `cover`; cualquier otra clave invalida el borrador entero.
+- **Columnas:** `id` · `template_id uuid` · `content_schema_version smallint` (`1`) · `content jsonb` · `updated_at timestamptz`. El contenido admite `title`, `activity_type_id` y `steps`; cualquier otra clave invalida el borrador entero. **`cover` salió el 19 de septiembre de 2026**: la portada la declara el programa (§9.9) y no la rutina, así que ya no es contenido de este borrador ni entra al hash canónico (`ADR-031`).
 - **FKs y borrado:** `template_id → session_templates(id) ON DELETE CASCADE`.
 - **Uniques y checks:** `UNIQUE template_id` (un borrador vivo por plantilla).
 - **Actores:** owner personal u organizacional de la plantilla; ninguna persona asignada puede editar el borrador.
@@ -1273,47 +1260,27 @@ crece, y el producto dibuja la figura del cuerpo en su lugar.
 - **Propósito:** versión publicada, completa e inmutable de una plantilla.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad histórica de cada versión publicada de una plantilla.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `template_id uuid` · `version_number integer` · `discipline_code text` · `activity_type_id uuid` · `derived_from_version_id uuid` (nullable) · `title text` · `content_hash bytea` · `cover_kind planning.routine_cover` (nullable) · `cover_icon planning.routine_cover_icon` (nullable) · `cover_photo_id uuid` (nullable) · `status catalog.publication_status` · `published_at timestamptz`.
+- **Columnas:** `id` · `template_id uuid` · `version_number integer` · `discipline_code text` · `activity_type_id uuid` · `derived_from_version_id uuid` (nullable) · `title text` · `content_hash bytea` · `status catalog.publication_status` · `published_at timestamptz`.
 - **FKs y borrado:** `template_id → session_templates(id) RESTRICT`; `activity_type_id → catalog.activity_types(id) RESTRICT`; `derived_from_version_id → session_template_versions(id) RESTRICT`.
-- **Uniques y checks:** `UNIQUE (template_id, version_number)`; sin `UPDATE`/`DELETE` en runtime. **`content_hash` no es único por plantilla**: dos versiones pueden repetir contenido porque deshacer un cambio es una versión nueva y no un regreso a la anterior (`ADR-009`). La unicidad que hubo hasta el 18 de septiembre de 2026 obligaba a devolver la versión antigua, y su identificador viaja en semanas de programa que lo resolverían contra nada. La portada y su carga concuerdan: `cover_icon` existe si y sólo si `cover_kind = 'icon'`, y `cover_photo_id` si y sólo si `cover_kind = 'photo'`. La clave foránea hacia la foto es **compuesta** —`(cover_photo_id, template_id)`— para que una versión no pueda apuntar a la foto de otra plantilla.
+- **Uniques y checks:** `UNIQUE (template_id, version_number)`; sin `UPDATE`/`DELETE` en runtime. **`content_hash` no es único por plantilla**: dos versiones pueden repetir contenido porque deshacer un cambio es una versión nueva y no un regreso a la anterior (`ADR-009`). La unicidad que hubo hasta el 18 de septiembre de 2026 obligaba a devolver la versión antigua, y su identificador viaja en semanas de programa que lo resolverían contra nada.
 - **Actores:** el owner publica; owner y personas con asignaciones que la referencian leen; ningún runtime actualiza una versión publicada.
 - **RLS:** owner del contexto, **OR** persona con asignación que la referencia.
 - **Consultas / índices:** `(template_id, version_number)`, que sirve tanto la última versión publicada como la comparación de contenido al publicar. No hay índice por `content_hash`: nadie busca por él desde que la deduplicación mira sólo a la última versión.
 - **Retención:** permanente si referenciada.
 - **Eventos:** `planning.session_template_version_published.v1`, `planning.session_template_version_deprecated.v1`.
 
-**La portada es opcional y por eso `cover_kind` es nullable.** Una rutina sin portada no
-está incompleta: se reconoce por su nombre, que es como se reconocía hasta ahora. Nulo
-significa «no se dijo», no «vacío elegido», y las dos cosas se ven igual en pantalla
-precisamente porque la pregunta nunca es obligatoria.
+**Aquí no hay portada, y es deliberado.** Entre el 18 y el 19 de septiembre de 2026 esta
+tabla llevó `cover_kind`, `cover_icon` y `cover_object_key`, y la clave `cover` viajaba en
+el contenido del borrador y por tanto en el hash canónico. La tercera revisión de
+`ADR-031` se lo llevó todo a `planning.programs` (§9.9): **la portada de una rutina no se
+decide en la rutina**, porque quien escribe una rutina la mira sola y quien arma el
+programa ve las seis juntas en el carrusel de la semana. Lo que cada rutina aporta —qué
+músculos trabaja— ya está en sus pasos y no hace falta copiarlo aquí.
 
-**Dos vocabularios cerrados.** `planning.routine_cover` dice de qué clase es la portada
-—`muscles`, `icon` o `photo`— y `planning.routine_cover_icon` enumera los iconos
-disponibles. Nació con doce y hoy tiene treinta y dos; **se amplía por el final y nunca se
-reordena ni se reutiliza un identificador**, porque una rutina guardada con `strength`
-tiene que seguir dibujando lo mismo dentro de un año. Qué orden usa la rejilla lo decide la
-aplicación, no el enumerado.
-
-**Los iconos no son el catálogo de equipamiento.** Un icono dice de qué va la rutina, no
-con qué se hace: una rutina de fondos en paralelas tiene derecho a la mancuerna, porque
-la mancuerna ahí significa «fuerza». Por eso viven en `planning` y no en `catalog`, por
-la misma razón que `planning.set_kind`: el catálogo guarda contenido que una persona
-explora, y esto es cómo se presenta una rutina que ya es suya. Nadie lo busca ni lo
-filtra, lo declara.
-
-**`muscles` no guarda nada más que la decisión.** Es una portada derivada: los músculos
-salen de los movimientos que la versión ya referencia, así que copiarlos aquí sería una
-segunda verdad que envejece cuando se edita la rutina. `icon` sí guarda cuál, porque es
-una elección que nada más puede reconstruir.
-
-**Entra al hash de publicación.** Dos rutinas que sólo difieren en la portada son dos
-rutinas: se ven distintas en la lista, que es el único sitio donde la portada hace algo.
-Dejarla fuera del hash publicaría la segunda como si fuera la primera y el cambio no
-llegaría a ninguna parte.
-
-**Se hereda al bifurcar.** `planning.fork_program_version` copia versiones de plantilla
-para que alguien se quede con un programa propio; una portada que no viajara en esa copia
-convertiría la bifurcación en una pérdida silenciosa de lo que la persona eligió.
+Que la portada saliera del contenido tiene una consecuencia declarada: **toda rutina que
+llevara portada dice «cambios sin publicar» hasta que se publique una vez**, y es cierto,
+porque su contenido cambió. Una rutina que no está en ningún programa no lleva portada y
+se reconoce por su letra inicial.
 
 ### 9.4 `planning.planned_steps`
 
@@ -1407,14 +1374,67 @@ al terminarla. Los de los pasos intermedios no se aplican; `ADR-030` lo fija.
 - **Propósito:** identidad estable de un programa.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad de la identidad y ownership estable de cada programa.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `content_scope catalog.content_scope` · `owner_organization_id uuid` (nullable) · `owner_person_id uuid` (nullable) · `author_person_id uuid` (nullable) · `status catalog.publication_status`.
+- **Columnas:** `id` · `content_scope catalog.content_scope` · `owner_organization_id uuid` (nullable) · `owner_person_id uuid` (nullable) · `author_person_id uuid` (nullable) · `routine_cover_kind planning.routine_cover` (nullable) · `routine_cover_icon planning.routine_cover_icon` (nullable) · `status catalog.publication_status`.
 - **FKs y borrado:** owners → sus tablas `RESTRICT`.
-- **Uniques y checks:** `CHECK` de un solo owner según `content_scope`, idéntico al de `catalog.movements`. `CHECK (author_person_id IS NULL) = (content_scope = 'global')`.
+- **Uniques y checks:** `CHECK` de un solo owner según `content_scope`, idéntico al de `catalog.movements`. `CHECK (author_person_id IS NULL) = (content_scope = 'global')`. `CHECK` de que `routine_cover_icon` existe **si y sólo si** `routine_cover_kind = 'icon'`: las otras dos clases se dibujan solas y un icono guardado bajo ellas sería un dato que nadie lee.
 - **Actores:** owner personal u organización con membresía/capacidad vigente; sin acceso de otras organizaciones. El contenido `global` lo escribe solo la curaduría de plataforma y **cualquier persona autenticada lo lee**: es el catálogo que `OP-PLN-011` ya llamaba «global» al exigir «versión publicada y accesible para la persona: propia o global».
 - **RLS:** `content_scope = 'global'` **OR** owner del contexto.
 - **Consultas / índices:** `(owner_organization_id, status)`, `(owner_person_id, status)`.
 - **Retención:** se archiva cuando deja de usarse; se conserva mientras una versión o asignación lo referencie.
 - **Eventos:** `planning.program_created.v1`.
+
+**El estilo de portada de las rutinas vive aquí porque la decisión es del programa.** La
+pantalla Hoy abre con las rutinas de la semana en un carrusel, una al lado de otra: si
+cada rutina eligiera su propio estilo, esa fila mezclaría figuras de músculos, iconos y
+fotografías y se leería como un muestrario en vez de como una semana. Quien escribe una
+rutina la mira sola; quien arma el programa ve las seis juntas, y por eso decide él.
+`routine_cover_kind` declara la clase para **todas** las rutinas del programa, y dentro de
+la clase cada rutina pone lo suyo: `muscles` dibuja lo que esa rutina trabaja y `photo`
+toma del catálogo la que corresponde a la región dominante de sus músculos. `icon` es el
+único que se guarda, en `routine_cover_icon`, y es el mismo para todas — **un icono se
+elige y no se calcula**, porque nada en los ejercicios dice cuál de los treinta y dos le
+toca. Así el carrusel habla un idioma y aun así una tarjeta se distingue de la de al lado
+sin leer el rótulo.
+
+**Vive en la identidad del programa y no en `planning.program_versions` (§9.11)**, por la
+misma razón que `cover_object_key`: una versión publicada es inmutable porque **es lo que
+alguien entrenó**, y cambiar cómo se ve una tarjeta no cambia lo que se entrena. Vestir un
+programa (`OP-PLN-033`) surte efecto al momento y no acuña versión de nada, igual que
+reordenar los programas (`OP-PLN-024`) no publica nada.
+
+**Se hereda al bifurcar.** Tomar un programa de Allfit copia su estilo junto con su
+`cover_object_key`: si la copia lo perdiera, seis tarjetas cambiarían de aspecto en el
+mismo instante en que el programa pasa a ser tuyo, y eso no es tomar ese programa sino
+otro. `IX-48` lo cubre desde el lado de la bifurcación.
+
+**El prefijo `routine_` es deliberado.** `cover_object_key` ya vive en esta tabla y
+significa otra cosa: la cara del programa en su propia tarjeta. Dos columnas parecidas con
+sentidos distintos se confunden a la primera, y el nombre es lo único que las separa
+cuando alguien lee una consulta en medio de un incidente.
+
+**Es nullable porque la portada es opcional.** Nulo significa «no se dijo», no «vacío
+elegido», y las rutinas del programa se reconocen entonces por su letra inicial, que es
+como se reconocían antes de que la portada existiera. Lo mismo vale para una rutina que no
+está en ningún programa: no hay nadie que haya declarado un estilo, así que no lleva
+portada. Una rutina que está en varios programas se viste del **primero**, por el orden
+que la persona ya eligió para sus programas.
+
+**Dos vocabularios cerrados.** `planning.routine_cover` dice de qué clase es la portada
+—`muscles`, `icon` o `photo`— y `planning.routine_cover_icon` enumera los iconos
+disponibles. Nació con doce y hoy tiene treinta y dos; **se amplía por el final y nunca se
+reordena ni se reutiliza un identificador**, porque un programa guardado con `strength`
+tiene que seguir dibujando lo mismo dentro de un año. Qué orden usa la rejilla lo decide la
+aplicación, no el enumerado. Los dos nacieron sirviendo a
+`planning.session_template_versions` y sólo cambiaron de dueño con la tercera revisión de
+`ADR-031`; el nombre `routine_cover` sigue siendo el correcto porque lo que describen es
+cómo se ve una rutina, no cómo se ve un programa.
+
+**Los iconos no son el catálogo de equipamiento.** Un icono dice de qué va el programa, no
+con qué se hace: un programa de fondos en paralelas tiene derecho a la mancuerna, porque
+la mancuerna ahí significa «fuerza». Por eso viven en `planning` y no en `catalog`, por
+la misma razón que `planning.set_kind`: el catálogo guarda contenido que una persona
+explora, y esto es cómo se presenta un programa que ya es suyo. Nadie lo busca ni lo
+filtra, lo declara.
 
 ### 9.10 `planning.program_drafts`
 
@@ -1465,7 +1485,7 @@ al terminarla. Los de los pasos intermedios no se aplican; `ADR-030` lo fija.
 - **Clasificación:** `training`.
 - **Columnas:** `id` · `person_id uuid` · `program_version_id uuid` · `origin_relationship_id uuid` (nullable) · `lifecycle planning.assignment_lifecycle` · `starts_on date` · `timezone text` · `assigned_at timestamptz`.
 - **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `program_version_id → program_versions(id) RESTRICT`; FK compuesta opcional `(origin_relationship_id, person_id) → relationships.service_relationships(id, person_id) RESTRICT` (`IX-11`).
-- **Uniques y checks:** clave portadora `UNIQUE (id, person_id)`.
+- **Uniques y checks:** clave portadora `UNIQUE (id, person_id)`; `program_day` entre 1 y 7.
 - **Actores:** la persona (autoasigna, decide continuidad); el coach con `contribute` (asigna, cancela).
 - **RLS:** `person_id = access_control.person()` **OR** (`origin_relationship_id` visible **AND** grant `relationship_training`).
 - **Consultas / índices:** `(person_id, lifecycle)`, `(origin_relationship_id, lifecycle)`.
@@ -1505,10 +1525,11 @@ al terminarla. Los de los pasos intermedios no se aplican; `ADR-030` lo fija.
 - **Propósito:** sesión del calendario materializada al asignar; en la zona horaria de la persona. **Pertenece a una semana, no a un día.**
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del calendario materializado de una asignación.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `assignment_id uuid` · `person_id uuid` · `template_version_id uuid` · `week_starts_on date` · `scheduled_at timestamptz` · `timezone text` · `status text` (`scheduled`, `paused`, `cancelled`, `completed`).
+- **Columnas:** `id` · `assignment_id uuid` · `person_id uuid` · `template_version_id uuid` · `program_day smallint` · `week_starts_on date` · `scheduled_at timestamptz` · `timezone text` · `status text` (`scheduled`, `paused`, `cancelled`, `completed`).
 - **`week_starts_on` es lo que decide qué se ofrece**, y es el lunes de la semana de calendario a la que pertenece la sesión. `scheduled_at` se conserva como el día **sugerido** dentro de esa semana: ordena la lista y fecha el historial, pero no obliga. La semana N del programa cae en la semana de calendario N contada desde la que contiene el día de la asignación, así que tomar un programa un viernes deja esa primera semana corta. Lo que no se hace **no se arrastra**: la semana siguiente empieza limpia.
+- **`program_day` es el día que el programa le puso, y `scheduled_at` es dónde cayó.** No siempre coinciden: la materialización adelanta las sesiones de la primera semana que caerían antes del día de la asignación, para no estrenar un programa con sesiones ya perdidas. Tomar un programa un jueves deja su sesión de lunes agendada el jueves, y sin esta columna la pantalla no tendría de dónde sacar que esa sesión es la del lunes — leería el jueves de `scheduled_at` y contradiría al programa que la persona armó. Va de 1 (lunes) a 7 (domingo), como `program_version_sessions.day`.
 - **FKs y borrado:** `(assignment_id, person_id) → program_assignments(id, person_id) ON DELETE CASCADE`; `template_version_id → session_template_versions(id) RESTRICT` (`IX-15`).
-- **Uniques y checks:** clave portadora `UNIQUE (id, person_id)`.
+- **Uniques y checks:** clave portadora `UNIQUE (id, person_id)`; `program_day` entre 1 y 7.
 - **Actores:** la persona (agenda); el coach reprograma la parte administrada.
 - **RLS:** vía la asignación.
 - **Consultas / índices:** `(assignment_id, scheduled_at)`, `(person_id, week_starts_on)`.
@@ -1613,34 +1634,22 @@ que sólo el borrador es mutable, así que esta tabla lleva las mismas tres prot
 que sus hermanas: sin mutación de hija inmutable, inserción sólo durante la publicación,
 y política de fila heredada del padre. Sin ellas sería la única grieta en esa garantía.
 
-### 9.22 `planning.session_template_cover_photos`
+### 9.22 `planning.session_template_cover_photos` — retirada
 
-- **Propósito:** los bytes de una portada que la persona subió para una rutina suya.
-- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad de la imagen, que no vive en ningún otro sitio.
-- **Clasificación:** `identity_pii`.
-- **Columnas:** `id` · `template_id uuid` · `content_type text` (`image/webp`) · `byte_size integer` · `checksum bytea` · `bytes bytea` · `created_at timestamptz`.
-- **FKs y borrado:** `template_id → session_templates(id) ON DELETE CASCADE`.
-- **Uniques y checks:** `UNIQUE (id, template_id)`, que es lo que sostiene la clave foránea compuesta de la versión; `content_type = 'image/webp'`; tamaño entre 1 byte y 1 MiB; checksum de 32 bytes; `octet_length(bytes) = byte_size`.
-- **Actores:** sólo la dueña de la plantilla. Ningún profesional, ninguna organización.
-- **RLS:** heredada de la plantilla, igual que `planned_steps` y los targets.
-- **Consultas / índices:** `(template_id, created_at desc)`.
-- **Retención:** con la plantilla. Se destruye en cuanto ni el borrador ni ninguna versión publicada la referencian.
-- **Eventos:** ninguno propio; su destrucción escribe en `privacy.disposition_events`.
+Guardó los metadatos y la clave del objeto de la fotografía que una persona subía como
+portada de una rutina suya. La segunda revisión de `ADR-031` retiró esa fotografía: nadie
+sube nada, y la portada de clase `foto` pasa a ser **una del catálogo elegida por la
+región dominante de los músculos que la rutina trabaja**, que es contenido público,
+inmutable y ya desplegado.
 
-**Un solo tipo de contenido porque el servidor lo produce.** `ADR-031` obliga a decodificar
-la imagen recibida y codificar una nueva; aceptar aquí lo que llegue sería aceptar que los
-bytes no pasaron por ese saneado. El checksum es del resultado, no del original.
+De aquello no queda ninguna columna. `session_template_versions` llegó a guardar la clave
+de esa imagen del catálogo, y la tercera revisión de `ADR-031` se la llevó también: hoy el
+estilo lo declara el programa (§9.9) y ninguna fila guarda qué imagen le toca a una
+rutina, porque la determina la región dominante de los músculos que trabaja y la elección
+es determinista. No es un dato personal, no tiene RLS propia y no hay nada que
+destruir cuando la rutina se descarta.
 
-**Los bytes están en la base y no en un bucket.** La razón de peso es el borrado: `ADR-012`
-exige que la supresión alcance el almacén, y con los bytes dentro de la transacción el
-`delete` **es** esa confirmación. La alternativa necesita un worker, reintentos y un estado
-en el que el dato ya se dijo borrado y todavía existe.
-
-**Una foto que una versión publicada referencia no se destruye.** La versión es inmutable y
-su portada tiene que seguir existiendo; la clave foránea lo impediría de todos modos, y
-excluirla de la recolección convierte esa negativa en una decisión escrita.
-
-Nota de conteo: `planning` tiene 22 tablas y 22 fichas; §9.5–9.8 son cuatro tablas físicas independientes.
+Nota de conteo: `planning` tiene 21 tablas y 22 fichas; §9.5–9.8 son cuatro tablas físicas independientes y §9.22 está retirada.
 
 ---
 
