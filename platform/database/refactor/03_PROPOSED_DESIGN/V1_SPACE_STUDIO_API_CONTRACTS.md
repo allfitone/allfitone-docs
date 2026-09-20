@@ -760,7 +760,7 @@ Command-Id: 019b...
   "planned_sessions_created": 24 }
 ```
 
-Las 24 sesiones se materializan **dentro de esta transacción**. No hay job de calendario.
+Las 24 sesiones se materializan **dentro de esta transacción**, porque este programa tiene fecha de fin y por tanto tiene un total. Una versión con `repeats_forever` no lo tiene: de ella se materializa aquí la semana de calendario en la que se asigna, `planned_sessions_created` cuenta esa semana, y cada semana posterior la siembra la lectura de la agenda un instante antes de enseñarla. **No hay job de calendario** en ninguno de los dos casos (`ADR-032`).
 
 Sin `relationship_training` vigente: `403 scope-required`.
 
@@ -912,7 +912,7 @@ Comandos con varias escrituras que deben ser atómicas. La API los invoca dentro
 | `close_historical_access_case(case_id)` | `OP-PRV-019` | Cierra el caso e invalida cualquier contexto asociado |
 | `privacy.revoke_grant(grant_id)` | `OP-PRV-005` | Acepta `active` o `frozen`, fija `revoked_at`, cierra casos históricos abiertos e invalida proyecciones y cachés antes de confirmar |
 | `privacy.log_access_event(subject_person_id, subject_organization_id, relationship_id, data_grant_id, historical_access_case_id, scope_code, scope_version, access_mode, resource, result)` | `OP-PRV-015`, `OP-ORG-013` y toda lectura amparada | Exige exactamente un sujeto; la rama organización valida membership activo/tenant, modo/recurso cerrados y contexto personal nulo; toma actor, membresía, propósito, request y tiempo del contexto y falla la lectura si no puede registrar |
-| `create_assignment(rel_id, program_version_id, starts_on, tz)` | `OP-PLN-010` | Asignación + periodo de gestión + **materialización completa** de sesiones |
+| `create_assignment(rel_id, program_version_id, starts_on, tz)` | `OP-PLN-010` | Asignación + periodo de gestión + materialización de sesiones: **completa** si la versión tiene fecha de fin, **la semana de la asignación** si no la tiene. En ningún caso queda pendiente de un job de calendario |
 | `resolve_detached_assignment(asg_id, choice)` | `OP-PLN-015` | Reutiliza la misma asignación o cancela solo sesiones futuras no iniciadas |
 | `start_attempt(planned_session_id)` | `OP-EXE-001` | `attempt_number` único y monotónico bajo concurrencia |
 | `finalize_execution(execution_id)` | `OP-EXE-006` | Valida contra el contrato congelado, escribe el evento de validación, cierra, resuelve primaria, encola derivados |

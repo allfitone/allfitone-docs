@@ -2254,6 +2254,8 @@ Reglas que gobiernan todo el dominio:
 | `OP-PLN-029` | Descartar un programa propio | Comando | `A2` |
 | `OP-PLN-030` | Consultar mi programa sin publicar | Consulta | `A2` |
 | `OP-PLN-033` | Vestir mi programa | Comando | `A2` |
+| `OP-PLN-034` | Eliminar mi programa | Comando | `A2` |
+| `OP-PLN-035` | Duplicar mi programa | Comando | `A2` |
 
 ---
 
@@ -2383,14 +2385,14 @@ Reglas que gobiernan todo el dominio:
 | **Tipo** | Comando |
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/programs/{id}/versions` · `POST /space/v1/programs/{id}/versions` |
 | **Actor** | `A3`–`A5`; `A2` para programas personales |
-| **Filtros obligatorios** | Borrador con al menos una posición; cada posición apunta a una versión de plantilla **publicada** |
-| **Transacción** | Crear `PROGRAM_VERSION` inmutable con sus `PROGRAM_VERSION_SESSION` y su numeración |
+| **Filtros obligatorios** | Borrador con al menos una posición; cada posición apunta a una versión de plantilla **publicada**; si el borrador declara `repeats_forever`, es booleano |
+| **Transacción** | Crear `PROGRAM_VERSION` inmutable con sus `PROGRAM_VERSION_SESSION` y su numeración. El borrador puede declarar `repeats_forever` —opcional, ausente es `false`— y **la versión publicada la lleva**: es contenido, entra en el canónico y por tanto en el `content_hash` (`ADR-032`) |
 | **Idempotencia** | `Idempotency-Key`. Publicaciones equivalentes convergen a una sola versión |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada; numeración serializada |
 | **Información sensible** | Contenido de entrenamiento |
 | **Evento de dominio** | `planning.program_version_published.v1` |
-| **Reglas** | Un programa v1 fijado a la plantilla v1 sigue en v1 aunque exista v2 de la plantilla: adoptar la nueva exige **publicar otra versión de programa**. Una versión publicada nunca se edita |
+| **Reglas** | Un programa v1 fijado a la plantilla v1 sigue en v1 aunque exista v2 de la plantilla: adoptar la nueva exige **publicar otra versión de programa**. Una versión publicada nunca se edita. **Que el programa no tenga fecha de fin es parte de lo que se publica**, no de cómo se presenta: dos versiones que sólo difieren en `repeats_forever` proponen entrenamientos distintos y no comparten hash. `content_schema_version` sigue siendo `1`, porque una clave opcional con valor por defecto no cambia la forma del contenido |
 | **Falla cerrada** | Posición apuntando a versión no publicada, rechazo |
 
 #### `OP-PLN-009` — Deprecar una versión de programa
@@ -2418,13 +2420,13 @@ Reglas que gobiernan todo el dominio:
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/relationships/{relId}/assignments` |
 | **Actor** | `A3` con asignación efectiva vigente |
 | **Filtros obligatorios** | **FÓRMULA**, más: versión de programa publicada, no deprecada y perteneciente a `{orgId}`; relación vigente; fecha de inicio y zona horaria de la persona |
-| **Transacción** | Una sola: crear `PROGRAM_ASSIGNMENT` congelando la versión exacta y la relación de origen; abrir el `ASSIGNMENT_MANAGEMENT_PERIOD` de esa relación; **materializar todas las `PLANNED_SESSION`** derivadas de la composición, resueltas en la zona horaria de la persona |
+| **Transacción** | Una sola: crear `PROGRAM_ASSIGNMENT` congelando la versión exacta y la relación de origen; abrir el `ASSIGNMENT_MANAGEMENT_PERIOD` de esa relación; **materializar las `PLANNED_SESSION`** derivadas de la composición, resueltas en la zona horaria de la persona: **con fecha de fin, todas**; sin fecha de fin, **la semana de calendario en la que se asigna**, porque ahí no hay un «todas» (`ADR-032`) |
 | **Idempotencia** | `Idempotency-Key`. Un reintento no crea una segunda asignación ni duplica sesiones |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Requiere `relationship_training` vigente: sin grant no hay asignación |
 | **Evento de dominio** | `planning.assignment_created.v1` |
-| **Reglas** | La agenda se materializa **en el momento de asignar**, no por un job periódico: no existe una ventana de calendario que dependa de que un worker corra a tiempo. La relación de origen es inmutable. No hay límite de asignaciones activas simultáneas; los solapamientos de agenda se **advierten**, no se bloquean |
+| **Reglas** | La agenda se materializa **en el momento de asignar**, no por un job periódico: no existe una ventana de calendario que dependa de que un worker corra a tiempo, y `ADR-032` no crea ninguno. De un programa con fecha de fin se materializa la composición entera; de uno sin fecha de fin, la semana de la asignación, y cada semana posterior la siembra la lectura que va a enseñarla —`OP-PLN-016` y `OP-PLN-022`— un instante antes de mostrarla. La relación de origen es inmutable. No hay límite de asignaciones activas simultáneas; los solapamientos de agenda se **advierten**, no se bloquean |
 | **Falla cerrada** | Sin grant `relationship_training` vigente, rechazo |
 
 #### `OP-PLN-011` — Autoasignarse un programa
@@ -2441,7 +2443,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Ninguna se comparte: es contenido personal |
 | **Evento de dominio** | `planning.assignment_created.v1` |
-| **Reglas** | La copia es una plantilla nueva con identidad propia, así que las métricas por rutina de la persona cuentan su copia; la procedencia es lo único que permite agregar cuánta gente entrena algo derivado de un programa de Allfit. Una asignación personal no tiene gestor y nadie la administra. Ninguna organización la ve, salvo que un grant la incluya explícitamente. **Tomar un programa global es quedárselo**: la persona pasa a ser dueña de una copia, así que lo que Allfit publique después no la alcanza y lo que ella cambie no alcanza a nadie. La inmutabilidad de una versión publicada ya protegía del cambio; lo que la copia añade es la propiedad, que es lo que hace posible editarlo. Partir el acto en dos operaciones dejaría a alguien dueño de una copia sin asignación si fallara la segunda mitad. **El calendario se materializa por semanas de calendario**: la semana N del programa cae en la semana N contada desde la que contiene el día de la asignación |
+| **Reglas** | La copia es una plantilla nueva con identidad propia, así que las métricas por rutina de la persona cuentan su copia; la procedencia es lo único que permite agregar cuánta gente entrena algo derivado de un programa de Allfit. Una asignación personal no tiene gestor y nadie la administra. Ninguna organización la ve, salvo que un grant la incluya explícitamente. **Tomar un programa global es quedárselo**: la persona pasa a ser dueña de una copia, así que lo que Allfit publique después no la alcanza y lo que ella cambie no alcanza a nadie. La inmutabilidad de una versión publicada ya protegía del cambio; lo que la copia añade es la propiedad, que es lo que hace posible editarlo. Partir el acto en dos operaciones dejaría a alguien dueño de una copia sin asignación si fallara la segunda mitad. **El calendario se materializa por semanas de calendario**: la semana N del programa cae en la semana N contada desde la que contiene el día de la asignación. Si la versión **no tiene fecha de fin**, esta transacción materializa sólo la semana en la que se asigna: lo demás lo siembra la lectura de la agenda, semana a semana, y no un job periódico (`ADR-032`) |
 | **Falla cerrada** | — |
 
 #### `OP-PLN-012` — Reprogramar una sesión planificada
@@ -2520,13 +2522,13 @@ Reglas que gobiernan todo el dominio:
 | **Superficie** | `GET /space/v1/agenda?from=&to=` |
 | **Actor** | `A2` |
 | **Filtros obligatorios** | Sesiones planificadas de asignaciones propias |
-| **Transacción** | Ninguna |
-| **Idempotencia** | N/A |
+| **Transacción** | Siembra previa de **una** semana: antes de responder, la lectura materializa la semana que va a enseñar de cada asignación propia cuya versión no tenga fecha de fin. Nada más |
+| **Idempotencia** | La siembra es idempotente: si ya existe una fila de esa asignación para esa semana, no se toca nada, y un `pg_advisory_xact_lock` por asignación impide que dos lecturas simultáneas siembren dos veces |
 | **Paginación y orden** | Cursor. Orden: fecha planificada ascendente, desempate por identificador |
 | **Offline / concurrencia** | Cacheable en el dispositivo: Space precarga una ventana para poder entrenar sin conexión |
 | **Información sensible** | Agenda y contenido de entrenamiento propios |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Resuelve todo en la **zona horaria de la persona**. Incluye asignaciones administradas, personales y desacopladas, distinguiendo su estado. Las sesiones de una asignación desacoplada aparecen como pausadas, no como incumplidas |
+| **Reglas** | Resuelve todo en la **zona horaria de la persona**. Incluye asignaciones administradas, personales y desacopladas, distinguiendo su estado. Las sesiones de una asignación desacoplada aparecen como pausadas, no como incumplidas. **Esta lectura escribe, y es junto con `OP-PLN-022` la única de toda la matriz que lo hace:** un programa sin fecha de fin no tiene agenda materializada más allá de la semana en que se asignó, así que la lectura siembra la semana que está a punto de enseñar. Es **una semana y ni un día más**, es idempotente, y se hace aquí y no en un worker porque `OP-EXE-001` exige que la fila planificada exista —nadie entrena una semana sin sembrar— y porque un horizonte que sólo extendiera el acto de entrenar dejaría a quien vuelve después de dos meses frente a una semana vacía que ya nadie podría sembrar (`ADR-032`) |
 | **Falla cerrada** | — |
 
 #### `OP-PLN-017` — Consultar una asignación propia
@@ -2577,7 +2579,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Cacheable para presentación |
 | **Información sensible** | Contenido de entrenamiento de la organización. El catálogo `global` no lo es: es contenido publicado de Allfit |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Distingue explícitamente borrador de versiones publicadas. Los programas maestros de una organización **no** son visibles bajo `prior_training_history` de otra. El contenido `global` lo lee cualquier persona autenticada y **no** pertenece a ninguna organización, que es lo que `OP-PLN-011` ya asumía al admitir una versión «propia o global» |
+| **Reglas** | Distingue explícitamente borrador de versiones publicadas. Los programas maestros de una organización **no** son visibles bajo `prior_training_history` de otra. El contenido `global` lo lee cualquier persona autenticada y **no** pertenece a ninguna organización, que es lo que `OP-PLN-011` ya asumía al admitir una versión «propia o global». **`weeks` puede venir nula**, y significa que la versión no tiene fecha de fin: no es un dato que falte, es que no hay un número que dar. Los días por semana se siguen derivando siempre, y el filtro de catálogo mira el número de sesiones y no si `weeks` existe, porque si no un programa sin fin desaparecería de él (`ADR-032`) |
 | **Falla cerrada** | — |
 
 #### `OP-PLN-022` — Consultar mi día
@@ -2588,13 +2590,13 @@ Reglas que gobiernan todo el dominio:
 | **Superficie** | `GET /space/v1/today` |
 | **Actor** | `A2` |
 | **Filtros obligatorios** | Lo propio de la persona autenticada, en su zona horaria |
-| **Transacción** | Ninguna |
-| **Idempotencia** | N/A |
+| **Transacción** | Siembra previa de **una** semana, la misma de `OP-PLN-016`: antes de componer la respuesta se materializa la semana en curso de cada asignación propia sin fecha de fin |
+| **Idempotencia** | La siembra es idempotente y está serializada por asignación; repetir la lectura no duplica ninguna sesión |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Cacheable para presentación |
 | **Información sensible** | Agenda, entrenamiento y peso corporal, cada uno con su categoría |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Cierra el hueco que `HU-SP-089` tenía anotado como `NEW-SP-TODAY`. **Compone, no centraliza**: Planificación responde por lo que hay agendado esta semana, Ejecución por lo entrenado y por el historial, e Identidad por el peso vigente; la superficie los junta en una respuesta porque la pantalla no puede dibujar ninguno sin los otros. Ningún dominio lee las tablas de otro. **La unidad es la semana de calendario, de lunes a domingo**, y la sesión que se ofrece es la siguiente pendiente de esa semana, no la fechada hoy: el día es una sugerencia. Cumplida la semana no se adelanta la siguiente; se dice que está cumplida. Lo que quede sin hacer **no se arrastra** |
+| **Reglas** | Cierra el hueco que `HU-SP-089` tenía anotado como `NEW-SP-TODAY`. **Compone, no centraliza**: Planificación responde por lo que hay agendado esta semana, Ejecución por lo entrenado y por el historial, e Identidad por el peso vigente; la superficie los junta en una respuesta porque la pantalla no puede dibujar ninguno sin los otros. Ningún dominio lee las tablas de otro. **La unidad es la semana de calendario, de lunes a domingo**, y la sesión que se ofrece es la siguiente pendiente de esa semana, no la fechada hoy: el día es una sugerencia. Cumplida la semana no se adelanta la siguiente; se dice que está cumplida. Lo que quede sin hacer **no se arrastra**. **Esta lectura también siembra**, por la misma razón y con los mismos límites que `OP-PLN-016`: si el programa no tiene fecha de fin, la semana en curso se materializa aquí, acotada a una semana e idempotente, y no existe ninguna otra lectura de la matriz que escriba |
 | **Falla cerrada** | — |
 
 #### `OP-PLN-024` — Ordenar mis programas
@@ -2638,7 +2640,7 @@ Reglas que gobiernan todo el dominio:
 | **Tipo** | Comando |
 | **Superficie** | `POST /space/v1/session-templates/{id}/discard` |
 | **Actor** | `A2` sobre contenido propio |
-| **Filtros obligatorios** | La plantilla es de la persona autenticada y no tiene ninguna versión publicada |
+| **Filtros obligatorios** | La plantilla es de la persona autenticada, tenga o no versiones publicadas: una plantilla publicada **también** se descarta, y los programas propios que la componen se republican sin ella |
 | **Transacción** | Llevar la plantilla a `archived`, retirar su borrador, y **republicar cada programa propio que la usaba sin ella**, mudando la asignación a la versión nueva. Todo en la misma transacción: partirlo dejaría a alguien con una rutina descartada que su programa sigue pidiendo |
 | **Idempotencia** | `Idempotency-Key` + `Command-Id`; descartar dos veces converge |
 | **Paginación y orden** | No aplica |
@@ -2663,7 +2665,7 @@ Reglas que gobiernan todo el dominio:
 | **Información sensible** | Contenido de entrenamiento |
 | **Evento de dominio** | `planning.program_discarded.v1` |
 | **Reglas** | El gemelo de `OP-PLN-028` y por las mismas razones. **Es un estado, no un borrado**, y un programa con versión publicada **no se descarta**: hay asignaciones que la referencian y sesiones ya materializadas contra ella. Sin esta operación, un programa que alguien empieza y abandona queda huérfano — existe, cuenta y nadie puede alcanzarlo, que es exactamente el hueco que `OP-PLN-023` cerró del lado de las rutinas |
-| **Falla cerrada** | Con versión publicada, rechazo |
+| **Falla cerrada** | Con versión publicada, rechazo — y la salida es `OP-PLN-034`, que elimina el programa entero en lugar de tirar un borrador que a esas alturas ya no existe |
 
 #### `OP-PLN-030` — Consultar mi programa sin publicar
 
@@ -2699,6 +2701,40 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | **El estilo es del programa y vale para todas sus rutinas**, porque la pantalla Hoy las abre en un carrusel y seis estilos mezclados se leen como un muestrario y no como una semana: la decisión es de quien ve las seis juntas, no de quien escribe una. Dentro del estilo, `muscles` dibuja lo que cada rutina trabaja y `photo` toma del catálogo la que corresponde a la región dominante de sus músculos; `icon` sí es el mismo para todas, porque un icono se elige y no se calcula. **Surte efecto al momento y no acuña versión de nada** —ni de programa ni de rutina—, igual que `OP-PLN-024` no publica nada por reordenar: la presentación no es contenido. Vive en `planning.programs` y no en la versión publicada, porque una versión es lo que alguien entrenó y cambiar cómo se ve una tarjeta no cambia lo que se entrena (`ADR-031`) |
 | **Falla cerrada** | **Un programa tomado de Allfit no se reviste**, porque se ve como Allfit lo armó: `content_scope` distinto de `person`, programa ajeno o inexistente responden lo mismo, para no revelar cuál de las tres cosas es |
 
+#### `OP-PLN-034` — Eliminar mi programa
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/programs/{programId}/remove` |
+| **Actor** | `A2` sobre programa propio |
+| **Filtros obligatorios** | El programa es de la persona autenticada (`owner_person_id`). Vale igual para uno que escribió y para uno de Allfit que tomó: tomarlo lo bifurcó y la copia es suya |
+| **Transacción** | Llevar el programa a `archived` y retirar su borrador; pasar sus versiones publicadas a `deprecated`; terminar la asignación personal de la persona sobre esas versiones y retirar sus sesiones planificadas no cumplidas; y, si se pidió con rutinas, archivar las que sólo este programa usaba. Todo en una sola transacción y **en ese orden**: el programa se archiva antes que las rutinas, porque el republicado de `OP-PLN-028` filtra los programas no archivados y republicar el que acaba de irse sería resucitarlo |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; eliminar dos veces converge |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada |
+| **Información sensible** | Contenido de entrenamiento |
+| **Evento de dominio** | `planning.program_discarded.v1`, `planning.assignment_ended.v1`, y un `planning.session_template_discarded.v1` por cada rutina archivada |
+| **Reglas** | **Es un estado, no un borrado**, por la misma línea que ya sostienen `OP-PLN-028` y `OP-PLN-029`: el programa pasa a `archived`, sus versiones publicadas a `deprecated` y la asignación personal a `lifecycle = 'ended'` —**primer escritor de ese valor en Space**, y para eso estaba el enumerado—. Las versiones no se destruyen: hay sesiones planificadas que las apuntan y `ADR-009` las congela. Lo único que se retira son las sesiones planificadas **que nadie entrenó**; lo entrenado se queda, y no por cortesía: la clave foránea de `planned_session_executions` es `RESTRICT` y se niega, pero antes que eso, un entrenamiento es de quien lo hizo y la plataforma no tiene nada que borrar ahí. Con la petición de llevarse las rutinas se archivan **sólo las que ningún otro programa no archivado de la persona use** —propias, presentes en la composición de alguna versión suya—, en sitio y sin pasar por `OP-PLN-028`, porque esa operación lleva su propio recibo de idempotencia y un comando no puede llevar dos. **Una rutina compartida se queda**: borrarla rompería el otro programa, y `OP-PLN-028` ya se niega a dejar un programa sin una sola sesión — sería pedirle al dominio exactamente lo que el dominio prohíbe. Eliminar un programa y descartar un borrador (`OP-PLN-029`) son **dos actos distintos**: el segundo tira lo que nunca llegó a publicarse y no toca ninguna rutina |
+| **Falla cerrada** | Programa ajeno e inexistente responden igual, para no hacer enumerable la biblioteca del vecino. Ninguna sesión con ejecución se retira: la clave foránea `RESTRICT` rechaza la transacción entera antes que perder un entrenamiento |
+
+#### `OP-PLN-035` — Duplicar mi programa
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/programs/{programId}/duplicate` |
+| **Actor** | `A2` sobre programa propio |
+| **Filtros obligatorios** | El programa es de la persona autenticada. La composición se toma de su **última versión publicada**, o de su borrador si nunca se publicó |
+| **Transacción** | Crear un `PROGRAM` propio con `content_scope = 'person'` y `status = 'draft'`, que hereda el estilo de portada del original, y su `PROGRAM_DRAFT` con la composición copiada tal cual —pasada por la canonicalización de contenido, con `repeats_forever` incluido— y el título con sufijo |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; reenviar la misma petición devuelve la copia que ya existe y no una segunda |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada |
+| **Información sensible** | Ninguna se comparte: es contenido personal |
+| **Evento de dominio** | `planning.program_created.v1` |
+| **Reglas** | **No acuña ninguna versión y no crea ninguna asignación.** La copia nace borrador y nada más: sólo se vuelve real cuando la persona la publica, y tirarla es `OP-PLN-029`. Hasta entonces no hay nada en la agenda, ninguna sesión materializada y nadie a quien le exista. **Las rutinas no se copian**: la composición apunta a las mismas versiones de plantilla, que son inmutables y por eso se comparten sin que un programa le cambie el contenido al otro; copiarlas duplicaría la biblioteca de la persona por cambiarle el nombre a un programa. El título es el del original con el sufijo **« - Copia»**, recortado a 160 caracteres antes de añadirlo, de modo que la copia se distinga del original sin abrirla. El estilo de portada se hereda —`routine_cover_kind` y `routine_cover_icon`— porque el estilo es del programa (`OP-PLN-033`) y una copia se reconoce igual que su original. Sirve además para lo que hoy no tiene salida: **un programa tomado de Allfit llega sin borrador y no se puede editar**, y duplicarlo da una copia propia que sí |
+| **Falla cerrada** | Programa ajeno e inexistente responden igual. Un programa sin versión publicada y sin borrador no se duplica: no hay composición que copiar |
+
 #### `OP-PLN-021` — Consultar una versión publicada
 
 | Campo | Valor |
@@ -2713,7 +2749,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Cacheable: es contenido inmutable |
 | **Información sensible** | Contenido de entrenamiento |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Una persona puede leer íntegramente la versión que le fue asignada, aunque pertenezca a una organización: es el contenido que va a ejecutar. Eso **no** le da acceso al resto del catálogo de esa organización. Ausente y prohibido responden igual: distinguirlos haría enumerable el catálogo ajeno de identificador en identificador |
+| **Reglas** | Una persona puede leer íntegramente la versión que le fue asignada, aunque pertenezca a una organización: es el contenido que va a ejecutar. Eso **no** le da acceso al resto del catálogo de esa organización. Ausente y prohibido responden igual: distinguirlos haría enumerable el catálogo ajeno de identificador en identificador. **`weeks` puede venir nula** cuando la versión no tiene fecha de fin, y quien la dibuja escribe «sin fecha de fin» en lugar de un total que no existe (`ADR-032`) |
 | **Falla cerrada** | — |
 
 ### 7.7 Ejecución

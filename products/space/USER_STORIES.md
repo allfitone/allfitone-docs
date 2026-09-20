@@ -893,7 +893,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 
 1. Puedo asignarme un programa propio o uno global publicado.
 2. **Al tomar un programa de Allfit me queda una copia mía.** Lo que Allfit publique después no me toca, y lo que yo cambie no le toca a nadie más. El programa aparece entre los míos porque lo es, no porque se lo esté tomando prestado.
-3. Mi agenda queda creada completa en el momento de asignarme el programa, no cuando un proceso corra más tarde.
+3. **Mi agenda existe desde el momento en que me asigno el programa, no cuando un proceso corra más tarde.** Si el programa termina, queda creada entera ahí mismo. Si no termina no hay un «entera» que crear, así que queda creada la semana en la que lo tomo, y cada semana siguiente aparece completa cuando abro la agenda para verla: nunca la estoy esperando, y nunca depende de que algo haya corrido por su cuenta.
 4. **Mi agenda se organiza por semanas de calendario**, de lunes a domingo. La semana 1 del programa es la semana en la que lo tomo, así que empezar un viernes deja esa semana corta: lo que no alcance no se arrastra.
 5. Nadie administra esta asignación: no tiene profesional a cargo.
 6. Ninguna organización la ve, salvo que yo comparta explícitamente esa categoría.
@@ -975,7 +975,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 
 1. Al salir de una rutina con nombre pero sin publicar, elijo entre guardarla como borrador o descartarla.
 2. Descartar la retira de mi contenido; no aparece más en mis rutinas.
-3. Una rutina ya publicada no se descarta por esta vía: para eso está retirar la versión.
+3. Una rutina ya publicada **también se descarta**, y los programas míos que la usaban se republican sin ella; lo que ya entrené con ella no cambia.
 4. Descartar dos veces la misma rutina no es un error.
 
 ### HU-SP-107 — Retomar el programa que dejé a medias
@@ -1005,8 +1005,29 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 
 1. Al salir de un programa con nombre pero sin publicar, elijo entre guardarlo como borrador o descartarlo.
 2. Descartar lo retira de mi contenido y deja de ofrecerse para retomar.
-3. Un programa ya publicado no se descarta por esta vía: hay asignaciones que dependen de él.
+3. Un programa ya publicado no se descarta por esta vía: hay asignaciones que dependen de él. Eliminarlo es otro acto, y lo dicen los criterios siguientes.
 4. Descartar dos veces el mismo programa no es un error.
+5. Un programa publicado **sí lo puedo eliminar**, desde su menú, y antes se me confirma diciéndome qué se lleva.
+6. Eliminarlo lo saca de mi biblioteca y de mi agenda: deja de aparecer entre mis programas y desaparecen las sesiones que no llegué a entrenar.
+7. Si lo pido, **se eliminan también sus rutinas**, salvo las que esté usando otro programa mío: esas se quedan, y la confirmación me dice cuáles y por qué.
+8. **Lo que ya entrené se conserva**, entero y en mi historial. Eliminar un programa no borra ni un entrenamiento.
+
+### HU-SP-110 — Duplicar un programa que ya tengo
+
+**Como** persona
+**quiero** partir de un programa que ya tengo para armar el siguiente
+**para** no volver a escribir la semana entera por cambiarle dos cosas.
+
+`E-SP-06` · importante
+
+**Criterios**
+
+1. Duplicar un programa me deja un **borrador** con la misma semana, la misma duración y la misma portada que el original: empiezo donde el otro terminó.
+2. La copia se llama «<Nombre> - Copia», para distinguirla del original sin abrirla.
+3. Hasta que la publico **no existe para nadie más**: no se me asigna, no aparece en mi agenda y no hay ninguna sesión planificada contra ella.
+4. Si salgo sin terminarla, elijo entre guardarla como borrador o descartarla, igual que con un programa nuevo (`HU-SP-106`).
+5. Un programa que tomé de Allfit también se duplica, y **esa copia sí la puedo editar**.
+6. Mis rutinas no se duplican con él: la copia usa las mismas, y mi biblioteca no crece por copiar un programa.
 
 ### HU-SP-104 — Definir mis series una por una
 
@@ -1124,6 +1145,9 @@ segunda revisión de `ADR-031`.
 1. Cada posición del programa apunta a una **versión exacta** de plantilla, nunca a "la última".
 2. No puedo componer con un borrador de plantilla.
 3. Si uso versiones retiradas puedo seguir editando, pero al publicar se me advierte.
+4. **No tengo que decir cuándo se acaba.** Un programa que armo yo no tiene fecha de fin mientras no le ponga una: lo que compongo se repite hasta que lo cambie. Es así de entrada, sin que yo active nada.
+5. **Puedo ponerle un final si lo quiero**, y entonces el programa dura las semanas que compuse y se acaba cuando se acaban. Poner o quitar ese final cambia lo que voy a entrenar, así que es parte de lo que publico y no un ajuste de presentación.
+6. Donde un programa con final me dice «8 semanas · 3 días por semana · 24 sesiones», uno sin final me dice **«Sin fecha de fin · 3 días por semana»**: no me inventa un total de sesiones que no existe.
 
 ### HU-SP-048 — Publicar una versión de mi programa
 
@@ -1877,7 +1901,7 @@ y lo sigue viendo.
 1. Veo programas que corresponden a lo que conté en el onboarding: mi objetivo y cuánto he entrenado. No es un catálogo genérico.
 2. **Elijo cuántos días por semana puedo comprometer.** Se me ofrecen tres, cuatro y cinco días para mi objetivo y mi nivel, y ninguna de esas opciones es contenido pensado para otro nivel.
 3. Uno viene marcado como sugerido, y puedo elegir otro sin fricción. La sugerencia orienta, no decide.
-4. De cada programa veo antes de elegir cuántos días son, cuántas semanas dura, para qué nivel es y qué zonas trabaja.
+4. De cada programa veo antes de elegir cuántos días son, cuántas semanas dura, para qué nivel es y qué zonas trabaja. Si el programa **no tiene fecha de fin**, donde iría la duración leo «Sin fin» en la tarjeta y «Sin fecha de fin» en el detalle: sé que se repite hasta que yo lo cambie, en vez de ver un número en blanco o uno inventado.
 5. **Antes de comprometerme veo el contenido completo**: cada día del reparto, con sus ejercicios y sus series. Ocho semanas no se deciden con un resumen.
 6. Puedo ver el catálogo completo, no solo lo que me proponen.
 7. **Al elegir uno, tengo sesiones en mi agenda desde hoy**, en mi zona horaria. Elegir no es una intención: es un plan.

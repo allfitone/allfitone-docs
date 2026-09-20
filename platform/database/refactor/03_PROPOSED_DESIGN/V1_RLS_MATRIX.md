@@ -833,11 +833,14 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 - **`T-TPL-3` (positiva)** — Una persona sin organización lee el catálogo `global` completo.
 - **`T-TPL-4` (negativa)** — Leer el catálogo `global` **no** abre nada de ninguna organización: el vecino sigue sin ver el contenido privado del otro.
 - **`T-TPL-5` (negativa)** — El borrador de una persona no lo lee otra por `OP-PLN-023`: ajeno e inexistente responden igual, de modo que la respuesta no revela cuál de las dos cosas es.
-- **`T-TPL-6` (negativa)** — `OP-PLN-028` no descarta una plantilla con versión publicada. Programas y asignaciones pueden referenciarla, y retirar de usos nuevos ya tiene su operación.
+- **`T-TPL-6` (positiva)** — `OP-PLN-028` **sí descarta una plantilla con versión publicada**, y en la misma transacción republica sin ella cada programa propio que la componía, mudando la asignación a la versión nueva. La versión anterior de cada programa queda intacta, porque es lo que alguien entrenó. La negativa que esta prueba afirmaba hasta entonces dejó de ser cierta cuando se reescribió el descarte de rutinas.
 - **`T-TPL-7` (positiva)** — Descartar lleva la plantilla a `archived` y retira su borrador **sin borrar ninguna fila**: el grant de arriba no tiene `DELETE` y el descarte no lo necesita.
 - **`T-TPL-8` (negativa)** — `OP-PLN-029` no descarta un programa con versión publicada. Hay asignaciones que la referencian y sesiones materializadas contra ella.
 - **`T-TPL-9` (positiva)** — Descartar un programa lo lleva a `archived` y retira su borrador, y lo saca de lo que la persona puede retomar. Mismo grant, misma ausencia de `DELETE`.
 - **`T-TPL-10` (negativa)** — `OP-PLN-030` no devuelve el borrador de otra persona ni uno archivado: retomar lo propio no puede convertirse en enumerar lo ajeno.
+- **`T-TPL-13` (negativa)** — Un vecino **no elimina ni duplica** el programa de otra persona: ni `OP-PLN-034` ni `OP-PLN-035` alcanzan una sola fila bajo la política, y ajeno e inexistente responden igual para no hacer enumerable la biblioteca del otro.
+- **`T-TPL-14` (positiva)** — `OP-PLN-034` lleva a `archived` un programa **con versión publicada**, que es justo lo que `T-TPL-8` niega a `OP-PLN-029`, y con la petición de llevarse las rutinas archiva **sólo las que ningún otro programa no archivado de la persona use**: una rutina compartida se queda, y el programa que la comparte sigue teniendo todas sus sesiones.
+- **`T-TPL-15` (positiva)** — `OP-PLN-035` crea un programa y su borrador propios y **no acuña ninguna versión ni ninguna asignación**; la copia no inserta, edita ni archiva ninguna plantilla, porque apunta a las mismas versiones inmutables que el original.
 - **`T-TPL-11` y `T-TPL-12` — retiradas.** Cubrían la fotografía personal de portada, que la segunda revisión de `ADR-031` retiró junto con su tabla. La portada de clase `foto` es ahora una imagen del catálogo, pública e idéntica para todo el mundo: no hay nada que aislar por persona. La tercera revisión mudó además el estilo de portada a `planning.programs`, que ya está cubierta por la política de fila del programa: vestir un programa no alcanza a ninguna tabla nueva.
 
 #### `SESSION_TEMPLATE_VERSION` · `PLANNED_STEP` · `PLANNED_SET` · targets · `PROGRAM_VERSION` · `PROGRAM_VERSION_SESSION`
@@ -878,6 +881,8 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 - **`T-ASG-5` (positiva)** — Terminarla cancela **solo** las sesiones futuras no iniciadas.
 - **`T-ASG-6` (negativa)** — Una relación nueva no hereda la gestión de una asignación desacoplada.
 - **`T-ASG-7` (positiva)** — Una adaptación personal crea una revisión de prescripción **sin** editar plantilla ni programa publicados.
+- **`T-ASG-8` (positiva)** — Eliminar el programa propio (`OP-PLN-034`) deja su asignación personal en `ended` **sin borrar la fila**: el grant de arriba sigue sin `DELETE` y `UPDATE(lifecycle)` es todo lo que la operación necesita. Ninguna asignación de otra persona, ni ninguna originada por una relación, cambia de estado.
+- **`T-ASG-9` (negativa)** — Un vecino no termina la asignación de otro eliminando un programa: la operación no ve el programa ajeno, así que tampoco ve la asignación que cuelga de él.
 
 #### `PLANNED_SESSION` · `PLANNED_SESSION_EXECUTION`
 
@@ -888,12 +893,15 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 | Resto | — | — | — | — |
 
 - **Condición RLS** — Heredan de la asignación. La reprogramación exige periodo de gestión **vigente** y que la sesión no tenga ejecución iniciada.
-- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(scheduled_at, status)`. Sin `DELETE`.
+- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(scheduled_at, status)`. **Sigue sin `DELETE`, y `OP-PLN-034` no lo cambia.** Eliminar un programa retira las sesiones que nadie entrenó, pero ese borrado no lo ejecuta el rol del runtime: lo ejecuta la función `security definer` que lleva la operación, como ya lo hacía `restate_assignment_onto` al re-plantear una asignación. Un privilegio que sólo hace falta dentro de una transacción escrita y revisada no se concede al rol que atiende peticiones. El límite último lo pone además la base: la clave foránea `RESTRICT` de `PLANNED_SESSION_EXECUTION` rechaza la transacción entera si una sola sesión con ejecución cae en el conjunto. `PLANNED_SESSION_EXECUTION` no se borra nunca, por nadie.
 - **Índice para la policy** — sobre `(assignment_id, scheduled_at)` y **único** sobre `(planned_session_id, attempt_number)`.
 - **`T-PLAN-1` (positiva)** — Una sesión planificada admite intentos numerados; el número es único y monotónico.
 - **`T-PLAN-2` (negativa)** — La concurrencia no crea números de intento duplicados: dos peticiones simultáneas producen uno solo.
 - **`T-PLAN-3` (negativa)** — Un coach no puede reprogramar una sesión de una asignación desacoplada: ya no hay gestor.
-- **`T-PLAN-4` (positiva)** — Al asignar, todas las sesiones quedan materializadas en la misma transacción y en la zona horaria de la persona.
+- **`T-PLAN-4` (positiva)** — Al asignar una versión **con fecha de fin**, todas sus sesiones quedan materializadas en la misma transacción y en la zona horaria de la persona.
+- **`T-PLAN-5` (positiva)** — Al asignar una versión **sin fecha de fin** queda materializada la semana de la asignación, y la lectura de la agenda siembra la semana que va a enseñar: dos lecturas simultáneas de esa semana la siembran **una sola vez**, y repetir la lectura no duplica ninguna sesión. El `INSERT` que esa siembra necesita es el mismo que la ficha ya concede a `allfit_api`; no hace falta ningún grant nuevo para sembrar.
+- **`T-PLAN-6` (positiva)** — Eliminar un programa (`OP-PLN-034`) retira sus sesiones planificadas **sin ejecución** y deja intactas las que tienen alguna: lo que la persona entrenó sobrevive al programa que lo pedía. El borrado ocurre dentro de la función de la operación y no por un privilegio de `allfit_api`, que sigue sin tenerlo. Una sesión con ejecución dentro del conjunto rechaza la transacción completa, y el programa no queda a medio eliminar.
+- **`T-PLAN-7` (negativa)** — Ese borrado no alcanza la sesión de otra persona ni la de otra asignación de la misma: la operación parte del programa, que ya es suyo, y `allfit_api` no tiene con qué borrar una fila por su cuenta.
 
 ### 7.7 Ejecución
 

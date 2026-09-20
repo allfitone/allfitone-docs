@@ -1241,6 +1241,15 @@ crece, y el producto dibuja la figura del cuerpo en su lugar.
 - **Retención:** con el owner.
 - **Eventos:** `planning.session_template_created.v1`.
 
+**`archived` tiene dos escritores y ninguno borra nada.** El primero es `OP-PLN-028`, que
+descarta la plantilla porque la persona lo pidió. El segundo es `OP-PLN-034`: al eliminar
+un programa, si la persona pide llevarse sus rutinas, se archivan **sólo las que ningún
+otro programa no archivado suyo use**. Una rutina compartida se queda donde está, porque
+archivarla dejaría al otro programa pidiendo una sesión que ya no existe, y `OP-PLN-028`
+ya se niega a dejar un programa sin ninguna. El archivado colateral ocurre en sitio, en la
+misma transacción del programa y sin pasar por `OP-PLN-028`, que lleva su propio recibo de
+idempotencia.
+
 ### 9.2 `planning.session_template_drafts`
 
 - **Propósito:** contenido editable de una plantilla; nunca referenciable por un programa.
@@ -1383,6 +1392,15 @@ al terminarla. Los de los pasos intermedios no se aplican; `ADR-030` lo fija.
 - **Retención:** se archiva cuando deja de usarse; se conserva mientras una versión o asignación lo referencie.
 - **Eventos:** `planning.program_created.v1`.
 
+**Un programa que estuvo publicado ahora puede llegar a `archived`.** Hasta que existió
+`OP-PLN-034` no podía: `OP-PLN-029` rechaza cualquier programa con una versión publicada,
+de modo que `archived` era el final exclusivo de los borradores que nadie llegó a publicar
+—y la lista de programas, que sólo enseña los publicados, enseñaba exactamente lo que no
+se podía quitar—. Eliminar no destruye nada: el programa pasa a `archived`, sus versiones
+a `deprecated` porque hay historial y sesiones que las apuntan, y la asignación personal
+termina. `status` sigue siendo un estado del contenido y no un rastro de ejecución, y por
+eso archivar aquí no toca ni una fila de lo entrenado.
+
 **El estilo de portada de las rutinas vive aquí porque la decisión es del programa.** La
 pantalla Hoy abre con las rutinas de la semana en un carrusel, una al lado de otra: si
 cada rutina eligiera su propio estilo, esa fila mezclaría figuras de músculos, iconos y
@@ -1450,12 +1468,20 @@ filtra, lo declara.
 - **Retención:** se reemplaza de forma controlada mientras es borrador y se elimina con el programa; publicar crea una versión inmutable separada.
 - **Eventos:** `planning.program_draft_updated.v1`.
 
+**Sobre `repeats_forever` en el borrador.** El `content` puede traer la clave opcional
+`repeats_forever` —booleana, y ausente significa `false`—, que es lo que quien edita
+declara cuando su programa no tiene fecha de fin; la validación la admite en su lista
+blanca y rechaza cualquier valor que no sea booleano. `content_schema_version` **sigue
+siendo `1`**: una clave nueva, opcional y con valor por defecto no cambia la forma del
+documento, y subir el número obligaría a migrar borradores que se leen exactamente igual
+que ayer. Al publicar, la clave pasa a la columna homónima de la versión (`§9.11`).
+
 ### 9.11 `planning.program_versions`
 
 - **Propósito:** versión publicada e inmutable de un programa.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad histórica de cada versión publicada del programa.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `program_id uuid` · `version_number integer` · `title text` · `notes text` (nullable) · `content_hash bytea` · `sex_affinity identity.biological_sex` (nullable) · `status catalog.publication_status` · `published_at timestamptz`.
+- **Columnas:** `id` · `program_id uuid` · `version_number integer` · `title text` · `notes text` (nullable) · `repeats_forever boolean` (`not null default false`) · `content_hash bytea` · `sex_affinity identity.biological_sex` (nullable) · `status catalog.publication_status` · `published_at timestamptz`.
 - **FKs y borrado:** `program_id → programs(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE (program_id, version_number)`; inmutable. **`content_hash` no es único por programa**, por la misma razón que en `§9.3`: publicar una composición idéntica a una versión anterior crea la siguiente y no devuelve la vieja, cuyo identificador vive en asignaciones y sesiones planificadas.
 - **Actores:** el owner publica; owner y personas con asignaciones que la referencian leen; ningún runtime actualiza una versión publicada.
@@ -1463,6 +1489,21 @@ filtra, lo declara.
 - **Consultas / índices:** `(program_id, version_number)`.
 - **Retención:** permanente mientras esté referenciada por una asignación o forme parte del historial publicado.
 - **Eventos:** `planning.program_version_published.v1`, `planning.program_version_deprecated.v1`.
+
+**Sobre `repeats_forever`, que es lo único que dice si el programa termina.** Un programa
+marcado así **no tiene fecha de fin**: cuando su composición se acaba, vuelve a empezar, y
+es el valor por defecto de un programa nuevo en Space. La marca vive en la **versión** y no
+en el programa porque cambia lo que se entrena —un bloque de ocho semanas con final y una
+rutina sostenida son dos entrenamientos distintos aunque compartan hasta la última serie—,
+y por esa misma razón `planning.canonical_program_content` la emite siempre y **entra en
+el `content_hash`**: dos versiones que sólo difieren en ella no pueden compartir hash. La
+contrapartida está declarada en `ADR-032`: como el canónico ganó una clave, la primera
+republicación de un programa que ya existía acuña una versión aunque nadie haya tocado
+nada. Lo que se repite es **la composición entera y no «una semana»**: al número de semanas
+de la composición lo llamamos el ciclo, en Space suele valer uno porque se compone una
+semana, y un bloque de cuatro de Studio da la vuelta como bloque. La semana de composición
+que toca en la semana de programa `n` es `((n - 1) % ciclo) + 1`, que con ciclo uno es
+«siempre la misma semana» sin ningún caso especial que escribir.
 
 ### 9.12 `planning.program_version_sessions`
 
@@ -1491,6 +1532,18 @@ filtra, lo declara.
 - **Consultas / índices:** `(person_id, lifecycle)`, `(origin_relationship_id, lifecycle)`.
 - **Retención:** historial personal; se conserva al desacoplar.
 - **Eventos:** `planning.assignment_created.v1`, `planning.assignment_detached.v1`, `planning.assignment_cancelled.v1`, `planning.assignment_continued.v1`, `planning.assignment_ended.v1`.
+
+**`lifecycle = 'ended'` ya tiene quien lo escriba.** El valor estaba en el enumerado desde
+el principio y hasta `OP-PLN-034` ninguna operación de Space lo ponía: eliminar un
+programa propio termina la asignación personal que la persona se hizo sobre sus versiones.
+Para quien usa la aplicación significa una cosa concreta y sólo esa: **el programa se va
+de su biblioteca y de su agenda**, deja de aparecer entre los suyos y dejan de ofrecérsele
+sus sesiones. No significa que se haya ido su historial. La asignación **no se borra** —el
+grant de runtime no tiene `DELETE` sobre esta tabla y la columna `program_version_id`
+sigue apuntando a una versión que existe—, porque es de dónde cuelga cada ejecución que la
+persona hizo, y un entrenamiento tiene que poder explicarse después de que el programa que
+lo pedía ya no esté. Terminar es distinto de cancelar: `cancelled` lo escribe quien
+administraba desde una relación, y `ended` lo escribe la persona sobre lo suyo.
 
 ### 9.14 `planning.assignment_management_periods`
 
@@ -1522,18 +1575,24 @@ filtra, lo declara.
 
 ### 9.16 `planning.planned_sessions`
 
-- **Propósito:** sesión del calendario materializada al asignar; en la zona horaria de la persona. **Pertenece a una semana, no a un día.**
+- **Propósito:** sesión del calendario en la zona horaria de la persona. **Pertenece a una semana, no a un día.** Un programa **con fecha de fin** la materializa entera al asignar, como siempre; uno **sin fecha de fin** materializa al asignar la semana en la que se asigna, y cada semana posterior la **siembra la lectura que está a punto de enseñarla** (`ADR-032`). No hay job de calendario en ninguno de los dos casos.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del calendario materializado de una asignación.
 - **Clasificación:** `training`.
 - **Columnas:** `id` · `assignment_id uuid` · `person_id uuid` · `template_version_id uuid` · `program_day smallint` · `week_starts_on date` · `scheduled_at timestamptz` · `timezone text` · `status text` (`scheduled`, `paused`, `cancelled`, `completed`).
 - **`week_starts_on` es lo que decide qué se ofrece**, y es el lunes de la semana de calendario a la que pertenece la sesión. `scheduled_at` se conserva como el día **sugerido** dentro de esa semana: ordena la lista y fecha el historial, pero no obliga. La semana N del programa cae en la semana de calendario N contada desde la que contiene el día de la asignación, así que tomar un programa un viernes deja esa primera semana corta. Lo que no se hace **no se arrastra**: la semana siguiente empieza limpia.
-- **`program_day` es el día que el programa le puso, y `scheduled_at` es dónde cayó.** No siempre coinciden: la materialización adelanta las sesiones de la primera semana que caerían antes del día de la asignación, para no estrenar un programa con sesiones ya perdidas. Tomar un programa un jueves deja su sesión de lunes agendada el jueves, y sin esta columna la pantalla no tendría de dónde sacar que esa sesión es la del lunes — leería el jueves de `scheduled_at` y contradiría al programa que la persona armó. Va de 1 (lunes) a 7 (domingo), como `program_version_sessions.day`.
+- **`program_day` es el día que el programa le puso, y `scheduled_at` es dónde cayó.** No siempre coinciden: la materialización adelanta las sesiones de la primera semana que caerían antes del día de la asignación, para no estrenar un programa con sesiones ya perdidas. Tomar un programa un jueves deja su sesión de lunes agendada el jueves, y sin esta columna la pantalla no tendría de dónde sacar que esa sesión es la del lunes — leería el jueves de `scheduled_at` y contradiría al programa que la persona armó. Va de 1 (lunes) a 7 (domingo), como `program_version_sessions.day`. **Ese adelanto es de la primera semana y sólo de ella:** una semana sembrada más tarde por la lectura no lo lleva, porque existe para no estrenar un programa con sesiones ya perdidas y la semana ciento tres no se estrena; cada una de sus sesiones cae en el día que le puso el programa.
 - **FKs y borrado:** `(assignment_id, person_id) → program_assignments(id, person_id) ON DELETE CASCADE`; `template_version_id → session_template_versions(id) RESTRICT` (`IX-15`).
 - **Uniques y checks:** clave portadora `UNIQUE (id, person_id)`; `program_day` entre 1 y 7.
 - **Actores:** la persona (agenda); el coach reprograma la parte administrada.
 - **RLS:** vía la asignación.
 - **Consultas / índices:** `(assignment_id, scheduled_at)`, `(person_id, week_starts_on)`.
-- **Retención:** con la asignación.
+- **Retención:** con la asignación. **Eliminar el programa (`OP-PLN-034`) retira las
+  sesiones que nadie entrenó y deja las demás donde están**: lo planificado es intención, y
+  una intención que ya no se va a cumplir no tiene por qué seguir ocupando la agenda; una
+  sesión con ejecución, en cambio, es un hecho, y la clave foránea `RESTRICT` de
+  `planned_session_executions` la defiende antes de que nadie tenga que acordarse de
+  hacerlo. Por eso el borrado se pide entero y la base decide qué sobrevive: si una sola
+  sesión con ejecución cayera en el conjunto, la transacción se rechaza completa.
 - **Eventos:** `planning.session_rescheduled.v1`.
 
 ### 9.17 `planning.service_access_blocks`
@@ -1595,9 +1654,14 @@ filtra, lo declara.
 **Sobre la afinidad de sexo y sobre lo que no se guarda.** La afinidad vive como
 columna `sex_affinity` nullable en `program_versions`, no como tabla: es un valor y no
 un conjunto, y **ordena sin filtrar** —todos ven el mismo catálogo, y quien declinó no
-necesita una regla aparte—. Los días por semana y las semanas de duración **no se
-guardan**: se derivan de `program_version_sessions`, porque guardarlos sería una
-segunda verdad del mismo número y la frecuencia es justo el eje sobre el que se elige.
+necesita una regla aparte—. Los días por semana y las semanas del **ciclo** siguen sin
+guardarse: se derivan de `program_version_sessions`, porque guardarlos sería una segunda
+verdad del mismo número y la frecuencia es justo el eje sobre el que se elige. Lo que **sí
+se guarda** es si el programa termina, en `repeats_forever`: eso no se puede derivar de una
+composición que se repite, porque `max(week)` dice cuánto mide el ciclo y no si hay un
+último ciclo. Antes coincidían por accidente —al leer la duración como `max(week)`, todo
+programa terminaba—, y esa coincidencia era justo la que hacía estructuralmente imposible
+un programa sin fin (`ADR-032`).
 
 ### 9.21 `planning.planned_sets`
 

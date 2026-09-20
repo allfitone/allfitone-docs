@@ -39,6 +39,7 @@
 | ADR-029 | Monorepo de implementación con deployables independientes |
 | ADR-030 | Detalle por serie y superseries en la planificación de fuerza |
 | ADR-031 | La portada de una rutina la pone su programa, y sale del catálogo |
+| ADR-032 | Un programa puede no tener fin, y la semana que no existe la siembra quien la va a enseñar |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -2906,7 +2907,8 @@ Una capacidad no entra parcialmente mediante una columna o permiso aislado. Su p
 
 **Estado:** aceptada para V1 y recertificada en Fase 2<br>
 **Fecha:** 22 de julio de 2026<br>
-**Recertificación:** 26 de julio de 2026
+**Recertificación:** 26 de julio de 2026<br>
+**Enmendada:** 20 de septiembre de 2026 — «todas las sesiones» se estrecha a los programas que terminan, y sigue sin haber job de calendario (`ADR-032`)
 
 ### Contexto
 
@@ -2976,7 +2978,7 @@ La alternativa —resolver incidencias con acceso directo a la base bajo procedi
 | Jurisdicción | Colombia (Ley 1581 y Decreto 1377) con techo GDPR; 30 días corridos para resolver una supresión |
 | Catálogo | Disciplinas, tipos de actividad, unidades y contratos solo los publica la plataforma; las organizaciones crean movimientos privados, promovibles a global mediante moderación explícita |
 | Idiomas del catálogo | Solo español en V1, con la estructura de alias lista para traducir sin cambio de modelo |
-| Calendario | Las sesiones se materializan **dentro de la transacción de asignación**; no existe job periódico de calendario |
+| Calendario | Las sesiones se materializan **dentro de la transacción de asignación**; no existe job periódico de calendario. Desde la enmienda del 20 de septiembre de 2026, un programa **sin fecha de fin** materializa en esa transacción la semana en la que se asigna, y la lectura de la agenda siembra la semana que va a enseñar (`ADR-032`) |
 | Asignaciones simultáneas | Sin límite; los solapamientos de agenda se advierten, no se bloquean |
 | Reprogramación | Solo el coach, y solo sobre la parte administrada por una relación con periodo de gestión vigente |
 | Zona horaria | La de la persona en el momento del hecho |
@@ -2985,6 +2987,27 @@ La alternativa —resolver incidencias con acceso directo a la base bajo procedi
 | Propuestas de corrección | Vencen a los 30 días y se cancelan al terminar la relación |
 | Notificación de revisiones | Obligatoria hacia la persona |
 | Jobs de V1 | Outbox, notificaciones, expiraciones, recordatorio de revisión de grants, disposición, resolución de supresión, reaplicación tras restauración y recálculo de derivados; cada uno con credencial propia y grants mínimos |
+
+### Revisión del 20 de septiembre de 2026
+
+**La promesa se mantiene entera; lo que se estrecha es la palabra «todas».** Esta decisión
+cerró el calendario diciendo que las sesiones se materializan dentro de la transacción de
+asignación y que **no existe job periódico de calendario**. Lo segundo sigue siendo cierto
+al pie de la letra: `ADR-032` no crea ningún worker, ninguna ventana de calendario y nada
+a lo que haya que vigilarle si corrió.
+
+Lo primero deja de poder decirse de un programa que no termina, porque ahí no hay un
+«todas» que materializar. Un programa **con** fecha de fin se comporta exactamente como
+esta decisión lo escribió: la composición entera cae en la transacción de la asignación.
+Un programa **sin** fecha de fin materializa en esa misma transacción la semana de
+calendario en la que se asigna, y cada semana posterior la siembra la lectura de la agenda
+un instante antes de enseñarla.
+
+Eso no reintroduce por la puerta de atrás lo que esta decisión rechazó. Lo que se rechazó
+fue que la agenda dependiera de un proceso ajeno corriendo a tiempo, con su ventana, su
+retraso y su pregunta de «¿ya corrió?»; una siembra que ocurre dentro de la petición que
+va a mostrar esa semana no tiene ventana ni retraso, porque no promete nada que no vaya a
+entregar en el mismo instante. El razonamiento completo está en `ADR-032`.
 
 ### Invariantes
 
@@ -3008,13 +3031,13 @@ La alternativa —resolver incidencias con acceso directo a la base bajo procedi
 - El catálogo de roles queda cerrado y comprobable, sin roles personalizados que multipliquen la superficie de autorización.
 - La suplencia resuelve un caso operativo real —vacaciones, cobertura, especialidad— sin que la organización pueda ampliar por su cuenta quién ve datos personales.
 - El acceso más sensible del sistema, el de soporte, entra al modelo de auditoría en lugar de vivir fuera de él.
-- La agenda deja de depender de que un job periódico corra a tiempo.
+- La agenda deja de depender de que un job periódico corra a tiempo, y sigue sin depender de él cuando el programa no termina: lo que falta lo siembra la misma lectura que lo va a mostrar (`ADR-032`).
 
 #### Costos
 
 - La aceptación de suplencias añade fricción cuando la cobertura es urgente: si la persona no responde, no hay suplente.
 - Auditar toda lectura bajo grant convierte `ACCESS_EVENT` en la tabla de mayor crecimiento del sistema y obliga a particionarla en Fase 4.
-- Materializar el calendario al asignar escribe decenas de filas en una sola transacción.
+- Materializar el calendario al asignar escribe decenas de filas en una sola transacción, y en un programa sin fin traslada a la lectura una escritura acotada a una semana.
 - Un cuarto rol es una condición más que probar en cada policy.
 
 ### Escenarios de prueba obligatorios
@@ -3034,7 +3057,7 @@ La alternativa —resolver incidencias con acceso directo a la base bajo procedi
 13. Un ejercicio de break-glass aparece en el historial de accesos de la persona afectada.
 14. Break-glass no permite escribir observaciones, correcciones ni resultados.
 15. Una categoría restringida no abre con una sola aprobación y vence a los 15 minutos aunque el job no haya corrido.
-16. Asignar un programa materializa todas sus sesiones en la misma transacción, en la zona horaria de la persona.
+16. Asignar un programa **con fecha de fin** materializa todas sus sesiones en la misma transacción, en la zona horaria de la persona; asignar uno sin fecha de fin materializa en esa misma transacción la semana de la asignación, y ninguna de las dos formas espera a que corra un proceso posterior.
 17. Revocar un grant corta el acceso en la lectura inmediatamente posterior, sin ventana de caché.
 18. Un grant sin uso durante doce meses genera recordatorio y **conserva** el acceso.
 
@@ -4025,3 +4048,177 @@ guarda es el razonamiento; lo que retira es el código que no tenía usuario.
    responde lo mismo que uno inexistente.
 9. Ninguna respuesta ni ninguna fila contiene una URL del almacén.
 10. Ninguna ruta del contrato acepta una imagen.
+
+---
+
+## ADR-032 — Un programa puede no tener fin, y la semana que no existe la siembra quien la va a enseñar
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 20 de septiembre de 2026<br>
+**Enmienda a:** `ADR-022`, cuya materialización del calendario se estrecha a los programas que terminan
+
+### Contexto
+
+La duración de un programa nunca se declaró: se deduce. Es el `max(week)` de
+`planning.program_version_sessions`, y deducirla así arrastra una consecuencia que nadie
+eligió — **todo programa termina**, porque una composición finita leída como duración no
+puede decir otra cosa. No es que faltara la casilla de «esto no se acaba»: es que no había
+dónde ponerla, y por eso la finitud no era una decisión de producto sino una propiedad
+estructural del modelo.
+
+Lo que la gente hace en Space no se parece a eso. Quien arma su propia semana —tres días,
+empujar, tirar, piernas— no está escribiendo ocho semanas: está escribiendo **una** y
+repitiéndola hasta que decida cambiarla. Pedirle un final la obliga a inventarse un número,
+y ese número vuelve el día que se cumple, cuando la agenda amanece vacía sin que nadie haya
+decidido parar. El caso frecuente del producto estaba obligado a disfrazarse del caso raro.
+
+Esto no es sólo Space. Studio compone bloques de varias semanas y también los hace girar;
+lo que se repite en un caso es una semana y en el otro un bloque, pero el acto es el mismo.
+Por eso la decisión no puede escribirse sobre «la semana»: tiene que escribirse sobre la
+composición.
+
+### Decisión
+
+**1. `planning.program_versions` gana `repeats_forever boolean not null default false`.**
+Un programa con esa marca no tiene fecha de fin: cuando su composición se acaba, vuelve a
+empezar. Es el **valor por defecto de un programa nuevo en Space**, porque es lo que la
+gente escribe.
+
+**2. Vive en la versión y no en el programa, y por eso entra en el hash.** Un programa que
+termina en ocho semanas y uno que no termina **son dos entrenamientos distintos** aunque
+compartan hasta la última serie: uno propone un ciclo con final y el otro una rutina
+sostenida. Eso es contenido, no presentación, así que sigue la regla de `ADR-009` —lo que
+cambia lo que se entrena pertenece a la versión inmutable— y `planning.canonical_program_content`
+lo emite siempre, nunca ausente, de modo que el `content_hash` lo distingue. La alternativa
+—colgarlo de `planning.programs`, como la portada de `ADR-031`— haría que dos cosas
+distintas compartieran hash, y un hash que no distingue no sirve para lo único que hace.
+
+**3. La unidad que se repite es la composición entera, y se llama el ciclo.** No es «una
+semana»: es `max(week)` de `program_version_sessions`. En Space el ciclo suele valer uno
+porque se compone una semana; en Studio un bloque de cuatro semanas da la vuelta como
+bloque. La semana de composición que toca en la semana de programa `n` es
+`((n - 1) % ciclo) + 1`, y con `ciclo = 1` eso es exactamente «la misma semana siempre»,
+sin un caso especial que escribir.
+
+**4. El borrador declara la clave y el esquema no cambia de número.**
+`planning.program_drafts.content` admite `repeats_forever` como clave **opcional**
+—ausente significa `false`—, `planning.program_content_errors` la acepta en su lista blanca
+y rechaza cualquier cosa que no sea booleano, y `content_schema_version` **sigue siendo 1**:
+una clave nueva opcional con valor por defecto no es un cambio de forma, y subir el número
+obligaría a migrar borradores que se leen igual de bien que ayer.
+
+**5. La primera republicación de un programa que ya existía acuña una versión, y está
+declarado.** El canónico ganó una clave, así que su hash cambió para todo el mundo: un
+programa que nadie ha tocado dirá «cambios sin publicar» una vez, y una vez publicado no
+vuelve a decirlo. Es el mismo precio que `ADR-031` pagó al sacar la portada del contenido,
+y por la misma razón se paga: lo contrario sería que dos programas distintos compartieran
+hash.
+
+**6. Con fin, la agenda entera al asignar; sin fin, la semana de la asignación.** Un
+programa con fecha de fin se materializa exactamente como hasta hoy: toda la composición
+dentro de la transacción de `self_assign_program`. Uno sin fecha de fin materializa en esa
+misma transacción **la semana de calendario en la que se asigna**, y nada más, porque no
+hay un «entera» que materializar.
+
+**7. La semana que falta la siembra la lectura, y no un worker.**
+`planning.read_week_plan` y `planning.read_today_session` llaman antes a
+`planning.plant_my_open_week`, que siembra **la semana que esa lectura va a enseñar**. Las
+dos razones por las que no es un trabajo periódico son concretas. La primera:
+`execution.start_planned_session_attempt` exige que la fila planificada exista, así que
+nadie puede entrenar una semana que no esté sembrada y la siembra no puede llegar tarde.
+La segunda: si sólo sembrara un acto de entrenar, quien vuelve después de dos meses abriría
+una semana vacía que ya nadie podría sembrar, y el horizonte quedaría atascado justo para
+la persona que más necesita volver a empezar. Sembrar dentro de la lectura no promete nada
+que no se entregue en el mismo instante.
+
+**8. La siembra es idempotente, cabe en una semana y toma un lock.** Si ya existe cualquier
+fila de esa asignación con ese `week_starts_on`, no se toca nada; se toma
+`pg_advisory_xact_lock` sobre el `assignment_id` antes de mirar, porque dos lecturas
+simultáneas sembrarían la misma semana dos veces; y si la semana de programa todavía no
+llegó a uno —la asignación empieza más adelante— no se siembra nada. Las filas se calculan
+igual que en la asignación **salvo el adelanto de la primera semana**: ese adelanto existe
+para no estrenar un programa con sesiones ya perdidas, y la semana ciento tres no se
+estrena.
+
+**9. `ADR-022` se estrecha, no se contradice.** Aquella decisión prometió que **no existe
+job periódico de calendario** y esa promesa queda intacta: esto no crea ningún worker.
+Lo único que se estrecha es el «todas» de «asignar materializa todas las sesiones», que
+ahora vale para los programas que terminan.
+
+**10. Donde no hay fin, la duración se responde nula.** `weeks` es `null` en
+`read_my_programs`, `read_program_version` y `read_program_catalogue` cuando la versión no
+termina, y sigue siendo `max(week)` en las demás. `editable` deja de compararse contra la
+duración declarada y se compara contra **el ciclo**, que existe siempre; y el catálogo deja
+de filtrar por «`weeks` no nula» —que quería decir «tiene sesiones»— y filtra por número de
+sesiones, o un programa sin fin desaparecería de él. `sessions_planned` y `sessions_done`
+no se tocan: cuentan lo que hay en la agenda, y eso es verdad tenga fin o no.
+
+### Invariantes
+
+1. `repeats_forever` pertenece a la versión publicada y nunca cambia después de publicarse.
+2. Dos versiones que difieren sólo en `repeats_forever` tienen `content_hash` distinto.
+3. Ninguna siembra escribe más de una semana de calendario por asignación y por lectura.
+4. No existen dos sesiones planificadas de la misma asignación para la misma semana de
+   calendario y el mismo día de programa.
+5. Ninguna semana sembrada después de la asignación lleva el adelanto de primera semana.
+6. Ningún proceso periódico, worker o job extiende el horizonte de la agenda.
+7. Una versión sin fin responde `weeks` nula y jamás un número inventado.
+
+### Consecuencias
+
+#### Positivas
+
+- **El caso frecuente deja de disfrazarse del raro.** Quien repite su semana no declara un
+  final que no piensa cumplir, y la agenda no se apaga sola el día en que ese número
+  arbitrario se agota.
+- La agenda de un programa sin fin no tiene techo y **no cuesta lo que un techo costaría**:
+  no se escriben cien semanas por si acaso, se escribe la que se va a mirar.
+- La promesa de `ADR-022` sobrevive intacta. No aparece un worker al que vigilarle si corrió,
+  ni una ventana de calendario que alguien tenga que dimensionar.
+- Quien vuelve después de meses abre la semana en curso y la encuentra completa, sin haber
+  tenido que entrenar para que existiera.
+- El modelo sirve igual a una semana de Space y a un bloque de cuatro de Studio, porque lo
+  que gira es la composición y no una unidad fija.
+
+#### Costos y riesgos
+
+- **Una lectura escribe.** Es la única del sistema que lo hace, y hay que decirlo en voz
+  alta: `GET /space/v1/agenda` y `GET /space/v1/today` dejan de ser puramente de lectura
+  cuando la persona sigue un programa sin fin.
+- El lock por asignación introduce un punto de serialización en el camino de una pantalla
+  que se abre muchas veces. Está acotado a la transacción y a una asignación, pero existe.
+- **Toda versión de programa que hoy existe dirá «cambios sin publicar» una vez.** El
+  canónico ganó una clave; es visible, es una sola vez y es cierto.
+- `weeks` deja de ser un entero y pasa a admitir nulo en tres proyecciones y en tres tipos
+  del contrato: cualquier pantalla que lo formateara sin preguntar imprimiría «semana 3 de
+  null».
+- Un programa sin fin no tiene total de sesiones que mostrar, así que la línea de resumen
+  del editor y la tarjeta de catálogo dicen menos de lo que decían.
+
+### Escenarios de prueba obligatorios
+
+1. Publicar un borrador con `repeats_forever` en verdadero crea una versión cuyo
+   `repeats_forever` es verdadero, y el borrador sin la clave crea una con falso.
+2. Dos borradores idénticos salvo `repeats_forever` producen `content_hash` distintos.
+3. Republicar sin tocar nada un programa publicado antes de esta decisión acuña
+   exactamente **una** versión nueva, y la republicación siguiente no acuña ninguna.
+4. Un borrador con `repeats_forever` no booleano es rechazado por
+   `planning.program_content_errors`.
+5. Asignarse una versión **con** fin materializa toda la composición en la transacción.
+6. Asignarse una versión **sin** fin materializa sólo la semana de calendario de la
+   asignación.
+7. Leer la agenda de una semana posterior de un programa sin fin la deja sembrada con la
+   semana de composición `((n - 1) % ciclo) + 1`.
+8. Dos lecturas simultáneas de la misma semana siembran esa semana **una sola vez**.
+9. Leer dos veces la misma semana no duplica ninguna sesión ni cambia las ya existentes.
+10. Una semana sembrada por la lectura **no** aplica el adelanto de la primera semana: cada
+    sesión cae en el día que le puso el programa.
+11. Una asignación que empieza la semana que viene no siembra nada al leerla hoy.
+12. Una persona que no abre la aplicación durante dos meses encuentra, al volver, la semana
+    en curso completa, y las semanas que no miró siguen sin existir.
+13. Re-plantear una asignación sin fin tras editar el programa borra lo no cumplido y
+    siembra **sólo la semana en curso** con la composición nueva.
+14. `read_my_programs`, `read_program_version` y `read_program_catalogue` responden `weeks`
+    nula para una versión sin fin, y un programa sin fin **aparece** en el catálogo.
+15. `editable` sigue siendo correcto en un programa sin fin, comparando contra el ciclo y
+    no contra la duración declarada.
