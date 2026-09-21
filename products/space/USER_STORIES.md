@@ -1890,8 +1890,10 @@ y lo sigue viendo.
 8. Veo **las rutinas de mi semana en un carrusel**, una tarjeta por sesión, y cada una con **la portada que le puso su programa**: la reconozco por su imagen antes de leer su nombre.
 9. Cada tarjeta me dice **cuántos ejercicios y cuántas series** tiene, y me ofrece las dos cosas que puedo querer ahí mismo: verla entera antes de decidir, o empezarla.
 10. **La marcha de la semana se ve como los días cumplidos**: cuántas sesiones llevo de las que me tocan, día por día, y no un porcentaje que no me dice qué me falta.
-11. **No se me inventa nada que no haya pasado.** Mientras no exista quien las responda, no veo una hora a la que nadie me citó, ni una sede donde nadie me espera, ni las cifras de la última vez que hice esa rutina. Prefiero una tarjeta que diga menos a una que diga algo que no ocurrió.
+11. **No se me inventa nada que no haya pasado.** No veo una hora a la que nadie me citó ni una sede donde nadie me espera: nadie las ha respondido nunca y ponerlas sería escribirlas yo. Prefiero una tarjeta que diga menos a una que diga algo que no ocurrió.
 12. **Las fotografías del carrusel muestran a alguien como yo cuando lo dije**, y una mezcla de las dos cuando preferí no decirlo. La mezcla es siempre la misma: no cambia de cara cada vez que abro la aplicación. **No se me pregunta otra vez ni se guarda nada nuevo por esto**: se usa lo que ya conté, y nada más.
+13. **Puedo girar la tarjeta** y ver el detalle sin salir de la pantalla ni elegir otra vista: qué músculos trabaja la rutina y cuántas series se lleva cada uno, y cómo me fue la última vez que la hice. Vuelvo a girarla y tengo otra vez la portada. Girar una tarjeta no gira las demás.
+14. **El reverso cuenta la última vez sólo si la hubo**: cuándo fue, cuánto duró, cuántas series registré y cuánto peso moví. Una rutina que nunca entrené me enseña los músculos y **calla** lo demás, en vez de decirme cero. Una rutina que no es de fuerza no me inventa un tonelaje. Y no cuenta como «la última vez» ni una sesión que anulé ni la que tengo abierta ahora mismo: la última vez es una que terminó.
 
 ### HU-SP-100 — Elegir mi primer programa
 

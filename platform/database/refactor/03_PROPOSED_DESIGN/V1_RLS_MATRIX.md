@@ -905,6 +905,8 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 - **`T-PLAN-5` (positiva)** — Al asignar una versión **sin fecha de fin** queda materializada la semana de la asignación, y la lectura de la agenda siembra la semana que va a enseñar: dos lecturas simultáneas de esa semana la siembran **una sola vez**, y repetir la lectura no duplica ninguna sesión. El `INSERT` que esa siembra necesita es el mismo que la ficha ya concede a `allfit_api`; no hace falta ningún grant nuevo para sembrar.
 - **`T-PLAN-6` (positiva)** — Eliminar un programa (`OP-PLN-034`) retira sus sesiones planificadas **sin ejecución** y deja intactas las que tienen alguna: lo que la persona entrenó sobrevive al programa que lo pedía. El borrado ocurre dentro de la función de la operación y no por un privilegio de `allfit_api`, que sigue sin tenerlo. Una sesión con ejecución dentro del conjunto rechaza la transacción completa, y el programa no queda a medio eliminar.
 - **`T-PLAN-7` (negativa)** — Ese borrado no alcanza la sesión de otra persona ni la de otra asignación de la misma: la operación parte del programa, que ya es suyo, y `allfit_api` no tiene con qué borrar una fila por su cuenta.
+- **`T-PLAN-8` (positiva)** — La agenda responde por cada sesión **cómo fue la última vez** que se entrenó esa rutina, contada por plantilla y no por versión: publicar una versión nueva de la rutina no le borra el pasado. El tonelaje viene en kilogramos aunque las series se registraran en libras, porque la base multiplica por `catalog.units.to_canonical_factor` y no el cliente. Leerlo **no escribe nada**: lo único que la agenda escribe sigue siendo la siembra de la semana de `T-PLAN-5`.
+- **`T-PLAN-9` (negativa)** — Esas cifras nunca son las de otra persona, y nunca son las de algo que no terminó: una ejecución anulada y un intento todavía abierto quedan fuera del cálculo. Una rutina que nadie entrenó responde nulo y no un cero, que afirmaría un entrenamiento sin trabajo.
 
 ### 7.7 Ejecución
 
@@ -1247,7 +1249,7 @@ Un índice que solo existe para consultas de negocio no basta: la condición RLS
 
 ## 9. Catálogo de pruebas
 
-Cada ficha aporta al menos una prueba positiva y una negativa, según exige el plan. El total actual es de **190 pruebas funcionales/RLS tipadas** distribuidas así:
+Cada ficha aporta al menos una prueba positiva y una negativa, según exige el plan. El total actual es de **192 pruebas funcionales/RLS tipadas** distribuidas así:
 
 | Dominio | Positivas | Negativas | Total |
 | --- | --- | --- | --- |
@@ -1256,13 +1258,13 @@ Cada ficha aporta al menos una prueba positiva y una negativa, según exige el p
 | Relaciones | 4 | 11 | 15 |
 | Privacidad | 22 | 27 | 49 |
 | Catálogo | 4 | 4 | 8 |
-| Planificación | 15 | 16 | 31 |
+| Planificación | 16 | 17 | 33 |
 | Ejecución | 12 | 16 | 28 |
 | Nutrición | 9 | 15 | 24 |
 | Soporte | 2 | 5 | 7 |
-| **Total** | **74** | **116** | **190** |
+| **Total** | **75** | **117** | **192** |
 
-El conteo incluye únicamente los casos individuales marcados como `(positiva)` o `(negativa)` en esta matriz. Las series `T-VG-01..06` y `T-BGG-01..12` se referencian aquí, pero pertenecen al catálogo separado de 18 pruebas de gobernanza de verificación y break-glass definido en `V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`; no se suman de nuevo a las 190 pruebas funcionales/RLS.
+El conteo incluye únicamente los casos individuales marcados como `(positiva)` o `(negativa)` en esta matriz. Las series `T-VG-01..06` y `T-BGG-01..12` se referencian aquí, pero pertenecen al catálogo separado de 18 pruebas de gobernanza de verificación y break-glass definido en `V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`; no se suman de nuevo a las 192 pruebas funcionales/RLS.
 
 La proporción no es casual: en un modelo de privacidad, lo que hay que demostrar sobre todo es lo que **no** debe ocurrir.
 
