@@ -1887,6 +1887,10 @@ y lo sigue viendo.
 5. Veo lo que quedó pendiente: una sesión sin cerrar, una propuesta de mi coach esperando respuesta, un permiso que me pidieron.
 6. Si mi plan con el gimnasio está suspendido, lo veo aquí con claridad y sé qué hacer.
 7. Todo se muestra en mi zona horaria.
+8. Veo **las rutinas de mi semana en un carrusel**, una tarjeta por sesión, y cada una con **la portada que le puso su programa**: la reconozco por su imagen antes de leer su nombre.
+9. Cada tarjeta me dice **cuántos ejercicios y cuántas series** tiene, y me ofrece las dos cosas que puedo querer ahí mismo: verla entera antes de decidir, o empezarla.
+10. **La marcha de la semana se ve como los días cumplidos**: cuántas sesiones llevo de las que me tocan, día por día, y no un porcentaje que no me dice qué me falta.
+11. **No se me inventa nada que no haya pasado.** Mientras no exista quien las responda, no veo una hora a la que nadie me citó, ni una sede donde nadie me espera, ni las cifras de la última vez que hice esa rutina. Prefiero una tarjeta que diga menos a una que diga algo que no ocurrió.
 
 ### HU-SP-100 — Elegir mi primer programa
 

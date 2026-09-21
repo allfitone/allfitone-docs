@@ -772,12 +772,14 @@ GET /space/v1/agenda?from=2026-07-27&to=2026-08-02
 ```json
 { "data": [
     { "id": "ps_c81...", "assignment_id": "asg_5e7...", "scheduled_at": "2026-07-27T06:00:00-05:00",
-      "timezone": "America/Bogota", "status": "scheduled",
+      "timezone": "America/Bogota", "status": "scheduled", "template_version_id": "stv_7a2...",
       "activity_type": { "code": "strength_training", "name": "Entrenamiento de fuerza" },
       "management": { "managed_by_relationship": true, "organization_name": "Estudio Norte" },
       "attempts": [] } ],
   "page": { "next_cursor": null, "has_more": false } }
 ```
+
+`template_version_id` es la versión exacta de rutina que esa sesión ejecuta, la misma que la composición del programa congeló en §8.1. Va aquí porque Hoy dibuja cada rutina de la semana con la portada que le puso su programa, y esa portada la responde `GET /space/v1/my-content` (`OP-PLN-025`) y no la agenda: sin este identificador el cliente solo podría emparejar las dos respuestas por el nombre, que es una cosa que se repite. Duplicar la portada en esta respuesta sería una segunda verdad del mismo dato.
 
 ### 8.4 Space registra y finaliza la ejecución
 
