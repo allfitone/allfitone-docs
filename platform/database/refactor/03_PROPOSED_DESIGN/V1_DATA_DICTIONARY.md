@@ -43,7 +43,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 | `relationships` | 6 | §6 |
 | `privacy` | 17 | §7 |
 | `catalog` | 18 | §8 |
-| `planning` | 21 | §9 |
+| `planning` | 22 | §9 |
 | `execution` | 14 | §10 |
 | `nutrition` | 8 | §10A |
 | `system` | 4 | §11 |
@@ -1415,20 +1415,30 @@ toca. Así el carrusel habla un idioma y aun así una tarjeta se distingue de la
 sin leer el rótulo.
 
 **Vive en la identidad del programa y no en `planning.program_versions` (§9.11)**, por la
-misma razón que `cover_object_key`: una versión publicada es inmutable porque **es lo que
-alguien entrenó**, y cambiar cómo se ve una tarjeta no cambia lo que se entrena. Vestir un
-programa (`OP-PLN-033`) surte efecto al momento y no acuña versión de nada, igual que
-reordenar los programas (`OP-PLN-024`) no publica nada.
+misma razón que la portada del propio programa (§9.9.1): una versión publicada es inmutable
+porque **es lo que alguien entrenó**, y cambiar cómo se ve una tarjeta no cambia lo que se
+entrena. Vestir un programa (`OP-PLN-033`) surte efecto al momento y no acuña versión de
+nada, igual que reordenar los programas (`OP-PLN-024`) no publica nada.
 
-**Se hereda al bifurcar.** Tomar un programa de Allfit copia su estilo junto con su
-`cover_object_key`: si la copia lo perdiera, seis tarjetas cambiarían de aspecto en el
+**Se hereda al bifurcar.** Tomar un programa de Allfit copia su estilo junto con sus
+portadas (§9.9.1): si la copia las perdiera, seis tarjetas cambiarían de aspecto en el
 mismo instante en que el programa pasa a ser tuyo, y eso no es tomar ese programa sino
 otro. `IX-48` lo cubre desde el lado de la bifurcación.
 
-**El prefijo `routine_` es deliberado.** `cover_object_key` ya vive en esta tabla y
-significa otra cosa: la cara del programa en su propia tarjeta. Dos columnas parecidas con
-sentidos distintos se confunden a la primera, y el nombre es lo único que las separa
-cuando alguien lee una consulta en medio de un incidente.
+**El prefijo `routine_` es deliberado.** La cara del programa en su propia tarjeta es otra
+cosa y vive en otra tabla (§9.9.1). Dos nombres parecidos con sentidos distintos se
+confunden a la primera, y el prefijo es lo único que los separa cuando alguien lee una
+consulta en medio de un incidente.
+
+**`cover_object_key` se retira de esta tabla.** Guardaba una sola clave de objeto porque
+había una sola portada por programa; desde que el catálogo se fotografía por sexo declarado
+hay un juego por audiencia, y una columna no puede llevar dos. Podría haberse quedado como
+«la portada por defecto», y sería exactamente el error: dos verdades sobre la misma imagen,
+una tabla que dice cuál le toca a cada quien y una columna que dice otra, y la garantía de
+que un día se responde la que no era. La portada la responde ahora `planning.cover_for`
+(§9.9.1) sin excepción, incluso para quien declinó decir su sexo. No queda ningún valor por
+migrar que la tabla nueva no reciba: la clave que la columna llevaba es una de las
+veinticuatro del juego que le corresponda.
 
 **Es nullable porque la portada es opcional.** Nulo significa «no se dijo», no «vacío
 elegido», y las rutinas del programa se reconocen entonces por su letra inicial, que es
@@ -1453,6 +1463,62 @@ la mancuerna ahí significa «fuerza». Por eso viven en `planning` y no en `cat
 la misma razón que `planning.set_kind`: el catálogo guarda contenido que una persona
 explora, y esto es cómo se presenta un programa que ya es suyo. Nadie lo busca ni lo
 filtra, lo declara.
+
+### 9.9.1 `planning.program_cover_photos`
+
+- **Propósito:** la fotografía con la que un programa se presenta en el catálogo, una por cada juego de audiencia.
+- **Dominio / fuente de verdad:** Planificación. La fuente de verdad sigue siendo el programa padre; el binario vive fuera de la base, igual que en `catalog.movement_media` (§8.18).
+- **Clasificación:** `operational`. Es contenido curado, idéntico para todo el mundo dentro de su juego, y no dice nada de ninguna persona.
+- **Columnas:** `program_id uuid` · `audience identity.biological_sex` · `object_key text` · `content_type text` · `width integer` · `height integer` · `byte_size integer` · `checksum text`.
+- **FKs y borrado:** `program_id → programs(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `PRIMARY KEY (program_id, audience)`, que es también el único: un programa tiene una portada por juego y no dos. `audience` es `NOT NULL` por ser parte de la clave —**no hay un tercer valor y tampoco un nulo que signifique «mixto»**—; clave de objeto y checksum no vacíos; tipo de contenido de imagen; dimensiones y tamaño positivos.
+- **Actores:** los mismos actores autorizados sobre el programa padre. Escritura solo de curaduría, como el resto del contenido `global`.
+- **RLS:** hereda visibilidad del padre mediante `program_id → programs(id)`, que para el catálogo resuelve `content_scope = 'global'` y lo lee cualquier persona autenticada. `allfit_api` tiene `SELECT` y nada más.
+- **Consultas / índices:** por la clave primaria `(program_id, audience)`, que es exactamente como se lee —un programa y un juego— y por `program_id` sola cuando la curaduría revisa el par completo. El único cubre las dos.
+- **Retención:** se elimina con el programa padre; el objeto se retira aparte.
+- **Eventos:** ninguno.
+
+**Dos juegos y no tres.** `audience` toma los dos valores de `identity.biological_sex`
+porque hay dos juegos de veinticuatro fotografías, y «mixto» **no es un tercero**: es lo
+que se ve cuando el carrusel alterna entre los dos. Un tercer juego serían veinticuatro
+imágenes más para decir lo mismo, y antes de encargarlas habría que resolver qué significa
+«mixto» dentro de un solo encuadre —dos personas en el cuadro, o ninguna, o una a la que
+nadie reconoce—, que es una pregunta sin buena respuesta y que el catálogo no necesita
+hacerse. El enumerado del sexo declarado ya tiene exactamente los valores que la tabla
+necesita, y por eso se reutiliza en lugar de inventar un vocabulario paralelo que habría
+que mantener en paso con él.
+
+**Quién elige es `planning.cover_for(p_program_id uuid, p_person_id uuid)`**, `stable`, y
+no cuenta como tabla de dominio (§1): lee el sexo declarado de la persona y devuelve la
+clave de su juego. Cuando la persona declinó —el nulo de `identity.people.biological_sex`,
+que §4.1 define como una respuesta y no como una ausencia de respuesta— la función elige
+entre los dos de forma determinista a partir del identificador del programa, de modo que
+el catálogo sale mixto y **sale siempre igual**. Que sea determinista no es un detalle de
+implementación: una portada sorteada en cada lectura sería una portada distinta cada vez
+que se refresca la lista, y un catálogo que cambia de cara solo porque lo miraste dos veces
+no se reconoce.
+
+**Nada se guarda por persona y nada se registra.** Elegir una portada es **una lectura**:
+no hay fila por persona, ni preferencia de imagen, ni traza de que alguien vio un juego u
+otro. El sexo declarado ya es un hecho que la persona dio y que vive en `identity.people`;
+esto lo **gasta**, no recoge nada nuevo. Por eso la clasificación es `operational` y no
+`identity_pii`: la fila no habla de nadie, y quién la mira no deja rastro en ella. Tampoco
+se le vuelve a preguntar a nadie: no existe una pregunta de portada, y quien declinó sigue
+habiendo declinado.
+
+**La base guarda la clave, no la URL**, por la misma razón que `movement_media` (§8.18):
+una dirección absoluta ata el contenido al origen que lo servía el día que se escribió. La
+clave sigue siendo el contenido —`programs/<program_id>/<sha256>.webp`, inmutable, y un
+arte nuevo es una dirección nueva—, y la API compone la dirección al proyectar. El
+`checksum` dice qué bytes se revisaron: si el objeto del almacén no coincide, alguien
+cambió la portada sin pasar por la revisión del cambio.
+
+**Es tabla y no columnas de `programs`.** Dos columnas paralelas —una por sexo— repetirían
+seis veces los metadatos de la imagen y no sobrevivirían a la primera pregunta sobre
+tamaños o formatos; una tabla hija con clave `(program_id, audience)` deja que el conjunto
+crezca por filas y que la base garantice que no hay dos portadas para el mismo juego. Un
+programa sin fila aquí no es un error de integridad sino un programa sin fotografiar
+todavía, y la tarjeta se resuelve como se resolvía antes de que la fotografía existiera.
 
 ### 9.10 `planning.program_drafts`
 
@@ -1713,7 +1779,7 @@ rutina, porque la determina la región dominante de los músculos que trabaja y 
 es determinista. No es un dato personal, no tiene RLS propia y no hay nada que
 destruir cuando la rutina se descarta.
 
-Nota de conteo: `planning` tiene 21 tablas y 22 fichas; §9.5–9.8 son cuatro tablas físicas independientes y §9.22 está retirada.
+Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro tablas físicas independientes, §9.9.1 es la tabla de portadas del catálogo —numerada junto a su padre, como §4.2.1 junto al suyo— y §9.22 está retirada.
 
 ---
 
@@ -2384,13 +2450,13 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 | `relationships` | 6 |
 | `privacy` | 17 |
 | `catalog` | 18 |
-| `planning` | 22 |
+| `planning` | 23 |
 | `execution` | 14 |
 | `nutrition` | 8 |
 | `payments` | 12 |
 | `system` | 4 |
 | `support` | 5 |
-| **Total** | **138** |
+| **Total** | **139** |
 
 ### 14.2 Invariantes transversales confirmadas por el diccionario
 

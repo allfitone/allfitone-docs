@@ -814,7 +814,7 @@ El catálogo es el único dominio con lectura amplia. Su riesgo no es la fuga de
 
 La regla estructural de este dominio: **el contenido pertenece a quien lo creó; la asignación pertenece a la persona.** Una organización que pierde la relación conserva su contenido y pierde la gestión.
 
-#### `SESSION_TEMPLATE` · `SESSION_TEMPLATE_DRAFT` · `PROGRAM` · `PROGRAM_DRAFT`
+#### `SESSION_TEMPLATE` · `SESSION_TEMPLATE_DRAFT` · `PROGRAM` · `PROGRAM_DRAFT` · `PROGRAM_COVER_PHOTO`
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
@@ -826,8 +826,9 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 | Curaduría de plataforma | El `global` | El `global` | El `global` | — |
 
 - **Condición RLS** — `content_scope = 'global'` **OR** (`content_scope = 'organization'` **AND** `owner_organization_id = access_control.org()` **AND** `access_control.has_membership(owner_organization_id)`) **OR** (`content_scope = 'person'` **AND** `owner_person_id = access_control.person()`). Es literalmente la condición que §7.x ya usa para `catalog.movements`, y un constraint garantiza que el owner corresponde al scope: `global` no tiene ninguno.
-- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE`. Sin `DELETE`. El contenido `global` **no** se escribe desde el runtime: lo publica la curaduría de plataforma.
-- **Índice para la policy** — sobre `(content_scope, owner_organization_id, status)` y `(content_scope, owner_person_id, status)`.
+- **Portadas del catálogo** — `PROGRAM_COVER_PHOTO` hereda con `EXISTS` sobre `program_id`, como las hijas del movimiento en §7.5: lo que se ve de la portada es exactamente lo que se ve del programa, y para el catálogo eso significa **cualquier persona autenticada**. Las dos filas de un programa —un juego por sexo— son visibles para todo el mundo por igual: la política no mira quién pregunta, porque **cuál de las dos se sirve no lo decide una policy sino la proyección**, con `planning.cover_for`. Esconder por RLS el juego que no le toca a alguien no protegería nada —son fotografías curadas y públicas, idénticas para todos— y convertiría una decisión de presentación en una regla de acceso, que es donde luego se rompe. Elegir una portada **no escribe ni registra nada**: no hay fila por persona que aislar, y por eso este recurso no aporta ninguna prueba de aislamiento entre vecinos.
+- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE`. Sin `DELETE`. El contenido `global` **no** se escribe desde el runtime: lo publica la curaduría de plataforma. Sobre `PROGRAM_COVER_PHOTO` el runtime tiene **`SELECT` y nada más**, igual que sobre `movement_media`: la fila dice qué bytes se revisaron, y poder escribirla desde el producto permitiría cambiar la cara del catálogo sin pasar por la revisión del cambio.
+- **Índice para la policy** — sobre `(content_scope, owner_organization_id, status)` y `(content_scope, owner_person_id, status)`; en las portadas basta la clave primaria `(program_id, audience)`, que es también el camino del `EXISTS`.
 - **`T-TPL-1` (negativa)** — Un borrador **nunca** es referenciable por un programa ni por una asignación.
 - **`T-TPL-2` (negativa)** — Los programas maestros de una organización **no** son visibles bajo `prior_training_history` de otra.
 - **`T-TPL-3` (positiva)** — Una persona sin organización lee el catálogo `global` completo.
@@ -841,6 +842,8 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 - **`T-TPL-13` (negativa)** — Un vecino **no elimina ni duplica** el programa de otra persona: ni `OP-PLN-034` ni `OP-PLN-035` alcanzan una sola fila bajo la política, y ajeno e inexistente responden igual para no hacer enumerable la biblioteca del otro.
 - **`T-TPL-14` (positiva)** — `OP-PLN-034` lleva a `archived` un programa **con versión publicada**, que es justo lo que `T-TPL-8` niega a `OP-PLN-029`, y con la petición de llevarse las rutinas archiva **sólo las que ningún otro programa no archivado de la persona use**: una rutina compartida se queda, y el programa que la comparte sigue teniendo todas sus sesiones.
 - **`T-TPL-15` (positiva)** — `OP-PLN-035` crea un programa y su borrador propios y **no acuña ninguna versión ni ninguna asignación**; la copia no inserta, edita ni archiva ninguna plantilla, porque apunta a las mismas versiones inmutables que el original.
+- **`T-TPL-16` (negativa)** — El rol de runtime no puede escribir `PROGRAM_COVER_PHOTO`, ni siquiera para corregir una dirección: la portada del catálogo es contenido curado y su `checksum` es lo que hace reproducible la revisión.
+- **`T-TPL-17` (positiva)** — Cualquier persona autenticada lee **las dos** filas de portada de un programa `global`, declare el sexo que declare o no lo declare, y pedir su portada **no inserta ni actualiza ninguna fila en ninguna tabla**: la elección ocurre al proyectar y no deja rastro de quién vio cuál.
 - **`T-TPL-11` y `T-TPL-12` — retiradas.** Cubrían la fotografía personal de portada, que la segunda revisión de `ADR-031` retiró junto con su tabla. La portada de clase `foto` es ahora una imagen del catálogo, pública e idéntica para todo el mundo: no hay nada que aislar por persona. La tercera revisión mudó además el estilo de portada a `planning.programs`, que ya está cubierta por la política de fila del programa: vestir un programa no alcanza a ninguna tabla nueva.
 
 #### `SESSION_TEMPLATE_VERSION` · `PLANNED_STEP` · `PLANNED_SET` · targets · `PROGRAM_VERSION` · `PROGRAM_VERSION_SESSION`
@@ -1244,7 +1247,7 @@ Un índice que solo existe para consultas de negocio no basta: la condición RLS
 
 ## 9. Catálogo de pruebas
 
-Cada ficha aporta al menos una prueba positiva y una negativa, según exige el plan. El total actual es de **188 pruebas funcionales/RLS tipadas** distribuidas así:
+Cada ficha aporta al menos una prueba positiva y una negativa, según exige el plan. El total actual es de **190 pruebas funcionales/RLS tipadas** distribuidas así:
 
 | Dominio | Positivas | Negativas | Total |
 | --- | --- | --- | --- |
@@ -1253,13 +1256,13 @@ Cada ficha aporta al menos una prueba positiva y una negativa, según exige el p
 | Relaciones | 4 | 11 | 15 |
 | Privacidad | 22 | 27 | 49 |
 | Catálogo | 4 | 4 | 8 |
-| Planificación | 14 | 15 | 29 |
+| Planificación | 15 | 16 | 31 |
 | Ejecución | 12 | 16 | 28 |
 | Nutrición | 9 | 15 | 24 |
 | Soporte | 2 | 5 | 7 |
-| **Total** | **73** | **115** | **188** |
+| **Total** | **74** | **116** | **190** |
 
-El conteo incluye únicamente los casos individuales marcados como `(positiva)` o `(negativa)` en esta matriz. Las series `T-VG-01..06` y `T-BGG-01..12` se referencian aquí, pero pertenecen al catálogo separado de 18 pruebas de gobernanza de verificación y break-glass definido en `V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`; no se suman de nuevo a las 188 pruebas funcionales/RLS.
+El conteo incluye únicamente los casos individuales marcados como `(positiva)` o `(negativa)` en esta matriz. Las series `T-VG-01..06` y `T-BGG-01..12` se referencian aquí, pero pertenecen al catálogo separado de 18 pruebas de gobernanza de verificación y break-glass definido en `V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`; no se suman de nuevo a las 190 pruebas funcionales/RLS.
 
 La proporción no es casual: en un modelo de privacidad, lo que hay que demostrar sobre todo es lo que **no** debe ocurrir.
 

@@ -1891,6 +1891,7 @@ y lo sigue viendo.
 9. Cada tarjeta me dice **cuántos ejercicios y cuántas series** tiene, y me ofrece las dos cosas que puedo querer ahí mismo: verla entera antes de decidir, o empezarla.
 10. **La marcha de la semana se ve como los días cumplidos**: cuántas sesiones llevo de las que me tocan, día por día, y no un porcentaje que no me dice qué me falta.
 11. **No se me inventa nada que no haya pasado.** Mientras no exista quien las responda, no veo una hora a la que nadie me citó, ni una sede donde nadie me espera, ni las cifras de la última vez que hice esa rutina. Prefiero una tarjeta que diga menos a una que diga algo que no ocurrió.
+12. **Las fotografías del carrusel muestran a alguien como yo cuando lo dije**, y una mezcla de las dos cuando preferí no decirlo. La mezcla es siempre la misma: no cambia de cara cada vez que abro la aplicación. **No se me pregunta otra vez ni se guarda nada nuevo por esto**: se usa lo que ya conté, y nada más.
 
 ### HU-SP-100 — Elegir mi primer programa
 
@@ -1911,6 +1912,7 @@ y lo sigue viendo.
 7. **Al elegir uno, tengo sesiones en mi agenda desde hoy**, en mi zona horaria. Elegir no es una intención: es un plan.
 8. Nunca estoy obligada a elegir: entrenar libre y crear mi propio programa siguen disponibles desde aquí.
 9. El programa que elijo es mío. Ninguna organización lo administra ni lo ve.
+10. **Las fotografías del catálogo muestran a alguien como yo cuando lo dije**, y una mezcla de las dos cuando preferí no decirlo, igual de estable: el mismo programa me recibe con la misma imagen cada vez que vuelvo. **No se me pregunta otra vez ni se guarda nada nuevo por esto**, y ver el catálogo no le dice a nadie qué contesté.
 
 **Por qué existe esta historia.** La escribimos el 31 de agosto de 2026, después de
 detectar —como con `HU-SP-099`— que el diseño tenía la pantalla y ninguna historia la
@@ -1923,8 +1925,13 @@ preveía esto al exigir «versión de programa publicada y accesible para la per
 propia o global». En V1 el catálogo es curado y precargado; **no hay IA generando
 programas**, y la correspondencia con la persona se resuelve con lo que declaró.
 
-**Qué hace el sexo declarado.** Ordena, no filtra. Todos ven el mismo catálogo y
-quien declinó no recibe una lista distinta ni necesita una regla aparte.
+**Qué hace el sexo declarado.** Ordena y fotografía; no filtra. Todos ven el mismo
+catálogo, con los mismos programas y en la misma cantidad, y quien declinó no
+recibe una lista distinta ni necesita una regla aparte: lo que cambia es la
+fotografía de la portada, y para quien declinó es una mezcla de las dos, no una
+por defecto. Son dos juegos de fotografías y no tres, porque «mixto» es lo que se
+ve cuando el carrusel alterna entre ellos, no una tercera manera de fotografiar a
+alguien.
 
 ### HU-SP-090 — Moverme por la aplicación
 

@@ -3803,12 +3803,14 @@ heredada del padre— o sería la única grieta en esa garantía.
 **Enmendada:** 19 de septiembre de 2026 — los bytes salen de PostgreSQL a un bucket privado<br>
 **Enmendada:** 19 de septiembre de 2026 — se revierte la fotografía personal entera y con ella el bucket<br>
 **Enmendada:** 19 de septiembre de 2026 — la portada deja de ser de la rutina y pasa a ser del programa<br>
+**Enmendada:** 20 de septiembre de 2026 — la portada del catálogo se fotografía por sexo declarado, y `cover_object_key` se retira<br>
 **Enmienda a:** `ADR-002`, cuyo diferimiento de Storage queda restituido
 
-> **Léase de abajo arriba.** Las tres primeras secciones son el rastro de cómo se llegó
+> **Léase de abajo arriba.** Las cuatro primeras secciones son el rastro de cómo se llegó
 > aquí y no describen lo vigente: la primera revisión midió el volumen, la segunda retiró
-> la fotografía personal y la tercera mudó la decisión de la rutina al programa. La
-> decisión en vigor empieza en «Tercera revisión».
+> la fotografía personal, la tercera mudó la decisión de la rutina al programa y la cuarta
+> fotografió el catálogo por sexo declarado. La decisión en vigor empieza en «Cuarta
+> revisión».
 
 ### Contexto
 
@@ -3860,7 +3862,6 @@ Las otras tres razones siguen siendo ciertas y se pagan a conciencia: aparece un
 credencial, aparece una dependencia de orden con el servicio, y el borrado deja de ser
 una sola sentencia. Lo que cambió no es el razonamiento, es un número.
 
-
 ### Segunda revisión del 19 de septiembre de 2026
 
 **El caso desapareció.** La fotografía de portada se construyó entera —selector, saneado,
@@ -3876,6 +3877,46 @@ esos bytes. La respuesta es no.
 
 Así que lo que se revierte no es el bucket contra PostgreSQL: es la fotografía personal
 entera. Y con ella se va todo lo que existía **sólo** para sostenerla.
+
+### Cuarta revisión del 20 de septiembre de 2026
+
+**La portada del catálogo se fotografía por sexo declarado.** Las veinticuatro
+fotografías de los programas globales pasan a ser dos juegos —`male` y `female`—, y quien
+prefirió no decirlo recibe una mezcla estable de los dos. Esta revisión contradice dos
+cosas que la tercera dijo que no haría, y por eso se escribe aquí y no en una ficha: «no
+toca las portadas del catálogo» y «`cover_object_key` sigue significando lo que
+significaba». Las dos dejan de ser ciertas.
+
+**Por qué es una decisión y no una sustitución de archivos.** Hasta hoy el sexo declarado
+sólo **ordenaba**: `sex_affinity` empuja hacia arriba los programas que encajan y no
+esconde ninguno, porque quien declinó no necesita una regla aparte. Fotografiar es otra
+cosa: es lo primero que la persona ve de un programa, y decidirlo por un dato suyo es
+tratar ese dato como parte de la presentación y no sólo del orden. Se hace porque una
+persona reconoce antes lo que puede hacer cuando ve a alguien como ella haciéndolo, y se
+escribe aquí porque es la clase de decisión que alguien debería poder discutir dentro de
+un año sin reconstruirla desde una tabla.
+
+**Dos juegos y no tres.** «Mixto» no es una tercera fotografía: es lo que se ve cuando el
+carrusel alterna entre los dos juegos. Un tercero serían veinticuatro imágenes más para
+decir lo mismo, y habría que resolver antes qué significa «mixto» dentro de un solo
+encuadre — dos personas, ninguna, o una que nadie reconoce—, que es una pregunta sin
+buena respuesta.
+
+**La mezcla es estable.** Se elige de forma determinista por el identificador del
+programa, no al azar y no por persona. Una portada sorteada en cada lectura sería una
+portada distinta cada vez que alguien refresca la lista, y el catálogo dejaría de ser un
+sitio y pasaría a ser un carrusel de sí mismo. Y nunca hay juego por defecto para quien
+declinó: eso sería decidir por ella justo lo que decidió no decir.
+
+**`planning.programs.cover_object_key` se retira.** Una columna no puede llevar dos
+claves, y dejarla como «la portada por defecto» sería tener dos verdades sobre la misma
+imagen. En su lugar, la tabla curada `planning.program_cover_photos`, con clave
+`(program_id, audience)`, y `planning.cover_for(program_id, person_id)`, que es por donde
+pasan todos los lectores — incluido el que le da fotografía a una rutina.
+
+**Elegir una portada no escribe nada.** No hay fila por persona, ni preferencia guardada,
+ni traza de qué juego vio nadie. El sexo declarado ya es un hecho que la persona dio; esto
+lo gasta, no recoge nada nuevo, y no se le vuelve a preguntar a nadie por esto.
 
 ### Tercera revisión del 19 de septiembre de 2026
 
@@ -3971,9 +4012,10 @@ guarda es el razonamiento; lo que retira es el código que no tenía usuario.
   sigue siendo una fotografía. Lo que desaparece es que sea *tuya* y que la elija la
   rutina.
 - **No toca las portadas del catálogo.** Las veinticuatro de los programas globales son
-  contenido curado y se despliegan como siempre.
+  contenido curado y se despliegan como siempre. *(Dejó de ser cierto el 20 de septiembre
+  de 2026: ver «Cuarta revisión».)*
 - **No cambia la cara del programa en su propia tarjeta.** `cover_object_key` sigue
-  significando lo que significaba y se decide igual.
+  significando lo que significaba y se decide igual. *(Ídem: la columna se retiró.)*
 - **No cierra la puerta a los binarios personales.** La cierra para V1 y deja el camino
   descrito.
 - **No modela retención programada.** `privacy.retention_policies`, `erasure_requests` y
