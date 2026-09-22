@@ -1910,11 +1910,13 @@ y lo sigue viendo.
 3. Uno viene marcado como sugerido, y puedo elegir otro sin fricción. La sugerencia orienta, no decide.
 4. De cada programa veo antes de elegir cuántos días son, cuántas semanas dura, para qué nivel es y qué zonas trabaja. Si el programa **no tiene fecha de fin**, donde iría la duración leo «Sin fin» en la tarjeta y «Sin fecha de fin» en el detalle: sé que se repite hasta que yo lo cambie, en vez de ver un número en blanco o uno inventado.
 5. **Antes de comprometerme veo el contenido completo**: cada día del reparto, con sus ejercicios y sus series. Ocho semanas no se deciden con un resumen.
-6. Puedo ver el catálogo completo, no solo lo que me proponen.
+6. Puedo ver el catálogo completo **sin salir de esta pantalla**: «Ver todos» extiende la lista donde está, con los que mejor encajan primero, y puedo volver a plegarla. No se me lleva a otro sitio a empezar la elección de nuevo.
 7. **Al elegir uno, tengo sesiones en mi agenda desde hoy**, en mi zona horaria. Elegir no es una intención: es un plan.
 8. Nunca estoy obligada a elegir: entrenar libre y crear mi propio programa siguen disponibles desde aquí.
 9. El programa que elijo es mío. Ninguna organización lo administra ni lo ve.
 10. **Las fotografías del catálogo muestran a alguien como yo cuando lo dije**, y una mezcla de las dos cuando preferí no decirlo, igual de estable: el mismo programa me recibe con la misma imagen cada vez que vuelvo. **No se me pregunta otra vez ni se guarda nada nuevo por esto**, y ver el catálogo no le dice a nadie qué contesté.
+11. **Cada programa se me presenta con la misma tarjeta con la que veré mis rutinas** cuando lo tome: la fotografía ocupa la tarjeta entera, y encima leo su nombre, las zonas que trabaja y sus cifras. El primer día y el día ciento uno son la misma pantalla con distinto contenido, no dos productos que se parecen.
+12. **Elegir no es comprometerse.** La tarjeta me lleva al programa entero, que es donde lo tomo; desde la lista no se me asigna nada, porque ocho semanas no se aceptan con un toque sobre una fotografía.
 
 **Por qué existe esta historia.** La escribimos el 31 de agosto de 2026, después de
 detectar —como con `HU-SP-099`— que el diseño tenía la pantalla y ninguna historia la
@@ -1934,6 +1936,13 @@ fotografía de la portada, y para quien declinó es una mezcla de las dos, no un
 por defecto. Son dos juegos de fotografías y no tres, porque «mixto» es lo que se
 ve cuando el carrusel alterna entre ellos, no una tercera manera de fotografiar a
 alguien.
+
+**Por qué la pantalla se rehízo el 21 de septiembre de 2026.** El primer día enseñaba
+tres fichas de texto con un filete y una cifra al costado, y el día siguiente —ya con
+programa— enseñaba fotografías a toda tarjeta. Eran dos productos pegados: la pantalla
+que convence a alguien de empezar era la más pobre de las dos. Ahora el catálogo se
+presenta con la tarjeta de Hoy, que es además lo que va a ver cada mañana si acepta, y
+«Ver todos» deja de ser una puerta a otra pantalla para ser lo que dice: más lista.
 
 ### HU-SP-090 — Moverme por la aplicación
 
