@@ -947,6 +947,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 2. Un borrador no puede usarse en un programa ni asignarse: primero hay que publicarlo.
 3. Los objetivos de cada paso deben corresponder al tipo de actividad; si no, no se acepta.
 4. Este trabajo requiere conexión: no hay modo local para editar contenido.
+5. **De cada serie puedo pedir un esfuerzo**, del 1 al 10, y no tengo que saberme la escala: al abrirla me explica qué significa, y al marcar un número me dice qué estoy pidiendo — un 8 es que quedaban dos repeticiones. Ponerlo es opcional y quitarlo también: una serie sin esfuerzo marcado no pide ninguno, que no es lo mismo que pedir el mínimo.
 
 ### HU-SP-102 — Retomar el borrador que dejé a medias
 
