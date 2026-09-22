@@ -1022,7 +1022,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 
 **Criterios**
 
-1. Duplicar un programa me deja un **borrador** con la misma semana, la misma duración y la misma portada que el original: empiezo donde el otro terminó.
+1. Duplicar un programa me deja un **borrador** con la misma semana y la misma duración que el original: empiezo donde el otro terminó.
 2. La copia se llama «<Nombre> - Copia», para distinguirla del original sin abrirla.
 3. Hasta que la publico **no existe para nadie más**: no se me asigna, no aparece en mi agenda y no hay ninguna sesión planificada contra ella.
 4. Si salgo sin terminarla, elijo entre guardarla como borrador o descartarla, igual que con un programa nuevo (`HU-SP-106`).
@@ -1063,33 +1063,37 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 5. Puedo salir de una cadena sin perder mis series, y los que quedan siguen encadenados si todavía son dos.
 6. Reordenar la rutina nunca deshace una cadena: se mueve entera y nada puede caer dentro de ella.
 
-### HU-SP-108 — Ponerle portada a mi programa
+### HU-SP-108 — Ponerle portada a mi programa — retirada
 
-**Como** persona
-**quiero** elegir cómo se ven las rutinas de mi programa
-**para** reconocer la de cada día de un vistazo sin leer el nombre.
+Pedía elegir cómo se ven las rutinas de un programa: la figura de los músculos, uno de
+treinta y dos iconos, o fotografía. Se construyó entera y se retiró el 22 de septiembre
+de 2026, por la misma razón que retiró a `HU-SP-109` y una más.
 
-`E-SP-06` · importante
+**La fotografía ganó sola.** Cuando las tres opciones se pusieron una al lado de otra en
+pantallas de verdad —el carrusel de Hoy, el catálogo, el detalle del programa—, ninguna
+de las otras dos se eligió nunca: una fotografía dice de qué va la rutina antes de que
+nadie lea el nombre, y un icono dice de qué va el programa, que es algo que el nombre del
+programa ya dice.
 
-**Criterios**
+**Y una opción que nadie cambia no es una opción, es una pregunta.** El estilo quedaba en
+medio del editor de programa pidiendo una decisión cuyo resultado era siempre el mismo.
+Ahora no se elige: toda rutina lleva su fotografía y su reverso, y una rutina que todavía
+no dice qué trabaja se reconoce por su letra, como se reconocía antes de que esto
+existiera.
 
-1. Elijo la portada **una vez para el programa entero**, y vale para todas sus rutinas: la semana se ve como una semana y no como una colección de estilos sueltos.
-2. Puedo elegir la figura de los músculos, y cada rutina dibuja los suyos con los ejercicios que tenga.
-3. Puedo elegir uno de treinta y dos iconos que dicen de qué va el programa —fuerza, correr, bici, intervalos, cardio, quemar, explosivo, reto, montaña, tiempo, movilidad, nadar y los demás—, y ese icono es el mismo para todas sus rutinas.
-4. Puedo elegir fotografía, y no elijo cuál: a cada rutina le toca la del catálogo que corresponde a lo que **esa** rutina trabaja.
-5. Al elegir veo **cómo se verá mi Home esa semana**, con las rutinas una al lado de otra, no un cuadradito suelto.
-6. Puedo quitar la portada cuando quiera y volver al estado de no haber dicho nada.
-7. Una rutina que no está en ningún programa no lleva portada y se reconoce por su nombre.
-8. Cambiar la portada se ve al momento y **no publica una versión nueva** del programa ni de sus rutinas: es cómo se presenta, no lo que se entrena.
+Lo que se conserva es lo único que la historia probó que valía: que la imagen la decide
+**el contenido y no la persona**, y que la elige el programa y no cada rutina, para que la
+semana se lea como una semana. Eso no era una opción; era la regla de debajo.
 
 ### HU-SP-109 — Poner una foto mía de portada — retirada
 
 Pedía elegir una foto de la galería y usarla como portada. Se construyó entera y se
 retiró el 19 de septiembre de 2026: **nadie iba a hacerlo**. Una portada sirve para
 reconocer una rutina entre seis, y para eso la figura de los músculos y el icono ya
-responden sin pedir nada. `HU-SP-108` conserva la fotografía como tercera opción, con la
-diferencia de que la elige el contenido y no la persona. La razón entera está en la
-segunda revisión de `ADR-031`.
+responden sin pedir nada. La razón entera está en la segunda revisión de `ADR-031`.
+`HU-SP-108` conservó entonces la fotografía como tercera opción —elegida por el contenido
+y no por la persona— y se retiró a su vez tres días después, cuando quedó claro que era la
+única que alguien elegía.
 
 ### HU-SP-044 — Publicar una versión de mi plantilla
 
@@ -1887,7 +1891,7 @@ y lo sigue viendo.
 5. Veo lo que quedó pendiente: una sesión sin cerrar, una propuesta de mi coach esperando respuesta, un permiso que me pidieron.
 6. Si mi plan con el gimnasio está suspendido, lo veo aquí con claridad y sé qué hacer.
 7. Todo se muestra en mi zona horaria.
-8. Veo **las rutinas de mi semana en un carrusel**, una tarjeta por sesión, y cada una con **la portada que le puso su programa**: la reconozco por su imagen antes de leer su nombre.
+8. Veo **las rutinas de mi semana en un carrusel**, una tarjeta por sesión, y cada una con **la fotografía que le corresponde por lo que trabaja**: la reconozco por su imagen antes de leer su nombre. No la elijo yo ni la elige nadie — la decide el contenido.
 9. Cada tarjeta me dice **cuántos ejercicios y cuántas series** tiene, y me ofrece las dos cosas que puedo querer ahí mismo: verla entera antes de decidir, o empezarla.
 10. **La marcha de la semana se ve como los días cumplidos**: cuántas sesiones llevo de las que me tocan, día por día, y no un porcentaje que no me dice qué me falta. Junto a ella veo lo que llevo hecho esta semana: minutos entrenando, series registradas y **kilos levantados**. Los kilos son los que moví, no los que peso: mi peso corporal es una medida mía y vive en mi progreso, no en el resumen de lo que hice.
 11. **No se me inventa nada que no haya pasado.** No veo una hora a la que nadie me citó ni una sede donde nadie me espera: nadie las ha respondido nunca y ponerlas sería escribirlas yo. Prefiero una tarjeta que diga menos a una que diga algo que no ocurrió.

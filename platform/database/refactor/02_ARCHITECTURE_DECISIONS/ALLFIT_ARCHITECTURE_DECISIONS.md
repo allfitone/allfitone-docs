@@ -4091,6 +4091,37 @@ guarda es el razonamiento; lo que retira es el código que no tenía usuario.
 9. Ninguna respuesta ni ninguna fila contiene una URL del almacén.
 10. Ninguna ruta del contrato acepta una imagen.
 
+### Quinta revisión del 22 de septiembre de 2026
+
+**El estilo de portada deja de ser configurable: toda rutina lleva fotografía.** Se retira
+la elección —`OP-PLN-033` y `HU-SP-108`—, no el mecanismo.
+
+Esta revisión contradice la primera mitad del punto 2 de la tercera: «el estilo de portada
+es del programa». Ya no hay estilo que declarar. La segunda mitad —«la imagen es de la
+rutina»— se queda entera y sin una línea de diferencia: la fotografía se pide **sin decir
+cuál**, la elige la región dominante de los ejercicios de esa rutina, y lo que se ve y lo
+que se entrena hablan de lo mismo sin que nadie elija.
+
+**Por qué.** Puestas las tres clases una al lado de otra en pantallas de verdad —el
+carrusel de Hoy, el catálogo, el detalle del programa—, la fotografía era la única que
+alguien elegía. Una fotografía dice de qué va la rutina antes de que nadie lea el nombre;
+un icono dice de qué va el programa, que es lo que el nombre del programa ya dice. **Una
+opción que nadie cambia no es una opción, es una pregunta**, y ésta estaba en medio de la
+pantalla de configuración del plan pidiendo una decisión cuyo resultado era siempre el
+mismo.
+
+**Qué queda por limpiar, dicho por delante.** Retirada la operación, nadie escribe
+`routine_cover_kind` ni `routine_cover_icon`: las dos columnas, sus enumerados y el
+invariante `IX-48` quedan sin quien las alimente. No se retiran en esta revisión porque
+todavía sostienen lo que algún programa declaró antes de hoy; su retirada es una decisión
+aparte y una migración aparte.
+
+**Una rutina sin fotografía se reconoce por su letra**, que es el caso de la que todavía
+no tiene ejercicios: nada dice qué trabaja, así que no hay región de la que partir.
+
+Tampoco se tocan las portadas del **programa** (`planning.program_cover_photos`, cuarta
+revisión) ni el punto 1: en V1 sigue sin haber binarios personales.
+
 ---
 
 ## ADR-032 — Un programa puede no tener fin, y la semana que no existe la siembra quien la va a enseñar
