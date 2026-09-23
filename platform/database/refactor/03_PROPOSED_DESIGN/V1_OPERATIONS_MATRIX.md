@@ -1744,6 +1744,7 @@ Reglas que gobiernan todo el dominio:
 | `OP-PRV-018` | Abrir un caso de acceso histórico | Comando | `A4`, `A5` |
 | `OP-PRV-019` | Cerrar un caso de acceso histórico | Comando | `A4`, `A5` |
 | `OP-PRV-020` | Consultar una relación histórica congelada | Consulta | `A3`, `A4`, `A5` autorizados por el caso |
+| `OP-PRV-021` | Seguir las solicitudes de eliminación | Consulta | `A6` con `manage_privacy_requests` |
 
 ---
 
@@ -2018,6 +2019,24 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno; `ACCESS_EVENT` es auditoría obligatoria |
 | **Reglas** | No lista antiguos clientes, no reutiliza `/clients`, no admite escrituras ni exportación masiva. `relationship_training` conserva artefactos bilaterales; `prior_training_history` solo lo compartido; `body_progress` solo medidas estructuradas. Un derivado se sirve únicamente si existía en `T` y todos sus inputs siguen autorizados |
 | **Falla cerrada** | La respuesta ante inexistencia o falta de autorización es indistinguible; cualquier condición ausente devuelve vacío/problema genérico sin filtrar existencia |
+
+#### `OP-PRV-021` — Seguir las solicitudes de eliminación
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /backoffice/v1/erasure-requests` |
+| **Actor** | `A6` con rol `allfit_admin` y deber `manage_privacy_requests` vigente (AAL2 por la sesión de Backoffice) |
+| **Filtros obligatorios** | `status` (`open` o `closed`); sólo casos con `origin = 'request'` |
+| **Transacción** | Una sola, sin escrituras de dominio, que registra un `ACCESS_EVENT` por persona revelada antes de devolver nada |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Cursor `(instante, id)`; abiertas por `opened_at` ascendente (la que más ha esperado primero), resueltas por `closed_at` descendente |
+| **Offline / concurrencia** | `no-store`; el seguimiento cambia cuando la disposición avanza |
+| **Información sensible** | Ninguna del contenido dispuesto. Persona por identificador; la resolución se agrupa por clasificación, acción y estado |
+| **Evento de dominio** | Ninguno; `ACCESS_EVENT` es auditoría obligatoria |
+| **Reglas** | El plazo objetivo de `HU-BO-032` son 30 días desde `opened_at` y viaja como `due_at`, nunca como días restantes: los días se calculan en la zona de quien lee. Una disposición abierta por retención no es una solicitud y no se lista. `retained_until` sale de la política que decidió conservar, no del plazo de respuesta |
+| **Falla cerrada** | Sin rol o sin deber vigente responde `42501` y no registra acceso, porque no reveló nada |
+| **Implementado** | `privacy.list_erasure_requests` y `privacy.erasure_request_categories`. Hoy una solicitud del titular se abre, se ejecuta y se cierra en la misma transacción, así que la mitad abierta sólo tendrá filas cuando exista una disposición diferida o suspendida por obligación legal (`HU-BO-033`) |
 
 ### 7.5 Catálogo
 
