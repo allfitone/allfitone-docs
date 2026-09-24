@@ -952,6 +952,13 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** `(status, valid_to)`.
 - **Retención:** auditoría.
 - **Eventos:** `privacy.legal_hold_applied.v1`, `privacy.legal_hold_released.v1`.
+- **Implementado (`HU-BO-033`), con dos desviaciones deliberadas:** `created_by text` quedó como
+  `applied_by_person_id uuid` resuelto de la sesión —un nombre escrito a mano no se puede
+  verificar y es en sí mismo dato personal—, y `reason` quedó como `reason_code` sobre lista
+  cerrada (`judicial_order`, `regulatory_request`, `service_dispute`,
+  `tax_or_accounting_obligation`), que es lo que pide el criterio 5. Suma `case_reference` (la
+  orden o requerimiento que sustenta el hold) y `released_by_person_id`. Un trigger impide
+  borrar la fila: un hold es evidencia.
 
 ### 7.16 `privacy.hold_applications`
 
@@ -967,6 +974,10 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** ambos compuestos.
 - **Retención:** auditoría.
 - **Eventos:** ninguno propio.
+- **Implementado (`HU-BO-033`):** el parcial único `uidx_hold_applications_active` sostiene un
+  hold vigente por ítem, porque dos harían ambigua la liberación. Suma `released_at`. Liberar
+  devuelve el ítem a `pending` y a nada más: ejecutar la eliminación de alguien no es decisión
+  de quien revisa.
 
 ---
 

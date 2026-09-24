@@ -1832,6 +1832,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `privacy.legal_hold_applied.v1` |
 | **Reglas** | Un hold **suspende disposición**; no concede ni mantiene acceso operativo. No existen holds globales ni indefinidos: alcance, motivo, vigencia y liberación son obligatorios y auditables |
 | **Falla cerrada** | Sin alcance acotado o sin vigencia, rechazo |
+| **Implementado** | `privacy.apply_legal_hold` sobre `POST /backoffice/v1/legal-holds`. La separación de deberes se comprueba **por persona**, no por caso: quien pidió o aprobó una ventana break-glass sobre alguien no puede suspender la disposición de esa persona. Responde `AF403`, distinto del `42501` general, para que la pantalla diga cuál de los dos 403 es. Un ítem ya ejecutado responde `55000` y uno inexistente `P0002` |
 
 #### `OP-PRV-010` — Liberar un hold legal
 
@@ -1849,6 +1850,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `privacy.legal_hold_released.v1` |
 | **Reglas** | Liberar reanuda la disposición de los ítems **dentro de su alcance** y solo de esos |
 | **Falla cerrada** | — |
+| **Implementado** | `privacy.release_legal_hold` sobre `POST /backoffice/v1/legal-holds/{id}/release`. Devuelve los ítems a `pending` y nunca los ejecuta; un hold ya liberado responde `55000`, y la misma separación de deberes aplica al liberar |
 
 #### `OP-PRV-011` — Publicar una versión de definición de scope
 
