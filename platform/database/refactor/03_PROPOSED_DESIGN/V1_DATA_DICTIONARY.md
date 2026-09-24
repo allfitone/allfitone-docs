@@ -3,12 +3,12 @@
 **Versión de revisión:** 8
 **Fecha:** 17 de agosto de 2026
 **Fase:** 4 — Modelo lógico y diccionario de datos
-**Estado:** 127 fichas; AFO-39 agrega transiciones organizacionales gobernadas y recertifica el inventario
+**Estado:** 136 fichas; la planificación de fuerza gana detalle por serie
 **Deriva de:** [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_PHYSICAL_OBJECT_CATALOG.md`](./V1_PHYSICAL_OBJECT_CATALOG.md), [`V1_RLS_MATRIX.md`](./V1_RLS_MATRIX.md), [`V1_CROSS_TABLE_INTEGRITY_MATRIX.md`](./V1_CROSS_TABLE_INTEGRITY_MATRIX.md), [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](./V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md), [`V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`](./V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md)
 
 ## 1. Propósito
 
-La ficha obligatoria de cada una de las **127 tablas físicas** de V1. El inventario vigente incluye `organizations.organization_type_transitions` y `system.invitation_rate_windows`; `identity.access_sessions` conserva evidencia por superficie sin confiar en claims. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
+La ficha obligatoria de cada una de las **136 tablas físicas** de V1. El inventario vigente incluye `organizations.organization_type_transitions` y `system.invitation_rate_windows`; `identity.access_sessions` conserva evidencia por superficie sin confiar en claims. El plan de fases es tajante: **no se crea una tabla cuya ficha no pueda completarse**; enums, vistas, funciones y particiones hijas no cuentan como tablas de dominio.
 
 Cada ficha responde los quince campos exigidos por [`DATABASE_REFACTOR_PHASES.md` §Fase 4](../04_EXECUTION/DATABASE_REFACTOR_PHASES.md). El diccionario, el ERD lógico y el SQL de Fase 5 deben coincidir; cualquier divergencia es un defecto que se corrige aquí antes de escribir la migración.
 
@@ -38,12 +38,12 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 | Schema | Tablas | Sección |
 | --- | --- | --- |
-| `identity` | 20 | §4 |
+| `identity` | 21 | §4 |
 | `organizations` | 11 | §5 |
 | `relationships` | 6 | §6 |
-| `privacy` | 16 | §7 |
-| `catalog` | 14 | §8 |
-| `planning` | 17 | §9 |
+| `privacy` | 17 | §7 |
+| `catalog` | 18 | §8 |
+| `planning` | 22 | §9 |
 | `execution` | 14 | §10 |
 | `nutrition` | 8 | §10A |
 | `system` | 4 | §11 |
@@ -59,15 +59,20 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** raíz canónica del Fitness ID; el sujeto humano al que todo lo demás refiere.
 - **Dominio / fuente de verdad:** Identidad. Es la fuente de verdad de la identidad de dominio.
 - **Clasificación:** `identity_pii`.
-- **Columnas:** `id` · `given_name text` · `family_name text` · `display_name text` (derivada, para presentación) · `contact_email citext` (nullable hasta verificar) · `contact_email_verified_at timestamptz` (nullable) · `contact_phone text` (E.164, nullable) · `contact_phone_verified_at timestamptz` (nullable) · `status text` (`active`, `closed`) · `activated_at timestamptz`.
+- **Columnas:** `id` · `given_name text` · `family_name text` · `display_name text` (derivada, para presentación) · `username citext` (nullable; Space lo exige al crear el Fitness ID, Studio no lo pide) · `contact_email citext` (nullable hasta verificar) · `contact_email_verified_at timestamptz` (nullable) · `contact_phone text` (E.164, nullable) · `contact_phone_verified_at timestamptz` (nullable) · `biological_sex identity.biological_sex` (`male`, `female`; **nullable**: no decirlo es una respuesta y se representa como ausencia de valor, nunca como `unknown`) · `status identity.person_status` (`pending_activation`, `active`, `closed`) · `activated_at timestamptz` (**nullable**: se sella en la activación).
 - **FKs y borrado:** ninguna saliente. Es la raíz; no referencia a otros dominios.
-- **Uniques y checks:** `CHECK (status in ('active','closed'))`; `UNIQUE (contact_email) WHERE contact_email IS NOT NULL`; `UNIQUE (contact_phone) WHERE contact_phone IS NOT NULL`; `CHECK ((contact_email_verified_at IS NULL) OR (contact_email IS NOT NULL))` y equivalente para teléfono. **El correo de contacto y el correo de ingreso son el mismo dato**: cambiarlo exige actualizar el usuario en WorkOS y volver a verificar, en el flujo de `OP-IDN-021`. Los uniques son parciales y **nunca** se exponen: una consulta por contacto no existe en ninguna superficie, para preservar que una invitación no revele si el contacto ya tiene cuenta.
-- **Actores:** lee la propia persona; escribe solo `activate_person` (INSERT) y el worker de privacidad (anonimización/cierre). Ningún profesional lee esta tabla directamente: usa `identity.v_client_identity`.
+- **Uniques y checks:** `UNIQUE (username) WHERE username IS NOT NULL` y `CHECK` de formato del handle (3 a 30 caracteres, empieza por letra, después letras, dígitos o `_`); `CHECK` que empareja estado y sello: `pending_activation` exige `activated_at` nulo, cualquier otro estado lo exige presente — el estado y la fecha no pueden discrepar; `UNIQUE (contact_email) WHERE contact_email IS NOT NULL`; `UNIQUE (contact_phone) WHERE contact_phone IS NOT NULL`; `CHECK ((contact_email_verified_at IS NULL) OR (contact_email IS NOT NULL))` y equivalente para teléfono. **El correo de contacto y el correo de ingreso son el mismo dato**: se siembra en `OP-IDN-043` desde lo que el proveedor confirma para ese `sub`, nunca desde lo que manda el cliente, y cambiarlo exige actualizar el usuario en WorkOS y volver a verificar, en el flujo de `OP-IDN-021`. Los uniques son parciales y **nunca** se exponen: una consulta por contacto no existe en ninguna superficie, para preservar que una invitación no revele si el contacto ya tiene cuenta.
+- **Actores:** lee la propia persona; escribe solo la función que crea el Fitness ID pendiente (INSERT), la de activación (transición de estado) y el worker de privacidad (anonimización/cierre). Ningún profesional lee esta tabla directamente: usa `identity.v_client_identity`.
 - **RLS:** `access_control.is_self(id)` para lectura y update; INSERT bloqueado salvo función de activación.
 - **Consultas:** por `id`; join desde casi todos los dominios.
 - **Índices:** PK. `status` no se indexa (baja cardinalidad).
 - **Retención:** el cierre elimina PII —nombre, apellido, correo y teléfono— y deja tombstone técnico sin PII (`OP-SYS-008`); nunca `deleted_at`. El contacto es dato personal bajo la Ley 1581: clasificación `identity_pii`, misma política de disposición que el resto de la identidad.
 - **Eventos:** `identity.person_activated.v1`, `identity.contact_changed.v1`, `identity.contact_verified.v1`.
+- **Nota de diseño:** la persona **se crea en `pending_activation` en cuanto se conoce su nombre**, no al final del onboarding. Eso es lo que permite que todo lo que se responda después —perfil, objetivo, datos físicos— se escriba directamente sobre ella con `person_id` real, sin ninguna tabla de preparación intermedia ni un segundo camino de escritura. Activar es la transición de estado y el sello de `activated_at`; no mueve datos de sitio.
+
+  La elegibilidad adulta sigue resolviéndose **antes** de crear la fila, que es lo que exigen DT-012 y ADR-017. Lo que cambia respecto a la versión anterior es cuándo se crea, no el orden de los controles.
+
+  El handle es columna de esta tabla y no una relación aparte: al colgar de una persona que existe desde el primer momento, nunca hay una segunda población de handles reservados sin persona, y por tanto nada que pueda entrar en carrera con otra fuente de verdad.
 
 ### 4.2 `identity.access_accounts`
 
@@ -158,7 +163,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** flujo previo a activar una persona; puede terminar sin crearla.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `identity_pii`.
-- **Columnas:** `id` · `account_id uuid` · `person_id uuid` (nullable) · `status identity.onboarding_status` · `invitation_token_hash text` (nullable, SHA-256 en hexadecimal) · `terms_version text` (nullable) · `terms_accepted_at timestamptz` (nullable) · `privacy_notice_version text` (nullable) · `privacy_notice_accepted_at timestamptz` (nullable) · `expires_at timestamptz`.
+- **Columnas:** `id` · `account_id uuid` · `person_id uuid` (nullable hasta crear el Fitness ID pendiente) · `status identity.onboarding_status` · `invitation_token_hash text` (nullable, SHA-256 en hexadecimal) · `terms_version text` (nullable) · `terms_accepted_at timestamptz` (nullable) · `privacy_notice_version text` (nullable) · `privacy_notice_accepted_at timestamptz` (nullable) · `expires_at timestamptz`.
 - **FKs y borrado:** `account_id → access_accounts(id) RESTRICT`; `person_id → people(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE parcial (account_id) WHERE status='open'` (un intento abierto por cuenta).
 - **Actores:** la propia cuenta lee; los cambios ocurren mediante funciones gobernadas; worker de privacidad dispone. Asociar el hash de una invitación conserva continuidad de navegación y nunca acepta la intención.
@@ -166,7 +171,24 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Consultas:** por `account_id` y estado abierto.
 - **Índices:** parcial de intento abierto por cuenta.
 - **Retención:** intentos no activados se purgan; los datos de elegibilidad se minimizan.
-- **Eventos:** `identity.onboarding_attempt_started.v1`.
+- **Eventos:** `identity.onboarding_attempt_started.v1`, `identity.person_created_pending.v1`.
+- **Nota de diseño:** el intento guarda **lo que es del intento**: la cuenta, el estado, la invitación de referencia y las aceptaciones legales versionadas. Ningún dato de la persona vive aquí. `person_id` se llena en cuanto se crea el Fitness ID pendiente, así que desde ese momento el intento y la persona están relacionados y todo lo demás del onboarding escribe sobre ella. Por eso esta tabla **no crece cuando cambia el onboarding**: añadir o quitar preguntas de perfil no la toca.
+
+### 4.3.1 `identity.onboarding_step_skips`
+
+- **Propósito:** registrar que una persona **saltó** un paso del onboarding, para que no se le vuelva a preguntar.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `operational`.
+- **Columnas:** `onboarding_attempt_id uuid` · `step_code text` · `skipped_at timestamptz`.
+- **FKs y borrado:** `onboarding_attempt_id → onboarding_attempts(id) ON DELETE CASCADE`. El salto no sobrevive al intento que lo produjo.
+- **Uniques y checks:** PK compuesta `(onboarding_attempt_id, step_code)`, que hace el salto idempotente por construcción: saltar dos veces no escribe dos filas.
+- **Actores:** la propia cuenta, mediante función gobernada.
+- **RLS:** por el intento, `account_id = app.actor_account_id`.
+- **Consultas / índices:** por intento; la PK basta.
+- **Retención:** se purga con el intento.
+- **Eventos:** ninguno.
+- **Nota de diseño:** `HU-SP-015` permite saltar cualquier paso que no sea edad, nombre y términos, y `HU-SP-011` es el primero que lo ejerce. Una columna por paso en `onboarding_attempts` —como la que tiene el sexo— habría reproducido el problema que ya obligó a convertir la lectura del onboarding en un solo objeto `answers`: cada paso nuevo cambia la tabla. Aquí el paso es **un valor**, no una columna, así que la tabla no crece cuando crece el onboarding, lo mismo que promete la nota de §4.3. Un array de códigos habría sido la otra tentación, y la norma lo prohíbe: los conjuntos son tablas explícitas.
+- **Lo que un salto NO es:** declinar. El sexo biológico se declina y eso deja el sello en el intento con valor ausente, porque declinar **es** una respuesta a esa pregunta. Saltar es no responderla. Coinciden en que el paso deja de pedirse y se distinguen en que el salto no afirma nada sobre la persona.
 
 ### 4.4 `identity.eligibility_evidence`
 
@@ -187,10 +209,20 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 - **Propósito:** catálogo cerrado de los atributos de perfil fitness declarables en V1.
 - **Dominio / fuente de verdad:** Identidad (catálogo de referencia).
+- **Miembros V1.** Se declaran cuando se construye la pantalla que los escribe, no antes: dar de alta un atributo es un `insert` en este catálogo, no un cambio de esquema, y enumerar códigos sin la pantalla que los usa inventa vocabulario que después no calza.
+  - `primary_training_goal` — `value_kind` enum, sin unidad, clasificación `training`. Valores: `lose_weight`, `build_muscle`, `get_fit`, `improve_performance`, `run_a_race`, `maintain`, que son los seis del criterio 1 de `HU-SP-010`. Clasificado `training` porque el profesional programa contra él: sin verlo no puede ajustar volumen ni intensidad.
+    - **`improve_performance` queda fuera del lanzamiento inicial de V1**, decidido el 23 de agosto de 2026. Permanece en el catálogo porque va a entrar más adelante y borrarlo obligaría a reponerlo, pero **el contrato de API declara solo los otros cinco** y rechaza este con `400`. Que no esté en V1 tiene que ser una garantía verificable, no una omisión de la pantalla.
+  - `focus_areas` — `value_kind` enum, sin unidad, clasificación `training`. Valores: `chest`, `back`, `shoulders`, `arms`, `abs`, `glutes`, `legs` y `whole_body`, que son las siete zonas del criterio 1 de `HU-SP-097` más la forma de decir «sin énfasis». Clasificado `training` por la misma razón que el objetivo: el profesional reparte volumen contra él.
+    - **Es el primer atributo multivaluado del catálogo.** Una persona tiene **varias afirmaciones vigentes** de este atributo a la vez, una por zona, y se declaran como conjunto con `OP-IDN-046`. `OP-IDN-004` no sirve para escribirlo: supersede la anterior del mismo atributo, así que tres zonas dejarían una. Ver el índice único parcial de §4.6.
+    - **`whole_body` es un miembro del catálogo, no la ausencia del dato.** Sin él, «no quiero énfasis» y «no contesté» serían ambos cero filas e indistinguibles, y el resumen del onboarding necesita separarlos para saber si el paso está respondido. Es el mismo recurso que `multiple` para `HU-SP-013`. Es **excluyente** con las siete zonas: llega solo o no llega.
+  - `training_experience` — `value_kind` enum, sin unidad, clasificación `training`. Valores: `starting`, `some_practice`, `experienced`, que son los tres términos simples del criterio 2 de `HU-SP-012`. Singular y excluyente: se escribe con `OP-IDN-004`, y recalificarse crea otra afirmación con `superseded_by_id` en lugar de editar, así que queda registrado con qué nivel se inscribió la persona.
+    - **Es un nivel global, no uno por disciplina.** El criterio 2 decía «en cada una» y se enmendó el 24 de agosto de 2026: `catalog.disciplines` no es legible por el rol de runtime y solo tiene filas de prueba, así que no hay lista sobre la que colgar un nivel por disciplina. Si esa lista llega a existir, el nivel por disciplina es un atributo **nuevo** —miembro con valor propio, no conjunto—, no una ampliación de este.
+    - **Nada de `beginner`, `intermediate`, `advanced`.** La historia pide términos simples, y el motivo es de producto: «avanzado» hace que la gente se subestime y elija por debajo de su nivel, con lo que el plan aburre. El orden lo comunica la pantalla, no el vocabulario.
+- **Fuera del catálogo:** el **sexo biológico** vive como columna de `identity.people`, no como atributo declarable. Decidido el 23 de agosto de 2026: es un hecho singular y estable, y el diseño de este catálogo —procedencias que coexisten, vigencias, `superseded_by_id`— existe para datos que cambian y que varias fuentes observan. Ver §4.1.
 - **Clasificación:** `operational`.
-- **Columnas:** `id` · `code text` · `name text` · `data_classification_code text` · `value_kind text` (numérico, texto, enum) · `unit_dimension text` (nullable).
+- **Columnas:** `id` · `code text` · `name text` · `data_classification_code text` · `value_kind text` (numérico, texto, enum) · `unit_dimension text` (nullable) · `allowed_values text[]` (nullable).
 - **FKs y borrado:** `data_classification_code → privacy.data_classifications(code) RESTRICT`.
-- **Uniques y checks:** `UNIQUE code`.
+- **Uniques y checks:** `UNIQUE code`. `allowed_values` es obligatorio y de al menos dos miembros cuando `value_kind` es enum, y nulo en cualquier otro caso; `unit_dimension` solo se acepta cuando el valor es numérico. Los miembros del enum viven aquí y no en la aplicación, para que la validación ocurra en la misma transacción que la escritura.
 - **Actores:** lectura autenticada; escritura plataforma.
 - **RLS:** lectura abierta a autenticados.
 - **Consultas:** por `code`.
@@ -203,13 +235,15 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** afirmación tipada de un atributo de perfil, con procedencia; varias coexisten.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** hereda del atributo (`training`, `body` o `health`).
-- **Columnas:** `id uuid` (**Command-Id UUIDv7 del dispositivo para `OP-IDN-004`**) · `person_id uuid` · `attribute_code text` · `value_numeric numeric` (nullable) · `value_text text` (nullable) · `unit_code text` (nullable) · `provenance identity.provenance` · `captured_by_kind identity.actor_kind` · `captured_by_assignment_id uuid` (nullable) · `valid_from timestamptz` · `valid_to timestamptz` (nullable) · `superseded_by_id uuid` (nullable).
+- **Columnas:** `id uuid` (**Command-Id UUIDv7 del dispositivo para `OP-IDN-004`**; en `OP-IDN-046` el comando escribe varias filas, así que cada una lleva un UUIDv7 propio generado en la base y la identidad del comando la sostiene el receipt de idempotencia) · `person_id uuid` · `attribute_code text` · `value_numeric numeric` (nullable) · `value_text text` (nullable) · `unit_code text` (nullable) · `provenance identity.provenance` · `captured_by_kind identity.actor_kind` · `captured_by_assignment_id uuid` (nullable) · `valid_from timestamptz` · `valid_to timestamptz` (nullable) · `superseded_by_id uuid` (nullable).
 - **FKs y borrado:** `person_id → people(id) RESTRICT`; `attribute_code → profile_attributes(code) RESTRICT`; `unit_code → catalog.units(code) RESTRICT`; FK compuesta opcional `(captured_by_assignment_id, person_id) → relationships.relationship_professional_assignments(id, person_id) RESTRICT` (`IX-04`).
-- **Uniques y checks:** `CHECK (value_numeric is not null or value_text is not null)`. Sin unique de "una por atributo": coexisten por procedencia. `UPDATE` revocado (append-only + `revision_events`).
+- **Uniques y checks:** `CHECK (value_numeric is not null or value_text is not null)`. Sin unique de "una por atributo": coexisten por procedencia, y en un atributo multivaluado coexisten además **por valor**. `UPDATE` revocado (append-only + `revision_events`).
+  - Único parcial `(person_id, value_text) WHERE attribute_code = 'focus_areas' AND valid_to IS NULL AND provenance = 'person_declared'`: en un atributo multivaluado la fila **es** el miembro del conjunto, así que la misma zona dos veces vigente es un estado corrupto y lo impide la base, no el comando. Es el patrón de `organizations.membership_roles`.
+  - **Va acotado al atributo a propósito.** Generalizarlo a todo `attribute_code` rompería `OP-IDN-004`, que **inserta antes de sellar**: la fila nueva y la anterior conviven un instante con el mismo valor, y redeclarar el objetivo vigente chocaría. Generalizarlo exige invertir ese orden, y es un cambio aparte.
 - **Actores:** la persona (declara, procedencia `person_declared`); el profesional con `contribute` (observación); worker de privacidad dispone.
 - **RLS:** `access_control.is_self(person_id)` **OR** `access_control.can_access(person_id,'relationship_training','read')`; proyección `identity.v_client_profile` aplica field-set.
 - **Consultas:** `(person_id, attribute_code, valid_from desc)`.
-- **Índices:** `(person_id, attribute_code, valid_from desc)`.
+- **Índices:** `(person_id, attribute_code, valid_from desc)`; único parcial de miembro vigente para `focus_areas`, descrito arriba.
 - **Retención:** por categoría de disposición; anonimización rompe el enlace a `person_id`.
 - **Eventos:** `identity.profile_claim_declared.v1`, `identity.profile_claim_revised.v1`.
 
@@ -220,7 +254,9 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Clasificación:** `body`.
 - **Columnas:** `id uuid` (**Command-Id UUIDv7 del dispositivo para `OP-IDN-006`**) · `person_id uuid` · `metric_code text` · `value_numeric numeric` · `unit_code text` · `original_value numeric` (nullable) · `original_unit_code text` (nullable) · `measured_on date` · `media_ref text` (nullable, sin EXIF) · `has_media boolean`.
 - **FKs y borrado:** `person_id → people(id) RESTRICT`; `unit_code → catalog.units(code) RESTRICT`.
-- **Uniques y checks:** `CHECK (has_media = (media_ref is not null))`.
+- **Uniques y checks:** `CHECK (has_media = (media_ref is not null))`. Añadido al construir: `CHECK` cerrado sobre `metric_code` con los miembros de V1, y `CHECK ((original_value is null) = (original_unit_code is null))`, porque media pareja de original no dice nada.
+- **Miembros V1 de `metric_code`:** `body_weight` y `body_height`, declarados el 24 de agosto de 2026 con `HU-SP-011`. La ficha no le da FK ni catálogo, así que sin el check sería texto libre y un dedazo crearía una métrica fantasma que nadie vuelve a escribir. El prefijo `body_` no es adorno: `metric_code` existe también en los resultados de ejecución y en los derivados, donde `weight` es la carga levantada y no el peso de la persona. Añadir un miembro cuesta una migración, y ese coste es preferible.
+- **Canónico y original:** `value_numeric`/`unit_code` guardan **siempre** la unidad canónica de la dimensión, y `original_value`/`original_unit_code` lo que la persona vio. La conversión la hace la función con `catalog.units.to_canonical_factor` y nunca el cliente: el factor tiene una sola fuente de verdad, y guardar solo lo mostrado hace que 74 kg → 163 lb → 73,9 kg y el peso se mueva solo al cambiar de unidad y volver.
 - **Actores:** la persona (lee, escribe, borra); el profesional con `body_progress` **read**; worker de privacidad.
 - **RLS:** `access_control.is_self(person_id)` **OR** `access_control.can_access(person_id,'body_progress','read')`. `relationship_training` **no** alcanza; Studio usa `identity.v_client_body_progress`.
 - **Consultas:** `(person_id, measured_on desc)`.
@@ -865,6 +901,18 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 ---
 
+### 7.17 `privacy.binary_disposals` — retirada
+
+Existió el 18 y el 19 de septiembre de 2026 para probar la destrucción de un binario
+personal, primero como recibo y después también como cola del borrado en el bucket. La
+segunda revisión de `ADR-031` retiró la fotografía personal entera, así que la tabla se
+quedó sin un solo escritor y `ADR-021` prohíbe dejarla puesta por si acaso.
+
+El registro de la retención programada sigue siendo `privacy.disposition_events` (§7.14),
+que nunca tuvo modelo físico y sigue esperando a `DB-P5-015`. Si algún día vuelve un
+binario personal —la foto de comida y el progreso corporal conservan su contrato en la
+baseline—, esta ficha y `ADR-031` son el punto de partida.
+
 ## 8. Schema `catalog`
 
 Salvo indicación, todas las tablas de catálogo tienen **clasificación `operational`**, **RLS de lectura autenticada** para contenido `global` publicado (el contenido `organization`/`person` se restringe a su owner) y **retención permanente** salvo archivado.
@@ -944,7 +992,7 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Propósito:** relación curatorial base↔variante; conserva procedencia sin sobrescribir.
 - **Dominio / fuente de verdad:** Catálogo. Es la fuente de verdad de las relaciones curatoriales entre movimientos.
 - **Clasificación:** `operational`.
-- **Columnas:** `id` · `base_movement_id uuid` · `variant_movement_id uuid` · `relation text`.
+- **Columnas:** `id` · `base_movement_id uuid` · `variant_movement_id uuid` · `relation text` · `note text` (nullable).
 - **FKs y borrado:** ambos `→ movements(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE (base_movement_id, variant_movement_id)`; `CHECK (base_movement_id <> variant_movement_id)`.
 - **Actores:** lectura para quien pueda leer ambos movimientos; escritura de plataforma o del owner autorizado de ambos movimientos privados.
@@ -952,6 +1000,10 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Consultas / índices:** por `base_movement_id`.
 - **Retención:** permanece mientras cualquiera de los movimientos esté referenciado; se elimina solo al retirar ambos sin referencias.
 - **Eventos:** ninguno.
+
+`relation` dice **qué tipo** de relación es; `note` dice **por qué le importa a quien
+lee**, en una frase — «más pectoral superior», «menos técnica». Son cosas distintas y
+por eso son dos columnas: un código no se muestra y una frase no se consulta.
 
 ### 8.7 `catalog.equipment`
 
@@ -989,8 +1041,9 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Columnas:** `id` · `code text` · `dimension text` (peso, distancia, tiempo…) · `is_canonical boolean` · `to_canonical_factor numeric`.
 - **FKs y borrado:** ninguna saliente; las referencias entrantes usan `ON DELETE RESTRICT`.
 - **Uniques y checks:** `UNIQUE code`; `UNIQUE parcial (dimension) WHERE is_canonical`.
+- **Miembros V1.** Curados el 24 de agosto de 2026 con `HU-SP-011`, que es la primera pantalla que necesita unidades reales: dimensión `mass` con `kg` canónica y `lb` a `0.45359237`; dimensión `length` con `cm` canónica y `in` a `2.54`. Las filas `test_*` de `seed.sql` son sintéticas y producción no las carga.
 - **Actores:** lectura autenticada; escritura exclusiva de curaduría de plataforma.
-- **RLS:** lectura autenticada; sin escritura de runtime salvo función de curaduría.
+- **RLS:** lectura autenticada; sin escritura de runtime salvo función de curaduría. **El esquema no lo cumplía**: hasta el 24 de agosto de 2026 la única política era `to allfit_owner` y no había `grant` para el rol de runtime, así que Space no podía leer el catálogo que sus propias pantallas necesitan. Corregido al construir `HU-SP-011`; no es un cambio de norma sino ponerse en conformidad con ella.
 - **Consultas / índices:** por `code`; por `dimension`.
 - **Retención:** permanente; una unidad referenciada no se elimina.
 - **Eventos:** ninguno.
@@ -1063,6 +1116,113 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Retención:** permanente; deprecar evita nuevas declaraciones y conserva referencias existentes.
 - **Eventos:** ninguno.
 
+### 8.15 `catalog.muscles`
+
+- **Propósito:** taxonomía global de músculos y regiones contra la que se etiqueta un movimiento, para que la persona pueda buscar por lo que quiere trabajar.
+- **Dominio / fuente de verdad:** Catálogo. Es la fuente de verdad del vocabulario muscular del producto.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `code text` · `name text` · `region text` (`upper`, `lower`, `general`) · `body_slug text` (nullable) · `status catalog.publication_status` · `display_order integer`.
+- **FKs y borrado:** ninguna.
+- **Uniques y checks:** `UNIQUE code`; código con la forma de los demás códigos de catálogo; nombre no vacío; orden no negativo.
+- **Actores:** lectura autenticada de publicados; escritura solo `A11/curate_global_catalog`.
+- **RLS:** autenticados leen `status='published'`; el runtime de producto no escribe.
+- **Consultas / índices:** `(status, display_order, code)`.
+- **Retención:** permanente; deprecar retira un músculo de las búsquedas y conserva las etiquetas existentes.
+- **Eventos:** ninguno.
+
+`body_slug` es el puente con la figura del cuerpo que Space ya dibuja en su
+onboarding: es **la parte que representa al músculo**, no necesariamente la que
+es exactamente él. La figura no tiene dorsal propio, así que toma la forma más
+cercana —la espalda superior— y la comparte con el músculo que la posee. Una
+parte puede por tanto encender dos músculos a la vez, y eso es lo honesto: el
+dibujo no los distingue, y fingir lo contrario dejándolo sin parte hacía que
+elegirlo pareciera roto.
+
+**Un músculo sin forma aproximadamente correcta no entra al vocabulario.** El
+abductor se probó sobre el glúteo y se leyó como otro músculo; un vocabulario de
+producto no puede contener una palabra que la interfaz responde mal.
+
+Es nullable porque no todo lo que se filtra es una parte dibujable: `cardio` y
+`cuerpo completo` etiquetan los movimientos que no son de fuerza, y sin ellos
+esos movimientos no tendrían ninguna etiqueta.
+
+`region` existe para agrupar las fichas del filtro en dos bloques legibles, que
+es como se lee una lista de diecinueve.
+
+### 8.16 `catalog.movement_muscles`
+
+- **Propósito:** qué trabaja un movimiento, N:M contra la taxonomía.
+- **Dominio / fuente de verdad:** Catálogo. Es la fuente de verdad de la relación entre un movimiento y los músculos que entrena.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `movement_id uuid` · `muscle_id uuid` · `is_primary boolean`.
+- **FKs y borrado:** `movement_id → movements(id) ON DELETE CASCADE`; `muscle_id → muscles(id) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (movement_id, muscle_id)`.
+- **Actores:** los actores autorizados para administrar el movimiento; lectura solo si movimiento y músculo son visibles.
+- **RLS:** hereda del movimiento mediante `movement_id`; además exige visibilidad del `muscle_id` asociado.
+- **Consultas / índices:** por `movement_id`; por `muscle_id` para el filtro inverso.
+- **Retención:** se elimina con el movimiento padre.
+- **Eventos:** ninguno.
+
+`is_primary` distingue lo que un movimiento entrena de lo que además usa: una
+sentadilla es cuádriceps y glúteos como principal y espalda baja como
+acompañante. El filtro devuelve ambos, porque quien busca «glúteos» quiere la
+sentadilla; el orden puede preferir lo principal.
+
+### 8.17 `catalog.movement_instructions`
+
+- **Propósito:** cómo se ejecuta un movimiento, paso a paso y en orden.
+- **Dominio / fuente de verdad:** Catálogo. La fuente de verdad sigue siendo el movimiento padre.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `movement_id uuid` · `locale text` · `position integer` · `text text`.
+- **FKs y borrado:** `movement_id → movements(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `UNIQUE (movement_id, locale, position)`; posición positiva; texto no vacío.
+- **Actores:** los mismos actores autorizados sobre el movimiento padre.
+- **RLS:** hereda visibilidad y escritura del padre mediante `movement_id → movements(id)`.
+- **Consultas / índices:** por `(movement_id, locale, position)`, que es también el orden en que se leen.
+- **Retención:** se elimina con el movimiento padre.
+- **Eventos:** ninguno.
+
+**Esto es instrucción de ejercicio, y eso tiene consecuencias.** Un paso mal escrito
+no es una errata: es alguien cargando mal la espalda. El texto se cura como el resto
+del catálogo global —solo Allfit lo publica— y **no se publica sin revisión de
+alguien con criterio técnico**. El control es la revisión del cambio, no una columna
+de estado: un `status` aquí solo movería la pregunta de sitio.
+
+`position` ordena y `locale` separa idiomas, de modo que traducir es añadir filas y
+nunca reescribir las que ya se leyeron.
+
+### 8.18 `catalog.movement_media`
+
+- **Propósito:** la demostración visual de un movimiento, para quien no lo conoce y no puede deducirlo del nombre.
+- **Dominio / fuente de verdad:** Catálogo. La fuente de verdad sigue siendo el movimiento padre; el binario vive fuera de la base.
+- **Clasificación:** `operational`.
+- **Columnas:** `id` · `movement_id uuid` · `kind text` · `object_key text` · `content_type text` · `width integer` · `height integer` · `byte_size integer` · `checksum text`.
+- **FKs y borrado:** `movement_id → movements(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `UNIQUE (movement_id, kind)`; `kind` en un conjunto cerrado (`demo`); clave de objeto y checksum no vacíos; tipo de contenido de imagen; dimensiones y tamaño positivos.
+- **Actores:** los mismos actores autorizados sobre el movimiento padre.
+- **RLS:** hereda visibilidad del padre mediante `movement_id → movements(id)`. Escritura solo de curaduría, como el resto del catálogo global.
+- **Consultas / índices:** por `movement_id`, que es como se proyecta.
+- **Retención:** se elimina con el movimiento padre; el objeto se retira aparte.
+- **Eventos:** ninguno.
+
+**La base guarda la clave, no la URL.** Una URL absoluta almacenada ata el contenido
+al origen que lo servía el día que se escribió: cambiar de proveedor obligaría a
+migrar filas. La API compone la dirección desde configuración al proyectar, así que
+mudar el origen es una variable de entorno.
+
+**Tampoco guarda el binario.** Una demostración es idéntica para todo el mundo,
+inmutable y grande; sirve desde un CDN con caché largo, no desde una fila. Esto la
+separa deliberadamente de la foto de comida, que es dato personal y por eso **sí** pasa
+por un endpoint que reevalúa autorización en cada petición: allí el control es la
+autorización, aquí es la inmutabilidad.
+
+**El `checksum` es lo que hace reproducible la curaduría.** Dice qué bytes se
+revisaron; si el objeto del almacén no coincide, alguien cambió el contenido sin pasar
+por la revisión del cambio.
+
+Un movimiento sin fila aquí no es un error: es el estado normal de un catálogo que
+crece, y el producto dibuja la figura del cuerpo en su lugar.
+
 ---
 
 ## 9. Schema `planning`
@@ -1072,21 +1232,30 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Propósito:** identidad estable de una plantilla de sesión; borradores y versiones no se mezclan.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad de la identidad y ownership estable de cada plantilla.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `owner_organization_id uuid` (nullable) · `owner_person_id uuid` (nullable) · `discipline_code text` · `status catalog.publication_status`.
+- **Columnas:** `id` · `content_scope catalog.content_scope` · `owner_organization_id uuid` (nullable) · `owner_person_id uuid` (nullable) · `author_person_id uuid` (nullable) · `discipline_code text` · `status catalog.publication_status`.
 - **FKs y borrado:** owners → sus tablas `RESTRICT`; `discipline_code → catalog.disciplines(code) RESTRICT`.
-- **Uniques y checks:** `CHECK (num_nonnulls(owner_organization_id, owner_person_id) = 1)`.
-- **Actores:** owner del contexto; sin acceso entre organizaciones.
-- **RLS:** owner org con membresía **OR** owner person.
+- **Uniques y checks:** `CHECK` de un solo owner según `content_scope`, idéntico al de `catalog.movements`: `global` sin ningún owner, `organization` solo con organización, `person` solo con persona. `CHECK (author_person_id IS NULL) = (content_scope = 'global')` — el contenido global no lo firma una persona, lo publica la plataforma.
+- **Actores:** owner del contexto; sin acceso entre organizaciones. El contenido `global` lo escribe solo la curaduría de plataforma.
+- **RLS:** `content_scope = 'global'` **OR** owner org con membresía **OR** owner person.
 - **Consultas / índices:** `(owner_organization_id, status)`, `(owner_person_id, status)`.
 - **Retención:** con el owner.
 - **Eventos:** `planning.session_template_created.v1`.
+
+**`archived` tiene dos escritores y ninguno borra nada.** El primero es `OP-PLN-028`, que
+descarta la plantilla porque la persona lo pidió. El segundo es `OP-PLN-034`: al eliminar
+un programa, si la persona pide llevarse sus rutinas, se archivan **sólo las que ningún
+otro programa no archivado suyo use**. Una rutina compartida se queda donde está, porque
+archivarla dejaría al otro programa pidiendo una sesión que ya no existe, y `OP-PLN-028`
+ya se niega a dejar un programa sin ninguna. El archivado colateral ocurre en sitio, en la
+misma transacción del programa y sin pasar por `OP-PLN-028`, que lleva su propio recibo de
+idempotencia.
 
 ### 9.2 `planning.session_template_drafts`
 
 - **Propósito:** contenido editable de una plantilla; nunca referenciable por un programa.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del único borrador editable de la plantilla padre.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `template_id uuid` · `content_schema_version smallint` (`1`) · `content jsonb` · `updated_at timestamptz`.
+- **Columnas:** `id` · `template_id uuid` · `content_schema_version smallint` (`1`) · `content jsonb` · `updated_at timestamptz`. El contenido admite `title`, `activity_type_id` y `steps`; cualquier otra clave invalida el borrador entero. **`cover` salió el 19 de septiembre de 2026**: la portada la declara el programa (§9.9) y no la rutina, así que ya no es contenido de este borrador ni entra al hash canónico (`ADR-031`).
 - **FKs y borrado:** `template_id → session_templates(id) ON DELETE CASCADE`.
 - **Uniques y checks:** `UNIQUE template_id` (un borrador vivo por plantilla).
 - **Actores:** owner personal u organizacional de la plantilla; ninguna persona asignada puede editar el borrador.
@@ -1100,37 +1269,67 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Propósito:** versión publicada, completa e inmutable de una plantilla.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad histórica de cada versión publicada de una plantilla.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `template_id uuid` · `version_number integer` · `discipline_code text` · `activity_type_id uuid` · `derived_from_version_id uuid` (nullable) · `status catalog.publication_status` · `published_at timestamptz`.
+- **Columnas:** `id` · `template_id uuid` · `version_number integer` · `discipline_code text` · `activity_type_id uuid` · `derived_from_version_id uuid` (nullable) · `title text` · `content_hash bytea` · `status catalog.publication_status` · `published_at timestamptz`.
 - **FKs y borrado:** `template_id → session_templates(id) RESTRICT`; `activity_type_id → catalog.activity_types(id) RESTRICT`; `derived_from_version_id → session_template_versions(id) RESTRICT`.
-- **Uniques y checks:** `UNIQUE (template_id, version_number)`; sin `UPDATE`/`DELETE` en runtime.
+- **Uniques y checks:** `UNIQUE (template_id, version_number)`; sin `UPDATE`/`DELETE` en runtime. **`content_hash` no es único por plantilla**: dos versiones pueden repetir contenido porque deshacer un cambio es una versión nueva y no un regreso a la anterior (`ADR-009`). La unicidad que hubo hasta el 18 de septiembre de 2026 obligaba a devolver la versión antigua, y su identificador viaja en semanas de programa que lo resolverían contra nada.
 - **Actores:** el owner publica; owner y personas con asignaciones que la referencian leen; ningún runtime actualiza una versión publicada.
 - **RLS:** owner del contexto, **OR** persona con asignación que la referencia.
-- **Consultas / índices:** `(template_id, version_number)`.
+- **Consultas / índices:** `(template_id, version_number)`, que sirve tanto la última versión publicada como la comparación de contenido al publicar. No hay índice por `content_hash`: nadie busca por él desde que la deduplicación mira sólo a la última versión.
 - **Retención:** permanente si referenciada.
 - **Eventos:** `planning.session_template_version_published.v1`, `planning.session_template_version_deprecated.v1`.
+
+**Aquí no hay portada, y es deliberado.** Entre el 18 y el 19 de septiembre de 2026 esta
+tabla llevó `cover_kind`, `cover_icon` y `cover_object_key`, y la clave `cover` viajaba en
+el contenido del borrador y por tanto en el hash canónico. La tercera revisión de
+`ADR-031` se lo llevó todo a `planning.programs` (§9.9): **la portada de una rutina no se
+decide en la rutina**, porque quien escribe una rutina la mira sola y quien arma el
+programa ve las seis juntas en el carrusel de la semana. Lo que cada rutina aporta —qué
+músculos trabaja— ya está en sus pasos y no hace falta copiarlo aquí.
+
+Que la portada saliera del contenido tiene una consecuencia declarada: **toda rutina que
+llevara portada dice «cambios sin publicar» hasta que se publique una vez**, y es cierto,
+porque su contenido cambió. Una rutina que no está en ningún programa no lleva portada y
+se reconoce por su letra inicial.
 
 ### 9.4 `planning.planned_steps`
 
 - **Propósito:** paso planificado de una versión de plantilla; movimiento opcional.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del orden y contenido estructural de los pasos de una versión.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `template_version_id uuid` · `position integer` · `movement_id uuid` (nullable) · `activity_type_id uuid` (nullable, más específico para híbrido) · `notes text` (nullable).
+- **Columnas:** `id` · `template_version_id uuid` · `position integer` · `movement_id uuid` (nullable) · `activity_type_id uuid` (nullable, más específico para híbrido) · `superset_group smallint` (nullable) · `notes text` (nullable).
 - **FKs y borrado:** `template_version_id → session_template_versions(id) ON DELETE CASCADE`; `movement_id → catalog.movements(id) RESTRICT`; `activity_type_id → catalog.activity_types(id) RESTRICT`.
-- **Uniques y checks:** `UNIQUE (template_version_id, position)`.
+- **Uniques y checks:** `UNIQUE (template_version_id, position)`; `superset_group > 0` si existe. `planning.enforce_superset_contiguity_ct` exige que los pasos de un mismo grupo ocupen posiciones consecutivas (`IX-46`).
 - **Actores:** los mismos actores con lectura de la versión; escritura solo durante la publicación atómica de la versión.
 - **RLS:** vía la versión.
 - **Consultas / índices:** por `template_version_id`.
 - **Retención:** con la versión publicada; inmutable una vez publicada.
 - **Eventos:** ninguno propio.
 
+**`superset_group` encadena pasos contiguos**, no cualesquiera. Dos ejercicios en
+superserie se hacen seguidos, sin descanso entre medias, y eso sólo tiene sentido si
+están uno al lado del otro en la sesión: encadenar el primero con el quinto describiría
+un orden que nadie puede ejecutar. Por eso es una columna con un trigger de
+contigüidad y no una tabla de grupos — con la regla puesta, una tabla diría exactamente
+lo mismo por más dinero. Nullable porque la mayoría de los pasos no está encadenada, y
+un cero no significaría nada.
+
+El descanso de una cadena es el del **último** paso del grupo, porque el descanso ocurre
+al terminarla. Los de los pasos intermedios no se aplican; `ADR-030` lo fija.
+
 ### 9.5 `planning.strength_targets`
 
 - **Propósito:** prescripción tipada de fuerza para un paso planificado.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del target de fuerza del paso.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `planned_step_id uuid` · `target_sets integer` · `target_reps integer` (nullable) · `target_load_value numeric` (nullable) · `target_load_unit_code text` (nullable) · `target_rpe numeric` (nullable).
+- **Columnas:** `id` · `planned_step_id uuid` · `target_sets integer` · `target_reps integer` (nullable) · `target_load_value numeric` (nullable) · `target_load_unit_code text` (nullable) · `target_rpe numeric` (nullable) · `target_rest_seconds integer` (nullable).
+- **`target_sets` y `target_reps` son resumen derivado, no autoría.** Desde `ADR-030` la
+  verdad de una prescripción de fuerza son las filas de `planned_sets`; al publicar,
+  `target_sets` es su conteo y `target_reps` existe sólo cuando todas las series
+  coinciden. Se conserva para que la agenda, el día y la semana sigan leyendo lo que
+  siempre leyeron, y ningún actor de runtime puede escribirlo a mano (`IX-47`).
+- **`target_rest_seconds` es prescripción, no medición.** Es el descanso que el paso pide entre series, y quien entrena lo ve como referencia; lo que de verdad descansó no se registra en V1. Nullable porque un paso puede no decir nada al respecto, y un cero significaría «sin descanso», que es una instrucción distinta a «no se dijo».
 - **FKs y borrado:** `planned_step_id → planned_steps(id) ON DELETE CASCADE`; `target_load_unit_code → catalog.units(code) RESTRICT`.
-- **Uniques y checks:** `UNIQUE (planned_step_id)`; `target_sets > 0`; `target_reps > 0` si existe; load y unidad aparecen juntos y load es `>=0`; RPE entre 0 y 10. `planning.enforce_target_family_ct` exige familia `strength` (`IX-22`).
+- **Uniques y checks:** `UNIQUE (planned_step_id)`; `target_sets > 0`; `target_reps > 0` si existe; load y unidad aparecen juntos y load es `>=0`; RPE entre 0 y 10; `target_rest_seconds` entre 0 y 3600 si existe. `planning.enforce_target_family_ct` exige familia `strength` (`IX-22`).
 - **Actores:** los mismos de la versión de plantilla.
 - **RLS:** `EXISTS` por `planned_step_id → session_template_versions → session_templates`.
 - **Consultas / índices:** único `(planned_step_id)`.
@@ -1184,14 +1383,142 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Propósito:** identidad estable de un programa.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad de la identidad y ownership estable de cada programa.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `owner_organization_id uuid` (nullable) · `owner_person_id uuid` (nullable) · `status catalog.publication_status`.
+- **Columnas:** `id` · `content_scope catalog.content_scope` · `owner_organization_id uuid` (nullable) · `owner_person_id uuid` (nullable) · `author_person_id uuid` (nullable) · `routine_cover_kind planning.routine_cover` (nullable) · `routine_cover_icon planning.routine_cover_icon` (nullable) · `status catalog.publication_status`.
 - **FKs y borrado:** owners → sus tablas `RESTRICT`.
-- **Uniques y checks:** `CHECK (num_nonnulls(owner_organization_id, owner_person_id) = 1)`.
-- **Actores:** owner personal u organización con membresía/capacidad vigente; sin acceso de otras organizaciones.
-- **RLS:** owner del contexto.
+- **Uniques y checks:** `CHECK` de un solo owner según `content_scope`, idéntico al de `catalog.movements`. `CHECK (author_person_id IS NULL) = (content_scope = 'global')`. `CHECK` de que `routine_cover_icon` existe **si y sólo si** `routine_cover_kind = 'icon'`: las otras dos clases se dibujan solas y un icono guardado bajo ellas sería un dato que nadie lee.
+- **Actores:** owner personal u organización con membresía/capacidad vigente; sin acceso de otras organizaciones. El contenido `global` lo escribe solo la curaduría de plataforma y **cualquier persona autenticada lo lee**: es el catálogo que `OP-PLN-011` ya llamaba «global» al exigir «versión publicada y accesible para la persona: propia o global».
+- **RLS:** `content_scope = 'global'` **OR** owner del contexto.
 - **Consultas / índices:** `(owner_organization_id, status)`, `(owner_person_id, status)`.
 - **Retención:** se archiva cuando deja de usarse; se conserva mientras una versión o asignación lo referencie.
 - **Eventos:** `planning.program_created.v1`.
+
+**Un programa que estuvo publicado ahora puede llegar a `archived`.** Hasta que existió
+`OP-PLN-034` no podía: `OP-PLN-029` rechaza cualquier programa con una versión publicada,
+de modo que `archived` era el final exclusivo de los borradores que nadie llegó a publicar
+—y la lista de programas, que sólo enseña los publicados, enseñaba exactamente lo que no
+se podía quitar—. Eliminar no destruye nada: el programa pasa a `archived`, sus versiones
+a `deprecated` porque hay historial y sesiones que las apuntan, y la asignación personal
+termina. `status` sigue siendo un estado del contenido y no un rastro de ejecución, y por
+eso archivar aquí no toca ni una fila de lo entrenado.
+
+**El estilo de portada de las rutinas vive aquí porque la decisión es del programa.** La
+pantalla Hoy abre con las rutinas de la semana en un carrusel, una al lado de otra: si
+cada rutina eligiera su propio estilo, esa fila mezclaría figuras de músculos, iconos y
+fotografías y se leería como un muestrario en vez de como una semana. Quien escribe una
+rutina la mira sola; quien arma el programa ve las seis juntas, y por eso decide él.
+`routine_cover_kind` declara la clase para **todas** las rutinas del programa, y dentro de
+la clase cada rutina pone lo suyo: `muscles` dibuja lo que esa rutina trabaja y `photo`
+toma del catálogo la que corresponde a la región dominante de sus músculos. `icon` es el
+único que se guarda, en `routine_cover_icon`, y es el mismo para todas — **un icono se
+elige y no se calcula**, porque nada en los ejercicios dice cuál de los treinta y dos le
+toca. Así el carrusel habla un idioma y aun así una tarjeta se distingue de la de al lado
+sin leer el rótulo.
+
+**Vive en la identidad del programa y no en `planning.program_versions` (§9.11)**, por la
+misma razón que la portada del propio programa (§9.9.1): una versión publicada es inmutable
+porque **es lo que alguien entrenó**, y cambiar cómo se ve una tarjeta no cambia lo que se
+entrena. Vestir un programa (`OP-PLN-033`) surte efecto al momento y no acuña versión de
+nada, igual que reordenar los programas (`OP-PLN-024`) no publica nada.
+
+**Se hereda al bifurcar.** Tomar un programa de Allfit copia su estilo junto con sus
+portadas (§9.9.1): si la copia las perdiera, seis tarjetas cambiarían de aspecto en el
+mismo instante en que el programa pasa a ser tuyo, y eso no es tomar ese programa sino
+otro. `IX-48` lo cubre desde el lado de la bifurcación.
+
+**El prefijo `routine_` es deliberado.** La cara del programa en su propia tarjeta es otra
+cosa y vive en otra tabla (§9.9.1). Dos nombres parecidos con sentidos distintos se
+confunden a la primera, y el prefijo es lo único que los separa cuando alguien lee una
+consulta en medio de un incidente.
+
+**`cover_object_key` se retira de esta tabla.** Guardaba una sola clave de objeto porque
+había una sola portada por programa; desde que el catálogo se fotografía por sexo declarado
+hay un juego por audiencia, y una columna no puede llevar dos. Podría haberse quedado como
+«la portada por defecto», y sería exactamente el error: dos verdades sobre la misma imagen,
+una tabla que dice cuál le toca a cada quien y una columna que dice otra, y la garantía de
+que un día se responde la que no era. La portada la responde ahora `planning.cover_for`
+(§9.9.1) sin excepción, incluso para quien declinó decir su sexo. No queda ningún valor por
+migrar que la tabla nueva no reciba: la clave que la columna llevaba es una de las
+veinticuatro del juego que le corresponda.
+
+**Es nullable porque la portada es opcional.** Nulo significa «no se dijo», no «vacío
+elegido», y las rutinas del programa se reconocen entonces por su letra inicial, que es
+como se reconocían antes de que la portada existiera. Lo mismo vale para una rutina que no
+está en ningún programa: no hay nadie que haya declarado un estilo, así que no lleva
+portada. Una rutina que está en varios programas se viste del **primero**, por el orden
+que la persona ya eligió para sus programas.
+
+**Dos vocabularios cerrados.** `planning.routine_cover` dice de qué clase es la portada
+—`muscles`, `icon` o `photo`— y `planning.routine_cover_icon` enumera los iconos
+disponibles. Nació con doce y hoy tiene treinta y dos; **se amplía por el final y nunca se
+reordena ni se reutiliza un identificador**, porque un programa guardado con `strength`
+tiene que seguir dibujando lo mismo dentro de un año. Qué orden usa la rejilla lo decide la
+aplicación, no el enumerado. Los dos nacieron sirviendo a
+`planning.session_template_versions` y sólo cambiaron de dueño con la tercera revisión de
+`ADR-031`; el nombre `routine_cover` sigue siendo el correcto porque lo que describen es
+cómo se ve una rutina, no cómo se ve un programa.
+
+**Los iconos no son el catálogo de equipamiento.** Un icono dice de qué va el programa, no
+con qué se hace: un programa de fondos en paralelas tiene derecho a la mancuerna, porque
+la mancuerna ahí significa «fuerza». Por eso viven en `planning` y no en `catalog`, por
+la misma razón que `planning.set_kind`: el catálogo guarda contenido que una persona
+explora, y esto es cómo se presenta un programa que ya es suyo. Nadie lo busca ni lo
+filtra, lo declara.
+
+### 9.9.1 `planning.program_cover_photos`
+
+- **Propósito:** la fotografía con la que un programa se presenta en el catálogo, una por cada juego de audiencia.
+- **Dominio / fuente de verdad:** Planificación. La fuente de verdad sigue siendo el programa padre; el binario vive fuera de la base, igual que en `catalog.movement_media` (§8.18).
+- **Clasificación:** `operational`. Es contenido curado, idéntico para todo el mundo dentro de su juego, y no dice nada de ninguna persona.
+- **Columnas:** `program_id uuid` · `audience identity.biological_sex` · `object_key text` · `content_type text` · `width integer` · `height integer` · `byte_size integer` · `checksum text`.
+- **FKs y borrado:** `program_id → programs(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `PRIMARY KEY (program_id, audience)`, que es también el único: un programa tiene una portada por juego y no dos. `audience` es `NOT NULL` por ser parte de la clave —**no hay un tercer valor y tampoco un nulo que signifique «mixto»**—; clave de objeto y checksum no vacíos; tipo de contenido de imagen; dimensiones y tamaño positivos.
+- **Actores:** los mismos actores autorizados sobre el programa padre. Escritura solo de curaduría, como el resto del contenido `global`.
+- **RLS:** hereda visibilidad del padre mediante `program_id → programs(id)`, que para el catálogo resuelve `content_scope = 'global'` y lo lee cualquier persona autenticada. `allfit_api` tiene `SELECT` y nada más.
+- **Consultas / índices:** por la clave primaria `(program_id, audience)`, que es exactamente como se lee —un programa y un juego— y por `program_id` sola cuando la curaduría revisa el par completo. El único cubre las dos.
+- **Retención:** se elimina con el programa padre; el objeto se retira aparte.
+- **Eventos:** ninguno.
+
+**Dos juegos y no tres.** `audience` toma los dos valores de `identity.biological_sex`
+porque hay dos juegos de veinticuatro fotografías, y «mixto» **no es un tercero**: es lo
+que se ve cuando el carrusel alterna entre los dos. Un tercer juego serían veinticuatro
+imágenes más para decir lo mismo, y antes de encargarlas habría que resolver qué significa
+«mixto» dentro de un solo encuadre —dos personas en el cuadro, o ninguna, o una a la que
+nadie reconoce—, que es una pregunta sin buena respuesta y que el catálogo no necesita
+hacerse. El enumerado del sexo declarado ya tiene exactamente los valores que la tabla
+necesita, y por eso se reutiliza en lugar de inventar un vocabulario paralelo que habría
+que mantener en paso con él.
+
+**Quién elige es `planning.cover_for(p_program_id uuid, p_person_id uuid)`**, `stable`, y
+no cuenta como tabla de dominio (§1): lee el sexo declarado de la persona y devuelve la
+clave de su juego. Cuando la persona declinó —el nulo de `identity.people.biological_sex`,
+que §4.1 define como una respuesta y no como una ausencia de respuesta— la función elige
+entre los dos de forma determinista a partir del identificador del programa, de modo que
+el catálogo sale mixto y **sale siempre igual**. Que sea determinista no es un detalle de
+implementación: una portada sorteada en cada lectura sería una portada distinta cada vez
+que se refresca la lista, y un catálogo que cambia de cara solo porque lo miraste dos veces
+no se reconoce.
+
+**Nada se guarda por persona y nada se registra.** Elegir una portada es **una lectura**:
+no hay fila por persona, ni preferencia de imagen, ni traza de que alguien vio un juego u
+otro. El sexo declarado ya es un hecho que la persona dio y que vive en `identity.people`;
+esto lo **gasta**, no recoge nada nuevo. Por eso la clasificación es `operational` y no
+`identity_pii`: la fila no habla de nadie, y quién la mira no deja rastro en ella. Tampoco
+se le vuelve a preguntar a nadie: no existe una pregunta de portada, y quien declinó sigue
+habiendo declinado.
+
+**La base guarda la clave, no la URL**, por la misma razón que `movement_media` (§8.18):
+una dirección absoluta ata el contenido al origen que lo servía el día que se escribió. La
+clave sigue siendo el contenido —`programs/<program_id>/<sha256>.webp`, inmutable, y un
+arte nuevo es una dirección nueva—, y la API compone la dirección al proyectar. El
+`checksum` dice qué bytes se revisaron: si el objeto del almacén no coincide, alguien
+cambió la portada sin pasar por la revisión del cambio.
+
+**Es tabla y no columnas de `programs`.** Dos columnas paralelas —una por sexo— repetirían
+seis veces los metadatos de la imagen y no sobrevivirían a la primera pregunta sobre
+tamaños o formatos; una tabla hija con clave `(program_id, audience)` deja que el conjunto
+crezca por filas y que la base garantice que no hay dos portadas para el mismo juego. Un
+programa sin fila aquí no es un error de integridad sino un programa sin fotografiar
+todavía, y la tarjeta se resuelve como se resolvía antes de que la fotografía existiera.
 
 ### 9.10 `planning.program_drafts`
 
@@ -1207,19 +1534,42 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Retención:** se reemplaza de forma controlada mientras es borrador y se elimina con el programa; publicar crea una versión inmutable separada.
 - **Eventos:** `planning.program_draft_updated.v1`.
 
+**Sobre `repeats_forever` en el borrador.** El `content` puede traer la clave opcional
+`repeats_forever` —booleana, y ausente significa `false`—, que es lo que quien edita
+declara cuando su programa no tiene fecha de fin; la validación la admite en su lista
+blanca y rechaza cualquier valor que no sea booleano. `content_schema_version` **sigue
+siendo `1`**: una clave nueva, opcional y con valor por defecto no cambia la forma del
+documento, y subir el número obligaría a migrar borradores que se leen exactamente igual
+que ayer. Al publicar, la clave pasa a la columna homónima de la versión (`§9.11`).
+
 ### 9.11 `planning.program_versions`
 
 - **Propósito:** versión publicada e inmutable de un programa.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad histórica de cada versión publicada del programa.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `program_id uuid` · `version_number integer` · `status catalog.publication_status` · `published_at timestamptz`.
+- **Columnas:** `id` · `program_id uuid` · `version_number integer` · `title text` · `notes text` (nullable) · `repeats_forever boolean` (`not null default false`) · `content_hash bytea` · `sex_affinity identity.biological_sex` (nullable) · `status catalog.publication_status` · `published_at timestamptz`.
 - **FKs y borrado:** `program_id → programs(id) RESTRICT`.
-- **Uniques y checks:** `UNIQUE (program_id, version_number)`; inmutable.
+- **Uniques y checks:** `UNIQUE (program_id, version_number)`; inmutable. **`content_hash` no es único por programa**, por la misma razón que en `§9.3`: publicar una composición idéntica a una versión anterior crea la siguiente y no devuelve la vieja, cuyo identificador vive en asignaciones y sesiones planificadas.
 - **Actores:** el owner publica; owner y personas con asignaciones que la referencian leen; ningún runtime actualiza una versión publicada.
 - **RLS:** owner, **OR** persona asignada.
 - **Consultas / índices:** `(program_id, version_number)`.
 - **Retención:** permanente mientras esté referenciada por una asignación o forme parte del historial publicado.
 - **Eventos:** `planning.program_version_published.v1`, `planning.program_version_deprecated.v1`.
+
+**Sobre `repeats_forever`, que es lo único que dice si el programa termina.** Un programa
+marcado así **no tiene fecha de fin**: cuando su composición se acaba, vuelve a empezar, y
+es el valor por defecto de un programa nuevo en Space. La marca vive en la **versión** y no
+en el programa porque cambia lo que se entrena —un bloque de ocho semanas con final y una
+rutina sostenida son dos entrenamientos distintos aunque compartan hasta la última serie—,
+y por esa misma razón `planning.canonical_program_content` la emite siempre y **entra en
+el `content_hash`**: dos versiones que sólo difieren en ella no pueden compartir hash. La
+contrapartida está declarada en `ADR-032`: como el canónico ganó una clave, la primera
+republicación de un programa que ya existía acuña una versión aunque nadie haya tocado
+nada. Lo que se repite es **la composición entera y no «una semana»**: al número de semanas
+de la composición lo llamamos el ciclo, en Space suele valer uno porque se compone una
+semana, y un bloque de cuatro de Studio da la vuelta como bloque. La semana de composición
+que toca en la semana de programa `n` es `((n - 1) % ciclo) + 1`, que con ciclo uno es
+«siempre la misma semana» sin ningún caso especial que escribir.
 
 ### 9.12 `planning.program_version_sessions`
 
@@ -1242,12 +1592,24 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Clasificación:** `training`.
 - **Columnas:** `id` · `person_id uuid` · `program_version_id uuid` · `origin_relationship_id uuid` (nullable) · `lifecycle planning.assignment_lifecycle` · `starts_on date` · `timezone text` · `assigned_at timestamptz`.
 - **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `program_version_id → program_versions(id) RESTRICT`; FK compuesta opcional `(origin_relationship_id, person_id) → relationships.service_relationships(id, person_id) RESTRICT` (`IX-11`).
-- **Uniques y checks:** clave portadora `UNIQUE (id, person_id)`.
+- **Uniques y checks:** clave portadora `UNIQUE (id, person_id)`; `program_day` entre 1 y 7.
 - **Actores:** la persona (autoasigna, decide continuidad); el coach con `contribute` (asigna, cancela).
 - **RLS:** `person_id = access_control.person()` **OR** (`origin_relationship_id` visible **AND** grant `relationship_training`).
 - **Consultas / índices:** `(person_id, lifecycle)`, `(origin_relationship_id, lifecycle)`.
 - **Retención:** historial personal; se conserva al desacoplar.
 - **Eventos:** `planning.assignment_created.v1`, `planning.assignment_detached.v1`, `planning.assignment_cancelled.v1`, `planning.assignment_continued.v1`, `planning.assignment_ended.v1`.
+
+**`lifecycle = 'ended'` ya tiene quien lo escriba.** El valor estaba en el enumerado desde
+el principio y hasta `OP-PLN-034` ninguna operación de Space lo ponía: eliminar un
+programa propio termina la asignación personal que la persona se hizo sobre sus versiones.
+Para quien usa la aplicación significa una cosa concreta y sólo esa: **el programa se va
+de su biblioteca y de su agenda**, deja de aparecer entre los suyos y dejan de ofrecérsele
+sus sesiones. No significa que se haya ido su historial. La asignación **no se borra** —el
+grant de runtime no tiene `DELETE` sobre esta tabla y la columna `program_version_id`
+sigue apuntando a una versión que existe—, porque es de dónde cuelga cada ejecución que la
+persona hizo, y un entrenamiento tiene que poder explicarse después de que el programa que
+lo pedía ya no esté. Terminar es distinto de cancelar: `cancelled` lo escribe quien
+administraba desde una relación, y `ended` lo escribe la persona sobre lo suyo.
 
 ### 9.14 `planning.assignment_management_periods`
 
@@ -1279,16 +1641,24 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 
 ### 9.16 `planning.planned_sessions`
 
-- **Propósito:** sesión del calendario materializada al asignar; en la zona horaria de la persona.
+- **Propósito:** sesión del calendario en la zona horaria de la persona. **Pertenece a una semana, no a un día.** Un programa **con fecha de fin** la materializa entera al asignar, como siempre; uno **sin fecha de fin** materializa al asignar la semana en la que se asigna, y cada semana posterior la **siembra la lectura que está a punto de enseñarla** (`ADR-032`). No hay job de calendario en ninguno de los dos casos.
 - **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad del calendario materializado de una asignación.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `assignment_id uuid` · `person_id uuid` · `template_version_id uuid` · `scheduled_at timestamptz` · `timezone text` · `status text` (`scheduled`, `paused`, `cancelled`, `completed`).
+- **Columnas:** `id` · `assignment_id uuid` · `person_id uuid` · `template_version_id uuid` · `program_day smallint` · `week_starts_on date` · `scheduled_at timestamptz` · `timezone text` · `status text` (`scheduled`, `paused`, `cancelled`, `completed`).
+- **`week_starts_on` es lo que decide qué se ofrece**, y es el lunes de la semana de calendario a la que pertenece la sesión. `scheduled_at` se conserva como el día **sugerido** dentro de esa semana: ordena la lista y fecha el historial, pero no obliga. La semana N del programa cae en la semana de calendario N contada desde la que contiene el día de la asignación, así que tomar un programa un viernes deja esa primera semana corta. Lo que no se hace **no se arrastra**: la semana siguiente empieza limpia.
+- **`program_day` es el día que el programa le puso, y `scheduled_at` es dónde cayó.** No siempre coinciden: la materialización adelanta las sesiones de la primera semana que caerían antes del día de la asignación, para no estrenar un programa con sesiones ya perdidas. Tomar un programa un jueves deja su sesión de lunes agendada el jueves, y sin esta columna la pantalla no tendría de dónde sacar que esa sesión es la del lunes — leería el jueves de `scheduled_at` y contradiría al programa que la persona armó. Va de 1 (lunes) a 7 (domingo), como `program_version_sessions.day`. **Ese adelanto es de la primera semana y sólo de ella:** una semana sembrada más tarde por la lectura no lo lleva, porque existe para no estrenar un programa con sesiones ya perdidas y la semana ciento tres no se estrena; cada una de sus sesiones cae en el día que le puso el programa.
 - **FKs y borrado:** `(assignment_id, person_id) → program_assignments(id, person_id) ON DELETE CASCADE`; `template_version_id → session_template_versions(id) RESTRICT` (`IX-15`).
-- **Uniques y checks:** clave portadora `UNIQUE (id, person_id)`.
+- **Uniques y checks:** clave portadora `UNIQUE (id, person_id)`; `program_day` entre 1 y 7.
 - **Actores:** la persona (agenda); el coach reprograma la parte administrada.
 - **RLS:** vía la asignación.
-- **Consultas / índices:** `(assignment_id, scheduled_at)`.
-- **Retención:** con la asignación.
+- **Consultas / índices:** `(assignment_id, scheduled_at)`, `(person_id, week_starts_on)`.
+- **Retención:** con la asignación. **Eliminar el programa (`OP-PLN-034`) retira las
+  sesiones que nadie entrenó y deja las demás donde están**: lo planificado es intención, y
+  una intención que ya no se va a cumplir no tiene por qué seguir ocupando la agenda; una
+  sesión con ejecución, en cambio, es un hecho, y la clave foránea `RESTRICT` de
+  `planned_session_executions` la defiende antes de que nadie tenga que acordarse de
+  hacerlo. Por eso el borrado se pide entero y la base decide qué sobrevive: si una sola
+  sesión con ejecución cayera en el conjunto, la transacción se rechaza completa.
 - **Eventos:** `planning.session_rescheduled.v1`.
 
 ### 9.17 `planning.service_access_blocks`
@@ -1305,7 +1675,111 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Retención:** se conserva como evidencia del periodo bloqueado junto con el evento causal; su cierre no altera ni revive grants, relaciones, membresías, asignaciones o sesiones.
 - **Eventos:** ninguno propio; la transición causal emite el evento de suscripción u organización correspondiente.
 
-Nota de conteo: `planning` tiene 17 tablas y 17 fichas; §9.5–9.8 son cuatro tablas físicas independientes.
+### 9.18 `planning.program_version_goals`
+
+- **Propósito:** para qué objetivos sirve una versión de programa. Es lo que permite proponer un catálogo sin IA.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad de la segmentación con la que se publicó una versión.
+- **Clasificación:** `training`.
+- **Columnas:** `program_version_id uuid` · `goal_code text`.
+- **FKs y borrado:** `program_version_id → program_versions(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `PRIMARY KEY (program_version_id, goal_code)`; `CHECK` cerrado sobre los cinco objetivos que el contrato admite. `improve_performance` queda fuera porque `PrimaryTrainingGoal` ya lo excluye.
+- **Actores:** lectura autenticada junto con la versión; escritura solo por la curaduría de plataforma.
+- **RLS:** vía la versión.
+- **Consultas / índices:** `(goal_code, program_version_id)` para resolver el catálogo desde el objetivo declarado.
+- **Retención:** con la versión. **Es inmutable como ella**: una versión publicada queda fija, y la segmentación con la que se publicó también.
+- **Eventos:** ninguno propio.
+
+### 9.19 `planning.program_version_levels`
+
+- **Propósito:** para qué nivel de experiencia sirve una versión.
+- **Dominio / fuente de verdad:** Planificación.
+- **Clasificación:** `training`.
+- **Columnas:** `program_version_id uuid` · `experience_code text`.
+- **FKs y borrado:** `program_version_id → program_versions(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `PRIMARY KEY (program_version_id, experience_code)`; `CHECK` cerrado sobre `starting`, `some_practice`, `experienced`, el vocabulario de `training_experience` en `identity.profile_attributes`.
+- **Actores:** igual que §9.18.
+- **RLS:** vía la versión.
+- **Consultas / índices:** `(experience_code, program_version_id)`.
+- **Retención:** con la versión, inmutable.
+- **Eventos:** ninguno propio.
+
+### 9.20 `planning.program_version_emphases`
+
+- **Propósito:** qué zonas trabaja una versión. Ordena el catálogo contra las zonas declaradas y es lo que la tarjeta muestra antes de elegir.
+- **Dominio / fuente de verdad:** Planificación.
+- **Clasificación:** `training`.
+- **Columnas:** `program_version_id uuid` · `focus_area_code text`.
+- **FKs y borrado:** `program_version_id → program_versions(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `PRIMARY KEY (program_version_id, focus_area_code)`; `CHECK` cerrado sobre las ocho zonas de `focus_areas`.
+- **Actores:** igual que §9.18.
+- **RLS:** vía la versión.
+- **Consultas / índices:** `(focus_area_code, program_version_id)`.
+- **Retención:** con la versión, inmutable.
+- **Eventos:** ninguno propio.
+
+**Sobre la afinidad de sexo y sobre lo que no se guarda.** La afinidad vive como
+columna `sex_affinity` nullable en `program_versions`, no como tabla: es un valor y no
+un conjunto, y **ordena sin filtrar** —todos ven el mismo catálogo, y quien declinó no
+necesita una regla aparte—. Los días por semana y las semanas del **ciclo** siguen sin
+guardarse: se derivan de `program_version_sessions`, porque guardarlos sería una segunda
+verdad del mismo número y la frecuencia es justo el eje sobre el que se elige. Lo que **sí
+se guarda** es si el programa termina, en `repeats_forever`: eso no se puede derivar de una
+composición que se repite, porque `max(week)` dice cuánto mide el ciclo y no si hay un
+último ciclo. Antes coincidían por accidente —al leer la duración como `max(week)`, todo
+programa terminaba—, y esa coincidencia era justo la que hacía estructuralmente imposible
+un programa sin fin (`ADR-032`).
+
+### 9.21 `planning.planned_sets`
+
+- **Propósito:** cada serie de un paso de fuerza, con lo que esa serie pide y de qué tipo es.
+- **Dominio / fuente de verdad:** Planificación. Es la fuente de verdad de la prescripción de fuerza; `strength_targets` sólo la resume.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `planned_step_id uuid` · `set_order integer` · `kind planning.set_kind` · `target_reps integer` (nullable) · `target_load_value numeric` (nullable) · `target_load_unit_code text` (nullable) · `target_rpe numeric` (nullable).
+- **FKs y borrado:** `planned_step_id → planned_steps(id) ON DELETE CASCADE`; `target_load_unit_code → catalog.units(code) RESTRICT`.
+- **Uniques y checks:** `UNIQUE (planned_step_id, set_order)`; `set_order > 0` y consecutivo desde 1 dentro del paso; `target_reps > 0` si existe; **`kind = 'to_failure'` exige `target_reps IS NULL`**; load y unidad aparecen juntos y load es `>=0`; RPE entre 0 y 10.
+- **Actores:** los mismos de la versión de plantilla; escritura sólo durante la publicación atómica.
+- **RLS:** `EXISTS` por `planned_step_id → planned_steps → session_template_versions → session_templates`, igual que los targets.
+- **Consultas / índices:** único `(planned_step_id, set_order)`, que es también el orden de lectura.
+- **Retención:** con la versión publicada; inmutable tras publicación.
+- **Eventos:** ninguno propio.
+
+**Por qué filas y no dos números.** Nadie hace cuatro series idénticas: la primera es de
+calentamiento con carga ligera, las del medio son de trabajo, la última va al fallo y su
+número de repeticiones es el que salga. Guardar «4 × 8» describe mal lo que la persona
+va a hacer, y una rutina que describe mal no se usa dos veces. `ADR-003` ya lo anticipa
+al cerrar que «los targets consultados o validados frecuentemente no se almacenan
+únicamente en JSONB».
+
+**Una serie al fallo no lleva repeticiones**, y el modelo lo prohíbe en lugar de dejarlo
+a la interfaz. «Hasta no poder más» y «hasta ocho» son instrucciones distintas; un
+número ahí sería una contradicción guardada.
+
+**`kind` vive en `planning` y no en `catalog`.** El catálogo guarda vocabulario de
+contenido que una persona explora —disciplinas, movimientos, equipamiento, músculos—.
+El tipo de serie es estructura de la prescripción: nadie lo busca ni lo filtra, lo
+declara. Su vocabulario es cerrado: `normal`, `warmup`, `to_failure`, `drop`.
+
+**Es hija de una versión publicada y hereda su inmutabilidad.** `ADR-009` es tajante en
+que sólo el borrador es mutable, así que esta tabla lleva las mismas tres protecciones
+que sus hermanas: sin mutación de hija inmutable, inserción sólo durante la publicación,
+y política de fila heredada del padre. Sin ellas sería la única grieta en esa garantía.
+
+### 9.22 `planning.session_template_cover_photos` — retirada
+
+Guardó los metadatos y la clave del objeto de la fotografía que una persona subía como
+portada de una rutina suya. La segunda revisión de `ADR-031` retiró esa fotografía: nadie
+sube nada, y la portada de clase `foto` pasa a ser **una del catálogo elegida por la
+región dominante de los músculos que la rutina trabaja**, que es contenido público,
+inmutable y ya desplegado.
+
+De aquello no queda ninguna columna. `session_template_versions` llegó a guardar la clave
+de esa imagen del catálogo, y la tercera revisión de `ADR-031` se la llevó también: hoy el
+estilo lo declara el programa (§9.9) y ninguna fila guarda qué imagen le toca a una
+rutina, porque la determina la región dominante de los músculos que trabaja y la elección
+es determinista. No es un dato personal, no tiene RLS propia y no hay nada que
+destruir cuando la rutina se descarta.
+
+Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro tablas físicas independientes, §9.9.1 es la tabla de portadas del catálogo —numerada junto a su padre, como §4.2.1 junto al suyo— y §9.22 está retirada.
 
 ---
 
@@ -1971,18 +2445,18 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 
 | Schema | Tablas fichadas |
 | --- | --- |
-| `identity` | 20 |
+| `identity` | 21 |
 | `organizations` | 11 |
 | `relationships` | 6 |
-| `privacy` | 16 |
-| `catalog` | 14 |
-| `planning` | 17 |
+| `privacy` | 17 |
+| `catalog` | 18 |
+| `planning` | 23 |
 | `execution` | 14 |
 | `nutrition` | 8 |
 | `payments` | 12 |
 | `system` | 4 |
 | `support` | 5 |
-| **Total** | **127** |
+| **Total** | **139** |
 
 ### 14.2 Invariantes transversales confirmadas por el diccionario
 
@@ -2013,7 +2487,7 @@ P0-07 cerró objetos/JSONB/particiones y P0-08 cerró receipts, PKs offline y re
 
 Entregable principal de detalle de la Fase 4, complementado por el catálogo de objetos físicos. Se considera completo cuando la revisión confirme que:
 
-1. las 127 tablas tienen ficha completa en sus quince campos;
+1. las 136 tablas tienen ficha completa en sus quince campos;
 2. el diccionario, el ERD lógico y las cardinalidades coinciden;
 3. cada tabla tiene responsabilidad clara, integridad y justificación en operaciones reales;
 4. ninguna tabla podría no existir sin romper una operación de la matriz;

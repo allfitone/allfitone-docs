@@ -217,6 +217,35 @@ movilidad no se organizan en series y repeticiones.
 2. Esta vista no muestra mis permisos concedidos ni mis relaciones: cada cosa tiene su propio lugar.
 3. Puedo consultarla sin conexión sobre lo ya descargado, pero nunca se usa para decidir qué puedo hacer.
 
+### HU-SP-101 — Decir qué disciplina entreno
+
+**Como** persona que acaba de activar su cuenta
+**quiero** decir qué disciplina entreno
+**para** que todo lo que la aplicación me pregunte después vaya de eso.
+
+`E-SP-01` · imprescindible
+
+**Criterios**
+
+1. Elijo **una** disciplina principal, antes de decir mi objetivo.
+2. Veo todas las disciplinas que Allfit va a cubrir, no solo las que ya están listas, y en cada una reconozco lo que practico por lo que la disciplina contiene.
+3. **Solo puedo elegir una que esté disponible.** Las demás se ven y se leen, y dicen sin rodeos que todavía no se pueden elegir.
+4. Puedo cambiarla cuando quiera desde mi perfil.
+
+**Por qué una y no varias.** `HU-SP-012` preguntaba «una o varias disciplinas» junto
+con la experiencia. Con varias no habría **de cuál** puede depender el objetivo, que es
+lo que esta pregunta existe para resolver: la principal es la dirección, y «también
+practico» es una lista. Se separaron el 8 de septiembre de 2026 y quedaron en dos
+historias distintas.
+
+**Alcance del lanzamiento inicial.** Solo **fuerza** está disponible. Las otras cinco
+—alta intensidad, resistencia y cardio, deportes de combate, bienestar y control,
+ritmos y clases— se muestran porque saber qué viene es parte de la promesa, y el
+criterio 3 es lo que impide que eso se convierta en una promesa falsa: no se dejan
+elegir, y **no se ofrece ningún aviso**, porque no se registra el interés de nadie. El
+catálogo de atributos guarda las seis desde el principio; lo que el contrato ofrece es
+una, igual que hace con `improve_performance` en `HU-SP-010`.
+
 ### HU-SP-010 — Decirle a Allfit qué quiero lograr
 
 **Como** persona que acaba de activar su cuenta
@@ -228,8 +257,27 @@ movilidad no se organizan en series y repeticiones.
 **Criterios**
 
 1. Elijo mi objetivo principal de una lista clara: bajar de peso, ganar músculo, ponerme en forma, mejorar mi rendimiento, correr una carrera, mantenerme.
-2. Puedo elegir solo uno como principal, para que la aplicación tenga una dirección.
-3. Puedo cambiarlo cuando quiera desde mi perfil.
+2. **La lista depende de la disciplina que dije entrenar**: solo veo los objetivos que esa disciplina persigue, para no elegir uno que su entrenamiento no puede darme.
+3. Puedo elegir solo uno como principal, para que la aplicación tenga una dirección.
+4. Puedo cambiarlo cuando quiera desde mi perfil.
+
+**Alcance del lanzamiento inicial.** Decidido el 23 de agosto de 2026: **mejorar mi
+rendimiento no se ofrece en el lanzamiento inicial de V1**. Entra más adelante y por
+eso sigue declarado en el catálogo de atributos, pero la lista del criterio 1 arranca
+con cinco. La razón es de producto: es el único de los seis cuyo avance no se ve en el
+cuerpo, así que la pantalla no puede mostrar lo que promete y ninguna de las otras
+cinco tiene ese problema.
+
+**El objetivo depende de la disciplina.** Decidido el 8 de septiembre de 2026, cuando
+`HU-SP-101` puso la disciplina delante de esta pregunta. Con **fuerza** —la única
+disponible en el lanzamiento inicial— la lista pierde **correr una carrera**: es el
+único de los cinco que el entrenamiento de fuerza no persigue, y ofrecerlo sería
+prometer un plan que esa disciplina no va a escribir. Quedan cuatro.
+
+El mapa vive en el cliente y no en PostgreSQL, a propósito. No es un invariante ni una
+frontera de seguridad —nada se rompe si conviven fuerza y correr una carrera— y es una
+decisión de curaduría que va a cambiar cada vez que entre una disciplina; grabada en la
+base rechazaría mañana un valor histórico que fue legítimo cuando se declaró.
 
 ### HU-SP-011 — Registrar mis datos físicos
 
@@ -243,7 +291,21 @@ movilidad no se organizan en series y repeticiones.
 
 1. Registro peso y estatura, y elijo si los quiero en kilos o libras, centímetros o pies.
 2. Estos datos son **míos**: quedan como mi primer registro de progreso y puedo actualizarlos cuando quiera.
-3. Puedo saltarme este paso; la aplicación funciona sin ellos, aunque el progreso será menos preciso.
+3. Las dos medidas se responden, en una sola pantalla y con el mismo control.
+
+**Alcance del lanzamiento inicial.** Decidido el 29 de agosto de 2026: **el paso deja de
+poder saltarse.** El criterio 3 decía «puedo saltarme este paso; la aplicación funciona sin
+ellos, aunque el progreso será menos preciso», y eso ya no es cierto: el peso es la **línea
+base de la serie de progreso**, y sin él no hay contra qué medir nada de lo que venga
+después. La frase «y sin él la aplicación funciona igual» prometía algo que el producto no
+cumple.
+
+**Las dos medidas comparten pantalla, y eso costó dos intentos.** El primero puso una
+tarjeta con su regla arriba y otra regla distinta abajo: dos objetos compitiendo, sin
+centro. Se separaron entonces en una pantalla cada una, y con una pregunta sola por
+pantalla el control ocupaba un tercio y el resto quedaba muerto. Vuelven juntas cuando las
+dos mitades pasan a ser **el mismo objeto** —rótulo, unidades, lectura y cinta—: como
+objetos distintos competían, como un objeto repetido se leen como pareja.
 
 ### HU-SP-012 — Contar qué entreno y desde cuándo
 
@@ -255,9 +317,34 @@ movilidad no se organizan en series y repeticiones.
 
 **Criterios**
 
-1. Elijo una o varias disciplinas: fuerza, running, movilidad, híbrido y las demás disponibles.
-2. Digo cuánta experiencia tengo en cada una, en términos simples: empezando, con algo de práctica, con experiencia.
+1. Además de mi disciplina principal (`HU-SP-101`), digo qué **otras** practico: fuerza, running, movilidad, híbrido y las demás disponibles.
+2. Digo cuánta experiencia tengo, en términos simples: empezando, con algo de práctica, con experiencia.
 3. Digo cuántos días a la semana puedo entrenar y cuánto tiempo tengo por sesión.
+
+**Alcance del lanzamiento inicial.** Decidido el 24 de agosto de 2026: el criterio 2
+declara **un nivel global**, no uno por disciplina. Decía «en cada una», y eso no es
+construible hoy: `catalog.disciplines` solo tiene filas sintéticas de prueba en
+`seed.sql` —que declara que producción no lo carga y exige curaduría aprobada— y su
+única política es `to allfit_owner` sin ningún `grant` para el rol de runtime, así que
+Space no puede leer la lista. Sin disciplinas reales que enumerar, el nivel por
+disciplina no tiene sobre qué colgarse. El argumento de producto apunta al mismo
+sitio: si las cargas se ajustan desde la primera semana, la precisión por disciplina
+en el momento de registrarse compra poco. El criterio 1 espera por la misma razón, y
+el criterio 3 es otra pregunta y merece su propia pantalla.
+
+**El criterio 1 dejó de ser la disciplina principal.** Corregido el 8 de septiembre de
+2026: decía «elijo una o varias disciplinas», y desde que existe `HU-SP-101` esa
+pregunta ya está contestada antes del objetivo. Con varias no habría **de cuál** puede
+depender el objetivo, así que la principal es una y se pregunta aparte; lo que queda
+aquí es «también practico», que es una lista y no una dirección. Sigue esperando por lo
+mismo que el resto de este criterio: hoy solo hay una disciplina disponible, y una lista
+de una no es una lista.
+
+**Pendiente de confirmar.** Los niveles de volumen que la pantalla anuncia —poco,
+medio, alto— y los cortes de tiempo —seis meses, años— vienen de un prototipo y **no
+los ha validado nadie que programe entrenamiento**. Ninguna pieza de `planning` los
+consume todavía, así que hoy describen una intención y no el comportamiento del plan.
+Revisar antes de tratarlos como promesa.
 
 ### HU-SP-013 — Contar dónde entreno y con qué
 
@@ -298,7 +385,7 @@ movilidad no se organizan en series y repeticiones.
 
 **Criterios**
 
-1. Puedo saltarme cualquier paso que no sea la edad y los términos.
+1. Puedo saltarme cualquier paso que no sea la edad, mi nombre y los términos.
 2. La aplicación funciona con lo que haya: si falta algo, se nota dónde y por qué conviene completarlo.
 3. Si lo dejo a medias y vuelvo después, retomo donde iba, no desde el principio.
 4. Desde mi perfil puedo completar lo que falte en cualquier momento.
@@ -331,8 +418,46 @@ movilidad no se organizan en series y repeticiones.
 
 1. Señalo una o varias zonas sobre una figura del cuerpo, y **puedo elegir las mismas zonas de una lista** sin usar la figura.
 2. Es un énfasis, no un plan: señalar una zona no excluye el resto del cuerpo ni promete un programa dedicado solo a ella.
-3. Puedo no señalar ninguna. En ese caso el énfasis lo decide mi objetivo principal.
+3. Puedo decir **«todo el cuerpo»**, y entonces el énfasis lo decide mi objetivo principal. Es una respuesta explícita y no dejar la pregunta en blanco: para continuar tengo que contestar algo.
 4. Puedo cambiarlo cuando quiera desde mi perfil.
+
+### HU-SP-098 — Decir cómo me llamo
+
+**Como** persona que acreditó su edad
+**quiero** decir mi nombre, mi apellido y con qué usuario me identifico
+**para** tener ya mi Fitness ID, aunque todavía no esté activo, y que la aplicación sepa cómo llamarme.
+
+`E-SP-01` · imprescindible · HU-SP-007
+
+**Criterios**
+
+1. Doy nombre y apellido. Sin ellos no hay Fitness ID que crear, así que **este paso no se puede saltar**.
+2. Veo con qué correo entro y no lo puedo cambiar aquí. Cambiarlo es otra cosa y exige verificarlo de nuevo.
+3. Elijo un nombre de usuario **que no tenga nadie más**. Si el que pido ya está en uso, se me dice y elijo otro.
+4. Si mi cuenta ya venía con mi nombre, lo veo escrito y solo lo confirmo o lo corrijo.
+5. Al terminar este paso mi Fitness ID **ya existe**, pendiente de activación. Lo que responda de aquí en adelante queda guardado sobre él, así que si cierro la aplicación y vuelvo, sigo donde iba.
+6. Puedo cambiar mi nombre y mi usuario después desde mi perfil.
+
+### HU-SP-099 — Cerrar el onboarding y empezar
+
+**Como** persona que ya respondió todo el onboarding
+**quiero** ver que mi perfil quedó listo y entrar de una vez
+**para** empezar a entrenar sin preguntarme si faltaba algo.
+
+`E-SP-01` · imprescindible · HU-SP-008
+
+**Criterios**
+
+1. Veo que mi perfil está listo, y con mi nombre de usuario: lo que confirma que terminé es mi propia identidad, no un mensaje genérico.
+2. **Al entrar, mi Fitness ID queda activo.** Es el mismo paso, no dos: la pantalla no promete algo que ocurra después.
+3. Veo la semana que empieza, con hoy señalado. No es un plan todavía y no promete sesiones: dice cuándo empieza lo que sigue.
+4. Si vuelvo atrás, sigo pudiendo corregir lo que respondí. Cerrar el onboarding no cierra las respuestas.
+
+**Por qué existe esta historia.** La escribimos el 30 de agosto de 2026, después de
+detectar que el diseño tenía la pantalla y ninguna historia la describía: se habría
+construido contra nada. `HU-SP-008` dice lo que la activación **garantiza** —un solo
+Fitness ID, reutilizar la identidad si ya existía, ninguna organización actuando por
+ti— y esta dice **dónde y cómo** ocurre.
 
 ---
 
@@ -767,10 +892,12 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 **Criterios**
 
 1. Puedo asignarme un programa propio o uno global publicado.
-2. Mi agenda queda creada completa en el momento de asignarme el programa, no cuando un proceso corra más tarde.
-3. Nadie administra esta asignación: no tiene profesional a cargo.
-4. Ninguna organización la ve, salvo que yo comparta explícitamente esa categoría.
-5. Si se solapa con otro programa activo, se me advierte pero no se me bloquea.
+2. **Al tomar un programa de Allfit me queda una copia mía.** Lo que Allfit publique después no me toca, y lo que yo cambie no le toca a nadie más. El programa aparece entre los míos porque lo es, no porque se lo esté tomando prestado.
+3. **Mi agenda existe desde el momento en que me asigno el programa, no cuando un proceso corra más tarde.** Si el programa termina, queda creada entera ahí mismo. Si no termina no hay un «entera» que crear, así que queda creada la semana en la que lo tomo, y cada semana siguiente aparece completa cuando abro la agenda para verla: nunca la estoy esperando, y nunca depende de que algo haya corrido por su cuenta.
+4. **Mi agenda se organiza por semanas de calendario**, de lunes a domingo. La semana 1 del programa es la semana en la que lo tomo, así que empezar un viernes deja esa semana corta: lo que no alcance no se arrastra.
+5. Nadie administra esta asignación: no tiene profesional a cargo.
+6. Ninguna organización la ve, salvo que yo comparta explícitamente esa categoría.
+7. Si se solapa con otro programa activo, se me advierte pero no se me bloquea.
 
 ### HU-SP-041 — Decidir qué pasa con mi plan cuando termina la relación
 
@@ -820,6 +947,154 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 2. Un borrador no puede usarse en un programa ni asignarse: primero hay que publicarlo.
 3. Los objetivos de cada paso deben corresponder al tipo de actividad; si no, no se acepta.
 4. Este trabajo requiere conexión: no hay modo local para editar contenido.
+5. **De cada serie puedo pedir un esfuerzo**, del 1 al 10, y no tengo que saberme la escala: al abrirla me explica qué significa, y al marcar un número me dice qué estoy pidiendo — un 8 es que quedaban dos repeticiones. Ponerlo es opcional y quitarlo también: una serie sin esfuerzo marcado no pide ninguno, que no es lo mismo que pedir el mínimo.
+
+### HU-SP-102 — Retomar el borrador que dejé a medias
+
+**Como** persona
+**quiero** volver a la rutina que estaba armando
+**para** no empezar de cero cada vez que salgo de la pantalla.
+
+`E-SP-06` · imprescindible
+
+**Criterios**
+
+1. Al volver a crear una rutina, si tengo un borrador sin publicar, se abre ese.
+2. Lo que veo es lo que guardé: el nombre, los ejercicios y sus series.
+3. **La pantalla no escribe nada hasta haber cargado.** Un editor que se abre vacío sobre un borrador existente y guarda solo reemplaza mi trabajo con nada.
+4. Si el borrador no se puede cargar, se me dice, y no se guarda encima.
+
+### HU-SP-103 — Descartar una rutina que no quiero
+
+**Como** persona
+**quiero** decidir al salir si guardo o descarto lo que llevaba
+**para** no acumular borradores que nunca voy a terminar.
+
+`E-SP-06` · imprescindible
+
+**Criterios**
+
+1. Al salir de una rutina con nombre pero sin publicar, elijo entre guardarla como borrador o descartarla.
+2. Descartar la retira de mi contenido; no aparece más en mis rutinas.
+3. Una rutina ya publicada **también se descarta**, y los programas míos que la usaban se republican sin ella; lo que ya entrené con ella no cambia.
+4. Descartar dos veces la misma rutina no es un error.
+
+### HU-SP-107 — Retomar el programa que dejé a medias
+
+**Como** persona
+**quiero** que al volver a «programa nuevo» aparezca lo que llevaba
+**para** no empezar de cero cada vez que salgo de la pantalla.
+
+`E-SP-06` · imprescindible
+
+**Criterios**
+
+1. Si dejé un programa sin publicar, al entrar a crear uno aparece ese con lo que llevaba.
+2. Si no dejé ninguno, empiezo en blanco.
+3. Un programa descartado no se retoma.
+4. Nunca se retoma el de otra persona.
+
+### HU-SP-106 — Descartar un programa que no quiero
+
+**Como** persona
+**quiero** decidir al salir si guardo o descarto el programa que llevaba
+**para** no acumular programas a medias que nunca voy a usar.
+
+`E-SP-06` · imprescindible
+
+**Criterios**
+
+1. Al salir de un programa con nombre pero sin publicar, elijo entre guardarlo como borrador o descartarlo.
+2. Descartar lo retira de mi contenido y deja de ofrecerse para retomar.
+3. Un programa ya publicado no se descarta por esta vía: hay asignaciones que dependen de él. Eliminarlo es otro acto, y lo dicen los criterios siguientes.
+4. Descartar dos veces el mismo programa no es un error.
+5. Un programa publicado **sí lo puedo eliminar**, desde su menú, y antes se me confirma diciéndome qué se lleva.
+6. Eliminarlo lo saca de mi biblioteca y de mi agenda: deja de aparecer entre mis programas y desaparecen las sesiones que no llegué a entrenar.
+7. Si lo pido, **se eliminan también sus rutinas**, salvo las que esté usando otro programa mío: esas se quedan, y la confirmación me dice cuáles y por qué.
+8. **Lo que ya entrené se conserva**, entero y en mi historial. Eliminar un programa no borra ni un entrenamiento.
+
+### HU-SP-110 — Duplicar un programa que ya tengo
+
+**Como** persona
+**quiero** partir de un programa que ya tengo para armar el siguiente
+**para** no volver a escribir la semana entera por cambiarle dos cosas.
+
+`E-SP-06` · importante
+
+**Criterios**
+
+1. Duplicar un programa me deja un **borrador** con la misma semana y la misma duración que el original: empiezo donde el otro terminó.
+2. La copia se llama «<Nombre> - Copia», para distinguirla del original sin abrirla.
+3. Hasta que la publico **no existe para nadie más**: no se me asigna, no aparece en mi agenda y no hay ninguna sesión planificada contra ella.
+4. Si salgo sin terminarla, elijo entre guardarla como borrador o descartarla, igual que con un programa nuevo (`HU-SP-106`).
+5. Un programa que tomé de Allfit también se duplica, y **esa copia sí la puedo editar**.
+6. Mis rutinas no se duplican con él: la copia usa las mismas, y mi biblioteca no crece por copiar un programa.
+
+### HU-SP-104 — Definir mis series una por una
+
+**Como** persona
+**quiero** decir qué hace cada serie de un ejercicio
+**para** que la rutina describa lo que realmente voy a entrenar.
+
+`E-SP-06` · imprescindible
+
+**Criterios**
+
+1. Cada ejercicio se abre y puedo poner cuántas series, con cuántas repeticiones y con qué carga.
+2. Cada serie tiene un tipo: normal, calentamiento, al fallo o descendente.
+3. Una serie al fallo no lleva número de repeticiones, porque el número es el que salga.
+4. Puedo elegir el descanso entre series del ejercicio.
+5. Puedo poner el peso de cada serie, y elegir si lo digo en kilos o en libras para ese ejercicio.
+6. Una serie sin peso dicho se queda sin peso: cero es una carga que alguien quiso poner, no una ausencia.
+
+### HU-SP-105 — Encadenar dos ejercicios en superserie
+
+**Como** persona
+**quiero** encadenar un ejercicio con el siguiente
+**para** hacerlos seguidos sin descanso entre medias.
+
+`E-SP-06` · importante
+
+**Criterios**
+
+1. Puedo encadenar con cualquier ejercicio de la rutina; el que elijo queda al lado de este.
+2. Una cadena puede tener más de dos: encadenar con uno que ya está en una cadena entra en esa cadena.
+3. La rutina muestra qué ejercicios están encadenados y en cuál, con la misma marca y el mismo color.
+4. El descanso de una cadena se aplica al terminarla, no entre sus ejercicios.
+5. Puedo salir de una cadena sin perder mis series, y los que quedan siguen encadenados si todavía son dos.
+6. Reordenar la rutina nunca deshace una cadena: se mueve entera y nada puede caer dentro de ella.
+
+### HU-SP-108 — Ponerle portada a mi programa — retirada
+
+Pedía elegir cómo se ven las rutinas de un programa: la figura de los músculos, uno de
+treinta y dos iconos, o fotografía. Se construyó entera y se retiró el 22 de septiembre
+de 2026, por la misma razón que retiró a `HU-SP-109` y una más.
+
+**La fotografía ganó sola.** Cuando las tres opciones se pusieron una al lado de otra en
+pantallas de verdad —el carrusel de Hoy, el catálogo, el detalle del programa—, ninguna
+de las otras dos se eligió nunca: una fotografía dice de qué va la rutina antes de que
+nadie lea el nombre, y un icono dice de qué va el programa, que es algo que el nombre del
+programa ya dice.
+
+**Y una opción que nadie cambia no es una opción, es una pregunta.** El estilo quedaba en
+medio del editor de programa pidiendo una decisión cuyo resultado era siempre el mismo.
+Ahora no se elige: toda rutina lleva su fotografía y su reverso, y una rutina que todavía
+no dice qué trabaja se reconoce por su letra, como se reconocía antes de que esto
+existiera.
+
+Lo que se conserva es lo único que la historia probó que valía: que la imagen la decide
+**el contenido y no la persona**, y que la elige el programa y no cada rutina, para que la
+semana se lea como una semana. Eso no era una opción; era la regla de debajo.
+
+### HU-SP-109 — Poner una foto mía de portada — retirada
+
+Pedía elegir una foto de la galería y usarla como portada. Se construyó entera y se
+retiró el 19 de septiembre de 2026: **nadie iba a hacerlo**. Una portada sirve para
+reconocer una rutina entre seis, y para eso la figura de los músculos y el icono ya
+responden sin pedir nada. La razón entera está en la segunda revisión de `ADR-031`.
+`HU-SP-108` conservó entonces la fotografía como tercera opción —elegida por el contenido
+y no por la persona— y se retiró a su vez tres días después, cuando quedó claro que era la
+única que alguien elegía.
 
 ### HU-SP-044 — Publicar una versión de mi plantilla
 
@@ -875,6 +1150,9 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 1. Cada posición del programa apunta a una **versión exacta** de plantilla, nunca a "la última".
 2. No puedo componer con un borrador de plantilla.
 3. Si uso versiones retiradas puedo seguir editando, pero al publicar se me advierte.
+4. **No tengo que decir cuándo se acaba.** Un programa que armo yo no tiene fecha de fin mientras no le ponga una: lo que compongo se repite hasta que lo cambie. Es así de entrada, sin que yo active nada.
+5. **Puedo ponerle un final si lo quiero**, y entonces el programa dura las semanas que compuse y se acaba cuando se acaban. Poner o quitar ese final cambia lo que voy a entrenar, así que es parte de lo que publico y no un ajuste de presentación.
+6. Donde un programa con final me dice «8 semanas · 3 días por semana · 24 sesiones», uno sin final me dice **«Sin fecha de fin · 3 días por semana»**: no me inventa un total de sesiones que no existe.
 
 ### HU-SP-048 — Publicar una versión de mi programa
 
@@ -934,7 +1212,8 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 2. Si el programa quedó pausado por una relación terminada, no puedo empezar hasta decidir qué hacer con él.
 3. Puedo empezar sin conexión y sincronizar después.
 4. Si toco dos veces o se corta la red, sigo teniendo **un solo** intento, no dos.
-5. Al empezar queda fijado con qué reglas se va a validar mi sesión, y esas reglas no cambian después.
+5. **Puedo repetir una sesión que ya cerré.** Queda como otro intento en mi historial y no reemplaza al primero, que es el que cuenta para la semana.
+6. Al empezar queda fijado con qué reglas se va a validar mi sesión, y esas reglas no cambian después.
 
 ### HU-SP-052 — Entrenar algo que no estaba planificado
 
@@ -1606,11 +1885,70 @@ y lo sigue viendo.
 
 **Criterios**
 
-1. Al abrir la aplicación veo mi entrenamiento de hoy y puedo empezarlo desde ahí, sin pasar por otras pantallas.
-2. Si no tengo nada planeado, se me ofrece registrar un entrenamiento libre. **Nunca veo una pantalla vacía sin salida.**
-3. Veo lo que quedó pendiente: una sesión sin cerrar, una propuesta de mi coach esperando respuesta, un permiso que me pidieron.
-4. Si mi plan con el gimnasio está suspendido, lo veo aquí con claridad y sé qué hacer.
-5. Todo se muestra en mi zona horaria.
+1. Al abrir la aplicación veo **la siguiente sesión pendiente de mi semana** y puedo empezarla desde ahí, sin pasar por otras pantallas.
+2. **El día es una sugerencia, no una obligación.** Puedo hacer cualquier sesión de la semana el día que quiera; la semana es la unidad y el orden orienta.
+3. **Si ya cumplí la semana se me dice**, y se me ofrece entrenar libre en vez de adelantar la semana siguiente.
+4. Si no tengo nada planeado, se me ofrece elegir un programa (`HU-SP-100`) y también registrar un entrenamiento libre. **Nunca veo una pantalla vacía sin salida.**
+5. Veo lo que quedó pendiente: una sesión sin cerrar, una propuesta de mi coach esperando respuesta, un permiso que me pidieron.
+6. Si mi plan con el gimnasio está suspendido, lo veo aquí con claridad y sé qué hacer.
+7. Todo se muestra en mi zona horaria.
+8. Veo **las rutinas de mi semana en un carrusel**, una tarjeta por sesión, y cada una con **la fotografía que le corresponde por lo que trabaja**: la reconozco por su imagen antes de leer su nombre. No la elijo yo ni la elige nadie — la decide el contenido.
+9. Cada tarjeta me dice **cuántos ejercicios y cuántas series** tiene, y me ofrece las dos cosas que puedo querer ahí mismo: verla entera antes de decidir, o empezarla.
+10. **La marcha de la semana se ve como los días cumplidos**: cuántas sesiones llevo de las que me tocan, día por día, y no un porcentaje que no me dice qué me falta. Junto a ella veo lo que llevo hecho esta semana: minutos entrenando, series registradas y **kilos levantados**. Los kilos son los que moví, no los que peso: mi peso corporal es una medida mía y vive en mi progreso, no en el resumen de lo que hice.
+11. **No se me inventa nada que no haya pasado.** No veo una hora a la que nadie me citó ni una sede donde nadie me espera: nadie las ha respondido nunca y ponerlas sería escribirlas yo. Prefiero una tarjeta que diga menos a una que diga algo que no ocurrió.
+12. **Las fotografías del carrusel muestran a alguien como yo cuando lo dije**, y una mezcla de las dos cuando preferí no decirlo. La mezcla es siempre la misma: no cambia de cara cada vez que abro la aplicación. **No se me pregunta otra vez ni se guarda nada nuevo por esto**: se usa lo que ya conté, y nada más.
+13. **Puedo girar la tarjeta** y ver el detalle sin salir de la pantalla ni elegir otra vista: qué músculos trabaja la rutina y cuántas series se lleva cada uno, y cómo me fue la última vez que la hice. Vuelvo a girarla y tengo otra vez la portada. Girar una tarjeta no gira las demás.
+14. **El reverso cuenta la última vez sólo si la hubo**: cuándo fue, cuánto duró, cuántas series registré y cuánto peso moví. Una rutina que nunca entrené me enseña los músculos y **calla** lo demás, en vez de decirme cero. Una rutina que no es de fuerza no me inventa un tonelaje. Y no cuenta como «la última vez» ni una sesión que anulé ni la que tengo abierta ahora mismo: la última vez es una que terminó.
+
+### HU-SP-100 — Elegir mi primer programa
+
+**Como** persona que acaba de activar su Fitness ID y no tiene nada planeado
+**quiero** que me propongan programas que encajen conmigo
+**para** empezar hoy sin tener que armar un plan desde cero.
+
+`E-SP-16` · imprescindible
+
+**Criterios**
+
+1. Veo programas que corresponden a lo que conté en el onboarding: mi objetivo y cuánto he entrenado. No es un catálogo genérico.
+2. **Elijo cuántos días por semana puedo comprometer.** Se me ofrecen tres, cuatro y cinco días para mi objetivo y mi nivel, y ninguna de esas opciones es contenido pensado para otro nivel.
+3. Uno viene marcado como sugerido, y puedo elegir otro sin fricción. La sugerencia orienta, no decide.
+4. De cada programa veo antes de elegir cuántos días son, cuántas semanas dura, para qué nivel es y qué zonas trabaja. Si el programa **no tiene fecha de fin**, donde iría la duración leo «Sin fin» en la tarjeta y «Sin fecha de fin» en el detalle: sé que se repite hasta que yo lo cambie, en vez de ver un número en blanco o uno inventado.
+5. **Antes de comprometerme veo el contenido completo**: el reparto entero, y de cada día sus ejercicios con sus series. Los días están todos a la vista y abro el que quiera; que se lean de uno en uno no es verlos a medias, es no tener que desplazar ocho semanas para saber qué hay en el cuarto. Ocho semanas no se deciden con un resumen.
+6. Puedo ver el catálogo completo **sin salir de esta pantalla**: «Ver todos» extiende la lista donde está, con los que mejor encajan primero, y puedo volver a plegarla. No se me lleva a otro sitio a empezar la elección de nuevo.
+7. **Al elegir uno, tengo sesiones en mi agenda desde hoy**, en mi zona horaria. Elegir no es una intención: es un plan.
+8. Nunca estoy obligada a elegir: entrenar libre y crear mi propio programa siguen disponibles desde aquí.
+9. El programa que elijo es mío. Ninguna organización lo administra ni lo ve.
+10. **Las fotografías del catálogo muestran a alguien como yo cuando lo dije**, y una mezcla de las dos cuando preferí no decirlo, igual de estable: el mismo programa me recibe con la misma imagen cada vez que vuelvo. **No se me pregunta otra vez ni se guarda nada nuevo por esto**, y ver el catálogo no le dice a nadie qué contesté.
+11. **Cada programa se me presenta con la misma tarjeta con la que veré mis rutinas** cuando lo tome: la fotografía ocupa la tarjeta entera, y encima leo su nombre, las zonas que trabaja y sus cifras. El primer día y el día ciento uno son la misma pantalla con distinto contenido, no dos productos que se parecen.
+12. **Elegir no es comprometerse.** La tarjeta me lleva al programa entero, que es donde lo tomo; desde la lista no se me asigna nada, porque ocho semanas no se aceptan con un toque sobre una fotografía.
+13. **El programa se ve antes de leerse.** Su fotografía encabeza el detalle, cada día del reparto lleva la suya —la misma que esa rutina tendrá en mi inicio cuando lo tome— y cada ejercicio su demostración. Decido mirando lo que voy a hacer, no una lista de nombres; y donde todavía no hay imagen curada no se inventa ninguna: se lee igual, sólo que sin foto.
+
+**Por qué existe esta historia.** La escribimos el 31 de agosto de 2026, después de
+detectar —como con `HU-SP-099`— que el diseño tenía la pantalla y ninguna historia la
+describía. `HU-SP-089` criterio 2 solo ofrecía entrenamiento libre cuando no había
+nada planeado, que es una salida pero no un plan; se enmendó en el mismo cambio.
+
+**De dónde sale el catálogo.** Los programas son contenido **global**, propiedad de
+Allfit: no pertenecen a ninguna organización ni a ninguna persona. `OP-PLN-011` ya
+preveía esto al exigir «versión de programa publicada y accesible para la persona:
+propia o global». En V1 el catálogo es curado y precargado; **no hay IA generando
+programas**, y la correspondencia con la persona se resuelve con lo que declaró.
+
+**Qué hace el sexo declarado.** Ordena y fotografía; no filtra. Todos ven el mismo
+catálogo, con los mismos programas y en la misma cantidad, y quien declinó no
+recibe una lista distinta ni necesita una regla aparte: lo que cambia es la
+fotografía de la portada, y para quien declinó es una mezcla de las dos, no una
+por defecto. Son dos juegos de fotografías y no tres, porque «mixto» es lo que se
+ve cuando el carrusel alterna entre ellos, no una tercera manera de fotografiar a
+alguien.
+
+**Por qué la pantalla se rehízo el 21 de septiembre de 2026.** El primer día enseñaba
+tres fichas de texto con un filete y una cifra al costado, y el día siguiente —ya con
+programa— enseñaba fotografías a toda tarjeta. Eran dos productos pegados: la pantalla
+que convence a alguien de empezar era la más pobre de las dos. Ahora el catálogo se
+presenta con la tarjeta de Hoy, que es además lo que va a ver cada mañana si acepta, y
+«Ver todos» deja de ser una puerta a otra pantalla para ser lo que dice: más lista.
 
 ### HU-SP-090 — Moverme por la aplicación
 
@@ -1692,7 +2030,7 @@ y lo sigue viendo.
 | Épica | Historias | Imprescindibles |
 | --- | --- | ---: |
 | `E-SP-00` Entrar a la aplicación | `HU-SP-001` – `HU-SP-005` | 4 de 5 |
-| `E-SP-01` Registro y onboarding | `HU-SP-006` – `HU-SP-015`, `HU-SP-096` – `HU-SP-097` | 9 de 12 |
+| `E-SP-01` Registro y onboarding | `HU-SP-006` – `HU-SP-015`, `HU-SP-096` – `HU-SP-098`, `HU-SP-101` | 11 de 14 |
 | `E-SP-02` Invitaciones y relaciones | `HU-SP-016` – `HU-SP-020`, `HU-SP-095` | 3 de 6 |
 | `E-SP-03` Perfil, cuerpo y salud | `HU-SP-021` – `HU-SP-028` | 2 de 8 |
 | `E-SP-04` Mis datos y quién los ve | `HU-SP-029` – `HU-SP-036` | 6 de 8 |
@@ -1707,8 +2045,8 @@ y lo sigue viendo.
 | `E-SP-13` Mi plan con el gimnasio | `HU-SP-079` – `HU-SP-082` | 4 de 4 |
 | `E-SP-14` Qué pasa si no pago | `HU-SP-083` | 0 de 1 |
 | `E-SP-15` Allfit Premium | `HU-SP-084` – `HU-SP-088` | 5 de 5 |
-| `E-SP-16` Hoy y navegación | `HU-SP-089` – `HU-SP-094` | 3 de 6 |
-| **Total** | **97 historias** | **51 imprescindibles** |
+| `E-SP-16` Hoy y navegación | `HU-SP-089` – `HU-SP-094`, `HU-SP-100` | 4 de 7 |
+| **Total** | **99 historias** | **53 imprescindibles** |
 
 El camino mínimo para lanzar es: crear cuenta y entrar, activar el Fitness ID,
 ver qué toca hoy, entrenar y registrarlo aunque no haya señal, ver el historial,

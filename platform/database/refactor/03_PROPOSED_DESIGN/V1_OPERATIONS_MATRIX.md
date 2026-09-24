@@ -61,7 +61,7 @@ Un actor no es un rol ni un permiso: es el sujeto autenticado desde el que se ev
 | --- | --- | --- |
 | `A0` Anónimo | Petición sin autenticar | Sí |
 | `A1` Cuenta sin persona | Usuario WorkOS válido cuyo `ACCESS_ACCOUNT` todavía no vincula una `PERSON`. Solo puede operar sobre su propio onboarding | Sí |
-| `A2` Persona | `PERSON` activa con Fitness ID. Sujeto de Space | No |
+| `A2` Persona | `PERSON` con Fitness ID, **activo o `pending_activation`**. Sujeto de Space. Las operaciones que exigen un Fitness ID ya activo lo declaran en sus filtros obligatorios; el resto opera igual en ambos estados, porque `access_control.is_self` no mira el estado | No |
 | `A3` Profesional coach | `PERSON` con `PROFESSIONAL_PROFILE` que opera mediante `ORGANIZATION_MEMBERSHIP` vigente con rol `coach` | No |
 | `A4` Admin de organización | Membresía vigente con rol `admin` | No |
 | `A5` Owner de organización | La única membresía activa de la organización con rol `owner`. Puede transferir la propiedad y cerrar la organización mediante comandos atómicos V1 | No |
@@ -198,13 +198,13 @@ Toda sesión conserva la zona horaria de la persona en el momento del hecho. La 
 | Relaciones | 9 | 5 | 14 |
 | Privacidad | 13 | 7 | 20 |
 | Catálogo | 4 | 8 | 12 |
-| Planificación | 15 | 6 | 21 |
+| Planificación | 19 | 10 | 29 |
 | Ejecución | 13 | 7 | 20 |
 | Nutrición | 8 | 5 | 13 |
 | Pagos | 16 | 7 | 23 |
 | Sistema | 10 | 1 | 11 |
 | Soporte | 6 | 5 | 11 |
-| **Total** | **127** | **67** | **194** |
+| **Total** | **129** | **69** | **198** |
 
 Algunas fichas cubren dos identificadores cuando la operación es simétrica —crear y editar un borrador, listar y consultar el detalle—. En esos casos el encabezado nombra ambos y el contenido aplica a los dos.
 
@@ -260,6 +260,12 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-040` | Iniciar sesión en Space | Comando | `A0` → `A1`, `A2` |
 | `OP-IDN-041` | Renovar la sesión de Space | Comando | `A1`, `A2` |
 | `OP-IDN-042` | Pedir el restablecimiento de contraseña de Space | Comando | `A0` |
+| `OP-IDN-043` | Crear el Fitness ID en estado pendiente | Comando | `A1` → `A2` |
+| `OP-IDN-044` | Consultar el intento de onboarding abierto | Consulta | `A1` |
+| `OP-IDN-045` | Declarar el sexo biológico | Comando | `A2` |
+| `OP-IDN-046` | Declarar las zonas de énfasis | Comando | `A2` |
+| `OP-IDN-047` | Saltarse un paso del onboarding | Comando | `A2` |
+| `OP-IDN-048` | Cerrar sesión Space | Comando idempotente | sesión presente o ausente |
 
 ---
 
@@ -303,15 +309,15 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | --- | --- |
 | **Tipo** | Comando |
 | **Superficie** | `POST /space/v1/onboarding-attempts/{id}/completion` o `POST /studio/v1/onboarding-attempts/{id}/completion` |
-| **Actor** | `A1`, dueño del intento |
-| **Filtros obligatorios** | Intento abierto, propio, con `ELIGIBILITY_EVIDENCE` en estado `pass` vigente, y con aceptaciones versionadas de `platform_terms_v1` y `privacy_notice_v1` registradas |
-| **Transacción** | Una sola: crear `PERSON`, vincular `ACCESS_ACCOUNT` a esa persona, cerrar el `ONBOARDING_ATTEMPT` como `activated` y, si el intento porta una invitación, marcarla como reclamable por esa persona **sin** materializar intenciones |
+| **Actor** | `A2` en `pending_activation`, dueño del intento |
+| **Filtros obligatorios** | Intento abierto y propio, con `PERSON` ya creada en `pending_activation`, `ELIGIBILITY_EVIDENCE` en estado `pass` vigente, y aceptación de `platform_terms_v1` y `privacy_notice_v1` |
+| **Transacción** | Una sola: pasar la `PERSON` de `pending_activation` a `active` sellando `activated_at`, registrar las versiones legales aceptadas, cerrar el `ONBOARDING_ATTEMPT` como `activated` y, si el intento porta una invitación, marcarla como reclamable por esa persona **sin** materializar intenciones |
 | **Idempotencia** | `Idempotency-Key`. Un reintento sobre un intento ya activado devuelve la misma `PERSON`; nunca crea una segunda |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Dos peticiones concurrentes producen una sola persona: la unicidad se resuelve en la base, no en el cliente |
 | **Información sensible** | Datos identificativos básicos |
 | **Evento de dominio** | `identity.person_activated.v1` |
-| **Reglas** | Es el **único** camino que crea una `PERSON`. Studio puede invocarlo exclusivamente para que el titular autenticado complete su propia activación; nunca puede activar a otra persona ni adquirir por ello potestades organizacionales. Si la cuenta ya tenía persona (invitación posterior sobre alguien ya registrado en Space), reutiliza el mismo `person_id` y no duplica el Fitness ID |
+| **Reglas** | **Ya no crea la persona: la activa.** Es el único camino que lleva un Fitness ID a `active`, y no mueve ningún dato de sitio — lo que se respondió durante el onboarding ya está escrito sobre la persona. Studio puede invocarlo exclusivamente para que el titular autenticado complete su propia activación; nunca puede activar a otra persona ni adquirir por ello potestades organizacionales. Reactivar una persona ya `active` devuelve la misma y no vuelve a sellar `activated_at` |
 | **Falla cerrada** | Sin elegibilidad `pass` no hay persona, aunque la invitación exista y esté vigente |
 
 #### `OP-IDN-004` — Declarar afirmación de perfil
@@ -897,7 +903,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Offline / concurrencia** | Falla cerrada. Varias sesiones simultáneas del mismo Fitness ID son válidas |
 | **Información sensible** | Credenciales y tokens. Ninguno se registra |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | **Un intento fallido no dice si falló el correo o la contraseña** (HU-SP-002 criterio 2). Un correo sin verificar recibe la misma respuesta que uno inexistente. **Límite de intentos obligatorio** |
+| **Reglas** | **Un intento fallido no dice si falló el correo o la contraseña** (HU-SP-002 criterio 2). Un correo sin verificar recibe la misma respuesta que uno inexistente. **Límite de intentos obligatorio**. **El correo verificado no viaja en la respuesta**: es server-only y `OP-IDN-043` lo muestra desde lo que la app guardó al iniciar sesión |
 | **Falla cerrada** | Sin credenciales válidas no se emite token, aunque la cuenta exista |
 
 #### `OP-IDN-041` — Renovar la sesión de Space
@@ -914,7 +920,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Offline / concurrencia** | Falla cerrada. Sin conexión la app conserva la sesión guardada pero no puede renovarla |
 | **Información sensible** | Tokens. Nunca se registran |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Es lo que sostiene HU-SP-002 criterio 4, que la sesión se mantiene entre aperturas. Un refresco rechazado obliga a iniciar sesión otra vez, nunca a un acceso degradado |
+| **Reglas** | Es lo que sostiene HU-SP-002 criterio 4, que la sesión se mantiene entre aperturas. Un refresco rechazado obliga a iniciar sesión otra vez, nunca a un acceso degradado. No devuelve contacto ni identidad de analítica: una sesión restaurada retoma el onboarding leyendo `OP-IDN-044` |
 | **Falla cerrada** | Token inválido o de otra superficie: `401`, sin emitir nada |
 
 #### `OP-IDN-042` — Pedir el restablecimiento de contraseña de Space
@@ -933,6 +939,108 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno al pedirlo. El cambio efectivo llega después como webhook del proveedor y lo procesa `identity.process_password_reset_succeeded` |
 | **Reglas** | **Responde `202` siempre**, exista o no la cuenta y esté o no el proveedor en pie: HU-SP-004 criterio 2. Un fallo del proveedor tampoco es público, porque distinguirlo delataría igualmente qué direcciones existen. **Límite de intentos obligatorio**: sin él, este endpoint envía correos a cualquier dirección que le pidan |
 | **Falla cerrada** | Cualquier error se traga y se responde `202`; nada se crea |
+
+#### `OP-IDN-043` — Crear el Fitness ID en estado pendiente
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/fitness-id` |
+| **Actor** | `A1`, dueño del intento. Al terminar, la cuenta pasa a tener persona y el actor es `A2` |
+| **Filtros obligatorios** | Intento abierto y propio, con `ELIGIBILITY_EVIDENCE` en estado `pass` vigente — **también al corregir**: una corrección no salta el control de adultez. Nombre y apellido no vacíos. Nombre de usuario con formato válido y libre para cualquier otra persona. **El proveedor debe confirmar la dirección de la credencial como verificada** al crear: sin eso no hay contacto que registrar |
+| **Transacción** | Una sola. Si la cuenta no tiene persona: crear `PERSON` en `pending_activation` con nombre, apellido, nombre de usuario, **correo de contacto y su sello de verificación**, `activated_at` nulo; vincular `ACCESS_ACCOUNT` a esa persona; y anotar `person_id` en el `ONBOARDING_ATTEMPT`, que sigue `open`. **Si ya la tiene: corregir** nombre, apellido y nombre de usuario sobre la misma persona. El contacto no se reescribe aquí: pertenece a la credencial y cambiarlo es `OP-IDN-021` |
+| **Idempotencia** | `Idempotency-Key`. Un reintento devuelve la misma `PERSON`; nunca crea una segunda, ni al crear ni al corregir. La unicidad del handle y del vínculo cuenta–persona se resuelven en la base |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | No admite `draft_local`: la unicidad del handle es autoritativa y no se puede prometer sin conexión. Dos peticiones concurrentes producen una sola persona |
+| **Información sensible** | Datos identificativos básicos **y contacto**. Clasificación `identity_pii`. Ninguna categoría fitness |
+| **Evento de dominio** | `identity.person_created_pending.v1` |
+| **Reglas** | **Crear la persona aquí es lo que permite que el resto del onboarding escriba directamente sobre ella**: sin esto, cada respuesta de perfil necesitaría una tabla de preparación y un segundo camino de escritura hacia `FITNESS_PROFILE_CLAIM`. La elegibilidad adulta se exige **antes**, que es lo que piden DT-012 y ADR-017: crear la fila más temprano no adelanta ningún control. Una persona `pending_activation` **no** puede crear organización ni perfil profesional; esas operaciones ya exigen estado activo. **No existe consulta de disponibilidad de usuario**: el choque vuelve como `conflict` sobre ese campo, porque preguntar si un handle está libre delata que alguien lo tiene. **El correo de contacto no se acepta como entrada**: es la dirección de la credencial —DT-016 los declara el mismo dato— y la API la consulta al proveedor por `sub`. Una dirección que mandara el cliente jamás puede guardarse como verificada: quedaría un contacto que nadie probó satisfaciendo el filtro de `OP-SYS-002`. Cambiarla es `OP-IDN-021`, con su propia verificación. **Límite de intentos obligatorio** |
+| **Falla cerrada** | Sin elegibilidad `pass` no hay persona ni corrección, aunque el nombre y el handle sean válidos. Usuario que otra persona tiene: `conflict`, y nada cambia. Si el proveedor no confirma la dirección como verificada: `forbidden` |
+
+#### `OP-IDN-044` — Consultar el intento de onboarding abierto
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/onboarding-attempts/current` |
+| **Actor** | `A1`, dueño del intento |
+| **Filtros obligatorios** | Solo el intento abierto de la cuenta autenticada. Una cuenta nunca ve el intento de otra |
+| **Transacción** | Lectura. Devuelve el intento abierto, su estado de elegibilidad y si la cuenta ya tiene un Fitness ID pendiente |
+| **Idempotencia** | No aplica |
+| **Paginación y orden** | No aplica. Hay a lo sumo un intento abierto por cuenta |
+| **Offline / concurrencia** | Sin conexión no se puede retomar: el estado autoritativo del onboarding vive en el servidor |
+| **Información sensible** | Datos identificativos básicos. **No devuelve contacto**: el correo verificado es server-only y la app ya tiene el que usó para entrar |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Es lo que sostiene HU-SP-015 criterio 3 y HU-SP-098 criterio 5: volver retoma donde iba en vez de empezar de nuevo. Una cuenta sin intento abierto —incluida una persona ya activada— recibe `null`, no un error: no haber empezado no es un fallo. Lo ausente viaja como `null` y nunca omitido, para que la app no tenga que adivinar si un paso se saltó o si el campo no llegó |
+| **Falla cerrada** | Sin token verificable, sin respuesta |
+
+#### `OP-IDN-045` — Declarar el sexo biológico
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/biological-sex` |
+| **Actor** | `A2`, dueño del intento. La persona ya existe en `pending_activation` desde `OP-IDN-043` |
+| **Filtros obligatorios** | Intento abierto y propio con `ELIGIBILITY_EVIDENCE` en `pass`. La cuenta debe tener `PERSON` vinculada. El sujeto es siempre la persona autenticada; nadie declara el sexo de otra |
+| **Transacción** | Una sola: escribir `PERSON.biological_sex`. El intento no cambia de estado |
+| **Idempotencia** | `Idempotency-Key`. Un reintento devuelve el mismo valor. **Una segunda declaración distinta corrige**, no choca: la persona puede volver atrás y cambiar su respuesta, y declinar después de haber declarado borra el valor. El sello del intento no se retira: la pregunta quedó respondida de todos modos |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | No admite `draft_local`: es un paso del onboarding y el estado autoritativo vive en el servidor |
+| **Información sensible** | Perfil fitness. Clasificación `training` |
+| **Evento de dominio** | Ninguno en V1. Nada reacciona todavía a este dato |
+| **Reglas** | **Vive en `identity.people`, no en `FITNESS_PROFILE_CLAIM`**: es un hecho singular y estable, y el catálogo de afirmaciones existe para datos que cambian y que varias fuentes observan. **No declararlo es una respuesta válida y se representa como ausencia de valor**, nunca como `unknown`: un centinela obligaría después a distinguirlo de «no preguntado». Por eso declinar **no llama a esta operación**; simplemente avanza. **Límite de intentos obligatorio** |
+| **Falla cerrada** | Valor fuera del enum: `invalid-request`, y nada se escribe. Sin persona vinculada: `forbidden`. Intento cerrado o sin elegibilidad: `invalid-request` |
+
+#### `OP-IDN-046` — Declarar las zonas de énfasis
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/profile/focus-areas` |
+| **Actor** | `A2`. El sujeto es siempre la persona autenticada |
+| **Filtros obligatorios** | La cuenta tiene `PERSON` vinculada. Cada miembro del conjunto pertenece a `allowed_values` del atributo `focus_areas`. Sin miembros repetidos y sin nulos internos. `whole_body` llega solo o no llega |
+| **Transacción** | Una sola, y declara **el conjunto completo**: sella con `valid_to` las afirmaciones vigentes de `focus_areas` que ya no están en el conjunto, inserta las que faltan y **no toca las que siguen**. Una zona retirada queda con `valid_to` y **sin `superseded_by_id`**: nada la reemplazó, y ese campo significa «fue reemplazada por esta otra», no «terminó» |
+| **Idempotencia** | `Idempotency-Key` con receipt durable. **Aquí `Command-Id` no es la PK de la fila**, a diferencia de `OP-IDN-004`: el comando escribe varias filas, así que cada una lleva su propio UUIDv7 y el agregado del receipt es la persona. Consecuencia declarada: el replay devuelve **el conjunto vigente**, no una foto de lo que escribió aquel comando. El reintento no duplica, que es lo que la clave garantiza |
+| **Paginación y orden** | No aplica. El conjunto se lee ordenado por código para que la comparación sea determinista |
+| **Offline / concurrencia** | Admite `draft_local` como el resto de la edición de perfil. Dos declaraciones concurrentes del mismo conjunto son idempotentes; dos distintas se serializan y gana la última, que es la semántica de declarar un conjunto entero |
+| **Información sensible** | Perfil fitness, clasificación `training`. Visible al profesional bajo `relationship_training` y según el field-set del grant |
+| **Evento de dominio** | Ninguno en V1. Nada reacciona todavía al énfasis; se añade cuando la planificación lo consuma |
+| **Reglas** | **El array es interfaz del comando, nunca almacenamiento**: cada zona es una fila, como en `OP-IDN-010` con las especialidades. La procedencia es `person_declared` y **no supersede la observación de un profesional** sobre el mismo atributo. `whole_body` es un miembro y significa «sin énfasis»; el conjunto vacío **no** es una respuesta y se rechaza, porque «no contesté» tiene que seguir siendo distinguible de «no quiero énfasis» |
+| **Falla cerrada** | Miembro fuera del catálogo, repetido, nulo, conjunto vacío, o `whole_body` acompañado de una zona: `invalid-request` y **nada se escribe**, sin escritura parcial. Sin persona vinculada: `forbidden` |
+
+#### `OP-IDN-047` — Saltarse un paso del onboarding
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/skips` |
+| **Actor** | `A2`, dueño del intento |
+| **Filtros obligatorios** | Intento abierto y propio. El paso pertenece a los que `HU-SP-015` permite saltar: **nunca** la edad, el nombre ni los términos, que son la condición para que exista una persona |
+| **Transacción** | Una sola: escribir `ONBOARDING_STEP_SKIP`. El intento no cambia de estado y no se escribe nada sobre la persona |
+| **Idempotencia** | La **clave primaria compuesta** `(intento, paso)` es toda la garantía: saltar dos veces escribe una fila. No lleva recibo durable porque no hay cuerpo que un replay pudiera contradecir, a diferencia de las demás operaciones de esta sección |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | No admite `draft_local`: es estado del onboarding y vive en el servidor |
+| **Información sensible** | Ninguna. Un salto no afirma nada de la persona, que es justo lo que lo distingue de declinar |
+| **Evento de dominio** | Ninguno en V1 |
+| **Reglas** | **Saltar no es declinar.** Declinar el sexo biológico deja el sello en el intento con valor ausente, porque declinar **es** una respuesta a esa pregunta; saltar es no responderla. Coinciden en que el paso deja de pedirse. Un salto **no impide volver**: el paso sigue siendo editable desde la flecha atrás y responderlo después lo deja respondido |
+| **Falla cerrada** | Paso no saltable o código desconocido: `invalid-request`. Intento cerrado, vencido o ajeno: `forbidden` |
+
+#### `OP-IDN-048` — Cerrar sesión Space
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando idempotente |
+| **Superficie** | `DELETE /space/v1/auth/sessions` |
+| **Actor** | Sesión Space presente o ausente |
+| **Filtros obligatorios** | Ninguno más allá del token. Un token vencido o ausente **también** cierra sesión: el teléfono ya no tiene nada que consultar, y negarse dejaría a la persona dentro sin poder salir |
+| **Transacción** | Ninguna en PostgreSQL. Space es *bearer* sin estado: `identity.access_sessions` proyecta las sesiones por cookie de Studio y ninguna petición de Space la consulta, así que no hay fila local que revocar. La única revocación posible es la del `sid` en el proveedor |
+| **Idempotencia** | Sin recibo durable, porque no hay cuerpo que un replay pudiera contradecir. Revocar dos veces responde `204` igual que la primera |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | **El dispositivo cierra sesión aunque la revocación falle.** Un teléfono sin red que no pueda borrar lo suyo es exactamente lo que `HU-SP-003` prohíbe; el `sid` se manda a outbox y el worker lo reintenta |
+| **Información sensible** | Métrica sólo con desencadenante y resultado. Nunca el `sid`, que identifica una sesión concreta |
+| **Evento de dominio** | Ninguno en V1 |
+| **Reglas** | **Revocar el `sid` no invalida el token de acceso ya emitido**, que sigue verificando hasta vencer: lo que muere es el refresco, y con él la sesión. Por eso el borrado en el dispositivo es la mitad que no puede fallar. El criterio 2 de `HU-SP-003` obliga a **avisar antes** cuando queda un entrenamiento sin sincronizar, y ese aviso es del cliente: el servidor no sabe qué guarda el teléfono |
+| **Falla cerrada** | Nada. Esta operación no tiene rechazo: cerrar sesión siempre se concede |
 
 ### 7.2 Organizaciones
 
@@ -1874,7 +1982,7 @@ Reglas que gobiernan todo el dominio:
 
 ### 7.5 Catálogo
 
-Dueño de `DISCIPLINE`, `ACTIVITY_TYPE`, `ACTIVITY_TYPE_ALIAS`, `MOVEMENT`, `MOVEMENT_ALIAS`, `MOVEMENT_VARIANT`, `EQUIPMENT`, `MOVEMENT_EQUIPMENT`, `UNIT`, `RESULT_CONTRACT`, `ACTIVITY_TYPE_RESULT_CONTRACT` y `CONTRACT_FIXTURE`.
+Dueño de `DISCIPLINE`, `ACTIVITY_TYPE`, `ACTIVITY_TYPE_ALIAS`, `MOVEMENT`, `MOVEMENT_ALIAS`, `MOVEMENT_VARIANT`, `MOVEMENT_INSTRUCTION`, `EQUIPMENT`, `MOVEMENT_EQUIPMENT`, `MUSCLE`, `MOVEMENT_MUSCLE`, `UNIT`, `RESULT_CONTRACT`, `ACTIVITY_TYPE_RESULT_CONTRACT` y `CONTRACT_FIXTURE`.
 
 Reglas que gobiernan todo el dominio:
 
@@ -1896,6 +2004,7 @@ Reglas que gobiernan todo el dominio:
 | `OP-CAT-012` | Consultar contratos de resultados de un tipo de actividad | Consulta | Autenticado |
 | `OP-CAT-013` | Listar especialidades profesionales | Consulta | Autenticado |
 | `OP-CAT-014` | Listar tipos de credencial profesional | Consulta | Autenticado |
+| `OP-CAT-015` | Listar músculos | Consulta | Autenticado |
 
 ---
 
@@ -1989,16 +2098,16 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /catalog/v1/movements?discipline=&q=` · `GET /studio/v1/organizations/{orgId}/movements?q=` |
+| **Superficie** | `GET /catalog/v1/movements?discipline=&q=&muscle=&equipment=` · `GET /studio/v1/organizations/{orgId}/movements?q=` |
 | **Actor** | Cualquier cuenta autenticada |
 | **Filtros obligatorios** | En `/catalog`: solo alcance global. En `/studio`: global **más** los privados de `{orgId}` y nada de otras organizaciones |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
-| **Paginación y orden** | Cursor. Orden: relevancia y nombre normalizado, desempate por identificador |
-| **Offline / concurrencia** | El subconjunto global es cacheable en Space |
+| **Paginación y orden** | Cursor opaco. Orden: relevancia y nombre normalizado, desempate por identificador. El cursor es obligatorio, no una comodidad: el catálogo global pasó de decenas a centenares, y un tope sin cursor devuelve una página que parece el catálogo entero |
+| **Offline / concurrencia** | El subconjunto global es cacheable en Space, que pagina una vez y se queda con la copia completa |
 | **Información sensible** | Ninguna categoría personal. El contenido privado de una organización **es** confidencial frente a las demás |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | La búsqueda cubre nombre y alias. Un movimiento archivado no aparece salvo petición explícita |
+| **Reglas** | La búsqueda cubre nombre y alias. Un movimiento archivado no aparece salvo petición explícita. `muscle` y `equipment` son repetibles: varios valores de un mismo filtro son `or`, y entre filtros distintos es `and`. Cada fila trae la dirección de su demostración cuando existe; un movimiento sin ella no es un error |
 | **Falla cerrada** | Sin `{orgId}` no se devuelve ningún privado |
 
 #### `OP-CAT-010` — Consultar un movimiento
@@ -2015,7 +2124,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Cacheable |
 | **Información sensible** | Ninguna categoría personal |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Incluye variantes, equipamiento compatible y sucesor global si fue promovido |
+| **Reglas** | Incluye alias, músculos con su principal, equipamiento compatible, los pasos de ejecución en orden, variantes con el porqué de cada una, la demostración visual cuando existe, y sucesor global si fue promovido. Los pasos son contenido curado y revisado: se leen aquí y no se escriben desde ninguna superficie de producto. La demostración viaja como dirección absoluta compuesta al proyectar, nunca como una URL almacenada: el origen es configuración, no dato |
 | **Falla cerrada** | Privado de otra organización: misma respuesta que "no existe" |
 
 #### `OP-CAT-011` — Listar equipamiento
@@ -2086,6 +2195,23 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | El tipo gobierna nuevas declaraciones; deprecarlo conserva credenciales históricas y evita nuevas declaraciones o revisiones con ese código |
 | **Falla cerrada** | Códigos draft, deprecados o archivados no se devuelven para nuevas declaraciones |
 
+#### `OP-CAT-015` — Listar músculos
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /catalog/v1/muscles` |
+| **Actor** | Cualquier cuenta autenticada |
+| **Filtros obligatorios** | Solo `status='published'` |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Sin paginación en V1; `region` y luego `display_order`, desempate por código |
+| **Offline / concurrencia** | Cacheable con `ETag` |
+| **Información sensible** | Ninguna. Un músculo del catálogo describe un movimiento, **nunca** el cuerpo de una persona: la composición corporal vive en `identity` y es dato de salud |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Vocabulario global y único: un músculo no tiene alcance de organización, porque dos gimnasios no pueden discrepar sobre qué es un cuádriceps. `body_slug`, cuando existe, es la parte de la figura que **representa** al músculo —no siempre la que es exactamente él—, de modo que el filtro y el onboarding hablan un solo idioma. Dos músculos pueden compartir parte |
+| **Falla cerrada** | Códigos draft o deprecados no se devuelven |
+
 ### 7.6 Planificación
 
 Dueño de `SESSION_TEMPLATE`, `SESSION_TEMPLATE_DRAFT`, `SESSION_TEMPLATE_VERSION`, `PLANNED_STEP`, los targets tipados, `PROGRAM`, `PROGRAM_DRAFT`, `PROGRAM_VERSION`, `PROGRAM_VERSION_SESSION`, `PROGRAM_ASSIGNMENT`, `ASSIGNMENT_MANAGEMENT_PERIOD`, `PRESCRIPTION_REVISION` y `PLANNED_SESSION`.
@@ -2120,6 +2246,15 @@ Reglas que gobiernan todo el dominio:
 | `OP-PLN-019` | Listar plantillas y versiones | Consulta | `A2`, `A3`–`A5` |
 | `OP-PLN-020` | Listar programas y versiones | Consulta | `A2`, `A3`–`A5` |
 | `OP-PLN-021` | Consultar una versión publicada | Consulta | `A2`, `A3`–`A5` |
+| `OP-PLN-022` | Consultar mi día | Consulta | `A2` |
+| `OP-PLN-023` | Consultar el borrador de una plantilla | Consulta | `A2`, `A3`–`A5` |
+| `OP-PLN-024` | Ordenar mis programas | Comando | `A2` |
+| `OP-PLN-025` | Consultar mi contenido | Consulta | `A2` |
+| `OP-PLN-028` | Descartar una plantilla propia | Comando | `A2` |
+| `OP-PLN-029` | Descartar un programa propio | Comando | `A2` |
+| `OP-PLN-030` | Consultar mi programa sin publicar | Consulta | `A2` |
+| `OP-PLN-034` | Eliminar mi programa | Comando | `A2` |
+| `OP-PLN-035` | Duplicar mi programa | Comando | `A2` |
 
 ---
 
@@ -2145,7 +2280,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `PUT /studio/v1/organizations/{orgId}/session-templates/{id}/draft` |
+| **Superficie** | `PUT /studio/v1/organizations/{orgId}/session-templates/{id}/draft` · `PUT /space/v1/session-templates/{id}/draft` |
 | **Actor** | `A3`–`A5` con membresía vigente; `A2` sobre contenido propio |
 | **Filtros obligatorios** | La plantilla pertenece al contexto del actor |
 | **Transacción** | Reemplazar el contenido del borrador: pasos planificados, targets tipados por modalidad y referencias a movimientos |
@@ -2157,16 +2292,33 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | Un borrador **nunca** es referenciable por un programa ni por una asignación. Los targets se guardan en estructuras tipadas por familia, no en JSONB libre |
 | **Falla cerrada** | Target incompatible con el tipo de actividad declarado, rechazo |
 
+#### `OP-PLN-023` — Consultar el borrador de una plantilla
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/session-templates/{id}/draft` · `GET /space/v1/session-templates/{id}/draft` |
+| **Actor** | `A3`–`A5` con membresía vigente; `A2` sobre contenido propio |
+| **Filtros obligatorios** | La plantilla pertenece al contexto del actor |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Devuelve el `ETag` con el que se editará después, de modo que la edición siguiente entra en el mismo control optimista que `OP-PLN-002` |
+| **Información sensible** | Contenido de entrenamiento |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Devuelve el borrador y nunca una versión publicada; para eso está `OP-PLN-021`. **Sin esta operación un borrador guardado es un borrador irrecuperable:** se escribe, se cuenta y nadie puede volver a él. Quien edita **carga antes de escribir**: un editor que se abre vacío sobre un borrador existente y autoguarda reemplaza lo que había por lo que todavía no sabe |
+| **Falla cerrada** | Borrador ajeno o inexistente: la misma respuesta, para no revelar cuál de las dos cosas es |
+
 #### `OP-PLN-003` — Publicar una versión de plantilla
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/organizations/{orgId}/session-templates/{id}/versions` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/session-templates/{id}/versions` · `POST /space/v1/session-templates/{id}/versions` |
 | **Actor** | `A3`–`A5`; `A2` sobre contenido propio |
 | **Filtros obligatorios** | Borrador completo y válido: disciplina, tipo de actividad, al menos un paso, targets compatibles y unidades resueltas |
 | **Transacción** | Crear `SESSION_TEMPLATE_VERSION` inmutable con sus `PLANNED_STEP` y targets, y asignar el número de versión |
-| **Idempotencia** | `Idempotency-Key`. Publicar dos veces el mismo contenido no crea dos versiones: la segunda petición devuelve la primera |
+| **Idempotencia** | `Idempotency-Key`. Publicar un borrador idéntico a la **última** versión no crea otra y devuelve esa. Idéntico a una versión **anterior** crea la siguiente: publicar nunca devuelve una versión ya superada, porque su identificador viaja en semanas de programa y sesiones planificadas que lo resolverían contra nada (`ADR-009`) |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. La numeración es monotónica y se serializa: dos publicaciones concurrentes no producen el mismo número |
 | **Información sensible** | Contenido de entrenamiento |
@@ -2213,7 +2365,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/organizations/{orgId}/programs` · `PUT .../programs/{id}/draft` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/programs` · `PUT .../programs/{id}/draft` · `POST /space/v1/programs` · `PUT /space/v1/programs/{id}/draft` |
 | **Actor** | `A3`–`A5`; `A2` para programas personales |
 | **Filtros obligatorios** | Un solo contexto de ownership. Cada posición del borrador referencia una **versión exacta** de plantilla accesible para el actor |
 | **Transacción** | Crear `PROGRAM` y su `PROGRAM_DRAFT`; al editar, reemplazar la composición |
@@ -2230,16 +2382,16 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/organizations/{orgId}/programs/{id}/versions` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/programs/{id}/versions` · `POST /space/v1/programs/{id}/versions` |
 | **Actor** | `A3`–`A5`; `A2` para programas personales |
-| **Filtros obligatorios** | Borrador con al menos una posición; cada posición apunta a una versión de plantilla **publicada** |
-| **Transacción** | Crear `PROGRAM_VERSION` inmutable con sus `PROGRAM_VERSION_SESSION` y su numeración |
+| **Filtros obligatorios** | Borrador con al menos una posición; cada posición apunta a una versión de plantilla **publicada**; si el borrador declara `repeats_forever`, es booleano |
+| **Transacción** | Crear `PROGRAM_VERSION` inmutable con sus `PROGRAM_VERSION_SESSION` y su numeración. El borrador puede declarar `repeats_forever` —opcional, ausente es `false`— y **la versión publicada la lleva**: es contenido, entra en el canónico y por tanto en el `content_hash` (`ADR-032`) |
 | **Idempotencia** | `Idempotency-Key`. Publicaciones equivalentes convergen a una sola versión |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada; numeración serializada |
 | **Información sensible** | Contenido de entrenamiento |
 | **Evento de dominio** | `planning.program_version_published.v1` |
-| **Reglas** | Un programa v1 fijado a la plantilla v1 sigue en v1 aunque exista v2 de la plantilla: adoptar la nueva exige **publicar otra versión de programa**. Una versión publicada nunca se edita |
+| **Reglas** | Un programa v1 fijado a la plantilla v1 sigue en v1 aunque exista v2 de la plantilla: adoptar la nueva exige **publicar otra versión de programa**. Una versión publicada nunca se edita. **Que el programa no tenga fecha de fin es parte de lo que se publica**, no de cómo se presenta: dos versiones que sólo difieren en `repeats_forever` proponen entrenamientos distintos y no comparten hash. `content_schema_version` sigue siendo `1`, porque una clave opcional con valor por defecto no cambia la forma del contenido |
 | **Falla cerrada** | Posición apuntando a versión no publicada, rechazo |
 
 #### `OP-PLN-009` — Deprecar una versión de programa
@@ -2267,13 +2419,13 @@ Reglas que gobiernan todo el dominio:
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/relationships/{relId}/assignments` |
 | **Actor** | `A3` con asignación efectiva vigente |
 | **Filtros obligatorios** | **FÓRMULA**, más: versión de programa publicada, no deprecada y perteneciente a `{orgId}`; relación vigente; fecha de inicio y zona horaria de la persona |
-| **Transacción** | Una sola: crear `PROGRAM_ASSIGNMENT` congelando la versión exacta y la relación de origen; abrir el `ASSIGNMENT_MANAGEMENT_PERIOD` de esa relación; **materializar todas las `PLANNED_SESSION`** derivadas de la composición, resueltas en la zona horaria de la persona |
+| **Transacción** | Una sola: crear `PROGRAM_ASSIGNMENT` congelando la versión exacta y la relación de origen; abrir el `ASSIGNMENT_MANAGEMENT_PERIOD` de esa relación; **materializar las `PLANNED_SESSION`** derivadas de la composición, resueltas en la zona horaria de la persona: **con fecha de fin, todas**; sin fecha de fin, **la semana de calendario en la que se asigna**, porque ahí no hay un «todas» (`ADR-032`) |
 | **Idempotencia** | `Idempotency-Key`. Un reintento no crea una segunda asignación ni duplica sesiones |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Requiere `relationship_training` vigente: sin grant no hay asignación |
 | **Evento de dominio** | `planning.assignment_created.v1` |
-| **Reglas** | La agenda se materializa **en el momento de asignar**, no por un job periódico: no existe una ventana de calendario que dependa de que un worker corra a tiempo. La relación de origen es inmutable. No hay límite de asignaciones activas simultáneas; los solapamientos de agenda se **advierten**, no se bloquean |
+| **Reglas** | La agenda se materializa **en el momento de asignar**, no por un job periódico: no existe una ventana de calendario que dependa de que un worker corra a tiempo, y `ADR-032` no crea ninguno. De un programa con fecha de fin se materializa la composición entera; de uno sin fecha de fin, la semana de la asignación, y cada semana posterior la siembra la lectura que va a enseñarla —`OP-PLN-016` y `OP-PLN-022`— un instante antes de mostrarla. La relación de origen es inmutable. No hay límite de asignaciones activas simultáneas; los solapamientos de agenda se **advierten**, no se bloquean |
 | **Falla cerrada** | Sin grant `relationship_training` vigente, rechazo |
 
 #### `OP-PLN-011` — Autoasignarse un programa
@@ -2284,13 +2436,13 @@ Reglas que gobiernan todo el dominio:
 | **Superficie** | `POST /space/v1/assignments` |
 | **Actor** | `A2` |
 | **Filtros obligatorios** | Versión de programa publicada y accesible para la persona: propia o global |
-| **Transacción** | Igual que `OP-PLN-010`, **sin** relación de origen y sin periodo de gestión |
+| **Transacción** | Igual que `OP-PLN-010`, **sin** relación de origen y sin periodo de gestión. Si la versión es `global`, **bifurca primero**: copia el programa, sus plantillas, sus pasos y sus targets a contenido de la persona y asigna la copia. Cada versión de plantilla copiada guarda `derived_from_version_id` hacia la de Allfit de la que salió (`ADR-009`, invariante 7). Todo en la misma transacción y bajo un solo recibo |
 | **Idempotencia** | `Idempotency-Key` |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | Ninguna se comparte: es contenido personal |
 | **Evento de dominio** | `planning.assignment_created.v1` |
-| **Reglas** | Una asignación personal no tiene gestor y nadie la administra. Ninguna organización la ve, salvo que un grant la incluya explícitamente |
+| **Reglas** | La copia es una plantilla nueva con identidad propia, así que las métricas por rutina de la persona cuentan su copia; la procedencia es lo único que permite agregar cuánta gente entrena algo derivado de un programa de Allfit. Una asignación personal no tiene gestor y nadie la administra. Ninguna organización la ve, salvo que un grant la incluya explícitamente. **Tomar un programa global es quedárselo**: la persona pasa a ser dueña de una copia, así que lo que Allfit publique después no la alcanza y lo que ella cambie no alcanza a nadie. La inmutabilidad de una versión publicada ya protegía del cambio; lo que la copia añade es la propiedad, que es lo que hace posible editarlo. Partir el acto en dos operaciones dejaría a alguien dueño de una copia sin asignación si fallara la segunda mitad. **El calendario se materializa por semanas de calendario**: la semana N del programa cae en la semana N contada desde la que contiene el día de la asignación. Si la versión **no tiene fecha de fin**, esta transacción materializa sólo la semana en la que se asigna: lo demás lo siembra la lectura de la agenda, semana a semana, y no un job periódico (`ADR-032`) |
 | **Falla cerrada** | — |
 
 #### `OP-PLN-012` — Reprogramar una sesión planificada
@@ -2369,13 +2521,13 @@ Reglas que gobiernan todo el dominio:
 | **Superficie** | `GET /space/v1/agenda?from=&to=` |
 | **Actor** | `A2` |
 | **Filtros obligatorios** | Sesiones planificadas de asignaciones propias |
-| **Transacción** | Ninguna |
-| **Idempotencia** | N/A |
+| **Transacción** | Siembra previa de **una** semana: antes de responder, la lectura materializa la semana que va a enseñar de cada asignación propia cuya versión no tenga fecha de fin. Nada más |
+| **Idempotencia** | La siembra es idempotente: si ya existe una fila de esa asignación para esa semana, no se toca nada, y un `pg_advisory_xact_lock` por asignación impide que dos lecturas simultáneas siembren dos veces |
 | **Paginación y orden** | Cursor. Orden: fecha planificada ascendente, desempate por identificador |
 | **Offline / concurrencia** | Cacheable en el dispositivo: Space precarga una ventana para poder entrenar sin conexión |
-| **Información sensible** | Agenda y contenido de entrenamiento propios |
+| **Información sensible** | Agenda y contenido de entrenamiento propios, y las cifras de la última ejecución de cada rutina |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Resuelve todo en la **zona horaria de la persona**. Incluye asignaciones administradas, personales y desacopladas, distinguiendo su estado. Las sesiones de una asignación desacoplada aparecen como pausadas, no como incumplidas |
+| **Reglas** | Resuelve todo en la **zona horaria de la persona**. Incluye asignaciones administradas, personales y desacopladas, distinguiendo su estado. Las sesiones de una asignación desacoplada aparecen como pausadas, no como incumplidas. **Esta lectura escribe, y es junto con `OP-PLN-022` la única de toda la matriz que lo hace:** un programa sin fecha de fin no tiene agenda materializada más allá de la semana en que se asignó, así que la lectura siembra la semana que está a punto de enseñar. Es **una semana y ni un día más**, es idempotente, y se hace aquí y no en un worker porque `OP-EXE-001` exige que la fila planificada exista —nadie entrena una semana sin sembrar— y porque un horizonte que sólo extendiera el acto de entrenar dejaría a quien vuelve después de dos meses frente a una semana vacía que ya nadie podría sembrar (`ADR-032`). **Cada sesión de la semana responde también la versión de plantilla a la que apunta** (`template_version_id`): Hoy dibuja cada rutina de la semana con la fotografía que le toca por lo que trabaja, y esa fotografía no vive en la agenda sino en la rutina que responde `OP-PLN-025`, así que sin ese identificador la única manera de emparejar las dos respuestas sería el nombre, que es una cosa que se repite. Es un campo de la proyección y no una tabla ni un dato nuevo: duplicar aquí la portada sería una segunda verdad del mismo dato. **Cada sesión responde además cómo fue la última vez** (`last_time`): cuándo se entrenó, cuánto duró, cuántas series se registraron y cuánto tonelaje se movió. Es el reverso de la tarjeta de Hoy, que se gira para enseñarlo. Cuatro decisiones lo gobiernan. **Se cuenta por rutina y no por versión**: una rutina cambia de versión cada vez que se publica, y emparejar por versión borraría su historial al editarla, así que el enlace sube de `template_version_id` a la plantilla. **Sólo cuenta lo que terminó**: ejecuciones cerradas y no anuladas, nunca el intento abierto de hoy, porque «la última vez» es una vez que acabó. **El tonelaje lo canoniza la base**, uniendo `load_unit_code` con `catalog.units.to_canonical_factor`, como ya hace el progreso corporal: el factor vive en el catálogo, y convertir también en el cliente serían dos verdades del mismo número. **Y se responde nulo cuando no hay nada que decir**: una rutina que nunca se entrenó no lleva cifras, y una que no es de fuerza no lleva tonelaje; un cero diría que se entrenó y no se movió nada. Esto **no cambia lo que la lectura escribe**: lo único que escribe sigue siendo la siembra de la semana |
 | **Falla cerrada** | — |
 
 #### `OP-PLN-017` — Consultar una asignación propia
@@ -2419,31 +2571,180 @@ Reglas que gobiernan todo el dominio:
 | **Tipo** | Consulta |
 | **Superficie** | `GET /studio/v1/organizations/{orgId}/session-templates` · `.../programs` · equivalentes en `/space/v1` |
 | **Actor** | `A3`–`A5` en Studio; `A2` para contenido propio |
-| **Filtros obligatorios** | Contenido del contexto del actor: su organización o su persona. **Nunca** de otra organización |
+| **Filtros obligatorios** | Contenido del contexto del actor: su organización o su persona, **más el contenido `global` publicado**. **Nunca** de otra organización |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
-| **Paginación y orden** | Cursor. Orden: actualización descendente, desempate por identificador |
+| **Paginación y orden** | Cursor. Orden: actualización descendente, desempate por identificador. En `/space` el catálogo global se ordena por correspondencia con lo declarado en el onboarding —objetivo, nivel, zonas y sexo— antes que por fecha |
 | **Offline / concurrencia** | Cacheable para presentación |
-| **Información sensible** | Contenido de entrenamiento de la organización |
+| **Información sensible** | Contenido de entrenamiento de la organización. El catálogo `global` no lo es: es contenido publicado de Allfit |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Distingue explícitamente borrador de versiones publicadas. Los programas maestros de una organización **no** son visibles bajo `prior_training_history` de otra |
+| **Reglas** | Distingue explícitamente borrador de versiones publicadas. Los programas maestros de una organización **no** son visibles bajo `prior_training_history` de otra. El contenido `global` lo lee cualquier persona autenticada y **no** pertenece a ninguna organización, que es lo que `OP-PLN-011` ya asumía al admitir una versión «propia o global». **`weeks` puede venir nula**, y significa que la versión no tiene fecha de fin: no es un dato que falte, es que no hay un número que dar. Los días por semana se siguen derivando siempre, y el filtro de catálogo mira el número de sesiones y no si `weeks` existe, porque si no un programa sin fin desaparecería de él (`ADR-032`). **La portada de cada programa es la del juego de quien pregunta**: la resuelve `planning.cover_for` con el sexo que la persona declaró, y quien prefirió no decirlo recibe una **mezcla estable** de los dos juegos —determinista por programa, de modo que la misma lista se ve igual cada vez que se abre— y nunca un juego por defecto, que sería decidir por ella lo que ella decidió no decir. Se responde la dirección compuesta y nunca la clave. **Esto no escribe nada**: el sexo declarado ya está dado, la portada se calcula al proyectar, no se guarda por persona y no se registra quién vio cuál |
 | **Falla cerrada** | — |
+
+#### `OP-PLN-022` — Consultar mi día
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/today` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Lo propio de la persona autenticada, en su zona horaria |
+| **Transacción** | Siembra previa de **una** semana, la misma de `OP-PLN-016`: antes de componer la respuesta se materializa la semana en curso de cada asignación propia sin fecha de fin |
+| **Idempotencia** | La siembra es idempotente y está serializada por asignación; repetir la lectura no duplica ninguna sesión |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Cacheable para presentación |
+| **Información sensible** | Agenda, entrenamiento y peso corporal, cada uno con su categoría |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Cierra el hueco que `HU-SP-089` tenía anotado como `NEW-SP-TODAY`. **Compone, no centraliza**: Planificación responde por lo que hay agendado esta semana, Ejecución por lo entrenado y por el historial, y también por el peso que se levantó; la superficie los junta en una respuesta porque la pantalla no puede dibujar ninguno sin los otros. **La cifra de peso de la semana es el tonelaje movido, no lo que pesa la persona.** La pantalla resume lo que se hizo —minutos, series y kilos levantados—, y el peso corporal no es algo que se haga: es una medida del cuerpo y vive en `OP-IDN-015`. Se canoniza a kilogramos en la base con `catalog.units.to_canonical_factor`, igual que en `OP-PLN-016`, y sale nulo cuando no se registró ninguna carga, porque un cero diría que se entrenó sin mover nada. **La unidad es la semana de calendario, de lunes a domingo**, y la sesión que se ofrece es la siguiente pendiente de esa semana, no la fechada hoy: el día es una sugerencia. Cumplida la semana no se adelanta la siguiente; se dice que está cumplida. Lo que quede sin hacer **no se arrastra**. **Esta lectura también siembra**, por la misma razón y con los mismos límites que `OP-PLN-016`: si el programa no tiene fecha de fin, la semana en curso se materializa aquí, acotada a una semana e idempotente, y no existe ninguna otra lectura de la matriz que escriba. **Las portadas del carrusel son las del juego de quien abre la aplicación**: `planning.cover_for` las resuelve con el sexo que declaró, y quien prefirió no decirlo ve una mezcla estable de los dos juegos, la misma cada vez que abre. Esa parte de la respuesta **no escribe nada** —lo único que escribe aquí es la siembra de la semana—: no se guarda por persona qué portada le tocó ni se registra que se eligió una |
+| **Falla cerrada** | — |
+
+#### `OP-PLN-024` — Ordenar mis programas
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `PUT /space/v1/programs/mine/order` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Todas las asignaciones personales de la persona autenticada, sin faltar ni repetir ninguna |
+| **Transacción** | Reescribir el orden de presentación de todas sus asignaciones en una sola pasada |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; reenviar el mismo orden converge |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada |
+| **Información sensible** | Ninguna se comparte: es contenido personal |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | El orden **no es decoración**: el primero es el programa sobre el que abre la pestaña Entrenar, así que vive en la base y no en el dispositivo — reinstalar la aplicación no puede cambiar con qué programa se entrena. Es una escritura **entera**, como reemplazar los resultados de una sesión: el cliente manda el orden que está viendo completo, así que nunca hay un orden a medio aplicar. Un orden parcial se rechaza, porque dejaría lo omitido donde estuviera. **Una asignación nueva entra adelante**, de modo que tomar un programa es elegirlo sin un paso más |
+| **Falla cerrada** | — |
+
+#### `OP-PLN-025` — Consultar mi contenido
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/my-content` |
+| **Actor** | `A2` sobre contenido propio |
+| **Filtros obligatorios** | Plantillas de la persona que no estén archivadas |
+| **Transacción** | Lectura |
+| **Idempotencia** | No aplica |
+| **Paginación y orden** | Sin paginar, ordenado por lo último tocado. Es la biblioteca de una persona, no un catálogo: no crece sin límite |
+| **Offline / concurrencia** | Sin modo offline |
+| **Información sensible** | Contenido de entrenamiento propio |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Cada rutina se responde con lo que hace falta para dibujarla sin una segunda petición: **la fotografía que le toca por lo que trabaja** —no hay estilo que declarar desde que `OP-PLN-033` se retiró: toda rutina lleva fotografía, y una que todavía no dice qué trabaja se reconoce por su letra inicial; se responde **la dirección compuesta y nunca la clave**—, los músculos que trabaja, sus cifras, si tiene cambios sin publicar, y **en qué programas de la persona está**. Esto último no se puede deducir en el cliente —`OP-PLN-026` responde los programas sin su composición, y un programa tomado de Allfit ni siquiera tiene borrador que abrir—, así que deducirlo obligaría a una petición por programa y aun así mentiría. La versión que se nombra es **la última publicada**: una rutina sin publicar todavía no está en ningún programa. La que se responde es **la del juego de quien pregunta**, por `planning.cover_for`, y una mezcla estable de los dos juegos si prefirió no decir su sexo. Qué fotografía le toca a la rutina lo decide la región que esa rutina trabaja; lo único que añade el sexo declarado es de cuál de los dos juegos sale. Sigue siendo una lectura: no se guarda ninguna preferencia de portada ni queda rastro de cuál se sirvió |
+| **Falla cerrada** | — |
+
+#### `OP-PLN-028` — Descartar una plantilla propia
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/session-templates/{id}/discard` |
+| **Actor** | `A2` sobre contenido propio |
+| **Filtros obligatorios** | La plantilla es de la persona autenticada, tenga o no versiones publicadas: una plantilla publicada **también** se descarta, y los programas propios que la componen se republican sin ella |
+| **Transacción** | Llevar la plantilla a `archived`, retirar su borrador, y **republicar cada programa propio que la usaba sin ella**, mudando la asignación a la versión nueva. Todo en la misma transacción: partirlo dejaría a alguien con una rutina descartada que su programa sigue pidiendo |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; descartar dos veces converge |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada |
+| **Información sensible** | Contenido de entrenamiento |
+| **Evento de dominio** | `planning.session_template_discarded.v1` |
+| **Reglas** | **Es un estado, no un borrado.** `allfit_api` no tiene `DELETE` sobre este recurso y no va a tenerlo: lo que una persona escribió no se destruye desde el runtime, y un descarte tiene que poder explicarse después. **Una plantilla publicada sí se descarta**, y los programas propios que la componen se republican sin ella — la versión anterior de cada programa queda intacta, porque es lo que alguien entrenó, y la asignación se muda sola a la nueva. El contenido de Allfit no se toca: no es de la persona, y tomarlo ya le dio una copia que sí lo es. Las fotos que ninguna versión referencia se destruyen con la rutina; las que una versión publicada congeló sobreviven, porque la versión sobrevive |
+| **Falla cerrada** | **Un programa no se vacía.** Si la plantilla es la única sesión que le queda a alguno, el descarte se rechaza nombrándolo: un programa sin sesiones no se puede publicar, y dejar a alguien con uno que ya no se puede tocar es peor que no borrar la rutina |
+
+#### `OP-PLN-029` — Descartar un programa propio
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/programs/{programId}/discard` |
+| **Actor** | `A2` sobre contenido propio |
+| **Filtros obligatorios** | El programa es de la persona autenticada y no tiene ninguna versión publicada |
+| **Transacción** | Llevar el programa a `archived` y retirar su borrador |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; descartar dos veces converge |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada |
+| **Información sensible** | Contenido de entrenamiento |
+| **Evento de dominio** | `planning.program_discarded.v1` |
+| **Reglas** | El gemelo de `OP-PLN-028` y por las mismas razones. **Es un estado, no un borrado**, y un programa con versión publicada **no se descarta**: hay asignaciones que la referencian y sesiones ya materializadas contra ella. Sin esta operación, un programa que alguien empieza y abandona queda huérfano — existe, cuenta y nadie puede alcanzarlo, que es exactamente el hueco que `OP-PLN-023` cerró del lado de las rutinas |
+| **Falla cerrada** | Con versión publicada, rechazo — y la salida es `OP-PLN-034`, que elimina el programa entero en lugar de tirar un borrador que a esas alturas ya no existe |
+
+#### `OP-PLN-030` — Consultar mi programa sin publicar
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/programs/unpublished` |
+| **Actor** | `A2` sobre contenido propio |
+| **Filtros obligatorios** | Programas de la persona autenticada, no archivados y **sin ninguna versión publicada** |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | El más reciente por `updated_at` del borrador; responde uno o ninguno |
+| **Offline / concurrencia** | `no-store`: es un borrador que cambia al escribirlo |
+| **Información sensible** | Contenido de entrenamiento |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | **Sin esto un borrador de programa no se puede retomar.** `OP-PLN-022` lista los programas que la persona sigue, y parte de las asignaciones: uno que nunca se publicó no tiene versión ni asignación, así que no aparece en ninguna consulta y queda huérfano — existe, ocupa y nadie puede volver a él. Es el mismo hueco que `OP-PLN-023` cerró del lado de las rutinas, con la diferencia de que allí la plantilla sí se listaba y aquí no se listaba nada |
+| **Falla cerrada** | Ausente y ajeno responden igual |
+
+#### `OP-PLN-033` — Vestir mi programa — retirada
+
+Reescribía el estilo de portada de un programa —`muscles`, `icon` con cuál, `photo`, o
+ninguno— sobre `planning.programs`. Se retiró el 22 de septiembre de 2026 con
+`HU-SP-108`: puestas las tres una al lado de otra en pantallas de verdad, la fotografía
+era la única que alguien elegía, y una opción que nadie cambia no es una opción sino una
+pregunta en medio del editor.
+
+El identificador no se reutiliza. Lo que la operación probaba que valía —que la imagen la
+decide el contenido y no la persona, y que la decide el programa y no cada rutina, para
+que la semana se lea como una semana— no era la opción: era la regla de debajo, y esa se
+queda en `OP-PLN-025`.
+
+#### `OP-PLN-034` — Eliminar mi programa
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/programs/{programId}/remove` |
+| **Actor** | `A2` sobre programa propio |
+| **Filtros obligatorios** | El programa es de la persona autenticada (`owner_person_id`). Vale igual para uno que escribió y para uno de Allfit que tomó: tomarlo lo bifurcó y la copia es suya |
+| **Transacción** | Llevar el programa a `archived` y retirar su borrador; pasar sus versiones publicadas a `deprecated`; terminar la asignación personal de la persona sobre esas versiones y retirar sus sesiones planificadas no cumplidas; y, si se pidió con rutinas, archivar las que sólo este programa usaba. Todo en una sola transacción y **en ese orden**: el programa se archiva antes que las rutinas, porque el republicado de `OP-PLN-028` filtra los programas no archivados y republicar el que acaba de irse sería resucitarlo |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; eliminar dos veces converge |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada |
+| **Información sensible** | Contenido de entrenamiento |
+| **Evento de dominio** | `planning.program_discarded.v1`, `planning.assignment_ended.v1`, y un `planning.session_template_discarded.v1` por cada rutina archivada |
+| **Reglas** | **Es un estado, no un borrado**, por la misma línea que ya sostienen `OP-PLN-028` y `OP-PLN-029`: el programa pasa a `archived`, sus versiones publicadas a `deprecated` y la asignación personal a `lifecycle = 'ended'` —**primer escritor de ese valor en Space**, y para eso estaba el enumerado—. Las versiones no se destruyen: hay sesiones planificadas que las apuntan y `ADR-009` las congela. Lo único que se retira son las sesiones planificadas **que nadie entrenó**; lo entrenado se queda, y no por cortesía: la clave foránea de `planned_session_executions` es `RESTRICT` y se niega, pero antes que eso, un entrenamiento es de quien lo hizo y la plataforma no tiene nada que borrar ahí. Con la petición de llevarse las rutinas se archivan **sólo las que ningún otro programa no archivado de la persona use** —propias, presentes en la composición de alguna versión suya—, en sitio y sin pasar por `OP-PLN-028`, porque esa operación lleva su propio recibo de idempotencia y un comando no puede llevar dos. **Una rutina compartida se queda**: borrarla rompería el otro programa, y `OP-PLN-028` ya se niega a dejar un programa sin una sola sesión — sería pedirle al dominio exactamente lo que el dominio prohíbe. Eliminar un programa y descartar un borrador (`OP-PLN-029`) son **dos actos distintos**: el segundo tira lo que nunca llegó a publicarse y no toca ninguna rutina |
+| **Falla cerrada** | Programa ajeno e inexistente responden igual, para no hacer enumerable la biblioteca del vecino. Ninguna sesión con ejecución se retira: la clave foránea `RESTRICT` rechaza la transacción entera antes que perder un entrenamiento |
+
+#### `OP-PLN-035` — Duplicar mi programa
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/programs/{programId}/duplicate` |
+| **Actor** | `A2` sobre programa propio |
+| **Filtros obligatorios** | El programa es de la persona autenticada. La composición se toma de su **última versión publicada**, o de su borrador si nunca se publicó |
+| **Transacción** | Crear un `PROGRAM` propio con `content_scope = 'person'` y `status = 'draft'`, que hereda el estilo de portada del original, y su `PROGRAM_DRAFT` con la composición copiada tal cual —pasada por la canonicalización de contenido, con `repeats_forever` incluido— y el título con sufijo |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; reenviar la misma petición devuelve la copia que ya existe y no una segunda |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada |
+| **Información sensible** | Ninguna se comparte: es contenido personal |
+| **Evento de dominio** | `planning.program_created.v1` |
+| **Reglas** | **No acuña ninguna versión y no crea ninguna asignación.** La copia nace borrador y nada más: sólo se vuelve real cuando la persona la publica, y tirarla es `OP-PLN-029`. Hasta entonces no hay nada en la agenda, ninguna sesión materializada y nadie a quien le exista. **Las rutinas no se copian**: la composición apunta a las mismas versiones de plantilla, que son inmutables y por eso se comparten sin que un programa le cambie el contenido al otro; copiarlas duplicaría la biblioteca de la persona por cambiarle el nombre a un programa. El título es el del original con el sufijo **« - Copia»**, recortado a 160 caracteres antes de añadirlo, de modo que la copia se distinga del original sin abrirla. Sirve además para lo que hoy no tiene salida: **un programa tomado de Allfit llega sin borrador y no se puede editar**, y duplicarlo da una copia propia que sí |
+| **Falla cerrada** | Programa ajeno e inexistente responden igual. Un programa sin versión publicada y sin borrador no se duplica: no hay composición que copiar |
 
 #### `OP-PLN-021` — Consultar una versión publicada
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /studio/v1/organizations/{orgId}/session-templates/{id}/versions/{v}` · `GET /space/v1/assignments/{id}/program-version` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/session-templates/{id}/versions/{v}` · `GET /space/v1/assignments/{id}/program-version` · `GET /space/v1/programs/{programVersionId}` |
 | **Actor** | `A2`, `A3`–`A5` |
-| **Filtros obligatorios** | La versión pertenece al contexto del actor, o le fue asignada a la persona autenticada |
+| **Filtros obligatorios** | La versión pertenece al contexto del actor, le fue asignada a la persona autenticada, **o es contenido `global` publicado**. Una versión que se puede asignar se puede leer: son la misma regla de acceso que `OP-PLN-011`, y decidir sin ver el contenido no es decidir |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Cacheable: es contenido inmutable |
 | **Información sensible** | Contenido de entrenamiento |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Una persona puede leer íntegramente la versión que le fue asignada, aunque pertenezca a una organización: es el contenido que va a ejecutar. Eso **no** le da acceso al resto del catálogo de esa organización |
+| **Reglas** | Una persona puede leer íntegramente la versión que le fue asignada, aunque pertenezca a una organización: es el contenido que va a ejecutar. Eso **no** le da acceso al resto del catálogo de esa organización. Ausente y prohibido responden igual: distinguirlos haría enumerable el catálogo ajeno de identificador en identificador. **`weeks` puede venir nula** cuando la versión no tiene fecha de fin, y quien la dibuja escribe «sin fecha de fin» en lugar de un total que no existe (`ADR-032`). **La portada del detalle es la misma que la de la lista**: la del juego de quien pregunta, resuelta por `planning.cover_for`, y una mezcla estable para quien declinó decir su sexo. La versión sigue siendo inmutable y la portada no forma parte de ella —cuelga del programa—, así que **la respuesta es cacheable por juego y no por versión**: dos personas pueden recibir imágenes distintas del mismo contenido congelado, y una caché indexada solo por identificador de versión le serviría a una la portada de la otra. No se guarda ni se registra nada por haber elegido una. **Cada día del reparto responde también su portada**: la de su rutina, que `planning.pick_routine_cover` resuelve con la región que esa rutina trabaja y con el juego de quien pregunta, de modo que es la misma que enseñará en Hoy cuando el programa se tome. Sale nula donde la curaduría todavía no llegó, que es el estado normal de un catálogo que crece y no un error: quien la dibuja enseña la fila sin imagen. Se responde la dirección compuesta y nunca la clave (`ADR-031`). **La demostración de cada ejercicio no la responde esta operación**, aunque la pantalla la dibuje: ya tiene dueño en el catálogo de movimientos (`OP-CAT-003`) y quien la necesita la cruza por identificador. Colgarla también del paso pondría la misma imagen en dos respuestas, y el paso es una forma compartida con la sesión, que no la pide |
 | **Falla cerrada** | — |
 
 ### 7.7 Ejecución
@@ -2489,14 +2790,14 @@ Reglas que gobiernan todo el dominio:
 | **Tipo** | Comando |
 | **Superficie** | `POST /space/v1/planned-sessions/{id}/attempts` |
 | **Actor** | `A2`, dueño de la asignación |
-| **Filtros obligatorios** | La sesión planificada pertenece a una asignación **propia**; la asignación no está desacoplada y pausada |
+| **Filtros obligatorios** | La sesión planificada pertenece a una asignación **propia**; la asignación no está desacoplada y pausada. **Una sesión ya cerrada admite otro intento**: rechaza `cancelled` y `paused`, no `completed` |
 | **Transacción** | Una sola: crear `EXECUTED_SESSION` en estado iniciado congelando disciplina, tipo de actividad, contrato de resultados vigente y su versión, zona horaria y procedencia de captura; crear el `PLANNED_SESSION_EXECUTION` con `attempt_number` único y monotónico |
 | **Idempotencia** | `Command-Id = EXECUTED_SESSION.id`; replay HTTP por `Idempotency-Key`. Doble toque o recuperación offline no crean otro intento |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Admite `draft_local`: el dispositivo puede iniciar sin conexión y sincronizar después con el mismo `Command-Id`. La numeración de intentos se serializa en el servidor |
 | **Información sensible** | Entrenamiento de la persona |
 | **Evento de dominio** | `execution.attempt_started.v1` |
-| **Reglas** | Una persona **no puede ejecutar una asignación ajena**. Los intentos son históricos y no se borran para "limpiar" el historial |
+| **Reglas** | Una persona **no puede ejecutar una asignación ajena**. Los intentos son históricos y no se borran para "limpiar" el historial. **Repetir una sesión hecha es legítimo** y crea otro intento; el primero válido sigue siendo el primario y es el que cuenta para la adherencia de la semana, de modo que repetir no infla el conteo |
 | **Falla cerrada** | Asignación desacoplada y pausada, rechazo |
 
 #### `OP-EXE-002` — Reanudar el intento activo
@@ -3855,7 +4156,7 @@ Un evento se escribe en el outbox dentro de la transacción de su comando. Trans
 | Relaciones | `client_invited`, `professional_assigned`, `professional_reassigned`, `substitution_proposed`, `substitution_decided`, `substitution_ended`, `substitution_expired`, `termination_requested`, `terminated` |
 | Privacidad | `grant_created`, `grant_rejected`, `grant_frozen`, `grant_revoked`, `grant_review_due`, `scope_definition_published`, `session_visibility_denied`, `session_visibility_restored`, `erasure_requested`, `erasure_resolved`, `disposition_case_opened`, `disposition_executed`, `disposition_reapplied`, `legal_hold_applied`, `legal_hold_released` |
 | Catálogo | `private_movement_created`, `private_movement_updated`, `private_movement_archived`, `result_contract_published` |
-| Planificación | `session_template_created`, `session_template_draft_updated`, `session_template_version_published`, `session_template_version_derived`, `session_template_version_deprecated`, `program_created`, `program_draft_updated`, `program_version_published`, `program_version_deprecated`, `assignment_created`, `assignment_detached`, `assignment_cancelled`, `assignment_continued`, `assignment_ended`, `session_rescheduled`, `prescription_revised` |
+| Planificación | `session_template_created`, `session_template_draft_updated`, `session_template_version_published`, `session_template_version_derived`, `session_template_version_deprecated`, `program_created`, `program_draft_updated`, `program_version_published`, `program_version_deprecated`, `assignment_created`, `assignment_detached`, `assignment_cancelled`, `assignment_continued`, `assignment_ended`, `session_rescheduled`, `prescription_revised`, `session_template_discarded`, `program_discarded` |
 | Ejecución | `attempt_started`, `attempt_resumed`, `attempt_abandoned`, `session_started`, `finalized`, `primary_resolved`, `primary_changed`, `revised`, `annulled`, `observation_created`, `observation_revised`, `correction_proposed`, `correction_decided`, `correction_expired`, `derived_recomputed` |
 | Nutrición | `meal_recorded`, `meal_revised`, `meal_deleted`, `goal_version_proposed`, `goal_version_activated`, `goal_version_accepted`, `goal_version_rejected`, `goal_proposals_cancelled` |
 | Pagos | `gateway_connected`, `gateway_revoked`, `plan_created`, `plan_version_published`, `plan_version_deprecated`, `subscription_started`, `subscription_suspended`, `subscription_reactivated`, `subscription_ended`, `payment_recorded`, `platform_plan_published`, `platform_plan_version_published`, `platform_subscription_started`, `platform_subscription_suspended`, `platform_subscription_reactivated`, `platform_subscription_ended`, `organization_premium_granted`, `organization_premium_revoked` |
