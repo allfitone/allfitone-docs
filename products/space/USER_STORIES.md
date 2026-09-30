@@ -947,7 +947,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 2. Un borrador no puede usarse en un programa ni asignarse: primero hay que publicarlo.
 3. Los objetivos de cada paso deben corresponder al tipo de actividad; si no, no se acepta.
 4. Este trabajo requiere conexión: no hay modo local para editar contenido.
-5. **De cada serie puedo pedir un esfuerzo**, del 1 al 10, y no tengo que saberme la escala: al abrirla me explica qué significa, y al marcar un número me dice qué estoy pidiendo — un 8 es que quedaban dos repeticiones. Ponerlo es opcional y quitarlo también: una serie sin esfuerzo marcado no pide ninguno, que no es lo mismo que pedir el mínimo.
+5. *Enmendado el 29 de septiembre de 2026 (`ADR-033`).* **Al planificar no se pide esfuerzo.** El esfuerzo es lo que se siente al hacer la serie, así que se registra mientras entreno (`HU-SP-055` criterio 8), no cuando armo la rutina.
 
 ### HU-SP-102 — Retomar el borrador que dejé a medias
 
@@ -1041,7 +1041,7 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 **Criterios**
 
 1. Cada ejercicio se abre y puedo poner cuántas series, con cuántas repeticiones y con qué carga.
-2. Cada serie tiene un tipo: normal, calentamiento, al fallo o descendente.
+2. Cada serie tiene un tipo: normal, calentamiento, al fallo o descendente. Al entrenar la sesión me propone ese tipo y puedo cambiarlo (`HU-SP-055` criterio 9).
 3. Una serie al fallo no lleva número de repeticiones, porque el número es el que salga.
 4. Puedo elegir el descanso entre series del ejercicio.
 5. Puedo poner el peso de cada serie, y elegir si lo digo en kilos o en libras para ese ejercicio.
@@ -1274,6 +1274,8 @@ y no por la persona— y se retiró a su vez tres días después, cuando quedó 
 5. Un dato que no capturé queda vacío; nunca se convierte en cero.
 6. Si registro dolor durante la sesión, se trata como contexto de salud y no lo ve nadie sin ese permiso, aunque la sesión sí sea visible.
 7. Una sesión híbrida exige al menos dos bloques de familias distintas, con la transición explícita. La protección es de **base de datos**: al cerrar la sesión un guardián verifica que existan al menos dos familias, porque es una condición entre varios bloques y no se puede comprobar bloque por bloque.
+8. **De cada serie puedo marcar cuánto me costó**, del 1 al 10, y no tengo que saberme la escala: al abrirla me explica qué significa cada número — un 8 es que quedaban dos repeticiones. Es opcional: una serie sin esfuerzo marcado no declara ninguno, que no es lo mismo que el mínimo.
+9. **Cada serie dice de qué tipo fue**: normal, calentamiento, al fallo o descendente. La sesión abre cada serie con el tipo que pidió la rutina y yo lo cambio si hice otra cosa. Un calentamiento se registra pero no cuenta como trabajo: no suma a mis kilos levantados, a «La última vez» ni a las series de la semana.
 
 ### HU-SP-056 — Cerrar la sesión
 

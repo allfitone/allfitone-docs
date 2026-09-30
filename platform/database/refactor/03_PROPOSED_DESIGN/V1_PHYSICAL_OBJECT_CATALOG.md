@@ -66,11 +66,13 @@ Un enum existe una sola vez en el schema indicado. Una columna de otro schema us
 | `nutrition.goal_status` | `nutrition.goal_versions` |
 | `nutrition.goal_target_mode` | `nutrition.goal_targets` |
 | `nutrition.goal_decision` | `nutrition.goal_decisions` |
-| `planning.set_kind` | `planning.planned_sets` |
+| `planning.set_kind` | `planning.planned_sets` y `execution.strength_sets` (`ADR-033`) |
 
 `planning.set_kind` vive en `planning` y no en `catalog` aunque sea vocabulario cerrado:
 el catálogo guarda lo que una persona **explora** —disciplinas, movimientos, equipamiento,
 músculos— y el tipo de serie es estructura de la prescripción, que se declara y no se busca.
+La ejecución lo usa tal cual para registrar de qué tipo fue cada serie: un segundo enum con
+los mismos valores en `execution` sería exactamente el homónimo que esta regla prohíbe.
 
 No existen `planning.publication_status` ni `privacy.publication_status`. Esta decisión evita enums homónimos incompatibles y casts implícitos en FKs, funciones o vistas.
 
