@@ -1832,13 +1832,27 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Propósito:** esfuerzo/serie de fuerza con orden, movimiento y cantidad lograda.
 - **Dominio / fuente de verdad:** Ejecución. Es la fuente de verdad de los resultados observados de fuerza de una ejecución.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `executed_session_id uuid` · `session_segment_id uuid` (nullable) · `movement_id uuid` (nullable) · `planned_step_id uuid` (nullable) · `set_order integer` · `achieved_reps integer` (nullable) · `load_value numeric` (nullable) · `load_unit_code text` (nullable) · `original_load_value numeric` (nullable) · `original_load_unit_code text` (nullable) · `rpe numeric` (nullable) · `kind planning.set_kind` (default `normal`, `ADR-033`).
+- **Columnas:** `id` · `executed_session_id uuid` · `session_segment_id uuid` (nullable) · `movement_id uuid` (nullable) · `planned_step_id uuid` (nullable) · `set_order integer` · `achieved_reps integer` (nullable) · `load_value numeric` (nullable) · `load_unit_code text` (nullable) · `original_load_value numeric` (nullable) · `original_load_unit_code text` (nullable) · `rpe numeric` (nullable) · `kind planning.set_kind` (default `normal`, `ADR-033`) · `session_exercise_id uuid` (el ejercicio de la sesión al que pertenece, `ADR-034`).
 - **FKs y borrado:** `executed_session_id → executed_sessions(id) ON DELETE CASCADE`; FK compuesta opcional `(session_segment_id, executed_session_id) → session_segments(id, executed_session_id) RESTRICT`; `movement_id → catalog.movements(id) RESTRICT`; unidades → `catalog.units(code) RESTRICT` (`IX-18`).
 - **Uniques y checks:** `UNIQUE (executed_session_id, set_order)`; `NULL` ≠ 0; `rpe` entre 0 y 10, nulo cuando no se declaró. Una serie `warmup` se registra pero no suma a tonelaje ni a recuentos de series (`ADR-033`).
 - **Actores:** la persona captura y revisa sus resultados; profesionales solo leen la proyección autorizada y nunca sobrescriben el set.
 - **RLS:** vía la sesión.
 - **Consultas / índices:** por `executed_session_id`.
 - **Retención:** con la ejecución; conserva revisiones y se dispone bajo la categoría `training`.
+- **Eventos:** ninguno propio.
+
+### 10.4b `execution.session_exercises`
+
+- **Propósito:** los ejercicios de una sesión, en su orden y con sus superseries (`ADR-034`).
+- **Dominio / fuente de verdad:** Ejecución. Se siembra desde la rutina al iniciar el intento y desde ahí es la verdad de la sesión.
+- **Clasificación:** `training`.
+- **Columnas:** `id` · `executed_session_id uuid` · `position integer` · `movement_id uuid` (nullable) · `planned_step_id uuid` (nullable: nulo para un ejercicio añadido) · `superset_group smallint` (nullable).
+- **FKs y borrado:** `executed_session_id → executed_sessions(id) ON DELETE CASCADE`; `movement_id → catalog.movements(id) RESTRICT`; `planned_step_id → planning.planned_steps(id) RESTRICT`. `strength_sets.session_exercise_id → session_exercises(id) ON DELETE CASCADE`.
+- **Uniques y checks:** `UNIQUE (executed_session_id, position)`; `position > 0`; los ejercicios de un mismo grupo son contiguos (`IX-50`).
+- **Actores:** la persona siembra, reordena, encadena, añade y quita mientras la sesión no está finalizada; profesionales solo leen la proyección autorizada.
+- **RLS:** vía la sesión.
+- **Consultas / índices:** por `executed_session_id`.
+- **Retención:** con la ejecución.
 - **Eventos:** ninguno propio.
 
 ### 10.5 `execution.endurance_laps`

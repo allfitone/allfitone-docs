@@ -1276,6 +1276,8 @@ y no por la persona— y se retiró a su vez tres días después, cuando quedó 
 7. Una sesión híbrida exige al menos dos bloques de familias distintas, con la transición explícita. La protección es de **base de datos**: al cerrar la sesión un guardián verifica que existan al menos dos familias, porque es una condición entre varios bloques y no se puede comprobar bloque por bloque.
 8. **De cada serie puedo marcar cuánto me costó**, del 1 al 10, y no tengo que saberme la escala: al abrirla me explica qué significa cada número — un 8 es que quedaban dos repeticiones. Es opcional: una serie sin esfuerzo marcado no declara ninguno, que no es lo mismo que el mínimo.
 9. **Cada serie dice de qué tipo fue**: normal, calentamiento, al fallo o descendente. La sesión abre cada serie con el tipo que pidió la rutina y yo lo cambio si hice otra cosa. Un calentamiento se registra pero no cuenta como trabajo: no suma a mis kilos levantados, a «La última vez» ni a las series de la semana.
+10. **La sesión es mía una vez empezada**: puedo añadir un ejercicio, quitar uno, moverlo de lugar y encadenarlo en superserie con otro, aunque la rutina dijera otra cosa. Empieza con los ejercicios y las superseries de la rutina, y lo que cambio se queda aunque cierre la aplicación.
+11. Una superserie son ejercicios seguidos: encadenar uno lo pone al lado del otro, y mover una superserie la mueve entera.
 
 ### HU-SP-056 — Cerrar la sesión
 
