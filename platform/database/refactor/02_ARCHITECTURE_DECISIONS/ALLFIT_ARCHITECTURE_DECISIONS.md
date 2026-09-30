@@ -40,6 +40,7 @@
 | ADR-030 | Detalle por serie y superseries en la planificación de fuerza |
 | ADR-031 | La portada de una rutina la pone su programa, y sale del catálogo |
 | ADR-032 | Un programa puede no tener fin, y la semana que no existe la siembra quien la va a enseñar |
+| ADR-033 | La serie ejecutada dice de qué tipo fue, y el esfuerzo se registra al entrenar |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -3669,7 +3670,8 @@ allfitone-landing-page/  sitio público de marketing
 ## ADR-030 — Detalle por serie y superseries en la planificación de fuerza
 
 **Estado:** aceptada para V1<br>
-**Fecha:** 17 de septiembre de 2026
+**Fecha:** 17 de septiembre de 2026<br>
+**Enmendada:** 29 de septiembre de 2026 — la ejecución registra el tipo de serie y la sesión recibe las series planificadas (`ADR-033`)
 
 ### Contexto
 
@@ -3743,6 +3745,8 @@ heredada del padre— o sería la única grieta en esa garantía.
 - **La ejecución no aprende de series planificadas.** `execution.strength_sets`
   seguirá apuntando al paso y no a la serie prescrita. Enlazar lo ejecutado con la
   serie que lo pidió es otra decisión, con su propio ADR.
+  *Estrechado por `ADR-033`:* la ejecución registra el tipo de cada serie y la sesión
+  recibe las series planificadas, pero el enlace con la serie concreta sigue sin existir.
 - **Las revisiones de prescripción siguen operando a nivel de paso.** Un profesional
   adapta el ejercicio, no la tercera serie; el vocabulario cerrado de
   `override_kind` no se amplía aquí.
@@ -4295,3 +4299,102 @@ no se tocan: cuentan lo que hay en la agenda, y eso es verdad tenga fin o no.
     nula para una versión sin fin, y un programa sin fin **aparece** en el catálogo.
 15. `editable` sigue siendo correcto en un programa sin fin, comparando contra el ciclo y
     no contra la duración declarada.
+
+---
+
+## ADR-033 — La serie ejecutada dice de qué tipo fue, y el esfuerzo se registra al entrenar
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 29 de septiembre de 2026<br>
+**Enmienda a:** `ADR-030`, cuya exclusión «la ejecución no aprende de series planificadas» se estrecha
+
+### Contexto
+
+`ADR-030` le dio a cada serie planificada un tipo —normal, calentamiento, al fallo o
+descendente— y dejó escrito que la ejecución no lo aprendía: `execution.strength_sets`
+sólo guarda orden, repeticiones, carga y RPE. Eso produce tres desajustes que ya se ven en
+Space.
+
+- **La sesión no sabe qué tipo de serie tiene delante.** `execution.read_execution` le pasa
+  a la pantalla el resumen de `strength_targets` —cuántas series y cuántas repeticiones—, no
+  las series planificadas, así que un calentamiento se entrena como una serie más y nada lo
+  distingue.
+- **El calentamiento suma como trabajo.** El editor promete que «no suma al volumen», pero
+  el tonelaje de «La última vez», la semana y los contadores de series lo cuentan, porque la
+  ejecución no puede saber cuál fue.
+- **El esfuerzo se pide en el sitio equivocado.** Space pedía un RPE al planificar cada
+  serie (`HU-SP-043` criterio 5). El RPE es lo que se sintió, y sólo se sabe al hacerla;
+  `HU-SP-055` criterio 1 ya lo pedía durante el entrenamiento y la sesión no lo capturaba,
+  aunque la columna `execution.strength_sets.rpe` y el contrato lo aceptan.
+
+### Decisión
+
+**1. `execution.strength_sets` gana `kind planning.set_kind not null default 'normal'`.**
+El vocabulario es el de `ADR-030` y es el mismo tipo, no uno nuevo: un segundo enum con
+los mismos cuatro valores en `execution` sería el enum homónimo que el catálogo físico
+prohíbe, y convertir entre los dos en cada lectura sería el cast implícito que esa regla
+evita. La ejecución ya depende de planificación —`strength_sets` referencia
+`planning.planned_steps`—, así que usar su tipo no añade una dirección nueva de
+dependencia. El valor por defecto conserva el significado de toda fila anterior.
+
+**2. La sesión recibe las series planificadas, y el tipo se propone, no se impone.**
+`read_execution` añade a cada paso planificado sus series de `planning.planned_sets`
+—orden, tipo, repeticiones y carga— y cae en el resumen de `strength_targets` cuando el paso
+no las tiene. La pantalla abre cada fila con el tipo que el plan pidió, y la persona puede
+cambiarlo: lo que se registra es lo que hizo. **Una serie ejecutada no se enlaza con la
+serie planificada concreta**; eso sigue siendo otra decisión.
+
+**3. Un calentamiento no es trabajo.** Las series ejecutadas `warmup` se registran y se
+ven, pero no suman al tonelaje ni a las series registradas que cuentan «La última vez», el
+resumen de la semana y la sesión en curso. Es la regla que la interfaz ya prometía, puesta
+donde se calcula. Los recuentos **del plan** —cuántas series tiene una rutina y cómo se
+reparten por músculo— no cambian con esta decisión.
+
+**4. El esfuerzo se registra al entrenar.** Space deja de pedir `target_rpe` en el editor de
+rutina y lo pide, opcional, en cada serie de la sesión. `target_rpe` se queda en el modelo
+de planificación: Studio puede prescribirlo y nada de esta decisión lo borra. Una serie sin
+esfuerzo marcado no declara ninguno, y **nunca se convierte en cero**.
+
+### Lo que esta decisión no hace
+
+- **No enlaza la serie ejecutada con la planificada.** `strength_sets` sigue apuntando al
+  paso; comparar la tercera serie hecha con la tercera pedida necesita ese enlace.
+- **No añade RIR, tempo ni descanso real por serie.**
+- **No cambia las demás disciplinas.** Resistencia, intervalos y movilidad no tienen tipo de
+  serie.
+
+### Invariantes
+
+1. Toda serie ejecutada tiene un tipo, y el de las anteriores a esta decisión es `normal`.
+2. El tipo de una serie ejecutada pertenece al vocabulario de `planning.set_kind`.
+3. Una serie ejecutada `warmup` no suma a ningún tonelaje ni a ningún recuento de series registradas.
+4. El esfuerzo registrado es opcional y, cuando no se declara, es nulo y no cero.
+
+### Consecuencias
+
+#### Positivas
+
+- La sesión enseña el plan que se escribió, serie por serie.
+- El volumen deja de inflarse con el calentamiento, y la interfaz deja de contradecir los
+  números.
+- El RPE deja de ser una promesa del plan para ser un dato de lo que pasó.
+
+#### Costos
+
+- `replace_execution_results`, `read_execution`, la agenda y el resumen de la semana se
+  redefinen juntos, o el tipo se escribe en un sitio y se ignora en otro.
+- Los recuentos del plan siguen contando el calentamiento, y quedan como trabajo aparte.
+- `planned.sets` y `StrengthSet.kind` entran al contrato como campos opcionales.
+- El RPE planificado de las rutinas de Space se pierde la próxima vez que se guarde su
+  borrador. Es un dato opcional y ya no se muestra.
+
+### Escenarios de prueba obligatorios
+
+1. Una serie registrada con tipo lo conserva al leerse la sesión.
+2. Una serie registrada sin tipo se lee como `normal`.
+3. Un tipo fuera del vocabulario se rechaza.
+4. `read_execution` devuelve las series planificadas de cada paso con su tipo, y el
+   resumen cuando el paso no tiene series.
+5. Un calentamiento con carga no suma al tonelaje de «La última vez» ni al de la semana.
+6. Un calentamiento no cuenta en las series de «La última vez».
+7. Las series de otra persona siguen sin verse, con o sin tipo.

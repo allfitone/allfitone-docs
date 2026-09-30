@@ -1832,9 +1832,9 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Propósito:** esfuerzo/serie de fuerza con orden, movimiento y cantidad lograda.
 - **Dominio / fuente de verdad:** Ejecución. Es la fuente de verdad de los resultados observados de fuerza de una ejecución.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `executed_session_id uuid` · `session_segment_id uuid` (nullable) · `movement_id uuid` (nullable) · `planned_step_id uuid` (nullable) · `set_order integer` · `achieved_reps integer` (nullable) · `load_value numeric` (nullable) · `load_unit_code text` (nullable) · `original_load_value numeric` (nullable) · `original_load_unit_code text` (nullable) · `rpe numeric` (nullable).
+- **Columnas:** `id` · `executed_session_id uuid` · `session_segment_id uuid` (nullable) · `movement_id uuid` (nullable) · `planned_step_id uuid` (nullable) · `set_order integer` · `achieved_reps integer` (nullable) · `load_value numeric` (nullable) · `load_unit_code text` (nullable) · `original_load_value numeric` (nullable) · `original_load_unit_code text` (nullable) · `rpe numeric` (nullable) · `kind planning.set_kind` (default `normal`, `ADR-033`).
 - **FKs y borrado:** `executed_session_id → executed_sessions(id) ON DELETE CASCADE`; FK compuesta opcional `(session_segment_id, executed_session_id) → session_segments(id, executed_session_id) RESTRICT`; `movement_id → catalog.movements(id) RESTRICT`; unidades → `catalog.units(code) RESTRICT` (`IX-18`).
-- **Uniques y checks:** `UNIQUE (executed_session_id, set_order)`; `NULL` ≠ 0.
+- **Uniques y checks:** `UNIQUE (executed_session_id, set_order)`; `NULL` ≠ 0; `rpe` entre 0 y 10, nulo cuando no se declaró. Una serie `warmup` se registra pero no suma a tonelaje ni a recuentos de series (`ADR-033`).
 - **Actores:** la persona captura y revisa sus resultados; profesionales solo leen la proyección autorizada y nunca sobrescriben el set.
 - **RLS:** vía la sesión.
 - **Consultas / índices:** por `executed_session_id`.
