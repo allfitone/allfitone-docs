@@ -42,6 +42,7 @@
 | ADR-032 | Un programa puede no tener fin, y la semana que no existe la siembra quien la va a enseñar |
 | ADR-033 | La serie ejecutada dice de qué tipo fue, y el esfuerzo se registra al entrenar |
 | ADR-034 | Una sesión es una lista de ejercicios, y cada serie pertenece a uno |
+| ADR-035 | El descanso viaja con la sesión y se cuenta al marcar la serie |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -4407,7 +4408,8 @@ esfuerzo marcado no declara ninguno, y **nunca se convierte en cero**.
 
 **Estado:** aceptada para V1<br>
 **Fecha:** 30 de septiembre de 2026<br>
-**Enmienda a:** `ADR-030` y `ADR-033`
+**Enmienda a:** `ADR-030` y `ADR-033`<br>
+**Enmendada:** 30 de septiembre de 2026 — cada ejercicio de la sesión lleva su descanso y la sesión lo cuenta (`ADR-035`)
 
 ### Contexto
 
@@ -4463,6 +4465,8 @@ movimiento.
 ### Lo que esta decisión no hace
 
 - **No temporiza la superserie.** El descanso entre ejercicios encadenados sigue fuera.
+  *Enmendado por `ADR-035`:* la sesión cuenta el descanso, y en una cadena lo cuenta al
+  terminarla.
 - **No enlaza la serie ejecutada con la planificada concreta.**
 - **No cambia los derivados por movimiento.** El historial de «anterior», «La última vez»
   y los kilos de la semana siguen leyendo series.
@@ -4499,3 +4503,64 @@ movimiento.
 5. Las sesiones anteriores quedan con su lista y sus series enlazadas.
 6. Otra persona no lee ni escribe los ejercicios de una sesión ajena.
 7. El tonelaje y «La última vez» no cambian.
+
+---
+
+## ADR-035 — El descanso viaja con la sesión y se cuenta al marcar la serie
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 30 de septiembre de 2026<br>
+**Enmienda a:** `ADR-034`
+
+### Contexto
+
+El descanso entre series existe como prescripción de la rutina
+(`strength_targets.target_rest_seconds`, `ADR-030`), pero nada del camino de la sesión lo
+llevaba: ni la lista de ejercicios (`ADR-034`) ni su lectura. La persona que entrena no
+tenía cuenta atrás, y si la máquina está ocupada o el día pesa, tampoco podía alargar el
+descanso sin editar la rutina, que es de todas las semanas y no de hoy.
+
+### Decisión
+
+**1. Cada ejercicio de la sesión lleva su descanso.** `session_exercises.rest_seconds`
+se copia de `target_rest_seconds` del paso al iniciar el intento (`OP-EXE-001`). Desde ahí
+es de la sesión: cambiarlo reemplaza la lista (`OP-EXE-005`) y **no toca la rutina**. Un
+ejercicio añadido nace sin descanso.
+
+**2. La cuenta atrás es del dispositivo, no un resultado.** Arranca al marcar una serie,
+se alarga o acorta de 15 en 15 segundos y se puede saltar. No se guarda: el descanso real
+hecho sigue fuera de V1, como dicen el diccionario y `ADR-033`.
+
+**3. En una superserie se cuenta al terminar la cadena.** Marcar una serie en un ejercicio
+que no es el último de su cadena no arranca descanso; en el último, arranca el suyo, que
+es el de la cadena (`ADR-030`, `HU-SP-105`).
+
+**4. Avisa también con la app cerrada.** Al terminar, la sesión vibra; con la app en
+segundo plano o el teléfono bloqueado, llega una notificación **local** programada en el
+propio teléfono. No hay push ni servidor: no hace falta el permiso de APNs, y un permiso
+negado sólo quita el aviso, nunca la cuenta atrás.
+
+### Invariantes
+
+1. `rest_seconds` es nulo o está entre 0 y 3600, igual que su origen.
+2. Cambiar el descanso de una sesión nunca cambia `strength_targets`.
+
+### Consecuencias
+
+#### Positivas
+
+- La sesión tiene cuenta atrás con el descanso de la rutina, sin que nadie lo recuerde.
+- Ajustar el descanso de hoy no reescribe el plan de todas las semanas.
+
+#### Costos
+
+- Una columna más en `session_exercises`, y las tres funciones de `ADR-034` se redefinen.
+- Una dependencia nueva en Space para la notificación local.
+
+### Escenarios de prueba obligatorios
+
+1. Una sesión nueva nace con el descanso de cada paso.
+2. Cambiarlo en la sesión persiste y no cambia la rutina.
+3. Un descanso fuera de rango se rechaza.
+4. Un ejercicio añadido nace sin descanso.
+5. En una superserie, sólo el último ejercicio arranca el descanso.

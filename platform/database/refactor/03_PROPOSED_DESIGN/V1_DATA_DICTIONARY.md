@@ -1843,12 +1843,12 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 
 ### 10.4b `execution.session_exercises`
 
-- **Propósito:** los ejercicios de una sesión, en su orden y con sus superseries (`ADR-034`).
+- **Propósito:** los ejercicios de una sesión, en su orden, con sus superseries y su descanso (`ADR-034`, `ADR-035`).
 - **Dominio / fuente de verdad:** Ejecución. Se siembra desde la rutina al iniciar el intento y desde ahí es la verdad de la sesión.
 - **Clasificación:** `training`.
-- **Columnas:** `id` · `executed_session_id uuid` · `position integer` · `movement_id uuid` (nullable) · `planned_step_id uuid` (nullable: nulo para un ejercicio añadido) · `superset_group smallint` (nullable).
+- **Columnas:** `id` · `executed_session_id uuid` · `position integer` · `movement_id uuid` (nullable) · `planned_step_id uuid` (nullable: nulo para un ejercicio añadido) · `superset_group smallint` (nullable) · `rest_seconds integer` (nullable: copiado de `strength_targets.target_rest_seconds` al iniciar; editable sólo en la sesión).
 - **FKs y borrado:** `executed_session_id → executed_sessions(id) ON DELETE CASCADE`; `movement_id → catalog.movements(id) RESTRICT`; `planned_step_id → planning.planned_steps(id) RESTRICT`. `strength_sets.session_exercise_id → session_exercises(id) ON DELETE CASCADE`.
-- **Uniques y checks:** `UNIQUE (executed_session_id, position)`; `position > 0`; los ejercicios de un mismo grupo son contiguos (`IX-50`).
+- **Uniques y checks:** `UNIQUE (executed_session_id, position)`; `position > 0`; `rest_seconds` nulo o entre 0 y 3600; los ejercicios de un mismo grupo son contiguos (`IX-50`).
 - **Actores:** la persona siembra, reordena, encadena, añade y quita mientras la sesión no está finalizada; profesionales solo leen la proyección autorizada.
 - **RLS:** vía la sesión.
 - **Consultas / índices:** por `executed_session_id`.

@@ -1278,6 +1278,10 @@ y no por la persona— y se retiró a su vez tres días después, cuando quedó 
 9. **Cada serie dice de qué tipo fue**: normal, calentamiento, al fallo o descendente. La sesión abre cada serie con el tipo que pidió la rutina y yo lo cambio si hice otra cosa. Un calentamiento se registra pero no cuenta como trabajo: no suma a mis kilos levantados, a «La última vez» ni a las series de la semana.
 10. **La sesión es mía una vez empezada**: puedo añadir un ejercicio, quitar uno, moverlo de lugar y encadenarlo en superserie con otro, aunque la rutina dijera otra cosa. Empieza con los ejercicios y las superseries de la rutina, y lo que cambio se queda aunque cierre la aplicación.
 11. Una superserie son ejercicios seguidos: encadenar uno lo pone al lado del otro, y mover una superserie la mueve entera.
+12. **Al marcar una serie empieza el descanso** que la rutina puso a ese ejercicio, con su cuenta atrás a la vista. Puedo sumarle o quitarle 15 segundos, o saltarlo, y marcar otra serie lo empieza de nuevo.
+13. En una superserie el descanso empieza al terminar la cadena: marcar el primer ejercicio me lleva al siguiente sin descanso.
+14. **Puedo cambiar el descanso de un ejercicio desde la sesión**, y el cambio es de hoy: la rutina sigue con el suyo.
+15. Si salgo de la aplicación o bloqueo el teléfono, me avisa cuando el descanso termina. Si no di permiso para avisos, la cuenta atrás sigue igual dentro de la sesión.
 
 ### HU-SP-056 — Cerrar la sesión
 
