@@ -232,6 +232,8 @@ Sujeto implícito: la persona autenticada. Ningún endpoint recibe un `person_id
 
 | Método | Ruta | Operación | Notas |
 | --- | --- | --- | --- |
+| `POST` | `/client-invitations/resolve` | `OP-REL-002` | Qué pide la invitación: cada scope con su finalidad, nivel y contrato. **No resuelve de forma anónima**, a diferencia de las de equipo: devuelve categorías de datos de salud, así que exige que el correo verificado sea el contacto invitado |
+| `POST` | `/client-invitations/decisions` | `OP-IDN-009` | Decide la relación y cada scope en una sola llamada. Un scope omitido cuenta como rechazado |
 | `GET` | `/consents` | `OP-PRV-013` | Panel de control del consentimiento |
 | `POST` | `/consents/{id}/revocation` | `OP-PRV-005` | Invalidación transaccional |
 | `GET` | `/visibility-denials` | `OP-PRV-017` | |
@@ -536,6 +538,7 @@ expiración.
 | Método | Ruta | Operación | Scope exigido |
 | --- | --- | --- | --- |
 | `GET` | `/organizations/{orgId}/clients` | `OP-REL-010` | **Ninguno** — directorio sin datos fitness |
+| `POST` | `/organizations/{orgId}/client-invitations` | `OP-REL-001` | Ninguno — ofrecer no es conceder |
 | `GET` | `/organizations/{orgId}/relationships/{id}` | `OP-REL-011` | Ninguno — estado, no contenido |
 | `GET` | `/organizations/{orgId}/relationships/{id}/events` | `OP-REL-014` | Ninguno |
 | `POST` | `/organizations/{orgId}/relationships/{relId}/professional-assignments` | `OP-REL-002` | Ninguno |

@@ -1417,6 +1417,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | `OP-REL-012` | Listar mis relaciones | Consulta | `A2` |
 | `OP-REL-013` | Consultar suplencias de una relación | Consulta | `A2`, `A3`–`A5` |
 | `OP-REL-014` | Consultar el historial de una relación | Consulta | `A2`, `A4`, `A5` |
+| `OP-REL-015` | Consultar qué pide una invitación de cliente | Consulta | `A2` |
 
 ---
 
@@ -1597,15 +1598,32 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Tipo** | Consulta |
 | **Superficie** | `GET /studio/v1/organizations/{orgId}/clients` |
 | **Actor** | `A3`–`A6` |
-| **Filtros obligatorios** | Relaciones de `{orgId}`. Para `A3`: **solo** aquellas donde tiene asignación efectiva vigente, como titular o suplente |
+| **Filtros obligatorios** | Dos clases de entrada, ambas de `{orgId}`: **relaciones**, y **invitaciones de tipo `service_relationship` todavía sin responder**. Para `A3`: solo las relaciones donde tiene asignación efectiva vigente, como titular o suplente, y solo las invitaciones que emitió esa persona |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
-| **Paginación y orden** | Cursor. Orden: estado de relación y nombre, desempate por identificador |
+| **Paginación y orden** | Cursor. Orden: clase de entrada y nombre, desempate por identificador. Para una invitación, el nombre de ordenamiento es el contacto |
 | **Offline / concurrencia** | Cacheable para presentación |
-| **Información sensible** | Identidad de la persona y estado del vínculo. **Ningún** dato fitness, ni siquiera agregado |
+| **Información sensible** | Identidad de la persona y estado del vínculo. **Ningún** dato fitness, ni siquiera agregado. Una invitación sin responder expone el contacto **enmascarado**, nunca completo |
 | **Evento de dominio** | Ninguno. El directorio no consume grants y no genera `ACCESS_EVENT` |
-| **Reglas** | `A6` (staff) ve el directorio completo de la organización: nombre, estado de relación y estado de invitación, y nada más. La existencia de un grant se muestra como estado, no como contenido |
+| **Reglas** | `A6` (staff) ve el directorio completo de la organización: nombre, estado de relación y estado de invitación, y nada más. La existencia de un grant se muestra como estado, no como contenido.<br><br>Una entrada de invitación **no tiene persona ni nombre**: mientras nadie acepta, no existe persona, ni siquiera provisional (`HU-STUDIO-023`, criterio 8). Lleva el contacto enmascarado en su lugar.<br><br>El estrechamiento de `A3` sobre invitaciones es por emisor y no por asignación, porque una invitación sin responder no tiene asignación sobre la que estrechar |
 | **Falla cerrada** | — |
+
+#### `OP-REL-015` — Consultar qué pide una invitación de cliente
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `POST /space/v1/client-invitations/resolve` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | La invitación cuyo hash de token coincide, con intención `service_relationship`. El contacto invitado debe ser el correo verificado del actor |
+| **Transacción** | Ninguna, salvo el vencimiento resuelto en la lectura |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | No aplica. Las opciones de scope vuelven ordenadas por código |
+| **Offline / concurrencia** | No cacheable |
+| **Información sensible** | Las categorías de datos que una organización quiere leer de esta persona, con su finalidad, nivel y contrato tal como se presentó |
+| **Evento de dominio** | `identity.invitation_expired.v1` cuando la lectura encuentra la invitación vencida |
+| **Reglas** | **No resuelve de forma anónima**, a diferencia de `OP-IDN-016` (equipo) y de la de titularidad. Aquellas revelan el nombre de una organización y un rol propuesto, que el destinatario ya leyó en el correo; esta revela categorías de datos de salud, así que aplica la misma prueba de destinatario que la decisión: tener el token no basta.<br><br>Un actor que no supere esa prueba recibe rechazo, **no** una invitación con oferta vacía: una oferta vacía seguiría confirmando que la invitación existe.<br><br>El vencimiento se resuelve al leer, como en las invitaciones de equipo: entre que pasa el plazo y alguien llega con el enlace no corre nada más, y una invitación que se lea como vigente después de vencer sería respondida |
+| **Falla cerrada** | Actor anónimo, hash que no mide 32 bytes, o correo verificado distinto del contacto invitado |
 
 #### `OP-REL-011` — Consultar una relación
 
