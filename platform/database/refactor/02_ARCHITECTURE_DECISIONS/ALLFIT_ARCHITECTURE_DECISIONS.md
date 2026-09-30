@@ -4528,12 +4528,17 @@ es de la sesión: cambiarlo reemplaza la lista (`OP-EXE-005`) y **no toca la rut
 ejercicio añadido nace sin descanso.
 
 **2. La cuenta atrás es del dispositivo, no un resultado.** Arranca al marcar una serie,
-se alarga o acorta de 15 en 15 segundos y se puede saltar. No se guarda: el descanso real
+se alarga o acorta de 15 en 15 segundos y se puede saltar. Un ejercicio cuya rutina no
+dijo nada de descanso cuenta el de apertura del editor, 1 min 30 s: una cuenta atrás que
+nunca aparece se lee como rota. Sólo «Ninguno» (0) no cuenta. No se guarda: el descanso real
 hecho sigue fuera de V1, como dicen el diccionario y `ADR-033`.
 
-**3. En una superserie se cuenta al terminar la cadena.** Marcar una serie en un ejercicio
-que no es el último de su cadena no arranca descanso; en el último, arranca el suyo, que
-es el de la cadena (`ADR-030`, `HU-SP-105`).
+**3. En una superserie también se cuenta, y dice qué sigue.** Marcar una serie arranca el
+descanso de ese ejercicio aunque esté en una cadena: la transición también es tiempo, y un
+aviso que sólo dice «ahora» deja adivinando cuánto queda. Mientras cuenta dice el ejercicio
+siguiente de la cadena; al final de la cadena, el primero para otra vuelta. Esto se aparta,
+**sólo durante la sesión**, de la regla de `ADR-030` de que en la cadena cuenta sólo el
+descanso del último paso: la rutina sigue guardándolo así.
 
 **4. Avisa también con la app cerrada.** Al terminar, la sesión vibra; con la app en
 segundo plano o el teléfono bloqueado, llega una notificación **local** programada en el
@@ -4563,4 +4568,4 @@ negado sólo quita el aviso, nunca la cuenta atrás.
 2. Cambiarlo en la sesión persiste y no cambia la rutina.
 3. Un descanso fuera de rango se rechaza.
 4. Un ejercicio añadido nace sin descanso.
-5. En una superserie, sólo el último ejercicio arranca el descanso.
+5. En una superserie, cada ejercicio arranca su descanso y dice cuál sigue.
