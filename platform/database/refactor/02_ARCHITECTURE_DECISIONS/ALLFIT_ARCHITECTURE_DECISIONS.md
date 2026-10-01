@@ -41,6 +41,8 @@
 | ADR-031 | La portada de una rutina la pone su programa, y sale del catálogo |
 | ADR-032 | Un programa puede no tener fin, y la semana que no existe la siembra quien la va a enseñar |
 | ADR-033 | La serie ejecutada dice de qué tipo fue, y el esfuerzo se registra al entrenar |
+| ADR-034 | Una sesión es una lista de ejercicios, y cada serie pertenece a uno |
+| ADR-035 | El descanso viaja con la sesión y se cuenta al marcar la serie |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -4306,7 +4308,8 @@ no se tocan: cuentan lo que hay en la agenda, y eso es verdad tenga fin o no.
 
 **Estado:** aceptada para V1<br>
 **Fecha:** 29 de septiembre de 2026<br>
-**Enmienda a:** `ADR-030`, cuya exclusión «la ejecución no aprende de series planificadas» se estrecha
+**Enmienda a:** `ADR-030`, cuya exclusión «la ejecución no aprende de series planificadas» se estrecha<br>
+**Enmendada:** 30 de septiembre de 2026 — las series pertenecen a un ejercicio de la sesión, y la sesión lee su lista y no el plan (`ADR-034`)
 
 ### Contexto
 
@@ -4398,3 +4401,171 @@ esfuerzo marcado no declara ninguno, y **nunca se convierte en cero**.
 5. Un calentamiento con carga no suma al tonelaje de «La última vez» ni al de la semana.
 6. Un calentamiento no cuenta en las series de «La última vez».
 7. Las series de otra persona siguen sin verse, con o sin tipo.
+
+---
+
+## ADR-034 — Una sesión es una lista de ejercicios, y cada serie pertenece a uno
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 30 de septiembre de 2026<br>
+**Enmienda a:** `ADR-030` y `ADR-033`<br>
+**Enmendada:** 30 de septiembre de 2026 — cada ejercicio de la sesión lleva su descanso y la sesión lo cuenta (`ADR-035`)
+
+### Contexto
+
+Una sesión en curso se reconstruía cada vez desde la rutina: sus ejercicios eran los
+pasos del plan, en el orden del plan, y sus series colgaban de la sesión sin saber de qué
+ejercicio eran más allá del movimiento. Eso deja fuera cuatro cosas que la gente hace al
+entrenar: **quitar** un ejercicio que no va a hacer, **moverlo** porque la máquina está
+ocupada, **encadenarlo** en superserie y **añadir** uno que la rutina no traía. Nada de
+eso tenía dónde guardarse:
+
+- `executed_sessions` es una fila por sesión; listar ejercicios ahí sería un JSON sin
+  contrato, que `OP-EXE-005` prohíbe.
+- `strength_sets` es una fila por serie marcada; un ejercicio quitado, movido o añadido
+  sin entrenar no tiene ninguna.
+- `session_segments` son los bloques de una sesión híbrida, no ejercicios.
+
+Y había un defecto: si un movimiento aparecía dos veces en la rutina, las dos filas
+compartían sus series, porque el único enlace era el movimiento.
+
+Las aplicaciones de registro de gimnasio resuelven esto igual. La API pública de Hevy
+modela un entrenamiento como una lista de **ejercicios**, cada uno con su posición y su
+`superset_id`, y las series dentro; empezar una rutina copia sus ejercicios al
+entrenamiento, y a partir de ahí es independiente.
+
+### Decisión
+
+**1. `execution.session_exercises`: una fila por ejercicio de la sesión.** Posición,
+movimiento, el paso de la rutina del que salió (`planned_step_id`, nulo para uno añadido)
+y el grupo de superserie. La posición es única por sesión.
+
+**2. Se siembra al empezar y desde ahí es la verdad de la sesión.** `OP-EXE-001` copia los
+pasos de la versión de rutina en la misma transacción que crea el intento, con sus
+superseries. A partir de ese momento el plan no vuelve a decidir: quitar borra la fila,
+mover cambia la posición, encadenar pone el grupo y añadir inserta. Una sesión espontánea
+nace sin ejercicios.
+
+**3. Cada serie pertenece a un ejercicio.** `strength_sets.session_exercise_id` referencia
+su fila, y borrarla borra sus series. Dos ejercicios del mismo movimiento dejan de
+compartir series.
+
+**4. Se reemplaza entero, como las series.** `OP-EXE-005` recibe la lista de ejercicios
+junto con las series y reemplaza ambas en la misma transacción, bajo el mismo lock y
+`If-Match`. Cada serie dice en qué posición está su ejercicio.
+
+**5. Una superserie es contigua, igual que en el plan.** Los ejercicios que comparten grupo
+ocupan posiciones consecutivas (`IX-50`, hermano de `IX-46`); un reemplazo que lo viole se
+rechaza entero.
+
+**6. Lo que ya existía se rellena.** Cada sesión anterior recibe una fila por paso de su
+rutina y una por movimiento registrado fuera de ella, y sus series se enlazan por
+movimiento.
+
+### Lo que esta decisión no hace
+
+- **No temporiza la superserie.** El descanso entre ejercicios encadenados sigue fuera.
+  *Enmendado por `ADR-035`:* la sesión cuenta el descanso, y en una cadena lo cuenta al
+  terminarla.
+- **No enlaza la serie ejecutada con la planificada concreta.**
+- **No cambia los derivados por movimiento.** El historial de «anterior», «La última vez»
+  y los kilos de la semana siguen leyendo series.
+
+### Invariantes
+
+1. Toda serie de fuerza de una sesión nueva pertenece a un ejercicio de esa sesión.
+2. La posición de un ejercicio es única dentro de su sesión.
+3. Los ejercicios que comparten grupo de superserie ocupan posiciones consecutivas.
+4. La lista la escribe sólo la dueña de la sesión, y sólo mientras no esté finalizada.
+
+### Consecuencias
+
+#### Positivas
+
+- La sesión recuerda cómo se entrenó de verdad: orden, cadenas y lo que se quitó o añadió.
+- El detalle de una sesión y cualquier historial futuro leen esa lista, no el plan.
+- Un movimiento repetido deja de mezclar sus series.
+
+#### Costos
+
+- Una tabla más con su política, heredada de la sesión.
+- `start_planned_session_attempt`, `replace_execution_results` y `read_execution` se
+  redefinen juntas.
+- El contrato gana `exercises` en el reemplazo y en la lectura, y `exercise_position` en
+  cada serie.
+
+### Escenarios de prueba obligatorios
+
+1. Una sesión nueva nace con los ejercicios y las superseries de su rutina.
+2. Mover, quitar y añadir sobreviven a leer la sesión otra vez.
+3. Una superserie no contigua se rechaza.
+4. Dos ejercicios del mismo movimiento no comparten series.
+5. Las sesiones anteriores quedan con su lista y sus series enlazadas.
+6. Otra persona no lee ni escribe los ejercicios de una sesión ajena.
+7. El tonelaje y «La última vez» no cambian.
+
+---
+
+## ADR-035 — El descanso viaja con la sesión y se cuenta al marcar la serie
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 30 de septiembre de 2026<br>
+**Enmienda a:** `ADR-034`
+
+### Contexto
+
+El descanso entre series existe como prescripción de la rutina
+(`strength_targets.target_rest_seconds`, `ADR-030`), pero nada del camino de la sesión lo
+llevaba: ni la lista de ejercicios (`ADR-034`) ni su lectura. La persona que entrena no
+tenía cuenta atrás, y si la máquina está ocupada o el día pesa, tampoco podía alargar el
+descanso sin editar la rutina, que es de todas las semanas y no de hoy.
+
+### Decisión
+
+**1. Cada ejercicio de la sesión lleva su descanso.** `session_exercises.rest_seconds`
+se copia de `target_rest_seconds` del paso al iniciar el intento (`OP-EXE-001`). Desde ahí
+es de la sesión: cambiarlo reemplaza la lista (`OP-EXE-005`) y **no toca la rutina**. Un
+ejercicio añadido nace sin descanso.
+
+**2. La cuenta atrás es del dispositivo, no un resultado.** Arranca al marcar una serie,
+se alarga o acorta de 15 en 15 segundos y se puede saltar. Un ejercicio cuya rutina no
+dijo nada de descanso cuenta el de apertura del editor, 1 min 30 s: una cuenta atrás que
+nunca aparece se lee como rota. Sólo «Ninguno» (0) no cuenta. No se guarda: el descanso real
+hecho sigue fuera de V1, como dicen el diccionario y `ADR-033`.
+
+**3. En una superserie también se cuenta, y dice qué sigue.** Marcar una serie arranca el
+descanso de ese ejercicio aunque esté en una cadena: la transición también es tiempo, y un
+aviso que sólo dice «ahora» deja adivinando cuánto queda. Mientras cuenta dice el ejercicio
+siguiente de la cadena; al final de la cadena, el primero para otra vuelta. Esto se aparta,
+**sólo durante la sesión**, de la regla de `ADR-030` de que en la cadena cuenta sólo el
+descanso del último paso: la rutina sigue guardándolo así.
+
+**4. Avisa también con la app cerrada.** Al terminar, la sesión vibra; con la app en
+segundo plano o el teléfono bloqueado, llega una notificación **local** programada en el
+propio teléfono. No hay push ni servidor: no hace falta el permiso de APNs, y un permiso
+negado sólo quita el aviso, nunca la cuenta atrás.
+
+### Invariantes
+
+1. `rest_seconds` es nulo o está entre 0 y 3600, igual que su origen.
+2. Cambiar el descanso de una sesión nunca cambia `strength_targets`.
+
+### Consecuencias
+
+#### Positivas
+
+- La sesión tiene cuenta atrás con el descanso de la rutina, sin que nadie lo recuerde.
+- Ajustar el descanso de hoy no reescribe el plan de todas las semanas.
+
+#### Costos
+
+- Una columna más en `session_exercises`, y las tres funciones de `ADR-034` se redefinen.
+- Una dependencia nueva en Space para la notificación local.
+
+### Escenarios de prueba obligatorios
+
+1. Una sesión nueva nace con el descanso de cada paso.
+2. Cambiarlo en la sesión persiste y no cambia la rutina.
+3. Un descanso fuera de rango se rechaza.
+4. Un ejercicio añadido nace sin descanso.
+5. En una superserie, cada ejercicio arranca su descanso y dice cuál sigue.

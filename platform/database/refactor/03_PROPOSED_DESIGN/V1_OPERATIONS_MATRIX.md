@@ -2809,7 +2809,7 @@ Reglas que gobiernan todo el dominio:
 | **Superficie** | `POST /space/v1/planned-sessions/{id}/attempts` |
 | **Actor** | `A2`, dueño de la asignación |
 | **Filtros obligatorios** | La sesión planificada pertenece a una asignación **propia**; la asignación no está desacoplada y pausada. **Una sesión ya cerrada admite otro intento**: rechaza `cancelled` y `paused`, no `completed` |
-| **Transacción** | Una sola: crear `EXECUTED_SESSION` en estado iniciado congelando disciplina, tipo de actividad, contrato de resultados vigente y su versión, zona horaria y procedencia de captura; crear el `PLANNED_SESSION_EXECUTION` con `attempt_number` único y monotónico |
+| **Transacción** | Una sola: crear `EXECUTED_SESSION` en estado iniciado congelando disciplina, tipo de actividad, contrato de resultados vigente y su versión, zona horaria y procedencia de captura; crear el `PLANNED_SESSION_EXECUTION` con `attempt_number` único y monotónico; sembrar `SESSION_EXERCISE` con los pasos de la versión de rutina, en su orden, con sus superseries y el descanso de cada paso (`ADR-034`, `ADR-035`) |
 | **Idempotencia** | `Command-Id = EXECUTED_SESSION.id`; replay HTTP por `Idempotency-Key`. Doble toque o recuperación offline no crean otro intento |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Admite `draft_local`: el dispositivo puede iniciar sin conexión y sincronizar después con el mismo `Command-Id`. La numeración de intentos se serializa en el servidor |
@@ -2883,7 +2883,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Admite `draft_local` y `pending_sync`. `If-Match` usa la revisión base; un draft obsoleto devuelve `409 stale-draft` y nunca sobrescribe una revisión confirmada |
 | **Información sensible** | Entrenamiento. Un dolor registrado aquí es **contexto de salud** y hereda esa clasificación, no la de la sesión |
 | **Evento de dominio** | Ninguno hasta finalizar |
-| **Reglas** | Los resultados van a estructuras tipadas por familia, nunca a un JSONB sin contrato. Un valor no capturado permanece `NULL`. Una sesión híbrida exige al menos dos segmentos de familias distintas con transiciones explícitas. **Cada serie de fuerza dice de qué tipo fue** —normal, calentamiento, al fallo o descendente, el vocabulario de `planning.set_kind`— y la que no lo dice es `normal`; **el esfuerzo percibido se registra aquí**, opcional por serie, y la que no lo declara lo deja nulo, nunca cero (`ADR-033`) |
+| **Reglas** | Los resultados van a estructuras tipadas por familia, nunca a un JSONB sin contrato. Un valor no capturado permanece `NULL`. Una sesión híbrida exige al menos dos segmentos de familias distintas con transiciones explícitas. **Cada serie de fuerza dice de qué tipo fue** —normal, calentamiento, al fallo o descendente, el vocabulario de `planning.set_kind`— y la que no lo dice es `normal`; **el esfuerzo percibido se registra aquí**, opcional por serie, y la que no lo declara lo deja nulo, nunca cero (`ADR-033`). **La lista de ejercicios se reemplaza con las series**: orden, superseries, añadidos y quitados, y cada serie dice a qué ejercicio pertenece. Una superserie no contigua se rechaza (`IX-50`, `ADR-034`). **El descanso de cada ejercicio viaja en la lista** y cambiarlo no toca la rutina (`ADR-035`) |
 | **Falla cerrada** | Familia incompatible o unidad de otra dimensión, rechazo con error tipado |
 
 #### `OP-EXE-006` — Finalizar la ejecución
@@ -3036,7 +3036,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Cacheable en el dispositivo |
 | **Información sensible** | Todas las categorías propias |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | La persona ve **todo lo suyo**: intentos abandonados, anuladas, ocultas para terceros, observaciones profesionales recibidas y revisiones con su historial completo. **El detalle trae lo planificado serie por serie**: cada paso de fuerza responde sus series de `planning.planned_sets` —orden, tipo, repeticiones y carga— y cae en el resumen del paso cuando no las tiene, para que la sesión abra cada fila con el tipo que el plan pidió. Cada resultado responde su tipo (`ADR-033`) |
+| **Reglas** | La persona ve **todo lo suyo**: intentos abandonados, anuladas, ocultas para terceros, observaciones profesionales recibidas y revisiones con su historial completo. **El detalle trae lo planificado serie por serie**: cada paso de fuerza responde sus series de `planning.planned_sets` —orden, tipo, repeticiones y carga— y cae en el resumen del paso cuando no las tiene, para que la sesión abra cada fila con el tipo que el plan pidió. Cada resultado responde su tipo (`ADR-033`). **Los ejercicios salen de la sesión, no del plan**: su lista en orden, con superseries, y cada serie con la posición de su ejercicio (`ADR-034`); cada ejercicio responde su descanso (`ADR-035`) |
 | **Falla cerrada** | — |
 
 #### `OP-EXE-016` — Consultar mi progreso

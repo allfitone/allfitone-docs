@@ -943,7 +943,7 @@ Es el dominio donde convergen las tres decisiones difíciles: una fila puede con
 - **`T-EXEC-4` (negativa)** — Ningún profesional puede escribir, corregir o borrar una ejecución ajena. No existe `manage_execution`.
 - **`T-EXEC-5` (positiva)** — Una sesión espontánea existe sin plan, relación ni organización.
 
-#### `SESSION_SEGMENT` · `STRENGTH_SET` · `ENDURANCE_LAP` · `INTERVAL_RESULT` · `ROUND_RESULT` · `MOBILITY_RESULT`
+#### `SESSION_SEGMENT` · `SESSION_EXERCISE` · `STRENGTH_SET` · `ENDURANCE_LAP` · `INTERVAL_RESULT` · `ROUND_RESULT` · `MOBILITY_RESULT`
 
 Comparten política porque comparten dueño y sensibilidad: heredan íntegramente de su `EXECUTED_SESSION`.
 
@@ -960,6 +960,8 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 - **`T-RESULT-2` (positiva)** — Una sesión híbrida admite segmentos de familias distintas.
 - **`T-RESULT-3` (negativa)** — Un resultado de una familia incompatible con el tipo de actividad del segmento es rechazado por constraint.
 - **`T-RESULT-4` (negativa)** — Un valor no capturado permanece `NULL` y **nunca** se sustituye por cero.
+- **`T-RESULT-5` (positiva)** — La dueña lee y reemplaza los ejercicios de su sesión en curso (`ADR-034`).
+- **`T-RESULT-6` (negativa)** — Otra persona no lee ni escribe los ejercicios de una sesión ajena.
 
 #### `METRIC_SAMPLE`
 
