@@ -43,6 +43,7 @@
 | ADR-033 | La serie ejecutada dice de qué tipo fue, y el esfuerzo se registra al entrenar |
 | ADR-034 | Una sesión es una lista de ejercicios, y cada serie pertenece a uno |
 | ADR-035 | El descanso viaja con la sesión y se cuenta al marcar la serie |
+| ADR-036 | El cierre de un entreno se resume y se comparte; récords, racha y número son derivados |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -4569,3 +4570,80 @@ negado sólo quita el aviso, nunca la cuenta atrás.
 3. Un descanso fuera de rango se rechaza.
 4. Un ejercicio añadido nace sin descanso.
 5. En una superserie, cada ejercicio arranca su descanso y dice cuál sigue.
+
+---
+
+## ADR-036 — El cierre de un entreno se resume y se comparte; récords, racha y número son derivados
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 1 de octubre de 2026
+
+### Contexto
+
+Al guardar un entrenamiento la aplicación volvía directo a Hoy: la persona no veía qué
+logró ni podía mostrarlo. La pantalla «Compártelo» resume la sesión en tarjetas para
+compartir, y algunas dicen cosas que ningún dato decía todavía: si hubo un récord, cuántas
+semanas seguidas lleva entrenando y qué número de entreno es este.
+
+### Decisión
+
+**1. Un resumen de lectura, no un dato nuevo.** `OP-EXE-021` responde el resumen de una
+ejecución propia terminada: duración, series de trabajo, ejercicios y kilos, la lista de
+ejercicios con sus series, los récords, la racha, el número de entreno, el nombre y el
+usuario de la persona, y la portada de la rutina. No hay tablas nuevas.
+
+**2. Los récords se calculan al leer.** Son derivados, como ya fija esta matriz para los
+indicadores: guardarlos sería una segunda verdad que envejece al corregir una serie. Para
+cada movimiento de la sesión se compara contra lo mejor de las ejecuciones **anteriores**,
+terminadas y no anuladas, y sólo con series de trabajo — el calentamiento nunca es récord.
+Hay cuatro tipos:
+
+- **Más peso:** la carga más alta levantada en el movimiento.
+- **Mejor 1RM estimado:** el mayor `carga × (1 + repeticiones / 30)` (Epley).
+- **Mejor serie:** el mayor `carga × repeticiones` en una sola serie.
+- **Más volumen en la sesión:** la mayor suma de `carga × repeticiones` del movimiento en
+  una ejecución.
+
+La primera vez que se hace un movimiento **no es récord**: no hay con qué compararlo. Cada
+récord responde su valor anterior y la fecha de ese anterior, y el cálculo lleva
+`algorithm_version = 1`.
+
+**3. La racha son semanas seguidas con al menos un entreno.** Semanas ISO, de lunes a
+domingo en la zona horaria de la persona, contadas hacia atrás desde la semana del
+entreno. La semana en curso no la rompe mientras no termine: una racha de ocho semanas no
+pasa a cero el lunes por la mañana.
+
+**4. El número de entreno cuenta todos los entrenos terminados de la persona**, contando
+éste. No depende de un programa.
+
+**5. La foto de fondo nunca sale del teléfono.** Las tarjetas con foto usan la portada
+predefinida de la rutina; si la persona elige otra de su galería, se usa sólo para
+componer la imagen en el dispositivo. No se sube ni se guarda: no es un dato nuevo.
+
+**6. Compartir es una imagen generada en el teléfono.** Allfit no publica nada ni guarda
+qué se compartió. «Historias» entrega la tarjeta al editor de historias de Instagram
+como sticker, con el identificador de aplicación de Meta, que es público y viaja en la
+app. Sin ese identificador o sin Instagram en el teléfono, la imagen sale por la hoja
+nativa del sistema, igual que el resto de acciones.
+
+### Lo que esta decisión no hace
+
+- No guarda récords ni rachas, ni ofrece un historial de récords.
+- No muestra la sede donde se entrenó: la ejecución es autónoma y no lleva organización.
+- No publica en Instagram por la persona: abre su editor y es ella quien publica.
+
+### Invariantes
+
+1. Un calentamiento nunca es récord ni suma a los kilos del resumen.
+2. Una ejecución abandonada o anulada no cuenta para récords, racha ni número.
+3. El resumen sólo lo lee la dueña de la ejecución, y sólo si está terminada.
+
+### Escenarios de prueba obligatorios
+
+1. Duración, totales y número de entreno de una ejecución terminada.
+2. Cada tipo de récord aparece al superar lo anterior, y no aparece al igualarlo.
+3. La primera vez de un movimiento no es récord.
+4. Un calentamiento con más peso no es récord.
+5. Una ejecución abandonada no cuenta para récords, racha ni número.
+6. La racha se corta con una semana sin entrenar, y la semana en curso no la rompe.
+7. Otra persona no lee el resumen de una ejecución ajena.
