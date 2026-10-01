@@ -2798,6 +2798,7 @@ Reglas que gobiernan todo el dominio:
 | `OP-EXE-018` | Consultar el detalle de una ejecución autorizada | Consulta | `A3`, `A7` |
 | `OP-EXE-019` | Consultar el progreso autorizado de un cliente | Consulta | `A3`, `A7` |
 | `OP-EXE-020` | Listar propuestas de corrección pendientes | Consulta | `A2`, `A3` |
+| `OP-EXE-021` | Leer el resumen de un entreno terminado | Consulta | `A2` |
 
 ---
 
@@ -3123,6 +3124,23 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Muestra estado y vencimiento. Las propuestas canceladas por terminación de relación aparecen como canceladas, no desaparecen |
 | **Falla cerrada** | — |
+
+#### `OP-EXE-021` — Leer el resumen de un entreno terminado
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/executions/{id}/summary?timezone=` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Ejecución propia y terminada |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | N/A |
+| **Offline / concurrencia** | Cacheable en el dispositivo |
+| **Información sensible** | Las propias de la ejecución, más el nombre y el usuario de la persona |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Responde duración, series de trabajo, ejercicios y kilos —sin calentamientos—, la lista de ejercicios con sus series, la portada de la rutina, el nombre y el usuario. **Récords, racha y número de entreno son derivados**, calculados al leer contra las ejecuciones anteriores terminadas y no anuladas, nunca guardados (`ADR-036`). Una ejecución ajena responde como inexistente, y una sin terminar se rechaza |
+| **Falla cerrada** | Si no puede calcular un derivado, responde el resumen sin él, nunca uno inventado |
 
 ### 7.11 Pagos y planes
 

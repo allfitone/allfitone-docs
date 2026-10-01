@@ -1299,6 +1299,24 @@ y no por la persona— y se retiró a su vez tres días después, cuando quedó 
 4. Cerrar dos veces no duplica la sesión ni el cumplimiento.
 5. Como máximo una sesión cuenta como el cumplimiento de lo planificado; no se reparte entre varias.
 6. Una sesión con datos incompletos no alimenta mi progreso como si estuviera completa.
+7. Al guardar, la sesión me lleva a compartirla (`HU-SP-111`).
+
+### HU-SP-111 — Compartir mi entreno
+
+**Como** persona que acaba de entrenar
+**quiero** ver lo que logré y poder compartirlo
+**para** celebrarlo y que lo vean los míos.
+
+`E-SP-07` · importante
+
+**Criterios**
+
+1. Al guardar un entreno veo «Compártelo» con tarjetas de lo que hice: el resumen de la sesión, los músculos que trabajé, qué número de entreno es y mi nombre con mi usuario.
+2. **Si batí un récord, aparece su tarjeta**: qué movimiento, cuánto y cuánto era antes. Si no lo batí, esa tarjeta no sale. Un calentamiento nunca cuenta como récord, y la primera vez que hago un ejercicio tampoco.
+3. Si llevo dos semanas o más entrenando sin saltarme ninguna, aparece mi racha. La semana en curso no la rompe hasta que termine.
+4. Las tarjetas con foto usan la de mi rutina. Puedo cambiarla por una de mi galería, y **esa foto no sale de mi teléfono**.
+5. Puedo guardar la imagen en mis fotos, copiarla, llevarla a mis historias de Instagram o mandarla a la aplicación que quiera.
+6. «Terminar» me lleva a Hoy, y el entreno ya quedó guardado aunque no comparta nada.
 
 ---
 

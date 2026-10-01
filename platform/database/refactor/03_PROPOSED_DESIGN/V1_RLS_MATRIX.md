@@ -962,6 +962,8 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 - **`T-RESULT-4` (negativa)** — Un valor no capturado permanece `NULL` y **nunca** se sustituye por cero.
 - **`T-RESULT-5` (positiva)** — La dueña lee y reemplaza los ejercicios de su sesión en curso (`ADR-034`).
 - **`T-RESULT-6` (negativa)** — Otra persona no lee ni escribe los ejercicios de una sesión ajena.
+- **`T-RESULT-7` (positiva)** — La persona lee el resumen de su ejecución terminada, con récords, racha y número (`OP-EXE-021`).
+- **`T-RESULT-8` (negativa)** — Otra persona no lee el resumen de una ejecución ajena, ni la dueña el de una sin terminar.
 
 #### `METRIC_SAMPLE`
 
