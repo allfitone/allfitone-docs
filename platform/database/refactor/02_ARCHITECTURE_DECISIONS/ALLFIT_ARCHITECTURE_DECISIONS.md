@@ -44,6 +44,7 @@
 | ADR-034 | Una sesión es una lista de ejercicios, y cada serie pertenece a uno |
 | ADR-035 | El descanso viaja con la sesión y se cuenta al marcar la serie |
 | ADR-036 | El cierre de un entreno se resume y se comparte; récords, racha y número son derivados |
+| ADR-037 | El historial de Space muestra lo terminado, y cada fila se resume al leer |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -4647,3 +4648,66 @@ nativa del sistema, igual que el resto de acciones.
 5. Una ejecución abandonada no cuenta para récords, racha ni número.
 6. La racha se corta con una semana sin entrenar, y la semana en curso no la rompe.
 7. Otra persona no lee el resumen de una ejecución ajena.
+
+## ADR-037 — El historial de Space muestra lo terminado, y cada fila se resume al leer
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 1 de octubre de 2026
+
+### Contexto
+
+`OP-EXE-014` define el listado de las ejecuciones propias, y `HU-SP-057` pide que la
+persona vea **todo lo suyo**. La primera entrega del historial en Space —una sección en Hoy
+y una pantalla completa con buscador, filtros y resumen del mes— tiene que decidir qué
+muestra cada fila, cómo se filtra y qué queda para después. Hoy todas las ejecuciones son
+autónomas: ni el ocultamiento a terceros ni las observaciones profesionales tienen todavía
+tablas que leer.
+
+### Decisión
+
+**1. Esta entrega lista sólo ejecuciones terminadas y no anuladas.** Los intentos
+abandonados, las anuladas y el historial de correcciones de `HU-SP-057` quedan
+**diferidos**: el listado responde un `status` por fila para poder añadirlos sin romper el
+contrato. Lo oculto y las observaciones llegan con el dominio de relaciones; hasta
+entonces el contrato no los declara, porque declarar un campo que siempre viene vacío es
+prometer un dato que no existe.
+
+**2. Cada fila se resume al leer.** Duración, series de trabajo y kilos —sin calentamientos,
+y nulos si no se pesó nada—, y el **número de récords**, con la misma regla de `ADR-036`:
+la fila y la tarjeta de esa sesión nunca discrepan. La miniatura es la **portada de la
+rutina**, la misma que muestran Hoy y el resumen; una sesión libre no tiene rutina y no
+lleva portada.
+
+**3. El listado se filtra por mes, disciplina, récord, libre y texto.** El mes se cuenta en
+la zona horaria de la persona. Una sesión es **libre** cuando no salió de una sesión
+planificada. El texto busca, sin tildes ni mayúsculas, en el nombre de la rutina y en el
+de sus ejercicios. Paginado por cursor, inicio descendente y desempate por identificador,
+como ya fija `OP-EXE-014`.
+
+**4. El mes se resume aparte (`OP-EXE-022`).** Entrenos, tiempo, series, kilos y récords del
+mes; por cada semana ISO, contada entera aunque cruce a otro mes, cuántas se terminaron,
+cuántas se planificaron y cuántas de las planificadas se cumplieron, cada una una sola vez
+por más veces que se repitiera; cada día entrenado, con su tiempo, sus series, sus kilos y sus récords, para dibujar el
+mes como calendario y resumir el día que se toque; los meses con algún entreno, para elegir mes; y las disciplinas presentes,
+para ofrecer sólo los filtros que dan resultado.
+
+### Lo que esta decisión no hace
+
+- No muestra abandonadas, anuladas ni correcciones (diferido, criterio 1 de `HU-SP-057`).
+- No abre el detalle de una sesión al tocarla.
+- No funciona sin conexión todavía (criterio 2 de `HU-SP-057`).
+
+### Invariantes
+
+1. Una ejecución abandonada o anulada no aparece en el listado ni suma al mes.
+2. El número de récords y la portada de una fila son los mismos que responde el resumen de esa ejecución.
+3. El historial sólo lo lee su dueña.
+
+### Escenarios de prueba obligatorios
+
+1. Orden por inicio descendente y paginación por cursor sin repetir ni saltar filas.
+2. Cada filtro y la búsqueda, con tildes, mayúsculas y por nombre de ejercicio.
+3. Abandonadas y anuladas no aparecen.
+4. Los récords de una fila coinciden con los del resumen.
+5. El mes responde sus totales, sus semanas con planificadas y libres, y los meses disponibles.
+6. Otra persona no lee el historial ajeno.

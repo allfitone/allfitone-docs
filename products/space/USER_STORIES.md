@@ -1334,6 +1334,12 @@ y no por la persona— y se retiró a su vez tres días después, cuando quedó 
 
 1. Veo **todo lo mío**: intentos abandonados, sesiones anuladas, sesiones que oculté a terceros, observaciones que me dejó un profesional y el historial de correcciones.
 2. Puedo consultar mi historial descargado sin conexión.
+3. En Hoy veo mis últimos entrenos agrupados por semana, y desde ahí abro el historial completo.
+4. Cada entreno dice cuánto duró, cuántas series y cuántos kilos hice, y cuántos récords logré.
+5. Puedo buscar por rutina o por ejercicio, y filtrar por mes, disciplina, entrenos con récord y entrenos libres.
+6. Veo el resumen del mes y, por semana, cuántos entrenos hice de los que tenía planificados.
+
+> **Alcance de la primera entrega (`ADR-037`).** Se muestran los entrenos terminados. Los abandonados, los anulados, las correcciones, lo oculto y las observaciones (criterio 1) y el uso sin conexión (criterio 2) quedan para una entrega siguiente.
 
 ### HU-SP-058 — Corregir una sesión ya cerrada
 

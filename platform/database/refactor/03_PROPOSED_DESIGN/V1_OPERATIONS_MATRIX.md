@@ -2799,6 +2799,7 @@ Reglas que gobiernan todo el dominio:
 | `OP-EXE-019` | Consultar el progreso autorizado de un cliente | Consulta | `A3`, `A7` |
 | `OP-EXE-020` | Listar propuestas de corrección pendientes | Consulta | `A2`, `A3` |
 | `OP-EXE-021` | Leer el resumen de un entreno terminado | Consulta | `A2` |
+| `OP-EXE-022` | Leer el mes de mi historial | Consulta | `A2` |
 
 ---
 
@@ -3028,7 +3029,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /space/v1/executions` · `GET /space/v1/executions/{id}` |
+| **Superficie** | `GET /space/v1/executions?timezone=&month=&day=&discipline=&with_record=&free=&q=&cursor=&limit=` · `GET /space/v1/executions/{id}` |
 | **Actor** | `A2` |
 | **Filtros obligatorios** | Ejecuciones propias |
 | **Transacción** | Ninguna |
@@ -3037,7 +3038,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Cacheable en el dispositivo |
 | **Información sensible** | Todas las categorías propias |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | La persona ve **todo lo suyo**: intentos abandonados, anuladas, ocultas para terceros, observaciones profesionales recibidas y revisiones con su historial completo. **El detalle trae lo planificado serie por serie**: cada paso de fuerza responde sus series de `planning.planned_sets` —orden, tipo, repeticiones y carga— y cae en el resumen del paso cuando no las tiene, para que la sesión abra cada fila con el tipo que el plan pidió. Cada resultado responde su tipo (`ADR-033`). **Los ejercicios salen de la sesión, no del plan**: su lista en orden, con superseries, y cada serie con la posición de su ejercicio (`ADR-034`); cada ejercicio responde su descanso (`ADR-035`) |
+| **Reglas** | La persona ve **todo lo suyo**: intentos abandonados, anuladas, ocultas para terceros, observaciones profesionales recibidas y revisiones con su historial completo. **En V1 el listado responde sólo las terminadas y no anuladas** (`ADR-037`); lo demás está diferido y cada fila declara su `status` para añadirlo sin romper. Cada fila se resume al leer —duración, series de trabajo, kilos sin calentamientos, número de récords con la regla de `ADR-036` y la portada de la rutina como miniatura— y se filtra por mes o por un día en la zona de la persona, disciplina, récord, libre y texto en el nombre de la rutina o de sus ejercicios. **El detalle trae lo planificado serie por serie**: cada paso de fuerza responde sus series de `planning.planned_sets` —orden, tipo, repeticiones y carga— y cae en el resumen del paso cuando no las tiene, para que la sesión abra cada fila con el tipo que el plan pidió. Cada resultado responde su tipo (`ADR-033`). **Los ejercicios salen de la sesión, no del plan**: su lista en orden, con superseries, y cada serie con la posición de su ejercicio (`ADR-034`); cada ejercicio responde su descanso (`ADR-035`) |
 | **Falla cerrada** | — |
 
 #### `OP-EXE-016` — Consultar mi progreso
@@ -3141,6 +3142,23 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Responde duración, series de trabajo, ejercicios y kilos —sin calentamientos—, la lista de ejercicios con sus series, la portada de la rutina, el nombre y el usuario. **Récords, racha y número de entreno son derivados**, calculados al leer contra las ejecuciones anteriores terminadas y no anuladas, nunca guardados (`ADR-036`). Una ejecución ajena responde como inexistente, y una sin terminar se rechaza |
 | **Falla cerrada** | Si no puede calcular un derivado, responde el resumen sin él, nunca uno inventado |
+
+#### `OP-EXE-022` — Leer el mes de mi historial
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/history/months/{month}?timezone=` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Ejecuciones propias terminadas y no anuladas |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | N/A |
+| **Offline / concurrencia** | Cacheable en el dispositivo |
+| **Información sensible** | Agregados de entrenamiento propios |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | El mes se cuenta en la zona horaria de la persona. Responde entrenos, tiempo, series de trabajo, kilos y récords del mes; por semana ISO contada entera, las terminadas, las planificadas y las planificadas cumplidas, cada una una vez; por cada día entrenado, sus sesiones, tiempo, series, kilos y récords; los meses con algún entreno, y las disciplinas presentes (`ADR-037`) |
+| **Falla cerrada** | Un mes sin entrenos responde ceros, nunca un error |
 
 ### 7.11 Pagos y planes
 
