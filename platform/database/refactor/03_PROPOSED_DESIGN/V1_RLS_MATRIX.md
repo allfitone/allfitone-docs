@@ -966,6 +966,7 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 - **`T-RESULT-8` (negativa)** — Otra persona no lee el resumen de una ejecución ajena, ni la dueña el de una sin terminar.
 - **`T-RESULT-9` (positiva)** — La persona lista su historial y lee el resumen de un mes, sólo con sus ejecuciones terminadas (`OP-EXE-014`, `OP-EXE-022`).
 - **`T-RESULT-10` (negativa)** — Otra persona no ve en su listado ni en su mes ninguna ejecución ajena.
+- **`T-RESULT-11` (positiva y negativa)** — La persona lee el detalle de su entreno terminado, lo corrige, lo anula y lo repite; otra persona no lo lee ni lo anula, y una revisión no se reescribe ni la dueña (`OP-EXE-007`, `OP-EXE-009`, `OP-EXE-023`, `OP-EXE-025`).
 
 #### `METRIC_SAMPLE`
 

@@ -45,6 +45,7 @@
 | ADR-035 | El descanso viaja con la sesión y se cuenta al marcar la serie |
 | ADR-036 | El cierre de un entreno se resume y se comparte; récords, racha y número son derivados |
 | ADR-037 | El historial de Space muestra lo terminado, y cada fila se resume al leer |
+| ADR-038 | La persona abre, corrige, anula y repite un entreno terminado |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -4694,7 +4695,7 @@ para ofrecer sólo los filtros que dan resultado.
 ### Lo que esta decisión no hace
 
 - No muestra abandonadas, anuladas ni correcciones (diferido, criterio 1 de `HU-SP-057`).
-- No abre el detalle de una sesión al tocarla.
+- No abre el detalle de una sesión al tocarla. **Superado por `ADR-038`**, que lo abre.
 - No funciona sin conexión todavía (criterio 2 de `HU-SP-057`).
 
 ### Invariantes
@@ -4711,3 +4712,65 @@ para ofrecer sólo los filtros que dan resultado.
 4. Los récords de una fila coinciden con los del resumen.
 5. El mes responde sus totales, sus semanas con planificadas y libres, y los meses disponibles.
 6. Otra persona no lee el historial ajeno.
+
+## ADR-038 — La persona abre, corrige, anula y repite un entreno terminado
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 3 de octubre de 2026
+
+### Contexto
+
+Tocar una fila del historial no abría nada (`ADR-037`). Los diseños `FIN-18` piden el
+detalle de un entreno terminado y, desde él, corregirlo, anularlo y repetirlo. `ADR-022`
+ya fijó que la edición es indefinida y append-only, y `HU-SP-058`, `HU-SP-060` y el
+criterio 5 de `HU-SP-051` lo piden; ninguna de las tres operaciones estaba construida, y
+`OP-EXE-005` sólo acepta sesiones en curso.
+
+### Decisión
+
+**1. El detalle se lee aparte (`OP-EXE-023`).** Cada serie con su tipo, la mejor serie de
+cada ejercicio (el mayor 1RM estimado, la primera de las iguales), la marca de la serie que
+batió todo lo anterior y la última vez que se terminó la misma rutina, con la diferencia
+de kilos. Récords y comparación se derivan al leer, como fija `ADR-036`, así que una
+corrección se ve al instante. Una sesión anulada o sin terminar responde como inexistente.
+
+**2. Corregir guarda lo que había (`OP-EXE-007`).** La sesión se envía entera —sus series,
+su lista de ejercicios y su horario— bajo la revisión que se leyó. Cada corrección deja en
+`execution.execution_revisions` el antes y el después, con actor y motivo; esa tabla no
+admite cambios ni borrados, ni del dueño. El motivo es fijo: «Corrección de la persona».
+Vaciar una sesión no es corregirla: es anularla.
+
+**3. Eliminar es anular (`OP-EXE-009`).** Nada se borra. La sesión pasa a `annulled`, deja
+de contar en historial, récords, racha y totales, y conserva sus series. **El motivo pasa
+a ser opcional**: sin uno se registra «La persona lo eliminó». Antes de confirmar, la
+persona ve qué cambia (`OP-EXE-024`): los récords que se van y la racha de hoy con la
+sesión y sin ella.
+
+**4. Repetir abre otro intento con los mismos ejercicios (`OP-EXE-025`).** Otro intento de
+la misma sesión planificada, como pide `HU-SP-051`, que empieza con la lista de ejercicios
+con la que terminó la sesión de origen —orden, superseries y descanso— y sin series. Un
+entreno libre no tiene rutina que repetir, y con otra sesión abierta se rechaza.
+
+### Lo que esta decisión no hace
+
+- No muestra el historial de revisiones a la persona.
+- No revalida contra el contrato al corregir: el nivel alcanzado no baja todavía (criterio 4 de `HU-SP-058`).
+- No emite `execution.revised.v1` ni `execution.annulled.v1`: el dominio de ejecución aún no escribe en el outbox.
+- No permite elegir qué intento cuenta (`OP-EXE-008`).
+
+### Invariantes
+
+1. Una revisión nunca se reescribe ni se borra.
+2. Anular no borra series ni la sesión.
+3. Lo anulado no cuenta para récords, racha, totales, historial ni «la última vez».
+4. Sólo la dueña lee, corrige, anula o repite su sesión.
+
+### Escenarios de prueba obligatorios
+
+1. El detalle suma como el resumen y marca la mejor serie y la que batió todo.
+2. La comparación con la última vez de la misma rutina, y su ausencia la primera vez.
+3. Corregir guarda el antes, rechaza una revisión obsoleta, un horario al revés y una sesión vacía.
+4. El anticipo dice los récords y la racha antes y después.
+5. Repetir copia la lista y rechaza un entreno libre y una segunda sesión abierta.
+6. Anular deja la sesión fuera del historial y del detalle, y es idempotente.
+7. Otra persona no lee ni anula lo ajeno.

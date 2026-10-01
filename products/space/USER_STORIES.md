@@ -1341,6 +1341,21 @@ y no por la persona— y se retiró a su vez tres días después, cuando quedó 
 
 > **Alcance de la primera entrega (`ADR-037`).** Se muestran los entrenos terminados. Los abandonados, los anulados, las correcciones, lo oculto y las observaciones (criterio 1) y el uso sin conexión (criterio 2) quedan para una entrega siguiente.
 
+### HU-SP-112 — Ver el detalle de un entreno terminado
+
+**Como** persona que revisa lo que entrenó
+**quiero** abrir un entreno de mi historial
+**para** ver serie por serie qué hice y qué logré.
+
+`E-SP-08` · importante
+
+**Criterios**
+
+1. Al tocar un entreno del historial veo su rutina, cuándo fue, cuánto duró, las series, los kilos y los récords.
+2. Cada ejercicio muestra sus series, su mejor serie y si batió un récord; la serie que batió todo lo anterior lo dice.
+3. Veo cómo me fue frente a la última vez que hice esa rutina.
+4. Desde ahí puedo editarlo (`HU-SP-058`), repetirlo (`HU-SP-051`), compartirlo (`HU-SP-111`) o eliminarlo (`HU-SP-060`).
+
 ### HU-SP-058 — Corregir una sesión ya cerrada
 
 **Como** persona
@@ -1354,7 +1369,8 @@ y no por la persona— y se retiró a su vez tres días después, cuando quedó 
 1. Puedo corregir cuando quiera: no hay una ventana de tiempo que se cierre.
 2. El valor original nunca se destruye; queda con el motivo del cambio.
 3. Lo que se calculó a partir de ese dato se recalcula o se invalida, no se queda desactualizado.
-4. Si mi corrección deja la sesión por debajo de un mínimo, baja de nivel de detalle en lugar de quedar en un estado inválido silencioso.
+4. Si mi corrección deja la sesión por debajo de un mínimo, baja de nivel de detalle en lugar de quedar en un estado inválido silencioso. *Diferido en V1* (`ADR-038`).
+5. Corrijo pesos, repeticiones, tipo de serie, ejercicios y horario, y antes de guardar veo cuántos cambios hice y si mis récords se mantienen.
 
 ### HU-SP-059 — Elegir qué intento cuenta
 
@@ -1381,7 +1397,8 @@ y no por la persona— y se retiró a su vez tres días después, cuando quedó 
 
 **Criterios**
 
-1. Anular no borra la sesión: queda con el motivo, y el motivo es obligatorio.
+1. Anular no borra la sesión: queda con su motivo. **Darlo es opcional**: en la app se llama «Eliminar» y, si no digo por qué, se registra «La persona lo eliminó» (`ADR-038`).
+5. Antes de confirmar veo qué cambia: los récords que se van y cómo queda mi racha.
 2. **Anulada por mí y no válida por el sistema son dos cosas distintas y se distinguen.** Que una sesión no haya alcanzado los mínimos de su contrato es una decisión del sistema; anularla es una decisión mía. La base de datos guarda **un estado propio** para la anulación en lugar de reutilizar el de invalidez, para que ambos hechos no queden indistinguibles.
 3. Si anulo la que contaba, **no se promueve otra en silencio**: la sesión queda sin una válida hasta que yo elija.
 4. Mi progreso y mi adherencia se recalculan.
@@ -2069,7 +2086,7 @@ presenta con la tarjeta de Hoy, que es además lo que va a ver cada mañana si a
 | `E-SP-05` Agenda y asignaciones | `HU-SP-037` – `HU-SP-041` | 5 de 5 |
 | `E-SP-06` Contenido de entrenamiento propio | `HU-SP-042` – `HU-SP-050` | 0 de 9 |
 | `E-SP-07` Registro de ejecución | `HU-SP-051` – `HU-SP-056` | 6 de 6 |
-| `E-SP-08` Historial y progreso | `HU-SP-057` – `HU-SP-063` | 1 de 7 |
+| `E-SP-08` Historial y progreso | `HU-SP-057` – `HU-SP-063`, `HU-SP-112` | 1 de 8 |
 | `E-SP-09` Catálogo y sin conexión | `HU-SP-064` – `HU-SP-066` | 3 de 3 |
 | `E-SP-10` Nutrición | `HU-SP-067` – `HU-SP-074` | 0 de 8 |
 | `E-SP-11` Sincronización con apps de salud | `HU-SP-075` | 0 de 1 |

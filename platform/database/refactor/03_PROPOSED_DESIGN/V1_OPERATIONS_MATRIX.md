@@ -2800,6 +2800,9 @@ Reglas que gobiernan todo el dominio:
 | `OP-EXE-020` | Listar propuestas de corrección pendientes | Consulta | `A2`, `A3` |
 | `OP-EXE-021` | Leer el resumen de un entreno terminado | Consulta | `A2` |
 | `OP-EXE-022` | Leer el mes de mi historial | Consulta | `A2` |
+| `OP-EXE-023` | Leer el detalle de un entreno terminado | Consulta | `A2` |
+| `OP-EXE-024` | Anticipar qué cambia si anulo un entreno | Consulta | `A2` |
+| `OP-EXE-025` | Repetir un entreno terminado | Comando | `A2` |
 
 ---
 
@@ -2913,13 +2916,13 @@ Reglas que gobiernan todo el dominio:
 | **Superficie** | `POST /space/v1/executions/{id}/revisions` |
 | **Actor** | `A2`, dueño de la ejecución |
 | **Filtros obligatorios** | Ejecución propia. Sin ventana temporal: la corrección es posible indefinidamente |
-| **Transacción** | Crear `REVISION_EVENT` con before/after, actor y motivo; revalidar contra el contrato congelado; invalidar o recalcular los `DERIVED_RESULT` afectados |
+| **Transacción** | Guardar en `execution.execution_revisions` el antes y el después, con actor y motivo, y reemplazar series, lista de ejercicios y horario bajo la revisión leída (`If-Match`). Los derivados se leen, no se guardan (`ADR-036`), así que se recalculan solos. En V1 no se revalida contra el contrato (`ADR-038`) |
 | **Idempotencia** | `Idempotency-Key` |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Admite `draft_local`. Revisiones concurrentes se ordenan; ninguna se pierde |
 | **Información sensible** | Entrenamiento y categorías heredadas |
 | **Evento de dominio** | `execution.revised.v1` |
-| **Reglas** | Append-only: el valor original **nunca** se destruye. Corregir un input invalida o recalcula los derivados registrando algoritmo y versión. |
+| **Reglas** | Append-only: el valor original **nunca** se destruye, y la revisión no admite cambios ni borrados. Sólo sesiones terminadas y no anuladas. Fin antes del inicio, o una sesión vacía, se rechazan: vaciarla es anularla. El motivo es fijo, «Corrección de la persona» (`ADR-038`). En V1 no se emite el evento |
 | **Falla cerrada** | Si la revisión rompe los mínimos del contrato, la ejecución baja de nivel alcanzado en lugar de quedar en un estado inválido silencioso |
 
 #### `OP-EXE-008` — Cambiar la ejecución primaria
@@ -2954,7 +2957,7 @@ Reglas que gobiernan todo el dominio:
 | **Información sensible** | Entrenamiento |
 | **Evento de dominio** | `execution.annulled.v1` |
 | **Reglas** | `annulled` es un estado **distinto** de `invalid`: `invalid` significa que la ejecución no alcanzó los mínimos de su contrato de resultados, y lo decide el sistema; `annulled` significa que la persona declara que esa sesión no refleja lo que pasó, y lo decide ella. Confundirlos hace indistinguibles dos hechos distintos. Anular la primaria **no promueve otra en silencio**: la sesión queda sin primaria hasta que la persona elija. Anular no borra la ejecución |
-| **Falla cerrada** | Anular exige motivo; sin él no se aplica el cambio de estado |
+| **Falla cerrada** | El motivo es opcional: sin uno se registra «La persona lo eliminó» (`ADR-038`). Una sesión ya anulada o sin terminar se rechaza. En V1 no se emite el evento |
 
 #### `OP-EXE-010` — Crear una observación profesional
 
@@ -3159,6 +3162,57 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno |
 | **Reglas** | El mes se cuenta en la zona horaria de la persona. Responde entrenos, tiempo, series de trabajo, kilos y récords del mes; por semana ISO contada entera, las terminadas, las planificadas y las planificadas cumplidas, cada una una vez; por cada día entrenado, sus sesiones, tiempo, series, kilos y récords; los meses con algún entreno, y las disciplinas presentes (`ADR-037`) |
 | **Falla cerrada** | Un mes sin entrenos responde ceros, nunca un error |
+
+#### `OP-EXE-023` — Leer el detalle de un entreno terminado
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/executions/{id}/detail?timezone=` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Ejecución propia, terminada y no anulada |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Ejercicios por posición y series por orden |
+| **Offline / concurrencia** | Responde la revisión que `OP-EXE-007` exige en `If-Match` |
+| **Información sensible** | Entrenamiento propio |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Cabecera con título, horario, duración, series, kilos sin calentamientos, récords y número de entreno; cada ejercicio con sus series, su mejor serie y si batió algo; la serie que batió todo lo anterior marcada; la última vez que se terminó la misma rutina, con la diferencia de kilos (`ADR-038`) |
+| **Falla cerrada** | Ajena, inexistente, sin terminar o anulada responden lo mismo: no encontrada |
+
+#### `OP-EXE-024` — Anticipar qué cambia si anulo un entreno
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/executions/{id}/invalidation-preview?timezone=` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Ejecución propia, terminada y no anulada |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | N/A |
+| **Offline / concurrencia** | Sin conexión no se ofrece anular |
+| **Información sensible** | Agregados de entrenamiento propios |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Los récords que tiene la sesión y la racha de hoy con ella y sin ella. La racha cuenta semanas seguidas hasta esta, o hasta la anterior mientras esta siga vacía |
+| **Falla cerrada** | Lo que no se puede anular no se anticipa: no encontrada |
+
+#### `OP-EXE-025` — Repetir un entreno terminado
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/executions/{id}/repetitions` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Ejecución propia, terminada, no anulada y con sesión planificada |
+| **Transacción** | Abrir otro intento de la misma sesión planificada con `OP-EXE-001` y reemplazar su lista de ejercicios por la de la sesión de origen, sin series |
+| **Idempotencia** | `Idempotency-Key`; `Command-Id` es el id de la sesión nueva |
+| **Paginación y orden** | N/A |
+| **Offline / concurrencia** | Con otra sesión abierta se rechaza con conflicto |
+| **Información sensible** | Entrenamiento propio |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Es otro intento, no reemplaza al primero (`HU-SP-051`); la lista conserva orden, superseries y descanso (`ADR-038`) |
+| **Falla cerrada** | Un entreno libre no tiene rutina que repetir: rechazo |
 
 ### 7.11 Pagos y planes
 
