@@ -1463,14 +1463,14 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/relationships/{relId}/professional-assignments` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | La relación pertenece a `{orgId}` y está vigente. La membresía destino está vigente **en la misma organización** y tiene rol `coach` |
-| **Transacción** | Crear `RELATIONSHIP_PROFESSIONAL_ASSIGNMENT` con vigencia abierta y registrar `PROFESSIONAL_ASSIGNMENT_EVENT` |
-| **Idempotencia** | `Idempotency-Key`. Asignar al mismo titular vigente no crea otra asignación |
+| **Transacción** | Crear `RELATIONSHIP_PROFESSIONAL_ASSIGNMENT` con vigencia abierta y registrar el hecho. V1 no tiene tabla `PROFESSIONAL_ASSIGNMENT_EVENT`: el evento viaja por el outbox, como en el resto del esquema |
+| **Idempotencia** | `Idempotency-Key`. Asignar al mismo titular vigente no crea otra asignación y responde `200` con la fecha desde la que ya atendía |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada. Solo puede existir **un titular efectivo** a la vez: dos asignaciones concurrentes se serializan y la segunda cierra la primera o falla |
+| **Offline / concurrencia** | Falla cerrada. Solo puede existir **un titular efectivo** a la vez: dos asignaciones concurrentes se serializan y la segunda falla contra el índice único |
 | **Información sensible** | Ninguna categoría personal se transfiere aquí |
 | **Evento de dominio** | `relationship.professional_assigned.v1` |
-| **Reglas** | La asignación **no** concede datos: sin grant vigente el titular no lee nada. Un profesional de otra organización nunca puede asignarse, aunque la persona sea cliente de ambas |
-| **Falla cerrada** | Membresía de otra organización o sin rol `coach`, rechazo |
+| **Reglas** | La asignación **no** concede datos: sin grant vigente el titular no lee nada. Un profesional de otra organización nunca puede asignarse, aunque la persona sea cliente de ambas. Esta operación **solo pone titular donde no hay**: quitárselo al que ya atiende es `OP-REL-003`, que avisa a la persona en la misma transacción, y hacerlo aquí sería hacerlo callada |
+| **Falla cerrada** | Membresía de otra organización o sin rol `coach`, rechazo. Relación con otro titular vigente, `409` |
 
 #### `OP-REL-003` — Reasignar profesional titular
 
