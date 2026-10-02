@@ -232,7 +232,7 @@ Sujeto implícito: la persona autenticada. Ningún endpoint recibe un `person_id
 
 | Método | Ruta | Operación | Notas |
 | --- | --- | --- | --- |
-| `POST` | `/client-invitations/resolve` | `OP-REL-002` | Qué pide la invitación: cada scope con su finalidad, nivel y contrato. **No resuelve de forma anónima**, a diferencia de las de equipo: devuelve categorías de datos de salud, así que exige que el correo verificado sea el contacto invitado |
+| `POST` | `/client-invitations/resolve` | `OP-REL-015` | Qué pide la invitación: cada scope con su finalidad, nivel y contrato. **No resuelve de forma anónima**, a diferencia de las de equipo: devuelve categorías de datos de salud, así que exige que el correo verificado sea el contacto invitado |
 | `POST` | `/client-invitations/decisions` | `OP-IDN-009` | Decide la relación y cada scope en una sola llamada. Un scope omitido cuenta como rechazado |
 | `GET` | `/consents` | `OP-PRV-013` | Panel de control del consentimiento |
 | `POST` | `/consents/{id}/revocation` | `OP-PRV-005` | Invalidación transaccional |
