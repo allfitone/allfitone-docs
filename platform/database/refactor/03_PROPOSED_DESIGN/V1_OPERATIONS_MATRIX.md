@@ -1639,7 +1639,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Offline / concurrencia** | Cacheable para presentación, nunca para decidir autorización |
 | **Información sensible** | Estado del vínculo, titular, suplencias y **estado** de los grants |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Devuelve qué scopes están concedidos y en qué versión, pero **no** el contenido que amparan. Saber que existe `health_context` concedido no es leer contexto de salud |
+| **Reglas** | Devuelve qué scopes están concedidos y en qué versión, pero **no** el contenido que amparan. Saber que existe `health_context` concedido no es leer contexto de salud. El documento es más estrecho para `A3`: la política de fila le muestra su propia asignación y no las demás, así que un coach no ve quién más atendió a esa persona. Una relación que el actor no puede ver responde **`404`**, no `403`: decirle a un coach que existe pero no es suya ya le cuenta que el gimnasio tiene a esa persona como clienta |
 | **Falla cerrada** | — |
 
 #### `OP-REL-012` — Listar mis relaciones
