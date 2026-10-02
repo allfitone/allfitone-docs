@@ -44,6 +44,8 @@
 | ADR-034 | Una sesión es una lista de ejercicios, y cada serie pertenece a uno |
 | ADR-035 | El descanso viaja con la sesión y se cuenta al marcar la serie |
 | ADR-036 | El cierre de un entreno se resume y se comparte; récords, racha y número son derivados |
+| ADR-037 | El historial de Space muestra lo terminado, y cada fila se resume al leer |
+| ADR-038 | La persona abre, corrige, anula y repite un entreno terminado |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -4647,3 +4649,128 @@ nativa del sistema, igual que el resto de acciones.
 5. Una ejecución abandonada no cuenta para récords, racha ni número.
 6. La racha se corta con una semana sin entrenar, y la semana en curso no la rompe.
 7. Otra persona no lee el resumen de una ejecución ajena.
+
+## ADR-037 — El historial de Space muestra lo terminado, y cada fila se resume al leer
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 1 de octubre de 2026
+
+### Contexto
+
+`OP-EXE-014` define el listado de las ejecuciones propias, y `HU-SP-057` pide que la
+persona vea **todo lo suyo**. La primera entrega del historial en Space —una sección en Hoy
+y una pantalla completa con buscador, filtros y resumen del mes— tiene que decidir qué
+muestra cada fila, cómo se filtra y qué queda para después. Hoy todas las ejecuciones son
+autónomas: ni el ocultamiento a terceros ni las observaciones profesionales tienen todavía
+tablas que leer.
+
+### Decisión
+
+**1. Esta entrega lista sólo ejecuciones terminadas y no anuladas.** Los intentos
+abandonados, las anuladas y el historial de correcciones de `HU-SP-057` quedan
+**diferidos**: el listado responde un `status` por fila para poder añadirlos sin romper el
+contrato. Lo oculto y las observaciones llegan con el dominio de relaciones; hasta
+entonces el contrato no los declara, porque declarar un campo que siempre viene vacío es
+prometer un dato que no existe.
+
+**2. Cada fila se resume al leer.** Duración, series de trabajo y kilos —sin calentamientos,
+y nulos si no se pesó nada—, y el **número de récords**, con la misma regla de `ADR-036`:
+la fila y la tarjeta de esa sesión nunca discrepan. La miniatura es la **portada de la
+rutina**, la misma que muestran Hoy y el resumen; una sesión libre no tiene rutina y no
+lleva portada.
+
+**3. El listado se filtra por mes, disciplina, récord, libre y texto.** El mes se cuenta en
+la zona horaria de la persona. Una sesión es **libre** cuando no salió de una sesión
+planificada. El texto busca, sin tildes ni mayúsculas, en el nombre de la rutina y en el
+de sus ejercicios. Paginado por cursor, inicio descendente y desempate por identificador,
+como ya fija `OP-EXE-014`.
+
+**4. El mes se resume aparte (`OP-EXE-022`).** Entrenos, tiempo, series, kilos y récords del
+mes; por cada semana ISO, contada entera aunque cruce a otro mes, cuántas se terminaron,
+cuántas se planificaron y cuántas de las planificadas se cumplieron, cada una una sola vez
+por más veces que se repitiera; cada día entrenado, con su tiempo, sus series, sus kilos y sus récords, para dibujar el
+mes como calendario y resumir el día que se toque; los meses con algún entreno, para elegir mes; y las disciplinas presentes,
+para ofrecer sólo los filtros que dan resultado.
+
+### Lo que esta decisión no hace
+
+- No muestra abandonadas, anuladas ni correcciones (diferido, criterio 1 de `HU-SP-057`).
+- No abre el detalle de una sesión al tocarla. **Superado por `ADR-038`**, que lo abre.
+- No funciona sin conexión todavía (criterio 2 de `HU-SP-057`).
+
+### Invariantes
+
+1. Una ejecución abandonada o anulada no aparece en el listado ni suma al mes.
+2. El número de récords y la portada de una fila son los mismos que responde el resumen de esa ejecución.
+3. El historial sólo lo lee su dueña.
+
+### Escenarios de prueba obligatorios
+
+1. Orden por inicio descendente y paginación por cursor sin repetir ni saltar filas.
+2. Cada filtro y la búsqueda, con tildes, mayúsculas y por nombre de ejercicio.
+3. Abandonadas y anuladas no aparecen.
+4. Los récords de una fila coinciden con los del resumen.
+5. El mes responde sus totales, sus semanas con planificadas y libres, y los meses disponibles.
+6. Otra persona no lee el historial ajeno.
+
+## ADR-038 — La persona abre, corrige, anula y repite un entreno terminado
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 3 de octubre de 2026
+
+### Contexto
+
+Tocar una fila del historial no abría nada (`ADR-037`). Los diseños `FIN-18` piden el
+detalle de un entreno terminado y, desde él, corregirlo, anularlo y repetirlo. `ADR-022`
+ya fijó que la edición es indefinida y append-only, y `HU-SP-058`, `HU-SP-060` y el
+criterio 5 de `HU-SP-051` lo piden; ninguna de las tres operaciones estaba construida, y
+`OP-EXE-005` sólo acepta sesiones en curso.
+
+### Decisión
+
+**1. El detalle se lee aparte (`OP-EXE-023`).** Cada serie con su tipo, la mejor serie de
+cada ejercicio (el mayor 1RM estimado, la primera de las iguales), la marca de la serie que
+batió todo lo anterior y la última vez que se terminó la misma rutina, con la diferencia
+de kilos. Récords y comparación se derivan al leer, como fija `ADR-036`, así que una
+corrección se ve al instante. Una sesión anulada o sin terminar responde como inexistente.
+
+**2. Corregir guarda lo que había (`OP-EXE-007`).** La sesión se envía entera —sus series,
+su lista de ejercicios y su horario— bajo la revisión que se leyó. Cada corrección deja en
+`execution.execution_revisions` el antes y el después, con actor y motivo; esa tabla no
+admite cambios ni borrados, ni del dueño. El motivo es fijo: «Corrección de la persona».
+Vaciar una sesión no es corregirla: es anularla.
+
+**3. Eliminar es anular (`OP-EXE-009`).** Nada se borra. La sesión pasa a `annulled`, deja
+de contar en historial, récords, racha y totales, y conserva sus series. **El motivo pasa
+a ser opcional**: sin uno se registra «La persona lo eliminó». Antes de confirmar, la
+persona ve qué cambia (`OP-EXE-024`): los récords que se van y la racha de hoy con la
+sesión y sin ella.
+
+**4. Repetir abre otro intento con los mismos ejercicios (`OP-EXE-025`).** Otro intento de
+la misma sesión planificada, como pide `HU-SP-051`, que empieza con la lista de ejercicios
+con la que terminó la sesión de origen —orden, superseries y descanso— y sin series. Un
+entreno libre no tiene rutina que repetir, y con otra sesión abierta se rechaza.
+
+### Lo que esta decisión no hace
+
+- No muestra el historial de revisiones a la persona.
+- No revalida contra el contrato al corregir: el nivel alcanzado no baja todavía (criterio 4 de `HU-SP-058`).
+- No emite `execution.revised.v1` ni `execution.annulled.v1`: el dominio de ejecución aún no escribe en el outbox.
+- No permite elegir qué intento cuenta (`OP-EXE-008`).
+
+### Invariantes
+
+1. Una revisión nunca se reescribe ni se borra.
+2. Anular no borra series ni la sesión.
+3. Lo anulado no cuenta para récords, racha, totales, historial ni «la última vez».
+4. Sólo la dueña lee, corrige, anula o repite su sesión.
+
+### Escenarios de prueba obligatorios
+
+1. El detalle suma como el resumen y marca la mejor serie y la que batió todo.
+2. La comparación con la última vez de la misma rutina, y su ausencia la primera vez.
+3. Corregir guarda el antes, rechaza una revisión obsoleta, un horario al revés y una sesión vacía.
+4. El anticipo dice los récords y la racha antes y después.
+5. Repetir copia la lista y rechaza un entreno libre y una segunda sesión abierta.
+6. Anular deja la sesión fuera del historial y del detalle, y es idempotente.
+7. Otra persona no lee ni anula lo ajeno.
