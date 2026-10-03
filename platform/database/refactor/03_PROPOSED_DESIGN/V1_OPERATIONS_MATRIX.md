@@ -266,6 +266,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-048` | Cancelar una recuperación sospechosa desde Backoffice | Comando | `A10` |
 | `OP-IDN-049` | Consultar mi contexto de salud | Consulta | `A2` |
 | `OP-IDN-050` | Eliminar una declaración de contexto de salud | Comando | `A2` |
+| `OP-IDN-051` | Reenviar una invitación de cliente desde Backoffice | Comando | `A10` |
 
 ---
 
@@ -1045,6 +1046,23 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | `privacy.disposition_case_opened.v1` |
 | **Reglas** | Hace para el contexto de salud lo que `OP-IDN-007` hace para el progreso corporal. Borrar un dato propio no revoca ningún grant. La declaración de otra persona y una que no existe responden igual, `404` |
 | **Falla cerrada** | Sin política `health`/`owner_request` publicada, el borrado se rechaza y no escribe nada |
+
+#### `OP-IDN-051` — Reenviar una invitación de cliente desde Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/organizations/{orgId}/client-invitations/{invitationId}/resends`; la lectura previa es `GET /backoffice/v1/organizations/{orgId}/client-invitations` (`NEW-IDN-CLIENT-RESEND`) |
+| **Actor** | `A10` con rol base, `diagnose_support_metadata`, AAL2 y deber vigente |
+| **Filtros obligatorios** | Invitación de cliente de esa organización, y organización `active`. El comando no lleva cuerpo: el contacto, la organización y los permisos que pide salen de la invitación |
+| **Transacción** | `identity.resend_client_invitation`. Una invitación vigente se extiende y se reenvía tal cual. Una vencida se reemite: invitación nueva idéntica, firmada por la persona de Allfit y su asignación de deber, con `reissues_invitation_id` hacia la vencida, que sigue vencida. La reemisión **copia las opciones de `privacy.invitation_scope_options`** con el mismo `scope_definition_id`, nivel y propósito. Cada reenvío escribe `identity.invitation_resends` con `kind = 'service_relationship'` |
+| **Idempotencia** | `Idempotency-Key`; el reintento devuelve la invitación entregada sin reenviar |
+| **Paginación y orden** | La lectura devuelve las 50 invitaciones más recientes con `truncated` |
+| **Offline / concurrencia** | Falla cerrada. Aceptada, rechazada, revocada, ya reemitida o con una igual pendiente responde `409` |
+| **Información sensible** | Contacto del invitado, que solo viaja enmascarado, y los códigos de permiso que pidió. No revela persona —antes de que alguien acepte, una invitación no identifica a nadie—, así que no escribe `access_events`. El propósito que escribió el gimnasio y la redacción que leerá la persona no viajan a Backoffice |
+| **Evento de dominio** | `relationship.client_invited.v1` (y `identity.invitation_expired.v1` si la vencida seguía pendiente) |
+| **Reglas** | `HU-BO-011`, criterios 2 a 6. La ventana por destino que usa Studio cuenta también los reenvíos de soporte: `429`. Una política de lectura sobre `privacy.invitation_scope_options` habilita a `diagnose_support_metadata` a ver la oferta, y un trigger de restricción diferido rechaza con `23514` toda reemisión cuyo conjunto de permisos, nivel, propósito o versión no coincida con el original —incluida la que copió cero filas porque no pudo leerlos—, recomputando `proposal_hash` desde lo escrito |
+| **Falla cerrada** | Sin poder leer la oferta no se envía nada: la reemisión vacía no coincide con el `proposal_hash` heredado y la transacción se rechaza |
 
 ### 7.2 Organizaciones
 
