@@ -1480,14 +1480,14 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/relationships/{relId}/professional-assignments/reassignment` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | Igual que `OP-REL-002`, más la existencia de un titular vigente |
-| **Transacción** | Una sola: cerrar la asignación anterior, abrir la nueva, notificar a la persona y registrar ambos eventos |
+| **Transacción** | Una sola: cerrar la asignación anterior, abrir la nueva y encolar el aviso. El evento lleva el aviso ya redactado —contacto, nombres y organización—, porque leerlos al entregarlo exigiría ampliar las políticas de fila que mantienen relaciones y personas fuera del alcance del worker; así el aviso dice además lo que era cierto cuando ocurrió el cambio |
 | **Idempotencia** | `Idempotency-Key` |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. La invalidación del acceso del actor anterior es inmediata, sin ventana de caché |
 | **Información sensible** | Cambia **quién** puede ejercer los grants vigentes |
 | **Evento de dominio** | `relationship.professional_reassigned.v1` |
 | **Reglas** | El grant se conserva porque no cambian organización, parte responsable, finalidad ni scope; lo que cambia es el actor autorizado. El profesional anterior pierde acceso de inmediato y conserva la autoría de lo que registró. La persona **es notificada**: la reasignación no es silenciosa |
-| **Falla cerrada** | Si la notificación no puede encolarse en la misma transacción, la reasignación no se confirma |
+| **Falla cerrada** | Si la notificación no puede encolarse en la misma transacción, la reasignación no se confirma. Esto es estructural, no una comprobación: el aviso es una fila del outbox escrita por la propia función, así que no existe camino donde el cambio se confirme y el aviso no. También falla cerrada si la persona no tiene contacto registrado — una reasignación que nadie puede comunicar es justo la silenciosa que la operación existe para impedir. Relación sin titular vigente, `409` |
 
 #### `OP-REL-004` — Proponer una suplencia
 
