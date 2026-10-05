@@ -2,7 +2,7 @@
 
 **Fecha:** 17 de agosto de 2026
 **Fase:** 4 — cierre de especificación física
-**Estado:** inventario recertificado de 127 tablas
+**Estado:** inventario recertificado de 136 tablas
 **Deriva de:** [`POSTGRES_MODELING_STANDARD.md`](./POSTGRES_MODELING_STANDARD.md), [`V1_LOGICAL_ERD.md`](./V1_LOGICAL_ERD.md), [`V1_DATA_DICTIONARY.md`](./V1_DATA_DICTIONARY.md)
 
 ## 1. Propósito
@@ -15,26 +15,26 @@ Este catálogo cierra las decisiones que no pueden dejarse a quien escriba la pr
 - forma, versión y validación de cada JSONB;
 - identidad global y mantenimiento de tablas particionadas.
 
-No sustituye las fichas de las 127 tablas. Fija las reglas mecánicas que todas consumen.
+No sustituye las fichas de las 136 tablas. Fija las reglas mecánicas que todas consumen.
 
 ## 2. Inventario recertificado
 
 | Schema | Tablas |
 | --- | ---: |
-| `identity` | 20 |
+| `identity` | 21 |
 | `organizations` | 11 |
 | `relationships` | 6 |
 | `privacy` | 16 |
-| `catalog` | 14 |
-| `planning` | 17 |
+| `catalog` | 18 |
+| `planning` | 21 |
 | `execution` | 14 |
 | `nutrition` | 8 |
 | `payments` | 12 |
 | `system` | 4 |
 | `support` | 5 |
-| **Total** | **127** |
+| **Total** | **136** |
 
-El conteo se obtiene de 127 fichas únicas del diccionario. Incluye `identity.access_sessions` como sesión técnica multi-superficie; `identity.password_reset_receipts`; `identity.access_account_mfa_factors`, `identity.backoffice_authentication_attempts` e `identity.mfa_factor_recovery_events`; `organizations.organization_type_transitions`; `planning.service_access_blocks`; `system.invitation_rate_windows`; y las tablas normalizadas de especialidades, tipos de credencial y credenciales profesionales. Incluye cuatro targets, cinco resultados tipados, ocho tablas nutricionales y las cinco tablas de soporte de ADR-028 como tablas independientes. Excluye:
+El conteo se obtiene de 136 fichas únicas del diccionario. Incluye `identity.access_sessions` como sesión técnica multi-superficie; `identity.password_reset_receipts`; `identity.access_account_mfa_factors`, `identity.backoffice_authentication_attempts` e `identity.mfa_factor_recovery_events`; `organizations.organization_type_transitions`; `planning.service_access_blocks`; `system.invitation_rate_windows`; y las tablas normalizadas de especialidades, tipos de credencial y credenciales profesionales. Incluye cuatro targets, cinco resultados tipados, ocho tablas nutricionales y las cinco tablas de soporte de ADR-028 como tablas independientes. Excluye:
 
 - enums;
 - vistas y funciones;
@@ -66,6 +66,13 @@ Un enum existe una sola vez en el schema indicado. Una columna de otro schema us
 | `nutrition.goal_status` | `nutrition.goal_versions` |
 | `nutrition.goal_target_mode` | `nutrition.goal_targets` |
 | `nutrition.goal_decision` | `nutrition.goal_decisions` |
+| `planning.set_kind` | `planning.planned_sets` y `execution.strength_sets` (`ADR-033`) |
+
+`planning.set_kind` vive en `planning` y no en `catalog` aunque sea vocabulario cerrado:
+el catálogo guarda lo que una persona **explora** —disciplinas, movimientos, equipamiento,
+músculos— y el tipo de serie es estructura de la prescripción, que se declara y no se busca.
+La ejecución lo usa tal cual para registrar de qué tipo fue cada serie: un segundo enum con
+los mismos valores en `execution` sería exactamente el homónimo que esta regla prohíbe.
 
 No existen `planning.publication_status` ni `privacy.publication_status`. Esta decisión evita enums homónimos incompatibles y casts implícitos en FKs, funciones o vistas.
 
@@ -186,7 +193,7 @@ La migración inicial crea el mes actual más tres meses futuros. Una escritura 
 
 | ID | Demostración |
 | --- | --- |
-| `T-SCHEMA-01` | ERD, diccionario e inventario reportan exactamente 127 tablas y el diccionario contiene 127 fichas únicas. |
+| `T-SCHEMA-01` | ERD, diccionario e inventario reportan exactamente 136 tablas y el diccionario contiene 136 fichas únicas. |
 | `T-SCHEMA-02` | Cada tabla/columna/FK/check/índice de las fichas se compara con `pg_catalog`; falta o nombre distinto falla CI. |
 | `T-SCHEMA-03` | Cada tabla con RLS tiene exactamente las policies esperadas por comando y ninguna policy extra permisiva. |
 | `T-SCHEMA-04` | Cada JSONB acepta fixtures V1 válidos y rechaza versión, claves, tipos y campos adicionales inválidos. |

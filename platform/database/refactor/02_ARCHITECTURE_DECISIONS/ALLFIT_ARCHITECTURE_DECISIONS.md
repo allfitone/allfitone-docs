@@ -37,6 +37,15 @@
 | ADR-027 | Nutrición personal y guía profesional no clínica en V1 |
 | ADR-028 | Backoffice con rol base, deberes temporales y separación break-glass |
 | ADR-029 | Monorepo de implementación con deployables independientes |
+| ADR-030 | Detalle por serie y superseries en la planificación de fuerza |
+| ADR-031 | La portada de una rutina la pone su programa, y sale del catálogo |
+| ADR-032 | Un programa puede no tener fin, y la semana que no existe la siembra quien la va a enseñar |
+| ADR-033 | La serie ejecutada dice de qué tipo fue, y el esfuerzo se registra al entrenar |
+| ADR-034 | Una sesión es una lista de ejercicios, y cada serie pertenece a uno |
+| ADR-035 | El descanso viaja con la sesión y se cuenta al marcar la serie |
+| ADR-036 | El cierre de un entreno se resume y se comparte; récords, racha y número son derivados |
+| ADR-037 | El historial de Space muestra lo terminado, y cada fila se resume al leer |
+| ADR-038 | La persona abre, corrige, anula y repite un entreno terminado |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -420,6 +429,8 @@ Un registro iniciado por la persona puede producir temporalmente un usuario Work
 - PostgREST/Data API como frontera pública de las aplicaciones.
 
 Storage, Realtime o Edge Functions requerirían un ADR separado antes de incorporarse; no forman parte de esta decisión.
+
+**Storage estuvo autorizado durante un día y volvió a quedar diferido.** `ADR-031` lo abrió el 19 de septiembre de 2026 para los binarios personales y lo cerró el mismo día, cuando el único caso que lo pedía —la fotografía de portada de una rutina— dejó de existir. El diferimiento de este ADR vuelve a estar íntegro: Storage, Realtime y Edge Functions siguen fuera hasta que un ADR los traiga con un caso construido detrás.
 
 ### Referencias de WorkOS
 
@@ -1169,7 +1180,8 @@ Las referencias vinculantes no viven únicamente en JSONB. El modelo lógico deb
 ## ADR-009 — Versionado independiente e inmutable de plantillas de sesión
 
 **Estado:** aceptada para V1<br>
-**Fecha:** 18 de julio de 2026; ratificada el 17 de agosto de 2026
+**Fecha:** 18 de julio de 2026; ratificada el 17 de agosto de 2026<br>
+**Enmendada:** 18 de septiembre de 2026 — alcance de la deduplicación por contenido
 
 ### Contexto
 
@@ -1216,7 +1228,15 @@ draft mutable → published immutable → retired para nuevos usos
 
 No se crea una versión por autosave. El borrador usa control de concurrencia/optimistic locking. La publicación es una operación explícita y transaccional que valida estructura, targets, unidades y referencias, calcula `content_hash` y asigna el siguiente `version_number`.
 
-La numeración es un entero por plantilla con `UNIQUE (template_id, version_number)`; no se usa SemVer. `change_kind` puede registrar `correction`, `progression`, `adaptation` o `localization` sin alterar la numeración.
+La numeración es un entero por plantilla con `UNIQUE (template_id, version_number)`; no se usa SemVer.
+
+**La deduplicación por contenido alcanza sólo a la última versión publicada.** Publicar un borrador idéntico a ella no crea nada y devuelve esa versión, que es lo que evita una versión por cada pulsación sobre un contenido que no cambió. Publicar un borrador que coincide con una versión **anterior** —deshacer un cambio, quitar una portada que se acababa de poner— crea la versión siguiente: nunca se devuelve una versión que ya fue superada.
+
+La razón es que el identificador de versión viaja fuera de la plantilla. Una semana de programa, una sesión planificada y una asignación guardan `session_template_version_id`, y el resto del producto resuelve el contenido vigente por la última versión publicada; entregar un identificador anterior al publicar deja esas referencias apuntando a una versión que ninguna consulta de biblioteca nombra. También destruye la cronología: una misma fila representaría dos épocas distintas y `version_number` dejaría de ordenar en el tiempo.
+
+El coste aceptado es almacenamiento —cada versión materializa sus pasos, series y targets— y no latencia: los lectores toman la última versión por el índice `(template_id, version_number)` sin recorrer la historia.
+
+`change_kind` —`correction`, `progression`, `adaptation`, `localization`— queda **fuera de V1**: se documenta como intención y no tiene columna física mientras ninguna operación lo escriba, según `ADR-021`.
 
 ### Relación con programas y personas
 
@@ -1238,6 +1258,7 @@ La numeración es un entero por plantilla con `UNIQUE (template_id, version_numb
 7. `derived_from_version_id` conserva procedencia sin compartir filas mutables.
 8. Las adaptaciones personales son revisiones de prescripción auditables y no nuevas ediciones silenciosas de la biblioteca.
 9. Un proceso/IA puede crear borradores, pero publicar requiere actor autorizado y auditable.
+10. Publicar devuelve la última versión de la plantilla o una nueva, jamás una anterior.
 
 ### Consecuencias
 
@@ -1264,8 +1285,10 @@ La numeración es un entero por plantilla con `UNIQUE (template_id, version_numb
 5. Retirar v1 no rompe programas, asignaciones o sesiones que ya la referencian.
 6. Una adaptación crea una versión nueva con `derived_from_version_id` y pasos propios.
 7. Personalizar la sesión de una persona conserva template/programa de origen y registra una revisión de prescripción.
-8. Reintentos concurrentes de publicación no asignan el mismo `version_number` ni crean dos versiones equivalentes.
+8. Reintentos concurrentes de publicación no asignan el mismo `version_number` ni crean dos versiones equivalentes a la última.
 9. Ningún endpoint histórico cambia de contenido al aparecer una versión más reciente.
+10. Publicar un contenido idéntico a la última versión no crea ninguna y devuelve esa; idéntico a una anterior crea la siguiente.
+11. Una copia hecha por bifurcación conserva `derived_from_version_id` hacia la versión de origen.
 
 ---
 
@@ -2890,7 +2913,8 @@ Una capacidad no entra parcialmente mediante una columna o permiso aislado. Su p
 
 **Estado:** aceptada para V1 y recertificada en Fase 2<br>
 **Fecha:** 22 de julio de 2026<br>
-**Recertificación:** 26 de julio de 2026
+**Recertificación:** 26 de julio de 2026<br>
+**Enmendada:** 20 de septiembre de 2026 — «todas las sesiones» se estrecha a los programas que terminan, y sigue sin haber job de calendario (`ADR-032`)
 
 ### Contexto
 
@@ -2960,7 +2984,7 @@ La alternativa —resolver incidencias con acceso directo a la base bajo procedi
 | Jurisdicción | Colombia (Ley 1581 y Decreto 1377) con techo GDPR; 30 días corridos para resolver una supresión |
 | Catálogo | Disciplinas, tipos de actividad, unidades y contratos solo los publica la plataforma; las organizaciones crean movimientos privados, promovibles a global mediante moderación explícita |
 | Idiomas del catálogo | Solo español en V1, con la estructura de alias lista para traducir sin cambio de modelo |
-| Calendario | Las sesiones se materializan **dentro de la transacción de asignación**; no existe job periódico de calendario |
+| Calendario | Las sesiones se materializan **dentro de la transacción de asignación**; no existe job periódico de calendario. Desde la enmienda del 20 de septiembre de 2026, un programa **sin fecha de fin** materializa en esa transacción la semana en la que se asigna, y la lectura de la agenda siembra la semana que va a enseñar (`ADR-032`) |
 | Asignaciones simultáneas | Sin límite; los solapamientos de agenda se advierten, no se bloquean |
 | Reprogramación | Solo el coach, y solo sobre la parte administrada por una relación con periodo de gestión vigente |
 | Zona horaria | La de la persona en el momento del hecho |
@@ -2969,6 +2993,27 @@ La alternativa —resolver incidencias con acceso directo a la base bajo procedi
 | Propuestas de corrección | Vencen a los 30 días y se cancelan al terminar la relación |
 | Notificación de revisiones | Obligatoria hacia la persona |
 | Jobs de V1 | Outbox, notificaciones, expiraciones, recordatorio de revisión de grants, disposición, resolución de supresión, reaplicación tras restauración y recálculo de derivados; cada uno con credencial propia y grants mínimos |
+
+### Revisión del 20 de septiembre de 2026
+
+**La promesa se mantiene entera; lo que se estrecha es la palabra «todas».** Esta decisión
+cerró el calendario diciendo que las sesiones se materializan dentro de la transacción de
+asignación y que **no existe job periódico de calendario**. Lo segundo sigue siendo cierto
+al pie de la letra: `ADR-032` no crea ningún worker, ninguna ventana de calendario y nada
+a lo que haya que vigilarle si corrió.
+
+Lo primero deja de poder decirse de un programa que no termina, porque ahí no hay un
+«todas» que materializar. Un programa **con** fecha de fin se comporta exactamente como
+esta decisión lo escribió: la composición entera cae en la transacción de la asignación.
+Un programa **sin** fecha de fin materializa en esa misma transacción la semana de
+calendario en la que se asigna, y cada semana posterior la siembra la lectura de la agenda
+un instante antes de enseñarla.
+
+Eso no reintroduce por la puerta de atrás lo que esta decisión rechazó. Lo que se rechazó
+fue que la agenda dependiera de un proceso ajeno corriendo a tiempo, con su ventana, su
+retraso y su pregunta de «¿ya corrió?»; una siembra que ocurre dentro de la petición que
+va a mostrar esa semana no tiene ventana ni retraso, porque no promete nada que no vaya a
+entregar en el mismo instante. El razonamiento completo está en `ADR-032`.
 
 ### Invariantes
 
@@ -2992,13 +3037,13 @@ La alternativa —resolver incidencias con acceso directo a la base bajo procedi
 - El catálogo de roles queda cerrado y comprobable, sin roles personalizados que multipliquen la superficie de autorización.
 - La suplencia resuelve un caso operativo real —vacaciones, cobertura, especialidad— sin que la organización pueda ampliar por su cuenta quién ve datos personales.
 - El acceso más sensible del sistema, el de soporte, entra al modelo de auditoría en lugar de vivir fuera de él.
-- La agenda deja de depender de que un job periódico corra a tiempo.
+- La agenda deja de depender de que un job periódico corra a tiempo, y sigue sin depender de él cuando el programa no termina: lo que falta lo siembra la misma lectura que lo va a mostrar (`ADR-032`).
 
 #### Costos
 
 - La aceptación de suplencias añade fricción cuando la cobertura es urgente: si la persona no responde, no hay suplente.
 - Auditar toda lectura bajo grant convierte `ACCESS_EVENT` en la tabla de mayor crecimiento del sistema y obliga a particionarla en Fase 4.
-- Materializar el calendario al asignar escribe decenas de filas en una sola transacción.
+- Materializar el calendario al asignar escribe decenas de filas en una sola transacción, y en un programa sin fin traslada a la lectura una escritura acotada a una semana.
 - Un cuarto rol es una condición más que probar en cada policy.
 
 ### Escenarios de prueba obligatorios
@@ -3018,7 +3063,7 @@ La alternativa —resolver incidencias con acceso directo a la base bajo procedi
 13. Un ejercicio de break-glass aparece en el historial de accesos de la persona afectada.
 14. Break-glass no permite escribir observaciones, correcciones ni resultados.
 15. Una categoría restringida no abre con una sola aprobación y vence a los 15 minutos aunque el job no haya corrido.
-16. Asignar un programa materializa todas sus sesiones en la misma transacción, en la zona horaria de la persona.
+16. Asignar un programa **con fecha de fin** materializa todas sus sesiones en la misma transacción, en la zona horaria de la persona; asignar uno sin fecha de fin materializa en esa misma transacción la semana de la asignación, y ninguna de las dos formas espera a que corra un proceso posterior.
 17. Revocar un grant corta el acceso en la lectura inmediatamente posterior, sin ventana de caché.
 18. Un grant sin uso durante doce meses genera recordatorio y **conserva** el acceso.
 
@@ -3624,3 +3669,1108 @@ allfitone-landing-page/  sitio público de marketing
 5. Un OpenAPI inválido o una diferencia entre la especificación canónica y los DTOs generados falla en CI.
 6. Un token emitido para una Application sigue siendo rechazado en otra superficie aunque ambas vivan en el mismo repositorio.
 7. Un fallo o rollback de un deployable no obliga a publicar una versión nueva de los otros cuatro.
+
+---
+
+## ADR-030 — Detalle por serie y superseries en la planificación de fuerza
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 17 de septiembre de 2026<br>
+**Enmendada:** 29 de septiembre de 2026 — la ejecución registra el tipo de serie y la sesión recibe las series planificadas (`ADR-033`)
+
+### Contexto
+
+El modelo de planificación describe un paso de fuerza con dos números agregados:
+`target_sets` y `target_reps`. Cuatro series de ocho repeticiones son literalmente el
+entero `4` y el entero `8` colgando del paso.
+
+Eso alcanzaba mientras el catálogo tenía treinta y ocho movimientos y la aplicación
+servía para anotar una rutina. Con cuatrocientos movimientos y personas que entrenan
+de verdad, no alcanza: nadie hace cuatro series idénticas. La primera es de
+calentamiento con carga ligera, las dos del medio son de trabajo, y la última va al
+fallo sin número de repeticiones porque el número es el que salga. Una rutina que no
+sabe distinguirlas describe mal lo que la persona va a hacer, y una rutina que
+describe mal no se usa dos veces.
+
+Lo mismo con las superseries. Encadenar dos ejercicios para hacerlos seguidos sin
+descanso entre medias no es un adorno: cambia el estímulo y cambia la duración de la
+sesión. Hoy no hay forma de decirlo, y quien lo quiere lo escribe en la nota, que es
+texto que ningún lector entiende.
+
+**Esta decisión no contradice `ADR-021`.** Sus listas de capacidades diferidas cubren
+otros dominios —reservas, comercio, marketplace, wearables, nutrición clínica, IA— y,
+en entrenamiento, «especialización completa de todas las disciplinas». Profundizar la
+única disciplina que Space publica no aparece ahí. Lo que `ADR-021` sí impone es una
+puerta de ocho pasos para cualquier ampliación y la exigencia de que su primera
+entrega sea «una rebanada vertical coherente»: este ADR es el paso 6 de esa puerta, y
+la entrega incluye migración, RLS, contrato, pruebas y pantalla.
+
+`ADR-003` ya sancionó el concepto: su modelo de `planned_steps` enumera «orden y
+bloque/superset» y «recuperación» entre los atributos del paso. Lo que faltaba era el
+modelo físico y el permiso explícito para construirlo.
+
+### Decisión
+
+**1. Las series de un paso de fuerza se modelan una por una.** `planning.planned_sets`
+cuelga de `planned_steps`, con `set_order`, un tipo, y las repeticiones, carga y RPE
+que esa serie pide.
+
+**2. El tipo de serie es un vocabulario cerrado de cuatro:** `normal`, `warmup`,
+`to_failure` y `drop`. Vive en `planning` y no en `catalog` porque `catalog` guarda
+vocabulario de **contenido** que una persona explora —disciplinas, movimientos,
+equipamiento, músculos— y el tipo de serie es estructura de la prescripción.
+
+**3. Una serie al fallo no lleva repeticiones.** Es lo que significa: hasta no poder
+más. Un número ahí sería una instrucción distinta, así que el modelo lo prohíbe en vez
+de dejarlo a la interfaz.
+
+**4. `strength_targets` pasa a ser resumen derivado, nunca autoría.** Al publicar,
+`target_sets` es el conteo de series y `target_reps` existe solo cuando todas
+coinciden. La verdad son las filas; el resumen es una comodidad para quien ya lo leía.
+Se hace así para que **ningún lector existente se rompa**: la agenda, el día de hoy,
+la semana y todo el lado de ejecución siguen leyendo lo que siempre leyeron.
+
+**5. La superserie es una agrupación de pasos contiguos**, expresada como una columna
+en `planned_steps` y no como una tabla. Sólo se encadena con el ejercicio de al lado;
+con esa regla, una columna dice exactamente lo que diría una tabla de grupos, y la
+contigüidad se impone con un trigger de restricción.
+
+**6. El descanso no se mueve.** `strength_targets.target_rest_seconds` ya existe, es
+prescripción y no medición, y es genuinamente por ejercicio. Dentro de una superserie
+sólo cuenta el del último paso de la cadena, porque el descanso ocurre al terminarla.
+
+**7. `planned_sets` es hija de una versión publicada y hereda su inmutabilidad.**
+`ADR-009` es tajante: sólo el borrador es mutable y una versión publicada no se edita.
+La tabla nueva lleva las mismas tres familias de protección que sus hermanas —sin
+mutación de hija inmutable, inserción sólo durante la publicación, y política de fila
+heredada del padre— o sería la única grieta en esa garantía.
+
+### Lo que esta decisión no hace
+
+- **La ejecución no aprende de series planificadas.** `execution.strength_sets`
+  seguirá apuntando al paso y no a la serie prescrita. Enlazar lo ejecutado con la
+  serie que lo pidió es otra decisión, con su propio ADR.
+  *Estrechado por `ADR-033`:* la ejecución registra el tipo de cada serie y la sesión
+  recibe las series planificadas, pero el enlace con la serie concreta sigue sin existir.
+- **Las revisiones de prescripción siguen operando a nivel de paso.** Un profesional
+  adapta el ejercicio, no la tercera serie; el vocabulario cerrado de
+  `override_kind` no se amplía aquí.
+- **Las demás disciplinas no cambian.** Resistencia, intervalos y movilidad conservan
+  su target único por paso. Esto es profundidad en fuerza, no una reforma del núcleo
+  multidisciplina.
+- **Nada de esto funciona sin conexión.** `DT-007` reserva el borrador local para el
+  registro de ejecución y la edición de perfil.
+
+### Invariantes
+
+1. Un paso de fuerza publicado tiene al menos una serie.
+2. `set_order` es único y consecutivo dentro de su paso.
+3. Una serie `to_failure` no declara repeticiones.
+4. El resumen de `strength_targets` es derivado: ningún actor de runtime lo escribe.
+5. Los pasos que comparten grupo de superserie ocupan posiciones consecutivas.
+6. Una serie planificada no se edita ni se borra una vez publicada su versión.
+7. El contenido del borrador entra al hash de publicación con sus series dentro: dos
+   rutinas que difieren en una serie no publican la misma versión.
+8. El descanso de una superserie es el del último paso de la cadena.
+
+### Consecuencias
+
+#### Positivas
+
+- La rutina describe lo que la persona realmente va a hacer.
+- Los lectores existentes no cambian: el detalle entra como añadido.
+- El tipo de serie queda disponible para que la ejecución lo aproveche cuando se
+  decida enlazarlas.
+
+#### Costos
+
+- Una tabla más bajo una versión inmutable, con las tres protecciones que eso exige.
+- El validador del borrador, la función canónica de hash y la materialización tienen
+  que moverse juntas o el hash y las filas se separan.
+- Lo ya publicado necesita relleno: cada `strength_targets` existente se convierte en
+  N series iguales.
+- Studio recibe el modelo y el contrato, pero su interfaz es trabajo aparte.
+
+### Escenarios de prueba obligatorios
+
+1. Una serie `to_failure` con repeticiones se rechaza.
+2. Un grupo de superserie con posiciones no contiguas se rechaza.
+3. El rol de runtime no puede escribir el resumen de `strength_targets`.
+4. Una versión publicada no admite insertar, editar ni borrar una serie.
+5. Publicar dos veces el mismo contenido sigue sin crear dos versiones, con las series
+   dentro del hash.
+6. Cambiar una sola serie del borrador sí produce una versión nueva.
+7. El relleno deja cada paso publicado con tantas series como decía su `target_sets`.
+8. La agenda, el día de hoy y la semana devuelven lo mismo antes y después del cambio.
+
+---
+
+## ADR-031 — La portada de una rutina la pone su programa, y sale del catálogo
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 18 de septiembre de 2026<br>
+**Enmendada:** 19 de septiembre de 2026 — los bytes salen de PostgreSQL a un bucket privado<br>
+**Enmendada:** 19 de septiembre de 2026 — se revierte la fotografía personal entera y con ella el bucket<br>
+**Enmendada:** 19 de septiembre de 2026 — la portada deja de ser de la rutina y pasa a ser del programa<br>
+**Enmendada:** 20 de septiembre de 2026 — la portada del catálogo se fotografía por sexo declarado, y `cover_object_key` se retira<br>
+**Enmienda a:** `ADR-002`, cuyo diferimiento de Storage queda restituido
+
+> **Léase de abajo arriba.** Las cuatro primeras secciones son el rastro de cómo se llegó
+> aquí y no describen lo vigente: la primera revisión midió el volumen, la segunda retiró
+> la fotografía personal, la tercera mudó la decisión de la rutina al programa y la cuarta
+> fotografió el catálogo por sexo declarado. La decisión en vigor empieza en «Cuarta
+> revisión».
+
+### Contexto
+
+`ADR-002` eligió Supabase **únicamente como PostgreSQL administrado** y dejó dicho que
+«Storage, Realtime o Edge Functions requerirían un ADR separado antes de incorporarse».
+Desde entonces nadie lo pidió, y el estado de la plataforma lo confirma: `[storage]` está
+`enabled = false` en la configuración local, el esquema `storage` existe sin una sola
+tabla, la API sólo habla `postgres` y Hono, y no hay una sola operación de subida en el
+contrato implementado.
+
+Pero la baseline **sí describe imágenes personales**. La foto de comida tiene contrato
+cerrado —`NutritionPhotoUpload` en base64, `SignedMediaUrl` de trescientos segundos para
+Space, proxy autenticado para Studio— y nunca se construyó. `identity.body_progress_records`
+lleva `media_ref` y `has_media` con su check, y ninguna función los escribe. Es decir:
+la doctrina está escrita y el mecanismo no existe.
+
+La portada de una rutina es lo primero que lo necesita de verdad. `HU-SP-108` la pide y
+el resto de la portada —figura de músculos e iconos— ya está construido: falta la foto.
+
+Lo único **implementado** hoy que se parece es `catalog.movement_media`, y su propio
+comentario de cabecera explica por qué no sirve de molde: guarda una clave de objeto
+hacia un origen estático público, la demostración de un ejercicio es idéntica para todo
+el mundo y se cachea un año. Su cabecera lo contrasta a propósito con la foto de comida,
+«que sí se sirve por petición precisamente porque es un dato personal cuya autorización
+hay que reevaluar cada vez».
+
+### Revisión del 19 de septiembre de 2026
+
+La cuarta razón de la decisión original —«el volumen no lo justifica»— se midió y es
+falsa. El error fue el modelo de uso: se supuso como mucho una foto por rutina y alguna
+rutina con foto. El modelo real del producto es **dos programas por persona, seis rutinas
+por programa y foto en todas**: doce fotos de unos setenta kilobytes, **822 KB por
+persona**.
+
+Contra las cuotas del plan, eso es:
+
+| Cuota | Personas que caben |
+| --- | --- |
+| Base de datos, 500 MB (plan gratuito) | **~600** |
+| Almacenamiento, 1 GB (plan gratuito) | ~1 300 |
+| Almacenamiento incluido en Pro, 100 GB | ~128 000 |
+| Egreso incluido en Pro, 250 GB/mes | ~107 000 |
+
+Seiscientas personas llenan la base de datos entera, y esa cuota es para los datos del
+producto: rutinas, programas, sesiones e historial de entrenamiento. Las imágenes no
+compiten con el producto por su espacio.
+
+Las otras tres razones siguen siendo ciertas y se pagan a conciencia: aparece una
+credencial, aparece una dependencia de orden con el servicio, y el borrado deja de ser
+una sola sentencia. Lo que cambió no es el razonamiento, es un número.
+
+### Segunda revisión del 19 de septiembre de 2026
+
+**El caso desapareció.** La fotografía de portada se construyó entera —selector, saneado,
+subida, proxy autenticado, bucket privado y cola de borrado— y la lectura del producto es
+que **nadie la va a usar**. Una portada existe para reconocer una rutina entre seis en una
+lista; para eso, la figura de los músculos y el icono ya responden, y hacen algo que una
+fotografía propia no hace: se dibujan solas.
+
+Pedir una fotografía es pedir trabajo. Es abrir la galería, encuadrar y esperar una
+subida, cada vez, para decorar una fila. La revisión de la mañana midió bien el volumen y
+corrigió dónde debían vivir los bytes; lo que no se preguntó es si alguien iba a producir
+esos bytes. La respuesta es no.
+
+Así que lo que se revierte no es el bucket contra PostgreSQL: es la fotografía personal
+entera. Y con ella se va todo lo que existía **sólo** para sostenerla.
+
+### Cuarta revisión del 20 de septiembre de 2026
+
+**La portada del catálogo se fotografía por sexo declarado.** Las veinticuatro
+fotografías de los programas globales pasan a ser dos juegos —`male` y `female`—, y quien
+prefirió no decirlo recibe una mezcla estable de los dos. Esta revisión contradice dos
+cosas que la tercera dijo que no haría, y por eso se escribe aquí y no en una ficha: «no
+toca las portadas del catálogo» y «`cover_object_key` sigue significando lo que
+significaba». Las dos dejan de ser ciertas.
+
+**Por qué es una decisión y no una sustitución de archivos.** Hasta hoy el sexo declarado
+sólo **ordenaba**: `sex_affinity` empuja hacia arriba los programas que encajan y no
+esconde ninguno, porque quien declinó no necesita una regla aparte. Fotografiar es otra
+cosa: es lo primero que la persona ve de un programa, y decidirlo por un dato suyo es
+tratar ese dato como parte de la presentación y no sólo del orden. Se hace porque una
+persona reconoce antes lo que puede hacer cuando ve a alguien como ella haciéndolo, y se
+escribe aquí porque es la clase de decisión que alguien debería poder discutir dentro de
+un año sin reconstruirla desde una tabla.
+
+**Dos juegos y no tres.** «Mixto» no es una tercera fotografía: es lo que se ve cuando el
+carrusel alterna entre los dos juegos. Un tercero serían veinticuatro imágenes más para
+decir lo mismo, y habría que resolver antes qué significa «mixto» dentro de un solo
+encuadre — dos personas, ninguna, o una que nadie reconoce—, que es una pregunta sin
+buena respuesta.
+
+**La mezcla es estable.** Se elige de forma determinista por el identificador del
+programa, no al azar y no por persona. Una portada sorteada en cada lectura sería una
+portada distinta cada vez que alguien refresca la lista, y el catálogo dejaría de ser un
+sitio y pasaría a ser un carrusel de sí mismo. Y nunca hay juego por defecto para quien
+declinó: eso sería decidir por ella justo lo que decidió no decir.
+
+**`planning.programs.cover_object_key` se retira.** Una columna no puede llevar dos
+claves, y dejarla como «la portada por defecto» sería tener dos verdades sobre la misma
+imagen. En su lugar, la tabla curada `planning.program_cover_photos`, con clave
+`(program_id, audience)`, y `planning.cover_for(program_id, person_id)`, que es por donde
+pasan todos los lectores — incluido el que le da fotografía a una rutina.
+
+**Elegir una portada no escribe nada.** No hay fila por persona, ni preferencia guardada,
+ni traza de qué juego vio nadie. El sexo declarado ya es un hecho que la persona dio; esto
+lo gasta, no recoge nada nuevo, y no se le vuelve a preguntar a nadie por esto.
+
+### Tercera revisión del 19 de septiembre de 2026
+
+**La portada no era una decisión de la rutina; era una decisión de quien las ve juntas.**
+La pantalla Hoy abre con las rutinas de la semana en un carrusel, una al lado de otra. Si
+cada rutina eligiera su propio estilo, esa fila mezclaría una figura de músculos, un icono
+y una fotografía, y lo que se lee entonces no es una semana: es un muestrario. El problema
+no se arregla pidiéndole gusto a quien escribe una rutina, porque quien escribe una rutina
+la está mirando sola. Sólo quien arma el programa ve las seis a la vez, y por eso la
+decisión es suya.
+
+Así que la portada cambia de dueño. **El estilo lo declara el programa y vale para todas
+sus rutinas; la imagen la sigue poniendo cada rutina**, porque dentro de un mismo estilo
+lo que se dibuja depende de lo que cada una trabaja. El carrusel habla un idioma y aun así
+una tarjeta se distingue de la de al lado sin leer el rótulo, que era lo único que una
+portada tenía que conseguir.
+
+Lo que la segunda revisión decidió sigue en pie entero: nadie sube nada, la clase `photo`
+toma una imagen del catálogo público y la elige la región dominante de los músculos. Lo
+que esta revisión mueve es **dónde se toma la decisión**, no de dónde sale la imagen.
+
+### Decisión
+
+**1. En V1 no hay binarios personales.** Ninguna operación acepta bytes de una persona.
+El diferimiento de `ADR-002` vuelve a estar íntegro: Storage, Realtime y Edge Functions
+quedan fuera hasta que un ADR los traiga con un caso construido detrás.
+
+**2. El estilo de portada es del programa; la imagen es de la rutina.** Un programa
+declara `muscles`, `icon` o `photo`, y esa clase vale para todas las rutinas que lo
+componen. Dentro de la clase, cada rutina se dibuja con lo suyo:
+
+- **músculos**, la figura de lo que *esa* rutina trabaja, calculada de sus ejercicios;
+- **foto**, la del catálogo público que corresponde a lo que *esa* rutina trabaja, elegida
+  por la región dominante de sus músculos;
+- **icono**, el mismo para todas, porque un icono **se elige y no se calcula**: no hay nada
+  en los ejercicios de una rutina que diga cuál de los treinta y dos le toca.
+
+La fotografía se sigue pidiendo sin decir *cuál*, por la misma razón de la segunda
+revisión: la región dominante ya está en los ejercicios, y **lo que se ve en la imagen y lo
+que se entrena hablan de lo mismo** sin que nadie elija. Es el mecanismo de
+`pick_program_cover`, aplicado ahora rutina a rutina bajo el estilo que el programa fijó.
+
+**3. Vive en `planning.programs`, no en `planning.program_versions`.** Por la misma razón
+que `planning.programs.cover_object_key`: una versión publicada es inmutable porque **es lo
+que alguien entrenó**, y cambiar cómo se ve una tarjeta no cambia lo que se entrena. Las
+columnas son `routine_cover_kind planning.routine_cover` (nullable) y
+`routine_cover_icon planning.routine_cover_icon` (nullable), con un check de que el icono
+existe si y sólo si la clase es `icon`. Se llaman `routine_`*algo* a propósito: `cover_object_key` ya vive en
+esa tabla y significa otra cosa —la cara del programa en su propia tarjeta—, y dos columnas
+parecidas con sentidos distintos se confunden a la primera.
+
+**4. `planning.session_template_versions` pierde la portada.** Se van `cover_kind`,
+`cover_icon` y `cover_object_key`, y la clave `cover` sale del contenido del borrador
+(`SessionTemplateDraftContent`) y por tanto del hash canónico. **Consecuencia declarada:**
+toda rutina que llevara portada dirá «cambios sin publicar» hasta que se publique una vez,
+y es cierto — su contenido cambió.
+
+**5. Una rutina suelta no lleva portada.** Una rutina que no está en ningún programa se
+reconoce por su letra inicial, que es como se reconocía antes de que la portada existiera.
+No hay estilo que aplicarle porque no hay nadie que lo haya declarado, y dejarla elegir uno
+propio devolvería exactamente el muestrario que esta revisión retira. Una rutina que está
+en **varios** programas se viste del primero, por el orden que la persona ya eligió para
+sus programas: el mismo con el que abre la pestaña Entrenar (`OP-PLN-024`).
+
+**6. Vestir un programa surte efecto al momento y no acuña versión de nada.** Es
+`OP-PLN-033`, `PUT /space/v1/programs/{programId}/cover`, un comando idempotente sobre
+programa propio. No publica una versión de programa ni de rutina, igual que `OP-PLN-024` no
+publica nada por reordenar: **la presentación no es contenido**. Un programa tomado de
+Allfit no se puede revestir, porque se ve como Allfit lo armó.
+
+**7. Esas imágenes no son personales, así que no heredan nada de lo anterior.** Viven en
+el origen estático público del catálogo, se cachean un año y son idénticas para todo el
+mundo: es exactamente el molde de `catalog.movement_media`. La fila guarda **la clave del
+objeto**, jamás una URL, y la base del endpoint vive en configuración —`CATALOG_MEDIA_BASE_URL`—
+como ya hacía. No hay autorización que reevaluar, no hay proxy, no hay credencial nueva.
+
+**8. `privacy.binary_disposals` se retira.** Era la cola y el recibo de la destrucción de
+un binario personal, y se queda sin un solo escritor. `ADR-021` prohíbe el modelo «por si
+acaso», y una tabla de disposiciones sin nada que disponer es justo eso. `ADR-012` no
+pierde nada: sin bytes personales fuera de la transacción, no hay nada que propagar más
+allá de ella, y el borrado vuelve a ser una sola sentencia.
+
+**9. Lo que se escribió sigue escrito, para cuando vuelva.** La foto de comida y el
+progreso corporal conservan su contrato en la baseline y siguen sin construirse. Cuando
+se construyan, la revisión de la mañana y sus tres condiciones de portabilidad —protocolo
+S3 y no el cliente de Supabase, la clave del objeto y nunca una URL, y la autorización en
+nuestra API— son el punto de partida, no un ADR nuevo desde cero. Lo que este documento
+guarda es el razonamiento; lo que retira es el código que no tenía usuario.
+
+### Lo que esta decisión no hace
+
+- **No quita la portada.** Sigue habiendo tres maneras de ver una rutina, y una de ellas
+  sigue siendo una fotografía. Lo que desaparece es que sea *tuya* y que la elija la
+  rutina.
+- **No toca las portadas del catálogo.** Las veinticuatro de los programas globales son
+  contenido curado y se despliegan como siempre. *(Dejó de ser cierto el 20 de septiembre
+  de 2026: ver «Cuarta revisión».)*
+- **No cambia la cara del programa en su propia tarjeta.** `cover_object_key` sigue
+  significando lo que significaba y se decide igual. *(Ídem: la columna se retiró.)*
+- **No cierra la puerta a los binarios personales.** La cierra para V1 y deja el camino
+  descrito.
+- **No modela retención programada.** `privacy.retention_policies`, `erasure_requests` y
+  `legal_holds` siguen sin modelo físico, y ahora sin nada personal que purgar tampoco lo
+  necesitan antes de `DB-P5-015`.
+
+### Invariantes
+
+1. Ninguna operación de V1 acepta bytes subidos por una persona.
+2. Ninguna fila guarda una URL de un almacén: sólo la clave del objeto.
+3. **La portada de una rutina no se decide en la rutina.** El estilo lo declara el programa
+   que la usa, y ninguna fila de plantilla ni de versión de plantilla lo guarda.
+4. El mismo programa y la misma rutina reciben siempre la misma fotografía: la elección es
+   determinista.
+5. Una rutina sin ejercicios no recibe fotografía, y eso no es un error: es una rutina
+   que todavía no dice qué trabaja.
+6. Una rutina fuera de todo programa no lleva portada, y se reconoce por su letra inicial.
+7. Ninguna respuesta expone el endpoint del origen estático; expone la dirección
+   compuesta, que es pública.
+
+### Consecuencias
+
+#### Positivas
+
+- **El carrusel de la semana se lee como una semana.** Seis tarjetas con el mismo idioma
+  visual y distinto contenido se recorren de un vistazo; seis estilos mezclados obligan a
+  leer cada rótulo.
+- La decisión se toma una vez por programa y no seis veces por semana, y la toma quien
+  tiene delante el resultado.
+- Desaparecen una credencial de almacenamiento, una dependencia de orden con Supabase,
+  un trabajo programado al que vigilarle la antigüedad y la ventana de borrado que
+  `ADR-012` obligaba a medir.
+- La base de datos no guarda ni un byte de imagen, y el bucket no existe: el techo de
+  personas deja de depender del almacenamiento.
+- **La portada sale del contenido versionado.** Vestir un programa deja de acuñar
+  versiones de rutina que no cambian nada de lo que se entrena, y el hash canónico vuelve
+  a describir sólo entrenamiento.
+- El saneado de imágenes sale del camino de una petición, y con él `sharp`.
+
+#### Costos
+
+- **Toda rutina que llevara portada dirá «cambios sin publicar»** hasta que se publique una
+  vez. Es correcto y está declarado: su contenido cambió al salir la clave `cover` del
+  borrador.
+- Se construyó y se retira: la subida, el proxy, el bucket, el paquete de acceso S3, la
+  cola de disposición y las tres columnas de portada en la versión de plantilla dejan de
+  existir. El razonamiento queda aquí; el código no.
+- Quien quisiera una rutina con un estilo propio dentro de un programa no puede tenerlo, y
+  quien quisiera una fotografía suya tampoco.
+- Una rutina que está en dos programas de estilos distintos se ve con el del primero, y no
+  hay manera de decir «en este programa quiero verla de otra forma».
+- Dos rutinas de la misma región pueden salir con caras parecidas; el desempate por
+  identificador las reparte, pero el catálogo son veinticuatro imágenes.
+
+### Escenarios de prueba obligatorios
+
+1. Un programa con estilo `photo` da a cada una de sus rutinas la clave que corresponde a
+   la región dominante de *esa* rutina, y dos rutinas de regiones distintas no reciben la
+   misma.
+2. Un programa con estilo `icon` da el **mismo** icono a todas sus rutinas.
+3. El mismo programa y la misma rutina reciben siempre la misma fotografía, y volver a
+   vestir el programa con la misma clase no la cambia.
+4. Una rutina sin ejercicios en un programa con estilo `photo` no recibe clave y la
+   pantalla dibuja el estado vacío.
+5. Una rutina que no está en ningún programa se responde sin portada y la pantalla la
+   dibuja con su letra inicial.
+6. Una rutina que está en dos programas se responde con el estilo del primero según el
+   orden de `OP-PLN-024`, y cambia de cara al reordenarlos.
+7. Vestir un programa no crea una versión de programa ni una versión de plantilla, y la
+   pantalla lo refleja al momento.
+8. Un programa de `content_scope = 'person'` se puede vestir; uno tomado de Allfit
+   responde lo mismo que uno inexistente.
+9. Ninguna respuesta ni ninguna fila contiene una URL del almacén.
+10. Ninguna ruta del contrato acepta una imagen.
+
+### Quinta revisión del 22 de septiembre de 2026
+
+**El estilo de portada deja de ser configurable: toda rutina lleva fotografía.** Se retira
+la elección —`OP-PLN-033` y `HU-SP-108`—, no el mecanismo.
+
+Esta revisión contradice la primera mitad del punto 2 de la tercera: «el estilo de portada
+es del programa». Ya no hay estilo que declarar. La segunda mitad —«la imagen es de la
+rutina»— se queda entera y sin una línea de diferencia: la fotografía se pide **sin decir
+cuál**, la elige la región dominante de los ejercicios de esa rutina, y lo que se ve y lo
+que se entrena hablan de lo mismo sin que nadie elija.
+
+**Por qué.** Puestas las tres clases una al lado de otra en pantallas de verdad —el
+carrusel de Hoy, el catálogo, el detalle del programa—, la fotografía era la única que
+alguien elegía. Una fotografía dice de qué va la rutina antes de que nadie lea el nombre;
+un icono dice de qué va el programa, que es lo que el nombre del programa ya dice. **Una
+opción que nadie cambia no es una opción, es una pregunta**, y ésta estaba en medio de la
+pantalla de configuración del plan pidiendo una decisión cuyo resultado era siempre el
+mismo.
+
+**Qué queda por limpiar, dicho por delante.** Retirada la operación, nadie escribe
+`routine_cover_kind` ni `routine_cover_icon`: las dos columnas, sus enumerados y el
+invariante `IX-48` quedan sin quien las alimente. No se retiran en esta revisión porque
+todavía sostienen lo que algún programa declaró antes de hoy; su retirada es una decisión
+aparte y una migración aparte.
+
+**Una rutina sin fotografía se reconoce por su letra**, que es el caso de la que todavía
+no tiene ejercicios: nada dice qué trabaja, así que no hay región de la que partir.
+
+Tampoco se tocan las portadas del **programa** (`planning.program_cover_photos`, cuarta
+revisión) ni el punto 1: en V1 sigue sin haber binarios personales.
+
+---
+
+## ADR-032 — Un programa puede no tener fin, y la semana que no existe la siembra quien la va a enseñar
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 20 de septiembre de 2026<br>
+**Enmienda a:** `ADR-022`, cuya materialización del calendario se estrecha a los programas que terminan
+
+### Contexto
+
+La duración de un programa nunca se declaró: se deduce. Es el `max(week)` de
+`planning.program_version_sessions`, y deducirla así arrastra una consecuencia que nadie
+eligió — **todo programa termina**, porque una composición finita leída como duración no
+puede decir otra cosa. No es que faltara la casilla de «esto no se acaba»: es que no había
+dónde ponerla, y por eso la finitud no era una decisión de producto sino una propiedad
+estructural del modelo.
+
+Lo que la gente hace en Space no se parece a eso. Quien arma su propia semana —tres días,
+empujar, tirar, piernas— no está escribiendo ocho semanas: está escribiendo **una** y
+repitiéndola hasta que decida cambiarla. Pedirle un final la obliga a inventarse un número,
+y ese número vuelve el día que se cumple, cuando la agenda amanece vacía sin que nadie haya
+decidido parar. El caso frecuente del producto estaba obligado a disfrazarse del caso raro.
+
+Esto no es sólo Space. Studio compone bloques de varias semanas y también los hace girar;
+lo que se repite en un caso es una semana y en el otro un bloque, pero el acto es el mismo.
+Por eso la decisión no puede escribirse sobre «la semana»: tiene que escribirse sobre la
+composición.
+
+### Decisión
+
+**1. `planning.program_versions` gana `repeats_forever boolean not null default false`.**
+Un programa con esa marca no tiene fecha de fin: cuando su composición se acaba, vuelve a
+empezar. Es el **valor por defecto de un programa nuevo en Space**, porque es lo que la
+gente escribe.
+
+**2. Vive en la versión y no en el programa, y por eso entra en el hash.** Un programa que
+termina en ocho semanas y uno que no termina **son dos entrenamientos distintos** aunque
+compartan hasta la última serie: uno propone un ciclo con final y el otro una rutina
+sostenida. Eso es contenido, no presentación, así que sigue la regla de `ADR-009` —lo que
+cambia lo que se entrena pertenece a la versión inmutable— y `planning.canonical_program_content`
+lo emite siempre, nunca ausente, de modo que el `content_hash` lo distingue. La alternativa
+—colgarlo de `planning.programs`, como la portada de `ADR-031`— haría que dos cosas
+distintas compartieran hash, y un hash que no distingue no sirve para lo único que hace.
+
+**3. La unidad que se repite es la composición entera, y se llama el ciclo.** No es «una
+semana»: es `max(week)` de `program_version_sessions`. En Space el ciclo suele valer uno
+porque se compone una semana; en Studio un bloque de cuatro semanas da la vuelta como
+bloque. La semana de composición que toca en la semana de programa `n` es
+`((n - 1) % ciclo) + 1`, y con `ciclo = 1` eso es exactamente «la misma semana siempre»,
+sin un caso especial que escribir.
+
+**4. El borrador declara la clave y el esquema no cambia de número.**
+`planning.program_drafts.content` admite `repeats_forever` como clave **opcional**
+—ausente significa `false`—, `planning.program_content_errors` la acepta en su lista blanca
+y rechaza cualquier cosa que no sea booleano, y `content_schema_version` **sigue siendo 1**:
+una clave nueva opcional con valor por defecto no es un cambio de forma, y subir el número
+obligaría a migrar borradores que se leen igual de bien que ayer.
+
+**5. La primera republicación de un programa que ya existía acuña una versión, y está
+declarado.** El canónico ganó una clave, así que su hash cambió para todo el mundo: un
+programa que nadie ha tocado dirá «cambios sin publicar» una vez, y una vez publicado no
+vuelve a decirlo. Es el mismo precio que `ADR-031` pagó al sacar la portada del contenido,
+y por la misma razón se paga: lo contrario sería que dos programas distintos compartieran
+hash.
+
+**6. Con fin, la agenda entera al asignar; sin fin, la semana de la asignación.** Un
+programa con fecha de fin se materializa exactamente como hasta hoy: toda la composición
+dentro de la transacción de `self_assign_program`. Uno sin fecha de fin materializa en esa
+misma transacción **la semana de calendario en la que se asigna**, y nada más, porque no
+hay un «entera» que materializar.
+
+**7. La semana que falta la siembra la lectura, y no un worker.**
+`planning.read_week_plan` y `planning.read_today_session` llaman antes a
+`planning.plant_my_open_week`, que siembra **la semana que esa lectura va a enseñar**. Las
+dos razones por las que no es un trabajo periódico son concretas. La primera:
+`execution.start_planned_session_attempt` exige que la fila planificada exista, así que
+nadie puede entrenar una semana que no esté sembrada y la siembra no puede llegar tarde.
+La segunda: si sólo sembrara un acto de entrenar, quien vuelve después de dos meses abriría
+una semana vacía que ya nadie podría sembrar, y el horizonte quedaría atascado justo para
+la persona que más necesita volver a empezar. Sembrar dentro de la lectura no promete nada
+que no se entregue en el mismo instante.
+
+**8. La siembra es idempotente, cabe en una semana y toma un lock.** Si ya existe cualquier
+fila de esa asignación con ese `week_starts_on`, no se toca nada; se toma
+`pg_advisory_xact_lock` sobre el `assignment_id` antes de mirar, porque dos lecturas
+simultáneas sembrarían la misma semana dos veces; y si la semana de programa todavía no
+llegó a uno —la asignación empieza más adelante— no se siembra nada. Las filas se calculan
+igual que en la asignación **salvo el adelanto de la primera semana**: ese adelanto existe
+para no estrenar un programa con sesiones ya perdidas, y la semana ciento tres no se
+estrena.
+
+**9. `ADR-022` se estrecha, no se contradice.** Aquella decisión prometió que **no existe
+job periódico de calendario** y esa promesa queda intacta: esto no crea ningún worker.
+Lo único que se estrecha es el «todas» de «asignar materializa todas las sesiones», que
+ahora vale para los programas que terminan.
+
+**10. Donde no hay fin, la duración se responde nula.** `weeks` es `null` en
+`read_my_programs`, `read_program_version` y `read_program_catalogue` cuando la versión no
+termina, y sigue siendo `max(week)` en las demás. `editable` deja de compararse contra la
+duración declarada y se compara contra **el ciclo**, que existe siempre; y el catálogo deja
+de filtrar por «`weeks` no nula» —que quería decir «tiene sesiones»— y filtra por número de
+sesiones, o un programa sin fin desaparecería de él. `sessions_planned` y `sessions_done`
+no se tocan: cuentan lo que hay en la agenda, y eso es verdad tenga fin o no.
+
+### Invariantes
+
+1. `repeats_forever` pertenece a la versión publicada y nunca cambia después de publicarse.
+2. Dos versiones que difieren sólo en `repeats_forever` tienen `content_hash` distinto.
+3. Ninguna siembra escribe más de una semana de calendario por asignación y por lectura.
+4. No existen dos sesiones planificadas de la misma asignación para la misma semana de
+   calendario y el mismo día de programa.
+5. Ninguna semana sembrada después de la asignación lleva el adelanto de primera semana.
+6. Ningún proceso periódico, worker o job extiende el horizonte de la agenda.
+7. Una versión sin fin responde `weeks` nula y jamás un número inventado.
+
+### Consecuencias
+
+#### Positivas
+
+- **El caso frecuente deja de disfrazarse del raro.** Quien repite su semana no declara un
+  final que no piensa cumplir, y la agenda no se apaga sola el día en que ese número
+  arbitrario se agota.
+- La agenda de un programa sin fin no tiene techo y **no cuesta lo que un techo costaría**:
+  no se escriben cien semanas por si acaso, se escribe la que se va a mirar.
+- La promesa de `ADR-022` sobrevive intacta. No aparece un worker al que vigilarle si corrió,
+  ni una ventana de calendario que alguien tenga que dimensionar.
+- Quien vuelve después de meses abre la semana en curso y la encuentra completa, sin haber
+  tenido que entrenar para que existiera.
+- El modelo sirve igual a una semana de Space y a un bloque de cuatro de Studio, porque lo
+  que gira es la composición y no una unidad fija.
+
+#### Costos y riesgos
+
+- **Una lectura escribe.** Es la única del sistema que lo hace, y hay que decirlo en voz
+  alta: `GET /space/v1/agenda` y `GET /space/v1/today` dejan de ser puramente de lectura
+  cuando la persona sigue un programa sin fin.
+- El lock por asignación introduce un punto de serialización en el camino de una pantalla
+  que se abre muchas veces. Está acotado a la transacción y a una asignación, pero existe.
+- **Toda versión de programa que hoy existe dirá «cambios sin publicar» una vez.** El
+  canónico ganó una clave; es visible, es una sola vez y es cierto.
+- `weeks` deja de ser un entero y pasa a admitir nulo en tres proyecciones y en tres tipos
+  del contrato: cualquier pantalla que lo formateara sin preguntar imprimiría «semana 3 de
+  null».
+- Un programa sin fin no tiene total de sesiones que mostrar, así que la línea de resumen
+  del editor y la tarjeta de catálogo dicen menos de lo que decían.
+
+### Escenarios de prueba obligatorios
+
+1. Publicar un borrador con `repeats_forever` en verdadero crea una versión cuyo
+   `repeats_forever` es verdadero, y el borrador sin la clave crea una con falso.
+2. Dos borradores idénticos salvo `repeats_forever` producen `content_hash` distintos.
+3. Republicar sin tocar nada un programa publicado antes de esta decisión acuña
+   exactamente **una** versión nueva, y la republicación siguiente no acuña ninguna.
+4. Un borrador con `repeats_forever` no booleano es rechazado por
+   `planning.program_content_errors`.
+5. Asignarse una versión **con** fin materializa toda la composición en la transacción.
+6. Asignarse una versión **sin** fin materializa sólo la semana de calendario de la
+   asignación.
+7. Leer la agenda de una semana posterior de un programa sin fin la deja sembrada con la
+   semana de composición `((n - 1) % ciclo) + 1`.
+8. Dos lecturas simultáneas de la misma semana siembran esa semana **una sola vez**.
+9. Leer dos veces la misma semana no duplica ninguna sesión ni cambia las ya existentes.
+10. Una semana sembrada por la lectura **no** aplica el adelanto de la primera semana: cada
+    sesión cae en el día que le puso el programa.
+11. Una asignación que empieza la semana que viene no siembra nada al leerla hoy.
+12. Una persona que no abre la aplicación durante dos meses encuentra, al volver, la semana
+    en curso completa, y las semanas que no miró siguen sin existir.
+13. Re-plantear una asignación sin fin tras editar el programa borra lo no cumplido y
+    siembra **sólo la semana en curso** con la composición nueva.
+14. `read_my_programs`, `read_program_version` y `read_program_catalogue` responden `weeks`
+    nula para una versión sin fin, y un programa sin fin **aparece** en el catálogo.
+15. `editable` sigue siendo correcto en un programa sin fin, comparando contra el ciclo y
+    no contra la duración declarada.
+
+---
+
+## ADR-033 — La serie ejecutada dice de qué tipo fue, y el esfuerzo se registra al entrenar
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 29 de septiembre de 2026<br>
+**Enmienda a:** `ADR-030`, cuya exclusión «la ejecución no aprende de series planificadas» se estrecha<br>
+**Enmendada:** 30 de septiembre de 2026 — las series pertenecen a un ejercicio de la sesión, y la sesión lee su lista y no el plan (`ADR-034`)
+
+### Contexto
+
+`ADR-030` le dio a cada serie planificada un tipo —normal, calentamiento, al fallo o
+descendente— y dejó escrito que la ejecución no lo aprendía: `execution.strength_sets`
+sólo guarda orden, repeticiones, carga y RPE. Eso produce tres desajustes que ya se ven en
+Space.
+
+- **La sesión no sabe qué tipo de serie tiene delante.** `execution.read_execution` le pasa
+  a la pantalla el resumen de `strength_targets` —cuántas series y cuántas repeticiones—, no
+  las series planificadas, así que un calentamiento se entrena como una serie más y nada lo
+  distingue.
+- **El calentamiento suma como trabajo.** El editor promete que «no suma al volumen», pero
+  el tonelaje de «La última vez», la semana y los contadores de series lo cuentan, porque la
+  ejecución no puede saber cuál fue.
+- **El esfuerzo se pide en el sitio equivocado.** Space pedía un RPE al planificar cada
+  serie (`HU-SP-043` criterio 5). El RPE es lo que se sintió, y sólo se sabe al hacerla;
+  `HU-SP-055` criterio 1 ya lo pedía durante el entrenamiento y la sesión no lo capturaba,
+  aunque la columna `execution.strength_sets.rpe` y el contrato lo aceptan.
+
+### Decisión
+
+**1. `execution.strength_sets` gana `kind planning.set_kind not null default 'normal'`.**
+El vocabulario es el de `ADR-030` y es el mismo tipo, no uno nuevo: un segundo enum con
+los mismos cuatro valores en `execution` sería el enum homónimo que el catálogo físico
+prohíbe, y convertir entre los dos en cada lectura sería el cast implícito que esa regla
+evita. La ejecución ya depende de planificación —`strength_sets` referencia
+`planning.planned_steps`—, así que usar su tipo no añade una dirección nueva de
+dependencia. El valor por defecto conserva el significado de toda fila anterior.
+
+**2. La sesión recibe las series planificadas, y el tipo se propone, no se impone.**
+`read_execution` añade a cada paso planificado sus series de `planning.planned_sets`
+—orden, tipo, repeticiones y carga— y cae en el resumen de `strength_targets` cuando el paso
+no las tiene. La pantalla abre cada fila con el tipo que el plan pidió, y la persona puede
+cambiarlo: lo que se registra es lo que hizo. **Una serie ejecutada no se enlaza con la
+serie planificada concreta**; eso sigue siendo otra decisión.
+
+**3. Un calentamiento no es trabajo.** Las series ejecutadas `warmup` se registran y se
+ven, pero no suman al tonelaje ni a las series registradas que cuentan «La última vez», el
+resumen de la semana y la sesión en curso. Es la regla que la interfaz ya prometía, puesta
+donde se calcula. Los recuentos **del plan** —cuántas series tiene una rutina y cómo se
+reparten por músculo— no cambian con esta decisión.
+
+**4. El esfuerzo se registra al entrenar.** Space deja de pedir `target_rpe` en el editor de
+rutina y lo pide, opcional, en cada serie de la sesión. `target_rpe` se queda en el modelo
+de planificación: Studio puede prescribirlo y nada de esta decisión lo borra. Una serie sin
+esfuerzo marcado no declara ninguno, y **nunca se convierte en cero**.
+
+### Lo que esta decisión no hace
+
+- **No enlaza la serie ejecutada con la planificada.** `strength_sets` sigue apuntando al
+  paso; comparar la tercera serie hecha con la tercera pedida necesita ese enlace.
+- **No añade RIR, tempo ni descanso real por serie.**
+- **No cambia las demás disciplinas.** Resistencia, intervalos y movilidad no tienen tipo de
+  serie.
+
+### Invariantes
+
+1. Toda serie ejecutada tiene un tipo, y el de las anteriores a esta decisión es `normal`.
+2. El tipo de una serie ejecutada pertenece al vocabulario de `planning.set_kind`.
+3. Una serie ejecutada `warmup` no suma a ningún tonelaje ni a ningún recuento de series registradas.
+4. El esfuerzo registrado es opcional y, cuando no se declara, es nulo y no cero.
+
+### Consecuencias
+
+#### Positivas
+
+- La sesión enseña el plan que se escribió, serie por serie.
+- El volumen deja de inflarse con el calentamiento, y la interfaz deja de contradecir los
+  números.
+- El RPE deja de ser una promesa del plan para ser un dato de lo que pasó.
+
+#### Costos
+
+- `replace_execution_results`, `read_execution`, la agenda y el resumen de la semana se
+  redefinen juntos, o el tipo se escribe en un sitio y se ignora en otro.
+- Los recuentos del plan siguen contando el calentamiento, y quedan como trabajo aparte.
+- `planned.sets` y `StrengthSet.kind` entran al contrato como campos opcionales.
+- El RPE planificado de las rutinas de Space se pierde la próxima vez que se guarde su
+  borrador. Es un dato opcional y ya no se muestra.
+
+### Escenarios de prueba obligatorios
+
+1. Una serie registrada con tipo lo conserva al leerse la sesión.
+2. Una serie registrada sin tipo se lee como `normal`.
+3. Un tipo fuera del vocabulario se rechaza.
+4. `read_execution` devuelve las series planificadas de cada paso con su tipo, y el
+   resumen cuando el paso no tiene series.
+5. Un calentamiento con carga no suma al tonelaje de «La última vez» ni al de la semana.
+6. Un calentamiento no cuenta en las series de «La última vez».
+7. Las series de otra persona siguen sin verse, con o sin tipo.
+
+---
+
+## ADR-034 — Una sesión es una lista de ejercicios, y cada serie pertenece a uno
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 30 de septiembre de 2026<br>
+**Enmienda a:** `ADR-030` y `ADR-033`<br>
+**Enmendada:** 30 de septiembre de 2026 — cada ejercicio de la sesión lleva su descanso y la sesión lo cuenta (`ADR-035`)
+
+### Contexto
+
+Una sesión en curso se reconstruía cada vez desde la rutina: sus ejercicios eran los
+pasos del plan, en el orden del plan, y sus series colgaban de la sesión sin saber de qué
+ejercicio eran más allá del movimiento. Eso deja fuera cuatro cosas que la gente hace al
+entrenar: **quitar** un ejercicio que no va a hacer, **moverlo** porque la máquina está
+ocupada, **encadenarlo** en superserie y **añadir** uno que la rutina no traía. Nada de
+eso tenía dónde guardarse:
+
+- `executed_sessions` es una fila por sesión; listar ejercicios ahí sería un JSON sin
+  contrato, que `OP-EXE-005` prohíbe.
+- `strength_sets` es una fila por serie marcada; un ejercicio quitado, movido o añadido
+  sin entrenar no tiene ninguna.
+- `session_segments` son los bloques de una sesión híbrida, no ejercicios.
+
+Y había un defecto: si un movimiento aparecía dos veces en la rutina, las dos filas
+compartían sus series, porque el único enlace era el movimiento.
+
+Las aplicaciones de registro de gimnasio resuelven esto igual. La API pública de Hevy
+modela un entrenamiento como una lista de **ejercicios**, cada uno con su posición y su
+`superset_id`, y las series dentro; empezar una rutina copia sus ejercicios al
+entrenamiento, y a partir de ahí es independiente.
+
+### Decisión
+
+**1. `execution.session_exercises`: una fila por ejercicio de la sesión.** Posición,
+movimiento, el paso de la rutina del que salió (`planned_step_id`, nulo para uno añadido)
+y el grupo de superserie. La posición es única por sesión.
+
+**2. Se siembra al empezar y desde ahí es la verdad de la sesión.** `OP-EXE-001` copia los
+pasos de la versión de rutina en la misma transacción que crea el intento, con sus
+superseries. A partir de ese momento el plan no vuelve a decidir: quitar borra la fila,
+mover cambia la posición, encadenar pone el grupo y añadir inserta. Una sesión espontánea
+nace sin ejercicios.
+
+**3. Cada serie pertenece a un ejercicio.** `strength_sets.session_exercise_id` referencia
+su fila, y borrarla borra sus series. Dos ejercicios del mismo movimiento dejan de
+compartir series.
+
+**4. Se reemplaza entero, como las series.** `OP-EXE-005` recibe la lista de ejercicios
+junto con las series y reemplaza ambas en la misma transacción, bajo el mismo lock y
+`If-Match`. Cada serie dice en qué posición está su ejercicio.
+
+**5. Una superserie es contigua, igual que en el plan.** Los ejercicios que comparten grupo
+ocupan posiciones consecutivas (`IX-50`, hermano de `IX-46`); un reemplazo que lo viole se
+rechaza entero.
+
+**6. Lo que ya existía se rellena.** Cada sesión anterior recibe una fila por paso de su
+rutina y una por movimiento registrado fuera de ella, y sus series se enlazan por
+movimiento.
+
+### Lo que esta decisión no hace
+
+- **No temporiza la superserie.** El descanso entre ejercicios encadenados sigue fuera.
+  *Enmendado por `ADR-035`:* la sesión cuenta el descanso, y en una cadena lo cuenta al
+  terminarla.
+- **No enlaza la serie ejecutada con la planificada concreta.**
+- **No cambia los derivados por movimiento.** El historial de «anterior», «La última vez»
+  y los kilos de la semana siguen leyendo series.
+
+### Invariantes
+
+1. Toda serie de fuerza de una sesión nueva pertenece a un ejercicio de esa sesión.
+2. La posición de un ejercicio es única dentro de su sesión.
+3. Los ejercicios que comparten grupo de superserie ocupan posiciones consecutivas.
+4. La lista la escribe sólo la dueña de la sesión, y sólo mientras no esté finalizada.
+
+### Consecuencias
+
+#### Positivas
+
+- La sesión recuerda cómo se entrenó de verdad: orden, cadenas y lo que se quitó o añadió.
+- El detalle de una sesión y cualquier historial futuro leen esa lista, no el plan.
+- Un movimiento repetido deja de mezclar sus series.
+
+#### Costos
+
+- Una tabla más con su política, heredada de la sesión.
+- `start_planned_session_attempt`, `replace_execution_results` y `read_execution` se
+  redefinen juntas.
+- El contrato gana `exercises` en el reemplazo y en la lectura, y `exercise_position` en
+  cada serie.
+
+### Escenarios de prueba obligatorios
+
+1. Una sesión nueva nace con los ejercicios y las superseries de su rutina.
+2. Mover, quitar y añadir sobreviven a leer la sesión otra vez.
+3. Una superserie no contigua se rechaza.
+4. Dos ejercicios del mismo movimiento no comparten series.
+5. Las sesiones anteriores quedan con su lista y sus series enlazadas.
+6. Otra persona no lee ni escribe los ejercicios de una sesión ajena.
+7. El tonelaje y «La última vez» no cambian.
+
+---
+
+## ADR-035 — El descanso viaja con la sesión y se cuenta al marcar la serie
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 30 de septiembre de 2026<br>
+**Enmienda a:** `ADR-034`
+
+### Contexto
+
+El descanso entre series existe como prescripción de la rutina
+(`strength_targets.target_rest_seconds`, `ADR-030`), pero nada del camino de la sesión lo
+llevaba: ni la lista de ejercicios (`ADR-034`) ni su lectura. La persona que entrena no
+tenía cuenta atrás, y si la máquina está ocupada o el día pesa, tampoco podía alargar el
+descanso sin editar la rutina, que es de todas las semanas y no de hoy.
+
+### Decisión
+
+**1. Cada ejercicio de la sesión lleva su descanso.** `session_exercises.rest_seconds`
+se copia de `target_rest_seconds` del paso al iniciar el intento (`OP-EXE-001`). Desde ahí
+es de la sesión: cambiarlo reemplaza la lista (`OP-EXE-005`) y **no toca la rutina**. Un
+ejercicio añadido nace sin descanso.
+
+**2. La cuenta atrás es del dispositivo, no un resultado.** Arranca al marcar una serie,
+se alarga o acorta de 15 en 15 segundos y se puede saltar. Un ejercicio cuya rutina no
+dijo nada de descanso cuenta el de apertura del editor, 1 min 30 s: una cuenta atrás que
+nunca aparece se lee como rota. Sólo «Ninguno» (0) no cuenta. No se guarda: el descanso real
+hecho sigue fuera de V1, como dicen el diccionario y `ADR-033`.
+
+**3. En una superserie también se cuenta, y dice qué sigue.** Marcar una serie arranca el
+descanso de ese ejercicio aunque esté en una cadena: la transición también es tiempo, y un
+aviso que sólo dice «ahora» deja adivinando cuánto queda. Mientras cuenta dice el ejercicio
+siguiente de la cadena; al final de la cadena, el primero para otra vuelta. Esto se aparta,
+**sólo durante la sesión**, de la regla de `ADR-030` de que en la cadena cuenta sólo el
+descanso del último paso: la rutina sigue guardándolo así.
+
+**4. Avisa también con la app cerrada.** Al terminar, la sesión vibra; con la app en
+segundo plano o el teléfono bloqueado, llega una notificación **local** programada en el
+propio teléfono. No hay push ni servidor: no hace falta el permiso de APNs, y un permiso
+negado sólo quita el aviso, nunca la cuenta atrás.
+
+### Invariantes
+
+1. `rest_seconds` es nulo o está entre 0 y 3600, igual que su origen.
+2. Cambiar el descanso de una sesión nunca cambia `strength_targets`.
+
+### Consecuencias
+
+#### Positivas
+
+- La sesión tiene cuenta atrás con el descanso de la rutina, sin que nadie lo recuerde.
+- Ajustar el descanso de hoy no reescribe el plan de todas las semanas.
+
+#### Costos
+
+- Una columna más en `session_exercises`, y las tres funciones de `ADR-034` se redefinen.
+- Una dependencia nueva en Space para la notificación local.
+
+### Escenarios de prueba obligatorios
+
+1. Una sesión nueva nace con el descanso de cada paso.
+2. Cambiarlo en la sesión persiste y no cambia la rutina.
+3. Un descanso fuera de rango se rechaza.
+4. Un ejercicio añadido nace sin descanso.
+5. En una superserie, cada ejercicio arranca su descanso y dice cuál sigue.
+
+---
+
+## ADR-036 — El cierre de un entreno se resume y se comparte; récords, racha y número son derivados
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 1 de octubre de 2026
+
+### Contexto
+
+Al guardar un entrenamiento la aplicación volvía directo a Hoy: la persona no veía qué
+logró ni podía mostrarlo. La pantalla «Compártelo» resume la sesión en tarjetas para
+compartir, y algunas dicen cosas que ningún dato decía todavía: si hubo un récord, cuántas
+semanas seguidas lleva entrenando y qué número de entreno es este.
+
+### Decisión
+
+**1. Un resumen de lectura, no un dato nuevo.** `OP-EXE-021` responde el resumen de una
+ejecución propia terminada: duración, series de trabajo, ejercicios y kilos, la lista de
+ejercicios con sus series, los récords, la racha, el número de entreno, el nombre y el
+usuario de la persona, y la portada de la rutina. No hay tablas nuevas.
+
+**2. Los récords se calculan al leer.** Son derivados, como ya fija esta matriz para los
+indicadores: guardarlos sería una segunda verdad que envejece al corregir una serie. Para
+cada movimiento de la sesión se compara contra lo mejor de las ejecuciones **anteriores**,
+terminadas y no anuladas, y sólo con series de trabajo — el calentamiento nunca es récord.
+Hay cuatro tipos:
+
+- **Más peso:** la carga más alta levantada en el movimiento.
+- **Mejor 1RM estimado:** el mayor `carga × (1 + repeticiones / 30)` (Epley).
+- **Mejor serie:** el mayor `carga × repeticiones` en una sola serie.
+- **Más volumen en la sesión:** la mayor suma de `carga × repeticiones` del movimiento en
+  una ejecución.
+
+La primera vez que se hace un movimiento **no es récord**: no hay con qué compararlo. Cada
+récord responde su valor anterior y la fecha de ese anterior, y el cálculo lleva
+`algorithm_version = 1`.
+
+**3. La racha son semanas seguidas con al menos un entreno.** Semanas ISO, de lunes a
+domingo en la zona horaria de la persona, contadas hacia atrás desde la semana del
+entreno. La semana en curso no la rompe mientras no termine: una racha de ocho semanas no
+pasa a cero el lunes por la mañana.
+
+**4. El número de entreno cuenta todos los entrenos terminados de la persona**, contando
+éste. No depende de un programa.
+
+**5. La foto de fondo nunca sale del teléfono.** Las tarjetas con foto usan la portada
+predefinida de la rutina; si la persona elige otra de su galería, se usa sólo para
+componer la imagen en el dispositivo. No se sube ni se guarda: no es un dato nuevo.
+
+**6. Compartir es una imagen generada en el teléfono.** Allfit no publica nada ni guarda
+qué se compartió. «Historias» entrega la tarjeta al editor de historias de Instagram
+como sticker, con el identificador de aplicación de Meta, que es público y viaja en la
+app. Sin ese identificador o sin Instagram en el teléfono, la imagen sale por la hoja
+nativa del sistema, igual que el resto de acciones.
+
+### Lo que esta decisión no hace
+
+- No guarda récords ni rachas, ni ofrece un historial de récords.
+- No muestra la sede donde se entrenó: la ejecución es autónoma y no lleva organización.
+- No publica en Instagram por la persona: abre su editor y es ella quien publica.
+
+### Invariantes
+
+1. Un calentamiento nunca es récord ni suma a los kilos del resumen.
+2. Una ejecución abandonada o anulada no cuenta para récords, racha ni número.
+3. El resumen sólo lo lee la dueña de la ejecución, y sólo si está terminada.
+
+### Escenarios de prueba obligatorios
+
+1. Duración, totales y número de entreno de una ejecución terminada.
+2. Cada tipo de récord aparece al superar lo anterior, y no aparece al igualarlo.
+3. La primera vez de un movimiento no es récord.
+4. Un calentamiento con más peso no es récord.
+5. Una ejecución abandonada no cuenta para récords, racha ni número.
+6. La racha se corta con una semana sin entrenar, y la semana en curso no la rompe.
+7. Otra persona no lee el resumen de una ejecución ajena.
+
+## ADR-037 — El historial de Space muestra lo terminado, y cada fila se resume al leer
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 1 de octubre de 2026
+
+### Contexto
+
+`OP-EXE-014` define el listado de las ejecuciones propias, y `HU-SP-057` pide que la
+persona vea **todo lo suyo**. La primera entrega del historial en Space —una sección en Hoy
+y una pantalla completa con buscador, filtros y resumen del mes— tiene que decidir qué
+muestra cada fila, cómo se filtra y qué queda para después. Hoy todas las ejecuciones son
+autónomas: ni el ocultamiento a terceros ni las observaciones profesionales tienen todavía
+tablas que leer.
+
+### Decisión
+
+**1. Esta entrega lista sólo ejecuciones terminadas y no anuladas.** Los intentos
+abandonados, las anuladas y el historial de correcciones de `HU-SP-057` quedan
+**diferidos**: el listado responde un `status` por fila para poder añadirlos sin romper el
+contrato. Lo oculto y las observaciones llegan con el dominio de relaciones; hasta
+entonces el contrato no los declara, porque declarar un campo que siempre viene vacío es
+prometer un dato que no existe.
+
+**2. Cada fila se resume al leer.** Duración, series de trabajo y kilos —sin calentamientos,
+y nulos si no se pesó nada—, y el **número de récords**, con la misma regla de `ADR-036`:
+la fila y la tarjeta de esa sesión nunca discrepan. La miniatura es la **portada de la
+rutina**, la misma que muestran Hoy y el resumen; una sesión libre no tiene rutina y no
+lleva portada.
+
+**3. El listado se filtra por mes, disciplina, récord, libre y texto.** El mes se cuenta en
+la zona horaria de la persona. Una sesión es **libre** cuando no salió de una sesión
+planificada. El texto busca, sin tildes ni mayúsculas, en el nombre de la rutina y en el
+de sus ejercicios. Paginado por cursor, inicio descendente y desempate por identificador,
+como ya fija `OP-EXE-014`.
+
+**4. El mes se resume aparte (`OP-EXE-022`).** Entrenos, tiempo, series, kilos y récords del
+mes; por cada semana ISO, contada entera aunque cruce a otro mes, cuántas se terminaron,
+cuántas se planificaron y cuántas de las planificadas se cumplieron, cada una una sola vez
+por más veces que se repitiera; cada día entrenado, con su tiempo, sus series, sus kilos y sus récords, para dibujar el
+mes como calendario y resumir el día que se toque; los meses con algún entreno, para elegir mes; y las disciplinas presentes,
+para ofrecer sólo los filtros que dan resultado.
+
+### Lo que esta decisión no hace
+
+- No muestra abandonadas, anuladas ni correcciones (diferido, criterio 1 de `HU-SP-057`).
+- No abre el detalle de una sesión al tocarla. **Superado por `ADR-038`**, que lo abre.
+- No funciona sin conexión todavía (criterio 2 de `HU-SP-057`).
+
+### Invariantes
+
+1. Una ejecución abandonada o anulada no aparece en el listado ni suma al mes.
+2. El número de récords y la portada de una fila son los mismos que responde el resumen de esa ejecución.
+3. El historial sólo lo lee su dueña.
+
+### Escenarios de prueba obligatorios
+
+1. Orden por inicio descendente y paginación por cursor sin repetir ni saltar filas.
+2. Cada filtro y la búsqueda, con tildes, mayúsculas y por nombre de ejercicio.
+3. Abandonadas y anuladas no aparecen.
+4. Los récords de una fila coinciden con los del resumen.
+5. El mes responde sus totales, sus semanas con planificadas y libres, y los meses disponibles.
+6. Otra persona no lee el historial ajeno.
+
+## ADR-038 — La persona abre, corrige, anula y repite un entreno terminado
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 3 de octubre de 2026
+
+### Contexto
+
+Tocar una fila del historial no abría nada (`ADR-037`). Los diseños `FIN-18` piden el
+detalle de un entreno terminado y, desde él, corregirlo, anularlo y repetirlo. `ADR-022`
+ya fijó que la edición es indefinida y append-only, y `HU-SP-058`, `HU-SP-060` y el
+criterio 5 de `HU-SP-051` lo piden; ninguna de las tres operaciones estaba construida, y
+`OP-EXE-005` sólo acepta sesiones en curso.
+
+### Decisión
+
+**1. El detalle se lee aparte (`OP-EXE-023`).** Cada serie con su tipo, la mejor serie de
+cada ejercicio (el mayor 1RM estimado, la primera de las iguales), la marca de la serie que
+batió todo lo anterior y la última vez que se terminó la misma rutina, con la diferencia
+de kilos. Récords y comparación se derivan al leer, como fija `ADR-036`, así que una
+corrección se ve al instante. Una sesión anulada o sin terminar responde como inexistente.
+
+**2. Corregir guarda lo que había (`OP-EXE-007`).** La sesión se envía entera —sus series,
+su lista de ejercicios y su horario— bajo la revisión que se leyó. Cada corrección deja en
+`execution.execution_revisions` el antes y el después, con actor y motivo; esa tabla no
+admite cambios ni borrados, ni del dueño. El motivo es fijo: «Corrección de la persona».
+Vaciar una sesión no es corregirla: es anularla.
+
+**3. Eliminar es anular (`OP-EXE-009`).** Nada se borra. La sesión pasa a `annulled`, deja
+de contar en historial, récords, racha y totales, y conserva sus series. **El motivo pasa
+a ser opcional**: sin uno se registra «La persona lo eliminó». Antes de confirmar, la
+persona ve qué cambia (`OP-EXE-024`): los récords que se van y la racha de hoy con la
+sesión y sin ella.
+
+**4. Repetir abre otro intento con los mismos ejercicios (`OP-EXE-025`).** Otro intento de
+la misma sesión planificada, como pide `HU-SP-051`, que empieza con la lista de ejercicios
+con la que terminó la sesión de origen —orden, superseries y descanso— y sin series. Un
+entreno libre no tiene rutina que repetir, y con otra sesión abierta se rechaza.
+
+### Lo que esta decisión no hace
+
+- No muestra el historial de revisiones a la persona.
+- No revalida contra el contrato al corregir: el nivel alcanzado no baja todavía (criterio 4 de `HU-SP-058`).
+- No emite `execution.revised.v1` ni `execution.annulled.v1`: el dominio de ejecución aún no escribe en el outbox.
+- No permite elegir qué intento cuenta (`OP-EXE-008`).
+
+### Invariantes
+
+1. Una revisión nunca se reescribe ni se borra.
+2. Anular no borra series ni la sesión.
+3. Lo anulado no cuenta para récords, racha, totales, historial ni «la última vez».
+4. Sólo la dueña lee, corrige, anula o repite su sesión.
+
+### Escenarios de prueba obligatorios
+
+1. El detalle suma como el resumen y marca la mejor serie y la que batió todo.
+2. La comparación con la última vez de la misma rutina, y su ausencia la primera vez.
+3. Corregir guarda el antes, rechaza una revisión obsoleta, un horario al revés y una sesión vacía.
+4. El anticipo dice los récords y la racha antes y después.
+5. Repetir copia la lista y rechaza un entreno libre y una segunda sesión abierta.
+6. Anular deja la sesión fuera del historial y del detalle, y es idempotente.
+7. Otra persona no lee ni anula lo ajeno.

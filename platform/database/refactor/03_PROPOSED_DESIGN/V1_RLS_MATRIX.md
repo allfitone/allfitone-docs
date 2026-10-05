@@ -238,7 +238,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 | `A9` privacy | Por criterio de disposición | — | Anonimización | Solo `delete` decidido |
 | `A10` | — salvo break-glass | — | — | — |
 
-- **Condición RLS** — `SELECT`: `access_control.is_self(id)` **OR** existe relación vigente entre `id` y `access_control.org()` con `access_control.effective_assignment(...)`. `INSERT`: exclusivo de la función transaccional de activación (`OP-IDN-003`); ninguna policy permite un `INSERT` directo desde la API. `UPDATE`: `access_control.is_self(id)`.
+- **Condición RLS** — `SELECT`: `access_control.is_self(id)` **OR** existe relación vigente entre `id` y `access_control.org()` con `access_control.effective_assignment(...)`. `INSERT`: exclusivo de la función transaccional que crea el Fitness ID pendiente (`OP-IDN-043`); ninguna policy permite un `INSERT` directo desde la API. La transición a `active` (`OP-IDN-003`) es un `UPDATE` gobernado, no un segundo `INSERT`. `UPDATE`: `access_control.is_self(id)`.
 - **Contexto requerido** — `actor_kind`, `actor_person_id`; `actor_org_id` para el acceso profesional.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `UPDATE(campos propios)`. Sin `DELETE`. `allfit_worker_privacy`: `SELECT`, `UPDATE`, `DELETE`.
 - **Proyección** — El acceso profesional **nunca** consulta la tabla: usa `identity.v_client_identity`, que expone únicamente nombre de presentación e identificador de relación.
@@ -343,12 +343,14 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **Contexto requerido** — Completo, incluido `app.purpose` para el acceso profesional.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`. **Sin `UPDATE` ni `DELETE`**: la inmutabilidad se garantiza con privilegios, no solo con disciplina.
 - **Proyección** — `identity.v_client_profile`, que aplica el `SCOPE_RESOURCE_RULE` de la **versión congelada en el grant**. Un grant v1 no recibe atributos añadidos en v2 aunque la fila los tenga.
-- **Índice para la policy** — sobre `(person_id, attribute_code, valid_from DESC)`.
+- **Índice para la policy** — sobre `(person_id, attribute_code, valid_from DESC)`. Además, único parcial de miembro vigente para los atributos multivaluados; hoy solo `focus_areas`. No participa en la policy: protege la forma del conjunto.
 - **`T-CLAIM-1` (positiva)** — Un coach con `relationship_training` v1 lee los atributos del field-set v1.
 - **`T-CLAIM-2` (negativa)** — Publicada la v2 con atributos nuevos, ese mismo grant v1 **no** los recibe.
 - **`T-CLAIM-3` (negativa)** — Un grant `read` intenta insertar una observación: denegado.
 - **`T-CLAIM-4` (positiva)** — Declaración de la persona, observación profesional e inferencia del sistema sobre el mismo atributo coexisten; ninguna sobrescribe a otra.
 - **`T-CLAIM-5` (negativa)** — Un profesional intenta revisar una afirmación con procedencia `person_declared`: denegado. Solo puede proponer.
+- **`T-CLAIM-6` (positiva)** — Varias afirmaciones vigentes del **mismo** atributo multivaluado y la **misma** procedencia coexisten, una por miembro del conjunto. Es lo que distingue un atributo multivaluado de uno singular, y sin esta prueba la diferencia solo vive en el cuerpo de la función.
+- **`T-CLAIM-7` (negativa)** — El mismo miembro dos veces vigente para la misma persona: rechazado por el único parcial, no por el comando.
 
 #### `BODY_PROGRESS_RECORD`
 
@@ -762,20 +764,21 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 
 El catálogo es el único dominio con lectura amplia. Su riesgo no es la fuga de datos personales, sino la fuga de **contenido privado entre organizaciones**.
 
-#### `DISCIPLINE` · `ACTIVITY_TYPE` · `UNIT` · `EQUIPMENT` global · alias
+#### `DISCIPLINE` · `ACTIVITY_TYPE` · `UNIT` · `EQUIPMENT` global · `MUSCLE` · alias
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
 | Autenticado | Publicado | — | — | — |
 | `A11` | Todo | Sí | Estado | — |
 
-- **Condición RLS** — Por tabla: `disciplines.status='published'`; `activity_types.content_scope='global' AND status='published'` o contenido de `owner_organization_id=access_control.org()`; `units` tiene lectura autenticada completa; `equipment.content_scope='global'` o `owner_organization_id=access_control.org()`. Alias heredan mediante su FK al padre.
+- **Condición RLS** — Por tabla: `disciplines.status='published'`; `activity_types.content_scope='global' AND status='published'` o contenido de `owner_organization_id=access_control.org()`; `units` tiene lectura autenticada completa; `equipment.content_scope='global'` o `owner_organization_id=access_control.org()`; `muscles.status='published'`, que es global y no tiene alcance de organización porque el vocabulario muscular es uno solo para todos. Alias y `movement_muscles` heredan mediante su FK al padre.
 - **Grants mínimos** — `allfit_api`: `SELECT`, más `INSERT`/`UPDATE` restringidos a soporte.
-- **Índice para la policy** — `disciplines(code)` único y `(status)`; `activity_types(content_scope, owner_organization_id, status)`; `units(code)` único; `equipment(content_scope, owner_organization_id)`; cada alias indexa su FK padre.
+- **Índice para la policy** — `disciplines(code)` único y `(status)`; `activity_types(content_scope, owner_organization_id, status)`; `units(code)` único; `equipment(content_scope, owner_organization_id)`; `muscles(status, display_order, code)` y `movement_muscles(muscle_id)` para el filtro inverso; cada alias indexa su FK padre.
 - **`T-CAT-1` (negativa)** — Una organización no puede crear ni alterar disciplinas ni tipos de actividad globales.
 - **`T-CAT-2` (negativa)** — Un código retirado no se reutiliza: lo impide un único sobre el código, incluidos los archivados.
+- **`T-CAT-3` (negativa)** — El rol de runtime del producto no puede escribir `muscles` ni `movement_muscles`: el catálogo global lo publica solo Allfit, y una etiqueta muscular escrita desde Space sería contenido curatorial sin curaduría.
 
-#### `MOVEMENT` y su contenido privado
+#### `MOVEMENT` y su contenido privado · alias · variantes · instrucciones
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
@@ -785,6 +788,9 @@ El catálogo es el único dominio con lectura amplia. Su riesgo no es la fuga de
 | `A11` | Todo | Globales | Globales | — |
 
 - **Condición RLS** — `content_scope = 'global'` **OR** (`content_scope = 'organization'` **AND** `owner_organization_id = access_control.org()` **AND** `access_control.has_membership(owner_organization_id)`) **OR** (`content_scope = 'person'` **AND** `owner_person_id = access_control.person()`).
+- **Hijas del movimiento** — `movement_aliases`, `movement_instructions`, `movement_muscles` y `movement_media` heredan con `EXISTS` sobre `movement_id`; `movement_variants` exige visibilidad de **ambos** extremos y no amplía la de ninguno. `allfit_api` tiene `SELECT` y nada más sobre las cinco: el catálogo global lo publica solo Allfit.
+- **`T-MOV-4` (negativa)** — El rol de runtime no puede escribir una instrucción. Es contenido curado y revisado; escribirlo desde el producto sería saltarse la revisión que lo hace seguro.
+- **`T-MOV-5` (negativa)** — El rol de runtime no puede escribir `movement_media`. La fila dice qué bytes se revisaron; escribirla desde el producto permitiría cambiar la demostración de un movimiento sin pasar por la revisión del cambio.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE`. **Sin `DELETE`**: un movimiento referenciado por una versión publicada o una ejecución nunca se borra; se archiva.
 - **Índice para la policy** — `(content_scope, owner_organization_id, status)`, `(content_scope, discipline_code, status)` y textual sobre `normalized_name`.
 - **`T-MOV-1` (negativa)** — Una organización **no** ve los movimientos privados de otra, ni por búsqueda, ni por identificador directo, ni por conteo de resultados.
@@ -808,23 +814,39 @@ El catálogo es el único dominio con lectura amplia. Su riesgo no es la fuga de
 
 La regla estructural de este dominio: **el contenido pertenece a quien lo creó; la asignación pertenece a la persona.** Una organización que pierde la relación conserva su contenido y pierde la gestión.
 
-#### `SESSION_TEMPLATE` · `SESSION_TEMPLATE_DRAFT` · `PROGRAM` · `PROGRAM_DRAFT`
+#### `SESSION_TEMPLATE` · `SESSION_TEMPLATE_DRAFT` · `PROGRAM` · `PROGRAM_DRAFT` · `PROGRAM_COVER_PHOTO`
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
-| `A2` | Los personales propios | Propios | Propios | — |
-| `A3` | Los de su organización | Sí | Sí | — |
-| `A4`, `A5` | Los de su organización | Sí | Sí, más deprecar | — |
+| `A2` | Los personales propios **y todo el catálogo `global` publicado** | Propios | Propios | — |
+| `A3` | Los de su organización, más el `global` | Sí | Sí | — |
+| `A4`, `A5` | Los de su organización, más el `global` | Sí | Sí, más deprecar | — |
 | `A6` | — | — | — | — |
 | Personas ajenas | — | — | — | — |
+| Curaduría de plataforma | El `global` | El `global` | El `global` | — |
 
-- **Condición RLS** — (`owner_organization_id = access_control.org()` **AND** `access_control.has_membership(owner_organization_id)`) **OR** `owner_person_id = access_control.person()`. Un constraint garantiza que exactamente uno de los dos owners es no nulo.
-- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE`. Sin `DELETE`.
-- **Índice para la policy** — sobre `(owner_organization_id, status)` y `(owner_person_id, status)`.
+- **Condición RLS** — `content_scope = 'global'` **OR** (`content_scope = 'organization'` **AND** `owner_organization_id = access_control.org()` **AND** `access_control.has_membership(owner_organization_id)`) **OR** (`content_scope = 'person'` **AND** `owner_person_id = access_control.person()`). Es literalmente la condición que §7.x ya usa para `catalog.movements`, y un constraint garantiza que el owner corresponde al scope: `global` no tiene ninguno.
+- **Portadas del catálogo** — `PROGRAM_COVER_PHOTO` hereda con `EXISTS` sobre `program_id`, como las hijas del movimiento en §7.5: lo que se ve de la portada es exactamente lo que se ve del programa, y para el catálogo eso significa **cualquier persona autenticada**. Las dos filas de un programa —un juego por sexo— son visibles para todo el mundo por igual: la política no mira quién pregunta, porque **cuál de las dos se sirve no lo decide una policy sino la proyección**, con `planning.cover_for`. Esconder por RLS el juego que no le toca a alguien no protegería nada —son fotografías curadas y públicas, idénticas para todos— y convertiría una decisión de presentación en una regla de acceso, que es donde luego se rompe. Elegir una portada **no escribe ni registra nada**: no hay fila por persona que aislar, y por eso este recurso no aporta ninguna prueba de aislamiento entre vecinos.
+- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE`. Sin `DELETE`. El contenido `global` **no** se escribe desde el runtime: lo publica la curaduría de plataforma. Sobre `PROGRAM_COVER_PHOTO` el runtime tiene **`SELECT` y nada más**, igual que sobre `movement_media`: la fila dice qué bytes se revisaron, y poder escribirla desde el producto permitiría cambiar la cara del catálogo sin pasar por la revisión del cambio.
+- **Índice para la policy** — sobre `(content_scope, owner_organization_id, status)` y `(content_scope, owner_person_id, status)`; en las portadas basta la clave primaria `(program_id, audience)`, que es también el camino del `EXISTS`.
 - **`T-TPL-1` (negativa)** — Un borrador **nunca** es referenciable por un programa ni por una asignación.
 - **`T-TPL-2` (negativa)** — Los programas maestros de una organización **no** son visibles bajo `prior_training_history` de otra.
+- **`T-TPL-3` (positiva)** — Una persona sin organización lee el catálogo `global` completo.
+- **`T-TPL-4` (negativa)** — Leer el catálogo `global` **no** abre nada de ninguna organización: el vecino sigue sin ver el contenido privado del otro.
+- **`T-TPL-5` (negativa)** — El borrador de una persona no lo lee otra por `OP-PLN-023`: ajeno e inexistente responden igual, de modo que la respuesta no revela cuál de las dos cosas es.
+- **`T-TPL-6` (positiva)** — `OP-PLN-028` **sí descarta una plantilla con versión publicada**, y en la misma transacción republica sin ella cada programa propio que la componía, mudando la asignación a la versión nueva. La versión anterior de cada programa queda intacta, porque es lo que alguien entrenó. La negativa que esta prueba afirmaba hasta entonces dejó de ser cierta cuando se reescribió el descarte de rutinas.
+- **`T-TPL-7` (positiva)** — Descartar lleva la plantilla a `archived` y retira su borrador **sin borrar ninguna fila**: el grant de arriba no tiene `DELETE` y el descarte no lo necesita.
+- **`T-TPL-8` (negativa)** — `OP-PLN-029` no descarta un programa con versión publicada. Hay asignaciones que la referencian y sesiones materializadas contra ella.
+- **`T-TPL-9` (positiva)** — Descartar un programa lo lleva a `archived` y retira su borrador, y lo saca de lo que la persona puede retomar. Mismo grant, misma ausencia de `DELETE`.
+- **`T-TPL-10` (negativa)** — `OP-PLN-030` no devuelve el borrador de otra persona ni uno archivado: retomar lo propio no puede convertirse en enumerar lo ajeno.
+- **`T-TPL-13` (negativa)** — Un vecino **no elimina ni duplica** el programa de otra persona: ni `OP-PLN-034` ni `OP-PLN-035` alcanzan una sola fila bajo la política, y ajeno e inexistente responden igual para no hacer enumerable la biblioteca del otro.
+- **`T-TPL-14` (positiva)** — `OP-PLN-034` lleva a `archived` un programa **con versión publicada**, que es justo lo que `T-TPL-8` niega a `OP-PLN-029`, y con la petición de llevarse las rutinas archiva **sólo las que ningún otro programa no archivado de la persona use**: una rutina compartida se queda, y el programa que la comparte sigue teniendo todas sus sesiones.
+- **`T-TPL-15` (positiva)** — `OP-PLN-035` crea un programa y su borrador propios y **no acuña ninguna versión ni ninguna asignación**; la copia no inserta, edita ni archiva ninguna plantilla, porque apunta a las mismas versiones inmutables que el original.
+- **`T-TPL-16` (negativa)** — El rol de runtime no puede escribir `PROGRAM_COVER_PHOTO`, ni siquiera para corregir una dirección: la portada del catálogo es contenido curado y su `checksum` es lo que hace reproducible la revisión.
+- **`T-TPL-17` (positiva)** — Cualquier persona autenticada lee **las dos** filas de portada de un programa `global`, declare el sexo que declare o no lo declare, y pedir su portada **no inserta ni actualiza ninguna fila en ninguna tabla**: la elección ocurre al proyectar y no deja rastro de quién vio cuál.
+- **`T-TPL-11` y `T-TPL-12` — retiradas.** Cubrían la fotografía personal de portada, que la segunda revisión de `ADR-031` retiró junto con su tabla. La portada de clase `foto` es ahora una imagen del catálogo, pública e idéntica para todo el mundo: no hay nada que aislar por persona. La tercera revisión mudó además el estilo de portada a `planning.programs`, que ya está cubierta por la política de fila del programa: vestir un programa no alcanza a ninguna tabla nueva.
 
-#### `SESSION_TEMPLATE_VERSION` · `PLANNED_STEP` · targets · `PROGRAM_VERSION` · `PROGRAM_VERSION_SESSION`
+#### `SESSION_TEMPLATE_VERSION` · `PLANNED_STEP` · `PLANNED_SET` · targets · `PROGRAM_VERSION` · `PROGRAM_VERSION_SESSION`
 
 | Actor | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
@@ -832,10 +854,11 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 | `A2` destinataria | La versión que le fue **asignada** | — | — | — |
 | Resto | — | — | — | — |
 
-- **Condición RLS** — Owner del contenido, **OR** existe una `PROGRAM_ASSIGNMENT` de `access_control.person()` que referencia esa versión. Los pasos y targets heredan de su versión.
+- **Condición RLS** — Contenido `global`, **OR** owner del contenido, **OR** existe una `PROGRAM_ASSIGNMENT` de `access_control.person()` que referencia esa versión. Los pasos, sus series y los targets heredan de su versión, y la segmentación (`PROGRAM_VERSION_GOAL`, `..._LEVEL`, `..._EMPHASIS`) también: es parte de la versión y es inmutable con ella.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`. **Sin `UPDATE` ni `DELETE` para ningún rol de runtime**: es la garantía de inmutabilidad de las versiones publicadas.
 - **Índice para la policy** — sobre `(template_id, version_number)` único, y sobre `program_version_id` en la asignación.
 - **`T-VER-1` (negativa)** — Ninguna vía permite editar una versión publicada.
+- **`T-VER-6` (negativa)** — Una serie planificada no se inserta, edita ni borra fuera de la publicación atómica: `PLANNED_SET` lleva las mismas tres protecciones que sus hermanas, o sería la única grieta en la inmutabilidad de la versión.
 - **`T-VER-2` (positiva)** — Publicar o retirar una versión de plantilla **no** altera programas ni asignaciones históricas.
 - **`T-VER-3` (positiva)** — Un programa v1 fijado a plantilla v1 sigue en v1 aunque exista v2.
 - **`T-VER-4` (positiva)** — La persona lee íntegramente la versión que le fue asignada, y **solo** esa: el resto del catálogo de la organización permanece invisible.
@@ -861,6 +884,8 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 - **`T-ASG-5` (positiva)** — Terminarla cancela **solo** las sesiones futuras no iniciadas.
 - **`T-ASG-6` (negativa)** — Una relación nueva no hereda la gestión de una asignación desacoplada.
 - **`T-ASG-7` (positiva)** — Una adaptación personal crea una revisión de prescripción **sin** editar plantilla ni programa publicados.
+- **`T-ASG-8` (positiva)** — Eliminar el programa propio (`OP-PLN-034`) deja su asignación personal en `ended` **sin borrar la fila**: el grant de arriba sigue sin `DELETE` y `UPDATE(lifecycle)` es todo lo que la operación necesita. Ninguna asignación de otra persona, ni ninguna originada por una relación, cambia de estado.
+- **`T-ASG-9` (negativa)** — Un vecino no termina la asignación de otro eliminando un programa: la operación no ve el programa ajeno, así que tampoco ve la asignación que cuelga de él.
 
 #### `PLANNED_SESSION` · `PLANNED_SESSION_EXECUTION`
 
@@ -871,12 +896,17 @@ La regla estructural de este dominio: **el contenido pertenece a quien lo creó;
 | Resto | — | — | — | — |
 
 - **Condición RLS** — Heredan de la asignación. La reprogramación exige periodo de gestión **vigente** y que la sesión no tenga ejecución iniciada.
-- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(scheduled_at, status)`. Sin `DELETE`.
+- **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT`, `UPDATE(scheduled_at, status)`. **Sigue sin `DELETE`, y `OP-PLN-034` no lo cambia.** Eliminar un programa retira las sesiones que nadie entrenó, pero ese borrado no lo ejecuta el rol del runtime: lo ejecuta la función `security definer` que lleva la operación, como ya lo hacía `restate_assignment_onto` al re-plantear una asignación. Un privilegio que sólo hace falta dentro de una transacción escrita y revisada no se concede al rol que atiende peticiones. El límite último lo pone además la base: la clave foránea `RESTRICT` de `PLANNED_SESSION_EXECUTION` rechaza la transacción entera si una sola sesión con ejecución cae en el conjunto. `PLANNED_SESSION_EXECUTION` no se borra nunca, por nadie.
 - **Índice para la policy** — sobre `(assignment_id, scheduled_at)` y **único** sobre `(planned_session_id, attempt_number)`.
 - **`T-PLAN-1` (positiva)** — Una sesión planificada admite intentos numerados; el número es único y monotónico.
 - **`T-PLAN-2` (negativa)** — La concurrencia no crea números de intento duplicados: dos peticiones simultáneas producen uno solo.
 - **`T-PLAN-3` (negativa)** — Un coach no puede reprogramar una sesión de una asignación desacoplada: ya no hay gestor.
-- **`T-PLAN-4` (positiva)** — Al asignar, todas las sesiones quedan materializadas en la misma transacción y en la zona horaria de la persona.
+- **`T-PLAN-4` (positiva)** — Al asignar una versión **con fecha de fin**, todas sus sesiones quedan materializadas en la misma transacción y en la zona horaria de la persona.
+- **`T-PLAN-5` (positiva)** — Al asignar una versión **sin fecha de fin** queda materializada la semana de la asignación, y la lectura de la agenda siembra la semana que va a enseñar: dos lecturas simultáneas de esa semana la siembran **una sola vez**, y repetir la lectura no duplica ninguna sesión. El `INSERT` que esa siembra necesita es el mismo que la ficha ya concede a `allfit_api`; no hace falta ningún grant nuevo para sembrar.
+- **`T-PLAN-6` (positiva)** — Eliminar un programa (`OP-PLN-034`) retira sus sesiones planificadas **sin ejecución** y deja intactas las que tienen alguna: lo que la persona entrenó sobrevive al programa que lo pedía. El borrado ocurre dentro de la función de la operación y no por un privilegio de `allfit_api`, que sigue sin tenerlo. Una sesión con ejecución dentro del conjunto rechaza la transacción completa, y el programa no queda a medio eliminar.
+- **`T-PLAN-7` (negativa)** — Ese borrado no alcanza la sesión de otra persona ni la de otra asignación de la misma: la operación parte del programa, que ya es suyo, y `allfit_api` no tiene con qué borrar una fila por su cuenta.
+- **`T-PLAN-8` (positiva)** — La agenda responde por cada sesión **cómo fue la última vez** que se entrenó esa rutina, contada por plantilla y no por versión: publicar una versión nueva de la rutina no le borra el pasado. El tonelaje viene en kilogramos aunque las series se registraran en libras, porque la base multiplica por `catalog.units.to_canonical_factor` y no el cliente. Leerlo **no escribe nada**: lo único que la agenda escribe sigue siendo la siembra de la semana de `T-PLAN-5`.
+- **`T-PLAN-9` (negativa)** — Esas cifras nunca son las de otra persona, y nunca son las de algo que no terminó: una ejecución anulada y un intento todavía abierto quedan fuera del cálculo. Una rutina que nadie entrenó responde nulo y no un cero, que afirmaría un entrenamiento sin trabajo.
 
 ### 7.7 Ejecución
 
@@ -913,7 +943,7 @@ Es el dominio donde convergen las tres decisiones difíciles: una fila puede con
 - **`T-EXEC-4` (negativa)** — Ningún profesional puede escribir, corregir o borrar una ejecución ajena. No existe `manage_execution`.
 - **`T-EXEC-5` (positiva)** — Una sesión espontánea existe sin plan, relación ni organización.
 
-#### `SESSION_SEGMENT` · `STRENGTH_SET` · `ENDURANCE_LAP` · `INTERVAL_RESULT` · `ROUND_RESULT` · `MOBILITY_RESULT`
+#### `SESSION_SEGMENT` · `SESSION_EXERCISE` · `STRENGTH_SET` · `ENDURANCE_LAP` · `INTERVAL_RESULT` · `ROUND_RESULT` · `MOBILITY_RESULT`
 
 Comparten política porque comparten dueño y sensibilidad: heredan íntegramente de su `EXECUTED_SESSION`.
 
@@ -930,6 +960,13 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 - **`T-RESULT-2` (positiva)** — Una sesión híbrida admite segmentos de familias distintas.
 - **`T-RESULT-3` (negativa)** — Un resultado de una familia incompatible con el tipo de actividad del segmento es rechazado por constraint.
 - **`T-RESULT-4` (negativa)** — Un valor no capturado permanece `NULL` y **nunca** se sustituye por cero.
+- **`T-RESULT-5` (positiva)** — La dueña lee y reemplaza los ejercicios de su sesión en curso (`ADR-034`).
+- **`T-RESULT-6` (negativa)** — Otra persona no lee ni escribe los ejercicios de una sesión ajena.
+- **`T-RESULT-7` (positiva)** — La persona lee el resumen de su ejecución terminada, con récords, racha y número (`OP-EXE-021`).
+- **`T-RESULT-8` (negativa)** — Otra persona no lee el resumen de una ejecución ajena, ni la dueña el de una sin terminar.
+- **`T-RESULT-9` (positiva)** — La persona lista su historial y lee el resumen de un mes, sólo con sus ejecuciones terminadas (`OP-EXE-014`, `OP-EXE-022`).
+- **`T-RESULT-10` (negativa)** — Otra persona no ve en su listado ni en su mes ninguna ejecución ajena.
+- **`T-RESULT-11` (positiva y negativa)** — La persona lee el detalle de su entreno terminado, lo corrige, lo anula y lo repite; otra persona no lo lee ni lo anula, y una revisión no se reescribe ni la dueña (`OP-EXE-007`, `OP-EXE-009`, `OP-EXE-023`, `OP-EXE-025`).
 
 #### `METRIC_SAMPLE`
 
@@ -1219,7 +1256,7 @@ Un índice que solo existe para consultas de negocio no basta: la condición RLS
 
 ## 9. Catálogo de pruebas
 
-Cada ficha aporta al menos una prueba positiva y una negativa, según exige el plan. El total actual es de **186 pruebas funcionales/RLS tipadas** distribuidas así:
+Cada ficha aporta al menos una prueba positiva y una negativa, según exige el plan. El total actual es de **192 pruebas funcionales/RLS tipadas** distribuidas así:
 
 | Dominio | Positivas | Negativas | Total |
 | --- | --- | --- | --- |
@@ -1228,13 +1265,13 @@ Cada ficha aporta al menos una prueba positiva y una negativa, según exige el p
 | Relaciones | 4 | 11 | 15 |
 | Privacidad | 22 | 27 | 49 |
 | Catálogo | 4 | 4 | 8 |
-| Planificación | 9 | 9 | 18 |
+| Planificación | 16 | 17 | 33 |
 | Ejecución | 12 | 16 | 28 |
 | Nutrición | 9 | 15 | 24 |
 | Soporte | 2 | 5 | 7 |
-| **Total** | **73** | **113** | **186** |
+| **Total** | **75** | **117** | **192** |
 
-El conteo incluye únicamente los casos individuales marcados como `(positiva)` o `(negativa)` en esta matriz. Las series `T-VG-01..06` y `T-BGG-01..12` se referencian aquí, pero pertenecen al catálogo separado de 18 pruebas de gobernanza de verificación y break-glass definido en `V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`; no se suman de nuevo a las 186 pruebas funcionales/RLS.
+El conteo incluye únicamente los casos individuales marcados como `(positiva)` o `(negativa)` en esta matriz. Las series `T-VG-01..06` y `T-BGG-01..12` se referencian aquí, pero pertenecen al catálogo separado de 18 pruebas de gobernanza de verificación y break-glass definido en `V1_VERIFICATION_AND_BREAK_GLASS_GOVERNANCE.md`; no se suman de nuevo a las 192 pruebas funcionales/RLS.
 
 La proporción no es casual: en un modelo de privacidad, lo que hay que demostrar sobre todo es lo que **no** debe ocurrir.
 
