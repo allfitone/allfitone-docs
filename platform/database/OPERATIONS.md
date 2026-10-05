@@ -283,3 +283,57 @@ correo nunca invalida la invitación. Para rollback, apagar primero la interfaz 
 después la emisión; opcionalmente cerrar entrega para correos aún no reclamados.
 Mantener resolución, decisiones, listado, revocación, cron y expiración. Las
 migraciones forward-only permanecen.
+
+## Despliegue de la invitación de cliente
+
+`OP-REL-001` encola `relationship.client_invited.v1` desde que se desplegó, y hasta
+`OP-IDN-051` nada lo reclamaba. Un evento sin reclamar no tiene publicación ni
+intentos, así que `support.list_operational_events` reportaba cada invitación de
+cliente emitida como `pending` indefinidamente: la cola crecía con trabajo que nadie
+hacía y el panel técnico de `HU-BO-031` se leía como una avería.
+
+El consumidor existe y está probado. **Permanece apagado**, porque la pantalla donde
+la persona resuelve y decide su invitación no existe todavía: `/space/v1/client-invitations/resolve`
+y `/space/v1/client-invitations/decisions` están servidos, pero Space no los consume y
+no hay dominios asociados para enlaces universales. Activarlo antes enviaría un enlace
+muerto a alguien a quien se le piden permisos sobre datos de salud.
+
+Los gates son independientes:
+
+- `STAFF_INVITATION_DELIVERY_ENABLED`: condición previa; es el interruptor general de
+  entrega de invitaciones y el que decide si existe el remitente;
+- `CLIENT_INVITATION_DELIVERY_ENABLED`: reclamación y entrega de la invitación de
+  cliente. Requiere el anterior;
+- `CLIENT_INVITATION_PUBLIC_BASE_URL`: base del enlace, obligatoria cuando el gate
+  anterior está encendido. Es **propia**, no la de Studio: el worker construye
+  `…/client-invitations#token=…`, y `/invitations` de Studio responde una invitación de
+  equipo, no una de cliente.
+
+Emitir, resolver, decidir y reenviar permanecen disponibles con la entrega apagada. Lo
+único que no ocurre es el correo.
+
+El correo no nombra ni cuenta los permisos que pide la invitación. Llega a una
+dirección, no a una persona verificada, y el conteo habría que leerlo de
+`privacy.invitation_scope_options`, cuyas políticas admiten a la organización que pidió
+y a la persona invitada. El detalle se muestra detrás del enlace, con el token y la
+sesión. La proyección `identity.prepare_client_invitation_delivery` tampoco lo devuelve,
+y `T-IDN-CLIENT-RESEND-01` lo fija enumerando sus columnas.
+
+Despliegue en este orden:
+
+1. integrar con `CLIENT_INVITATION_DELIVERY_ENABLED` apagado; el evento sigue sin
+   reclamar, igual que antes del cambio;
+2. construir la pantalla de Space y publicar la ruta pública que la abre;
+3. configurar `CLIENT_INVITATION_PUBLIC_BASE_URL` apuntando a esa ruta y desplegar el
+   worker todavía apagado;
+4. revisar el inventario de invitaciones de cliente pendientes. Las emitidas antes de
+   la activación llevan semanas en la cola: decidir explícitamente si se entregan o se
+   descartan antes de encender, porque encender las enviará todas;
+5. habilitar la entrega para una organización interna y validar con un correo real que
+   el enlace abre, que la persona decide cada permiso por separado y que el reenvío
+   desde Backoffice ofrece exactamente lo mismo;
+6. habilitar en general.
+
+Para rollback, apagar `CLIENT_INVITATION_DELIVERY_ENABLED`. El evento vuelve a quedar
+sin reclamar y nada más cambia. `apps/worker/src/delivery-coverage.test.ts` impide que
+un evento de entrega nuevo vuelva a quedarse sin consumidor sin que nadie lo note.
