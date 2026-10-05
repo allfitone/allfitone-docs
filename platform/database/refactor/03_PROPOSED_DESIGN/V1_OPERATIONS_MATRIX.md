@@ -260,10 +260,10 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-040` | Iniciar sesión en Space | Comando | `A0` → `A1`, `A2` |
 | `OP-IDN-041` | Renovar la sesión de Space | Comando | `A1`, `A2` |
 | `OP-IDN-042` | Pedir el restablecimiento de contraseña de Space | Comando | `A0` |
-| `OP-IDN-045` | Reenviar una invitación de equipo desde Backoffice | Comando | `A10` |
-| `OP-IDN-046` | Enviar a una persona el flujo oficial de recuperación desde Backoffice | Comando | `A10` |
-| `OP-IDN-047` | Reenviar una recuperación en curso desde Backoffice | Comando | `A10` |
-| `OP-IDN-048` | Cancelar una recuperación sospechosa desde Backoffice | Comando | `A10` |
+| `OP-IDN-052` | Reenviar una invitación de equipo desde Backoffice | Comando | `A10` |
+| `OP-IDN-053` | Enviar a una persona el flujo oficial de recuperación desde Backoffice | Comando | `A10` |
+| `OP-IDN-054` | Reenviar una recuperación en curso desde Backoffice | Comando | `A10` |
+| `OP-IDN-055` | Cancelar una recuperación sospechosa desde Backoffice | Comando | `A10` |
 | `OP-IDN-049` | Consultar mi contexto de salud | Consulta | `A2` |
 | `OP-IDN-050` | Eliminar una declaración de contexto de salud | Comando | `A2` |
 | `OP-IDN-051` | Reenviar una invitación de cliente desde Backoffice | Comando | `A10` |
@@ -274,20 +274,21 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-047` | Saltarse un paso del onboarding | Comando | `A2` |
 | `OP-IDN-048` | Cerrar sesión Space | Comando idempotente | sesión presente o ausente |
 
-> **`OP-IDN-045` a `OP-IDN-048` están asignados dos veces, y hay que decidirlo.** Space
-> los usa para el sexo biológico, las zonas de énfasis, saltarse un paso y cerrar sesión;
-> Backoffice, para reenviar una invitación de equipo y para las tres operaciones de
-> recuperación de acceso. **No es sólo un problema de esta tabla**: ambos lados escriben
-> su código en `system.idempotency_keys`, así que el recibo deja de identificar qué
-> operación ocurrió y el panel técnico muestra dos cosas distintas bajo el mismo nombre.
+> **`OP-IDN-045` a `OP-IDN-048` estuvieron asignados dos veces, y ya no.** Space los usa
+> para el sexo biológico, las zonas de énfasis, saltarse un paso y cerrar sesión. Las
+> cuatro operaciones de Backoffice que compartían esos números —reenviar una invitación
+> de equipo y las tres de recuperación de acceso— pasaron a `OP-IDN-052` … `OP-IDN-055`.
 >
-> Los de Space entraron antes (`20260913…`) y ya están en `main`; los de Backoffice
-> llegan en `feature/AFO-backoffice-v3`. Por el mismo criterio que rige las migraciones
-> —lo que ya está en historia compartida se queda—, lo esperable es renumerar los de
-> Backoffice a partir de `OP-IDN-052`. **No se hizo aquí** porque no es un reemplazo
-> global: los mismos códigos aparecen en archivos de Space con el otro significado, y
-> tocarlos a ciegas rompería ese lado. Queda para una decisión del equipo, con las dos
-> numeraciones a la vista mientras tanto.
+> No era sólo un problema de esta tabla: ambos lados escribían su código en
+> `system.idempotency_keys`, así que el recibo dejaba de identificar qué operación había
+> ocurrido y el panel técnico mostraba dos cosas distintas bajo el mismo nombre.
+>
+> Se movieron los de Backoffice y no los de Space por el mismo criterio que rige las
+> migraciones: **lo que ya está en historia compartida se queda**. Los de Space entraron
+> el `20260913…` y están en `main`; los de Backoffice llegaban sin fusionar. El cambio se
+> hizo archivo por archivo, no reemplazando la cadena: esos mismos códigos aparecen en
+> migraciones, en el cliente de cierre de sesión y en pantallas de onboarding de Space
+> con el otro significado.
 
 ---
 
@@ -970,8 +971,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | **Responde `202` siempre**, exista o no la cuenta y esté o no el proveedor en pie: HU-SP-004 criterio 2. Un fallo del proveedor tampoco es público, porque distinguirlo delataría igualmente qué direcciones existen. **Límite de intentos obligatorio**: sin él, este endpoint envía correos a cualquier dirección que le pidan |
 | **Falla cerrada** | Cualquier error se traga y se responde `202`; nada se crea |
 
-#### `OP-IDN-045` — Reenviar una invitación de equipo desde Backoffice
-#### `OP-IDN-043` — Crear el Fitness ID en estado pendiente
+#### `OP-IDN-052` — Reenviar una invitación de equipo desde Backoffice
 
 | Campo | Valor |
 | --- | --- |
@@ -987,7 +987,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | `organization.staff_invited.v1` (y `identity.invitation_expired.v1` si la vencida seguía pendiente) |
 | **Reglas** | `HU-BO-011`, criterios 2 a 6. La ventana por destino que usa Studio (tres al día por organización y dirección) cuenta también los reenvíos de soporte: `429`. Un trigger rechaza una reemisión con otra organización, canal, contacto, propuesta o rol |
 
-#### `OP-IDN-046` — Enviar a una persona el flujo oficial de recuperación desde Backoffice
+#### `OP-IDN-053` — Enviar a una persona el flujo oficial de recuperación desde Backoffice
 
 | Campo | Valor |
 | --- | --- |
@@ -1003,39 +1003,56 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | `identity.account_recovery_requested.v1` (payload: `request_id`). El worker llama al proveedor, registra `delivered` con el vencimiento del enlace o `failed`; `identity.process_password_reset_succeeded` confirma la solicitud cuando la persona cambia su contraseña |
 | **Reglas** | `HU-BO-010`, criterios 3, 4, 5, 10 y 12. Solo la persona confirma. No hay recuperación por teléfono: V1 no tiene canal SMS |
 
-#### `OP-IDN-047` — Reenviar una recuperación en curso desde Backoffice
+#### `OP-IDN-054` — Reenviar una recuperación en curso desde Backoffice
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
 | **Superficie** | `POST /backoffice/v1/people/{personId}/account-recoveries/{requestId}/resends` |
-| **Actor** | Igual que `OP-IDN-046` |
+| **Actor** | Igual que `OP-IDN-053` |
 | **Filtros obligatorios** | Solicitud de esa persona en `awaiting_verification` y con enlace vigente. El cuerpo lleva solo `case_reference` |
 | **Transacción** | `identity.resend_account_recovery`: comprueba que el correo verificado sigue siendo aquel con el que empezó (fingerprint), escribe `delivery_requested` y encola otra entrega de la misma solicitud |
 | **Idempotencia** | `Idempotency-Key` + `Command-Id`; el reintento devuelve la solicitud sin encolar otro correo |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada. Una solicitud que todavía no salió, vencida, cancelada, confirmada, fallida o cuyo correo verificado cambió responde `409`; una vencida nunca revive y la reemplaza una nueva con `OP-IDN-046`. Comparte el límite diario: `429` |
-| **Información sensible** | Igual que `OP-IDN-046` |
+| **Offline / concurrencia** | Falla cerrada. Una solicitud que todavía no salió, vencida, cancelada, confirmada, fallida o cuyo correo verificado cambió responde `409`; una vencida nunca revive y la reemplaza una nueva con `OP-IDN-053`. Comparte el límite diario: `429` |
+| **Información sensible** | Igual que `OP-IDN-053` |
 | **Evento de dominio** | `identity.account_recovery_requested.v1` |
 | **Reglas** | `HU-BO-011`, criterios 2 a 6, para la recuperación: reenviar no cambia sujeto, destino, finalidad ni acción |
 
-#### `OP-IDN-048` — Cancelar una recuperación sospechosa desde Backoffice
+#### `OP-IDN-055` — Cancelar una recuperación sospechosa desde Backoffice
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
 | **Superficie** | `POST /backoffice/v1/people/{personId}/account-recoveries/{requestId}/cancellation` |
-| **Actor** | Igual que `OP-IDN-046` |
+| **Actor** | Igual que `OP-IDN-053` |
 | **Filtros obligatorios** | Solicitud de esa persona en `initiated` o `awaiting_verification` y con enlace vigente. El cuerpo lleva solo `case_reference` |
 | **Transacción** | `identity.cancel_account_recovery`: pasa la solicitud a `cancelled` y escribe `cancelled` con persona, deber y caso |
 | **Idempotencia** | `Idempotency-Key` + `Command-Id` |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Una solicitud que ya no está vigente responde `409`. Si la entrega estaba en cola, el worker ya no la envía; si el correo ya salió, se registra pero no reabre la solicitud |
-| **Información sensible** | Igual que `OP-IDN-046` |
+| **Información sensible** | Igual que `OP-IDN-053` |
 | **Evento de dominio** | Ninguno |
 | **Reglas** | `HU-BO-010`, criterio 10. Un correo que ya salió no se puede retirar del buzón de la persona: un cambio de contraseña posterior ya no confirma la solicitud cancelada |
 
 #### `OP-IDN-049` — Consultar mi contexto de salud
+| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/fitness-id` |
+| **Actor** | `A1`, dueño del intento. Al terminar, la cuenta pasa a tener persona y el actor es `A2` |
+| **Filtros obligatorios** | Intento abierto y propio, con `ELIGIBILITY_EVIDENCE` en estado `pass` vigente — **también al corregir**: una corrección no salta el control de adultez. Nombre y apellido no vacíos. Nombre de usuario con formato válido y libre para cualquier otra persona. **El proveedor debe confirmar la dirección de la credencial como verificada** al crear: sin eso no hay contacto que registrar |
+| **Transacción** | Una sola. Si la cuenta no tiene persona: crear `PERSON` en `pending_activation` con nombre, apellido, nombre de usuario, **correo de contacto y su sello de verificación**, `activated_at` nulo; vincular `ACCESS_ACCOUNT` a esa persona; y anotar `person_id` en el `ONBOARDING_ATTEMPT`, que sigue `open`. **Si ya la tiene: corregir** nombre, apellido y nombre de usuario sobre la misma persona. El contacto no se reescribe aquí: pertenece a la credencial y cambiarlo es `OP-IDN-021` |
+| **Idempotencia** | `Idempotency-Key`. Un reintento devuelve la misma `PERSON`; nunca crea una segunda, ni al crear ni al corregir. La unicidad del handle y del vínculo cuenta–persona se resuelven en la base |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | No admite `draft_local`: la unicidad del handle es autoritativa y no se puede prometer sin conexión. Dos peticiones concurrentes producen una sola persona |
+| **Información sensible** | Datos identificativos básicos **y contacto**. Clasificación `identity_pii`. Ninguna categoría fitness |
+| **Evento de dominio** | `identity.person_created_pending.v1` |
+| **Reglas** | **Crear la persona aquí es lo que permite que el resto del onboarding escriba directamente sobre ella**: sin esto, cada respuesta de perfil necesitaría una tabla de preparación y un segundo camino de escritura hacia `FITNESS_PROFILE_CLAIM`. La elegibilidad adulta se exige **antes**, que es lo que piden DT-012 y ADR-017: crear la fila más temprano no adelanta ningún control. Una persona `pending_activation` **no** puede crear organización ni perfil profesional; esas operaciones ya exigen estado activo. **No existe consulta de disponibilidad de usuario**: el choque vuelve como `conflict` sobre ese campo, porque preguntar si un handle está libre delata que alguien lo tiene. **El correo de contacto no se acepta como entrada**: es la dirección de la credencial —DT-016 los declara el mismo dato— y la API la consulta al proveedor por `sub`. Una dirección que mandara el cliente jamás puede guardarse como verificada: quedaría un contacto que nadie probó satisfaciendo el filtro de `OP-SYS-002`. Cambiarla es `OP-IDN-021`, con su propia verificación. **Límite de intentos obligatorio** |
+| **Falla cerrada** | Sin elegibilidad `pass` no hay persona ni corrección, aunque el nombre y el handle sean válidos. Usuario que otra persona tiene: `conflict`, y nada cambia. Si el proveedor no confirma la dirección como verificada: `forbidden` |
+
+#### `OP-IDN-043` — Crear el Fitness ID en estado pendiente
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
 | **Superficie** | `POST /space/v1/onboarding-attempts/{id}/fitness-id` |
 | **Actor** | `A1`, dueño del intento. Al terminar, la cuenta pasa a tener persona y el actor es `A2` |
 | **Filtros obligatorios** | Intento abierto y propio, con `ELIGIBILITY_EVIDENCE` en estado `pass` vigente — **también al corregir**: una corrección no salta el control de adultez. Nombre y apellido no vacíos. Nombre de usuario con formato válido y libre para cualquier otra persona. **El proveedor debe confirmar la dirección de la credencial como verificada** al crear: sin eso no hay contacto que registrar |
