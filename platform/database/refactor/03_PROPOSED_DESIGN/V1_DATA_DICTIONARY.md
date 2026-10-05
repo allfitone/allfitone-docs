@@ -1041,7 +1041,7 @@ por eso son dos columnas: un código no se muestra y una frase no se consulta.
 - **Columnas:** `id` · `code text` · `dimension text` (peso, distancia, tiempo…) · `is_canonical boolean` · `to_canonical_factor numeric`.
 - **FKs y borrado:** ninguna saliente; las referencias entrantes usan `ON DELETE RESTRICT`.
 - **Uniques y checks:** `UNIQUE code`; `UNIQUE parcial (dimension) WHERE is_canonical`.
-- **Miembros V1.** Curados el 24 de agosto de 2026 con `HU-SP-011`, que es la primera pantalla que necesita unidades reales: dimensión `mass` con `kg` canónica y `lb` a `0.45359237`; dimensión `length` con `cm` canónica y `in` a `2.54`. Las filas `test_*` de `seed.sql` son sintéticas y producción no las carga.
+- **Miembros V1.** Curados el 24 de agosto de 2026 con `HU-SP-011`, que es la primera pantalla que necesita unidades reales: dimensión `mass` con `kg` canónica y `lb` a `0.45359237`; dimensión `length` con `cm` canónica y `in` a `2.54`. Nutrición (`ADR-027`, `ADR-041`) suma `kcal` (energía, canónica), `g` a `0.001`, `mg` a `0.000001`, `mcg` a `0.000000001` y `oz` a `0.028349523125` en `mass`, y `ml` (canónica), `l` a `1000` y `fl_oz` a `29.5735` en `volume`. La taza y la cucharada no son unidades: son porciones de cada alimento, porque una taza de arroz y una de leche no pesan lo mismo. Las filas `test_*` de `seed.sql` son sintéticas y producción no las carga.
 - **Actores:** lectura autenticada; escritura exclusiva de curaduría de plataforma.
 - **RLS:** lectura autenticada; sin escritura de runtime salvo función de curaduría. **El esquema no lo cumplía**: hasta el 24 de agosto de 2026 la única política era `to allfit_owner` y no había `grant` para el rol de runtime, así que Space no podía leer el catálogo que sus propias pantallas necesitan. Corregido al construir `HU-SP-011`; no es un cambio de norma sino ponerse en conformidad con ella.
 - **Consultas / índices:** por `code`; por `dimension`.
@@ -2004,22 +2004,28 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Propósito:** catálogo cerrado y publicado de nutrientes admitidos por Nutrición V1.
 - **Dominio / fuente de verdad:** Nutrición.
 - **Clasificación:** `operational`.
-- **Columnas:** `id uuid` · `code text` (`energy`, `protein`, `carbohydrates`, `fat`, `fiber`, `water`) · `name text` · `canonical_unit_code text` (`kcal`, `g`, `ml`) · `status catalog.publication_status` · `published_at timestamptz`.
+- **Columnas:** `id uuid` · `code text` · `name text` · `canonical_unit_code text` (`kcal`, `g`, `mg`, `mcg`, `ml`) · `nutrient_group text` (`macro`, `detail`, `vitamin`, `mineral`) · `daily_reference numeric` (nullable) · `status catalog.publication_status` · `published_at timestamptz`.
+- **Códigos (31, `ADR-041`):**
+  - macros: `energy`, `protein`, `carbohydrates`, `fat`, `fiber`, `water`;
+  - detalle: `saturated_fat`, `trans_fat`, `cholesterol`, `sodium`, `sugars`;
+  - vitaminas: `vitamin_a`, `vitamin_c`, `vitamin_d`, `vitamin_e`, `vitamin_k`, `thiamin`, `riboflavin`, `niacin`, `pantothenic_acid`, `vitamin_b6`, `vitamin_b12`, `folate`;
+  - minerales: `calcium`, `iron`, `magnesium`, `phosphorus`, `potassium`, `zinc`, `selenium`, `copper`.
+- **Referencia diaria:** el valor para adultos de la Resolución 810 de 2021, art. 15, en la unidad canónica: la tabla 9 para necesidades y la tabla 10 para los máximos de grasas saturadas y trans, colesterol y sodio. Es null en `sugars` y `water`, que la norma no fija. La app usa primero la meta activa de la persona.
 - **FKs y borrado:** `canonical_unit_code → catalog.units(code) RESTRICT`.
-- **Uniques y checks:** `UNIQUE(code)`; combinación código/unidad cerrada por seed/constraint; versiones publicadas sin `UPDATE/DELETE` runtime.
+- **Uniques y checks:** `UNIQUE(code)`; la unidad canónica es de energía, masa o volumen (`kcal`, `g`, `mg`, `mcg`, `ml`); el grupo es uno de los cuatro; la referencia, si existe, es positiva; versiones publicadas sin `UPDATE/DELETE` runtime. El contrato empareja cada código con su única unidad.
 - **Actores:** lectura autenticada; publicación exclusiva de plataforma.
 - **RLS:** runtime lee solo `status='published'`.
 - **Consultas:** por `code`, catálogo publicado.
 - **Índices:** único `(code)`; `(status,code)`.
 - **Retención:** permanente; referenciado por historial.
-- **Eventos:** ninguno; ampliar códigos exige nueva versión de `nutrition_intake`.
+- **Eventos:** ninguno; ampliar códigos exige nueva versión de `nutrition_intake`. Al 5 de octubre de 2026 ese scope no tiene ninguna versión publicada con reglas de campos, así que la primera nace con los 31 códigos.
 
 ### 10A.2 `nutrition.meals`
 
 - **Propósito:** comida manual personal y raíz transaccional de ítems, nutrientes y una foto opcional.
 - **Dominio / fuente de verdad:** Nutrición.
 - **Clasificación:** `nutrition`.
-- **Columnas:** `id uuid` (**Command-Id UUIDv7 para `OP-NUT-001`**) · `person_id uuid` · `occurred_at timestamptz` · `timezone text` · `local_date date` · `meal_type nutrition.meal_type` · `note text` (nullable) · `revision_number integer` (`0`) · `media_ref text` (nullable, solo objeto saneado) · `has_media boolean` · `created_at timestamptz` · `updated_at timestamptz`.
+- **Columnas:** `id uuid` (**Command-Id UUIDv7 para `OP-NUT-001`**) · `person_id uuid` · `occurred_at timestamptz` · `timezone text` · `local_date date` · `meal_type nutrition.meal_type` · `note text` (nullable) · `revision_number integer` (`0`) · `media_ref text` (nullable, solo objeto saneado) · `has_media boolean` · `recognized_by text` (nullable: el modelo exacto que reconoció la foto, `ADR-041`) · `created_at timestamptz` · `updated_at timestamptz`.
 - **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; clave portadora `UNIQUE(id,person_id)`.
 - **Uniques y checks:** `revision_number>=0`; `CHECK (has_media=(media_ref IS NOT NULL))`; `local_date` corresponde a `occurred_at` bajo `timezone` mediante función de entrada; máximo una foto.
 - **Actores:** solo la persona crea/revisa/borra por funciones; profesional nunca recibe DML.
@@ -2034,9 +2040,9 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Propósito:** componente manual y ordenado de una comida.
 - **Dominio / fuente de verdad:** Nutrición.
 - **Clasificación:** `nutrition`.
-- **Columnas:** `id uuid` · `meal_id uuid` · `person_id uuid` · `position integer` · `name text` · `quantity_numeric numeric` (nullable) · `quantity_unit_code text` (nullable) · `created_at timestamptz`.
+- **Columnas:** `id uuid` · `meal_id uuid` · `person_id uuid` · `position integer` · `name text` · `quantity_numeric numeric` (nullable) · `quantity_unit_code text` (nullable) · `serving text` (nullable, 1 a 40 caracteres: cómo dijo la persona la cantidad, «1 ½ tazas»; los nutrientes siguen los gramos) · `food_id uuid` (nullable, `ADR-041`) · `product_id uuid` (nullable, `ADR-041`) · `origin nutrition.item_origin` (`typed`, `catalog`, `photo`; por defecto `typed`) · `created_at timestamptz`.
 - **FKs y borrado:** `(meal_id,person_id) → meals(id,person_id) ON DELETE CASCADE`; `quantity_unit_code → catalog.units(code) RESTRICT`; claves portadoras `UNIQUE(id,meal_id,person_id)` y `UNIQUE(id,person_id)` (`IX-28`).
-- **Uniques y checks:** `UNIQUE(meal_id,position)`; `position>0`; cantidad/unidad aparecen juntas y cantidad `>0`.
+- **Uniques y checks:** `UNIQUE(meal_id,position)`; `position>0`; cantidad/unidad aparecen juntas y cantidad `>0`; `origin='catalog'` exige exactamente uno de `food_id` y `product_id`, `origin='typed'` prohíbe los dos y `origin='photo'` prohíbe `product_id`; cada uno solo nombra un alimento o un producto publicado (función de escritura).
 - **Actores:** solo funciones de revisión de la persona.
 - **RLS:** hereda del meal mediante `EXISTS`; sin lectura profesional directa.
 - **Consultas:** por `meal_id` ordenado por posición.
@@ -2120,6 +2126,54 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Eventos:** `nutrition.goal_version_accepted.v1`, `nutrition.goal_version_rejected.v1`.
 
 ---
+
+### 10A.9 `nutrition.foods` y sus tablas (`ADR-041`)
+
+- **Propósito:** el catálogo de alimentos de Allfit: ingredientes tomados de USDA FoodData Central (CC0) con nombre en español, y platos que son recetas de Allfit.
+- **Dominio / fuente de verdad:** Nutrición; los datos viven en `packages/db/curation/005_food_catalogue.sql`, generado desde `curation/import/foods-authored.ts` y los CSV de USDA.
+- **Clasificación:** `operational`.
+- **Tablas y columnas:**
+  - `foods`: `id uuid` · `name text` · `name_normalized text` (generada: minúsculas, sin tildes) · `kind nutrition.food_kind` (`ingredient`, `dish`) · `source nutrition.food_source` (`usda`, `allfit_recipe`) · `source_ref text` (el `fdc_id`) · `icon text` (un icono de alimento del Design System) · `grams_per_ml numeric` (nullable, 0,1 a 3: lo que pesa un mililitro de lo que se sirve líquido, sacado de la taza de USDA o 1 si no la trae; sin él no se ofrecen ml) · `status catalog.publication_status` · `published_at timestamptz` · `created_at timestamptz`.
+  - `food_aliases`: `id uuid` · `food_id uuid` · `alias text` · `alias_normalized text` (generada).
+  - `food_nutrients`: `food_id uuid` · `nutrient_definition_id uuid` · `value_per_100g numeric` · `unit_code text`.
+  - `food_portions`: `id uuid` · `food_id uuid` · `label text` · `grams numeric` · `position integer` · `is_default boolean`.
+  - `food_recipe_parts`: `dish_id uuid` · `part_food_id uuid` · `grams numeric` · `position integer`.
+- **Uniques y checks:** `UNIQUE(name_normalized)`; `UNIQUE(alias_normalized)`; un ingrediente de USDA lleva `source_ref` numérico; una porción por defecto como máximo por alimento; valores `>=0` en la unidad canónica de su nutriente (`nutrition.enforce_canonical_unit`); una receta no se contiene a sí misma.
+- **Actores:** lectura de cualquier persona por funciones; nadie escribe en runtime: cambia solo por curaduría.
+- **RLS:** `FORCE`; lectura de lo publicado; sin escritura para `allfit_api`.
+- **Consultas:** `nutrition.search_foods`, `nutrition.match_foods`, `nutrition.my_frequent_foods`.
+- **Índices:** `(status, name_normalized text_pattern_ops)`; `(alias_normalized text_pattern_ops)`; `(food_id)`.
+- **Retención:** permanente; referenciado por `meal_items.food_id`.
+- **Eventos:** ninguno.
+
+### 10A.10 `nutrition.recognition_consents` (`ADR-041`)
+
+- **Propósito:** el consentimiento de una persona para que sus fotos de comida se reconozcan con un proveedor externo, por versión del texto aceptado.
+- **Dominio / fuente de verdad:** Nutrición.
+- **Clasificación:** `nutrition`.
+- **Columnas:** `id uuid` (Command-Id) · `person_id uuid` · `text_version text` → `recognition_consent_versions(version)` · `accepted_at timestamptz`.
+- **Uniques y checks:** `UNIQUE(person_id, text_version)`.
+- **Actores:** solo la persona, por `nutrition.accept_recognition_consent` (`OP-NUT-017`).
+- **RLS:** `FORCE`, `is_self`.
+- **Retención:** mientras la cuenta esté activa; se elimina con la cuenta.
+- **Eventos:** ninguno.
+
+### 10A.11 `nutrition.products` y sus tablas (`ADR-041`)
+
+- **Propósito:** los productos empacados vendidos en Colombia, tomados de Open Food Facts. Viven aparte de `nutrition.foods` porque sus datos son ODbL.
+- **Dominio / fuente de verdad:** Nutrición. Los datos viven en `packages/db/curation/006_off_products.sql`, generado por `curation/import/products.ts` desde la búsqueda de Open Food Facts. Datos © colaboradores de Open Food Facts, bajo la ODbL; cada producto, bajo la Database Contents License.
+- **Clasificación:** `operational`.
+- **Tablas y columnas:**
+  - `products`: `id uuid` · `barcode text` · `name text` · `name_normalized text` (generada) · `brand text` (nullable) · `brand_normalized text` (generada) · `quantity_label text` (nullable, el tamaño del empaque) · `icon text` · `grams_per_ml numeric` (nullable; 1 en las bebidas, cuyos valores vienen por 100 ml) · `status catalog.publication_status` · `published_at timestamptz` · `created_at timestamptz`.
+  - `product_nutrients`: `product_id uuid` · `nutrient_definition_id uuid` · `value_per_100g numeric` · `unit_code text`.
+  - `product_portions`: `id uuid` · `product_id uuid` · `label text` · `grams numeric` · `position integer` · `is_default boolean`.
+- **Uniques y checks:** `UNIQUE(barcode)`, de 8 a 14 dígitos; una porción por defecto como máximo por producto; valores `>=0` en la unidad canónica (`nutrition.enforce_canonical_unit`). La importación deja fuera lo que no puede ser verdad por 100 g: más de 900 kcal, un macro de más de 100 g o macros que sumen más de 105 g. Los valores de bebidas vienen por 100 ml y se cuentan como gramos.
+- **Actores:** lectura de cualquier persona por funciones; nadie escribe en runtime: cambia solo por curaduría.
+- **RLS:** `FORCE`; lectura de lo publicado; sin escritura para `allfit_api`.
+- **Consultas:** `nutrition.search_foods` (por nombre y marca, después de los alimentos propios que empaten) y `nutrition.my_frequent_foods`. `nutrition.match_foods` no los usa: una foto nunca se cruza con una marca.
+- **Índices:** `(status, name_normalized text_pattern_ops)`; `(status, brand_normalized text_pattern_ops)`; `meal_items (person_id, product_id)`.
+- **Retención:** permanente; referenciado por `meal_items.product_id`.
+- **Eventos:** ninguno.
 
 ## 11. Schema `system`
 
