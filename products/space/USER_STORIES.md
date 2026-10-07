@@ -1666,6 +1666,14 @@ barras, los menús y las recetas de la persona siguen diferidos.
 6. Si el reconocimiento no responde, puedo buscar los alimentos sin perder la foto.
 7. Al guardar puedo deshacerlo durante unos segundos.
 
+> **Dónde vive la foto** (`ADR-042`): en un almacén privado de Cloudflare R2 que guarda
+> los datos solo en Estados Unidos. Nadie la ve por una dirección pública; la app la muestra
+> con un enlace que vale cinco minutos. Antes de guardarla se le quitan la ubicación, la
+> cámara y la hora. Cloudflare la guarda por cuenta de Allfit, con un contrato de
+> transmisión de datos como lo pide la Ley 1581. Si un cliente o una auditoría pidiera una
+> llave de cifrado propia, las fotos pueden pasar a AWS S3 sin que cambie nada para la
+> persona.
+
 ### HU-SP-114 — Registrar una comida buscando sus alimentos
 
 **Como** persona que registra lo que come

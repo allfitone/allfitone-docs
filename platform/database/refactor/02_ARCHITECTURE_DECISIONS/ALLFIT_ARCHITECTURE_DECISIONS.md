@@ -46,9 +46,10 @@
 | ADR-036 | El cierre de un entreno se resume y se comparte; récords, racha y número son derivados |
 | ADR-037 | El historial de Space muestra lo terminado, y cada fila se resume al leer |
 | ADR-038 | La persona abre, corrige, anula y repite un entreno terminado |
-| ADR-039 | Las fotos de comida viven en un almacén privado S3 |
+| ADR-039 | Las fotos de comida viven en un almacén privado S3 (proveedor sustituido por ADR-042) |
 | ADR-040 | Alcance V1 de nutrición en Space |
 | ADR-041 | Reconocer y buscar alimentos al registrar una comida |
+| ADR-042 | Las fotos de comida viven en Cloudflare R2, en Estados Unidos |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -4781,8 +4782,10 @@ entreno libre no tiene rutina que repetir, y con otra sesión abierta se rechaza
 
 ## ADR-039 — Las fotos de comida viven en un almacén privado S3
 
-**Estado:** aceptada para V1<br>
+**Estado:** aceptada para V1; su decisión 1 (el proveedor) está sustituida por ADR-042<br>
 **Fecha:** 4 de octubre de 2026
+
+> **Reemplazado en parte por [ADR-042](#adr-042-las-fotos-de-comida-viven-en-cloudflare-r2-en-estados-unidos)** el 6 de octubre de 2026: el almacén es Cloudflare R2 con jurisdicción de Estados Unidos, no AWS S3. Siguen vigentes el puerto propio, la clave que no sale de la API, el saneamiento y el orden de subida, commit y borrado.
 
 ### Contexto
 
@@ -5022,3 +5025,115 @@ modelo. Los gramos no se pudieron validar porque las fotos no tienen peso real.
 `T-NUT-API-16..` y `T-REC-UNIT-*`,
 más el set de prueba del reconocimiento, que se corre a mano antes de cambiar de modelo
 (umbral: 85 % de aciertos y ninguna respuesta que devuelva solo el plato).
+
+## ADR-042 — Las fotos de comida viven en Cloudflare R2, en Estados Unidos
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 6 de octubre de 2026<br>
+**Supersede:** la decisión 1 de `ADR-039` (el proveedor). Sus decisiones 2 a 5 siguen vigentes.
+
+### Contexto
+
+`ADR-039` eligió AWS S3 por dos razones: una llave de cifrado propia (KMS) y que AWS ya
+era proveedor de la empresa. Antes de crear el bucket se compararon de nuevo los dos
+almacenes, con los precios y límites publicados el 6 de octubre de 2026.
+
+| | Cloudflare R2 | AWS S3 (`us-east-1`) |
+| --- | --- | --- |
+| Almacenamiento | US$ 0,015 por GB al mes; 10 GB gratis | US$ 0,023 por GB al mes |
+| Escrituras | US$ 4,50 por millón; 1 millón gratis al mes | US$ 5,00 por millón |
+| Lecturas | US$ 0,36 por millón; 10 millones gratis al mes | US$ 0,40 por millón |
+| Salida de datos (el teléfono descargando la foto) | Gratis | US$ 0,09 por GB, después de la franja gratuita de AWS (sin verificar en esta revisión) |
+| Tamaño máximo por objeto | 5 TiB | 5 TiB |
+| Enlaces firmados | Sí, hasta 7 días, solo en el dominio S3 de R2 | Sí |
+| Cifrado en reposo | AES-256 con llaves de Cloudflare | Con llave propia en KMS |
+| Llave propia | Solo SSE-C (la llave viaja en cada petición) | KMS |
+| Ubicación garantizada | Jurisdicciones de Estados Unidos, Unión Europea o FedRAMP | La región elegida |
+
+Con 1.000 personas, tres fotos al día de unos 250 KB y diez vistas por foto, al cabo de
+un año serían unos 270 GB guardados y unos 225 GB descargados al mes: alrededor de
+US$ 4 al mes en R2 y de US$ 18 a 20 en S3 con su llave. La diferencia es casi toda la
+salida de datos, que crece con las personas.
+
+**La llave propia protege poco en esta arquitectura.** Da un registro de cada uso, la
+posibilidad de dejar ilegible todo apagando la llave, y que leer exija dos permisos. Pero:
+
+- la API necesita los dos permisos para funcionar, así que quien la comprometa tiene ambos;
+- la foto llega al teléfono por un enlace firmado de 300 segundos, y quien tenga el enlace
+  la ve con o sin llave propia;
+- la Ley 1581 exige medidas de seguridad adecuadas, no una llave propia en particular. Lo
+  que protege las fotos es el bucket privado, los enlaces cortos y que la clave del objeto
+  nunca salga de la API, y eso no depende del proveedor.
+
+En R2 la única llave propia es SSE-C, que obliga a enviar la llave en cada lectura. Eso no
+funciona con enlaces firmados: la API tendría que servir cada foto ella misma.
+
+`ADR-039` descartó R2 porque no garantizaba residencia fuera de la Unión Europea y
+FedRAMP. Hoy R2 ofrece también la jurisdicción de **Estados Unidos**.
+
+### Decisión
+
+**1. El almacén es Cloudflare R2, en un bucket privado con jurisdicción de Estados
+Unidos.**
+- La jurisdicción se elige al crear el bucket («Specify jurisdiction» → *United States*) y
+  **no se puede cambiar después**. Sin ella, Cloudflare elige la región más cercana sin
+  garantía de que los datos se queden ahí.
+- Estados Unidos porque no existe una jurisdicción en Latinoamérica, es la más cercana a
+  Colombia, y es donde están ya el proveedor de identidad y el alojamiento de la API: un
+  solo país en el que responder dónde están los datos.
+- El punto de acceso S3 del bucket es `https://<cuenta>.us.r2.cloudflarestorage.com`.
+
+**2. La foto se sigue leyendo con un enlace firmado de GET por 300 segundos**, en el
+dominio S3 de R2. Los enlaces firmados de R2 no funcionan con dominios personalizados.
+
+**3. El cifrado en reposo es el de Cloudflare (AES-256).** No se usa SSE-C, porque rompería
+los enlaces firmados.
+
+**4. No cambia el código.** El puerto `packages/object-store` ya habla el protocolo S3 y su
+adaptador acepta cualquier punto de acceso. Cambiar de proveedor es cambiar las variables
+`OBJECT_STORE_*` de la API: con R2, el punto de acceso de la jurisdicción y la región
+`auto`. En local sigue MinIO.
+
+**5. Cloudflare es encargado del tratamiento.** Guardar las fotos fuera de Colombia es una
+*transmisión* internacional a un encargado, según la distinción del Decreto 1074 de 2025 que
+recoge la Circular Externa 003 de 2025 de la SIC. Exige un contrato de transmisión con
+Cloudflare. La SIC recomienda las cláusulas contractuales modelo de la Red Iberoamericana de
+Protección de Datos. Esto valdría igual con AWS.
+
+### Volver a S3 si hace falta
+
+Si un cliente o una auditoría pide llave propia, la mudanza es corta porque ninguna fila
+guarda una URL, solo la clave del objeto (`meals.media_ref`), y los enlaces se firman al leer:
+
+1. Crear el bucket privado en S3 con su llave KMS como cifrado por defecto.
+2. Copiar los objetos de R2 a S3 con las mismas claves (por ejemplo con `rclone`), sin
+   detener la app. Sacar datos de R2 no tiene costo.
+3. Cambiar las variables `OBJECT_STORE_*` de la API (y `OBJECT_STORE_KMS_KEY_ID`) y desplegar.
+4. Copiar otra vez lo que se haya subido durante la primera copia.
+5. Verificar que las fotos abren y, unos días después, borrar el bucket de R2.
+
+No cambia la app, ni la base de datos, ni el código de la API. Se estima en un día de
+trabajo más el tiempo de la copia.
+
+### Invariantes
+
+Siguen las de `ADR-039`: ninguna fila ni ninguna respuesta contiene una URL del almacén, la
+clave del objeto no sale de la API, y ninguna foto se guarda sin sanear.
+
+### Lo que esta decisión no hace
+
+- No crea el bucket ni sus credenciales en Cloudflare: es un paso de operación.
+- No firma el contrato de transmisión con Cloudflare ni revisa con un abogado si Estados
+  Unidos sigue en la lista de países con nivel adecuado de la SIC (Circular Externa 005
+  de 2017).
+- No verificó si R2 registra cada lectura de un objeto como lo hace S3.
+- No resuelve qué pasa si el almacén no responde: hoy la API espera los reintentos del
+  cliente S3 sin límite de tiempo propio, y eso queda para otra tarea.
+
+### Pruebas
+
+Sin pruebas nuevas: no cambia el código. `T-OBJ-UNIT-01..03` prueban el adaptador sin red:
+la configuración que falta, el enlace firmado y el direccionamiento por ruta con un punto de
+acceso propio, que es como se habla con R2. Los casos de uso de nutrición se prueban con el
+almacén en memoria. Ninguna prueba automática habla con R2; se verifica a mano al crear el
+bucket.
