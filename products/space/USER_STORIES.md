@@ -1506,9 +1506,11 @@ Las tres categorías de nutrición son independientes entre sí y de las otras
 cuatro: autorizar el registro de comidas **no** autoriza sus fotos, y autorizar
 comidas no autoriza objetivos.
 
-**El registro es manual.** La persona sube la foto y escribe qué comió.
-**Identificar una comida escaneándola con IA está diferido de V1**, igual que el
-catálogo de alimentos, los códigos de barras y las recetas.
+**Registrar una comida tiene tres caminos** (`ADR-041`): escribirla a mano,
+buscar sus alimentos en el catálogo de Allfit, o tomarle una foto para que Allfit
+reconozca los alimentos y sus porciones. En los tres, las calorías y los macros
+salen del catálogo, y la persona revisa todo antes de guardar. Los códigos de
+barras, los menús y las recetas de la persona siguen diferidos.
 
 ### HU-SP-067 — Registrar una comida
 
@@ -1526,6 +1528,8 @@ catálogo de alimentos, los códigos de barras y las recetas.
 4. Puedo registrar sin conexión y sincronizar luego; **la foto no forma parte de ese registro offline**, se adjunta aparte.
 5. Si algo del registro es inválido, no se guarda nada a medias: o entra completo o no entra.
 6. Mis resúmenes diarios se actualizan como parte del mismo registro, no más tarde.
+
+> **Sin conexión, diferido en V1** (`ADR-040`): por ahora la comida se guarda con señal.
 
 ### HU-SP-068 — Ver lo que he comido
 
@@ -1560,6 +1564,8 @@ catálogo de alimentos, los códigos de barras y las recetas.
 6. La foto anterior se elimina después de confirmar el cambio, no antes.
 7. Puedo sincronizar la corrección desde un borrador y adjuntar la foto al recuperar la conexión.
 
+> **Sin conexión, diferido en V1** (`ADR-040`): por ahora la comida se guarda con señal.
+
 ### HU-SP-070 — Eliminar una comida
 
 **Como** persona
@@ -1576,6 +1582,8 @@ catálogo de alimentos, los códigos de barras y las recetas.
 4. Si existe una obligación legal que suspenda la eliminación, se informa como suspendida en lugar de reportarse como hecha.
 5. Puedo dejar la intención encolada sin conexión, pero es el servidor quien decide contra el estado real.
 6. La eliminación no se reporta como completada hasta que se confirma en todos los sistemas.
+
+> **Sin conexión, diferido en V1** (`ADR-040`): por ahora la comida se guarda con señal.
 
 ### HU-SP-071 — Ver mis resúmenes diarios
 
@@ -1639,6 +1647,48 @@ catálogo de alimentos, los códigos de barras y las recetas.
 4. Cada propuesta se decide una sola vez: una decisión ya tomada no se reabre.
 5. Esta decisión exige conexión; no se confirma desde el teléfono sin red.
 6. No puedo decidir sobre una propuesta ajena, cancelada o ya decidida.
+
+### HU-SP-113 — Registrar una comida con una foto
+
+**Como** persona que registra lo que come
+**quiero** tomarle una foto a mi plato y que Allfit reconozca los alimentos
+**para** no tener que escribir cada uno con sus calorías.
+
+`E-SP-10` · importante
+
+**Criterios**
+
+1. Antes de la primera foto que se reconoce, acepto un consentimiento que dice qué se envía, a quién y qué no se guarda. Sin aceptarlo, puedo seguir registrando con la búsqueda.
+2. Veo cada alimento reconocido con su porción y sus calorías, y sobre la foto, dónde está.
+3. Lo que Allfit no tiene claro me lo marca para que lo revise.
+4. Puedo cambiar el alimento, la cantidad o cualquier valor; si cambio la cantidad se recalcula todo, salvo lo que edité yo.
+5. Nada se guarda sin que yo lo confirme, y la foto queda con la comida, sin su ubicación.
+6. Si el reconocimiento no responde, puedo buscar los alimentos sin perder la foto.
+7. Al guardar puedo deshacerlo durante unos segundos.
+
+> **Dónde vive la foto** (`ADR-042`): en un almacén privado de Cloudflare R2 que guarda
+> los datos solo en Estados Unidos. Nadie la ve por una dirección pública; la app la muestra
+> con un enlace que vale cinco minutos. Antes de guardarla se le quitan la ubicación, la
+> cámara y la hora. Cloudflare la guarda por cuenta de Allfit, con un contrato de
+> transmisión de datos como lo pide la Ley 1581. Si un cliente o una auditoría pidiera una
+> llave de cifrado propia, las fotos pueden pasar a AWS S3 sin que cambie nada para la
+> persona.
+
+### HU-SP-114 — Registrar una comida buscando sus alimentos
+
+**Como** persona que registra lo que come
+**quiero** buscar un alimento y elegir cuánto comí
+**para** registrar rápido sin saberme sus calorías.
+
+`E-SP-10` · importante
+
+**Criterios**
+
+1. Encuentro un alimento por su nombre o por como le digo yo, con o sin tildes.
+2. Veo primero lo que más registro, con la última cantidad que usé.
+3. Elijo la porción entre las habituales o escribo los gramos, y veo sus calorías y macros antes de añadirlo.
+4. Veo el total de la comida mientras la armo.
+5. Al guardar puedo deshacerlo durante unos segundos.
 
 ---
 
@@ -2088,7 +2138,7 @@ presenta con la tarjeta de Hoy, que es además lo que va a ver cada mañana si a
 | `E-SP-07` Registro de ejecución | `HU-SP-051` – `HU-SP-056` | 6 de 6 |
 | `E-SP-08` Historial y progreso | `HU-SP-057` – `HU-SP-063`, `HU-SP-112` | 1 de 8 |
 | `E-SP-09` Catálogo y sin conexión | `HU-SP-064` – `HU-SP-066` | 3 de 3 |
-| `E-SP-10` Nutrición | `HU-SP-067` – `HU-SP-074` | 0 de 8 |
+| `E-SP-10` Nutrición | `HU-SP-067` – `HU-SP-074`, `HU-SP-113`, `HU-SP-114` | 0 de 10 |
 | `E-SP-11` Sincronización con apps de salud | `HU-SP-075` | 0 de 1 |
 | `E-SP-12` Contacto y notificaciones | `HU-SP-076` – `HU-SP-078` | 0 de 3 |
 | `E-SP-13` Mi plan con el gimnasio | `HU-SP-079` – `HU-SP-082` | 4 de 4 |

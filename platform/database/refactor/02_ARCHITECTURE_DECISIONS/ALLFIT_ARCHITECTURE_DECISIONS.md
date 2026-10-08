@@ -46,6 +46,10 @@
 | ADR-036 | El cierre de un entreno se resume y se comparte; récords, racha y número son derivados |
 | ADR-037 | El historial de Space muestra lo terminado, y cada fila se resume al leer |
 | ADR-038 | La persona abre, corrige, anula y repite un entreno terminado |
+| ADR-039 | Las fotos de comida viven en un almacén privado S3 (proveedor sustituido por ADR-042) |
+| ADR-040 | Alcance V1 de nutrición en Space |
+| ADR-041 | Reconocer y buscar alimentos al registrar una comida |
+| ADR-042 | Las fotos de comida viven en Cloudflare R2, en Estados Unidos |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -3471,6 +3475,7 @@ El cambio necesita dominio, ownership, privacidad, autoridad profesional, estruc
 2. La persona es dueña lógica de sus comidas, componentes, nutrientes, fotos, objetivos y decisiones. Space es una superficie de captura; no una fuente paralela.
 3. V1 incluye registro manual estructurado, seis nutrientes iniciales (`energy`, `protein`, `carbohydrates`, `fat`, `fiber`, `water`), resúmenes diarios calculados, una foto opcional por comida y una línea versionada de objetivos.
 4. V1 excluye nutrición clínica o terapéutica, diagnósticos, medicamentos, laboratorios, prescripción médica, suplementos, catálogo global de alimentos, recetas, menús, códigos de barras, proveedores externos e IA nutricional.
+   > **Reemplazado en parte por [ADR-041](#adr-041-reconocer-y-buscar-alimentos-al-registrar-una-comida)** el 4 de octubre de 2026: entran un catálogo propio de alimentos y el reconocimiento por foto con un proveedor externo. Siguen fuera la nutrición clínica, los suplementos, los menús y los códigos de barras.
 5. Privacidad publica tres scopes independientes: `nutrition_intake`, `nutrition_guidance` y `nutrition_media`. El último nunca revela una comida sin `nutrition_intake/read`.
 6. Un profesional solo lee nutrición o propone objetivos cuando coinciden organización de ruta, relación activa, asignación efectiva, membresía vigente, capability `guide_nutrition`, credencial `nutrition_professional` verificada y grant suficiente. Ningún rol organizacional concede acceso por sí solo.
 7. La persona puede publicar una meta propia, que se activa inmediatamente. Una versión profesional exige un `rationale` no vacío de hasta 2000 caracteres, es inmutable y permanece `proposed` hasta decisión personal explícita; aceptarla reemplaza la activa y rechazarla no cambia la meta vigente.
@@ -4774,3 +4779,361 @@ entreno libre no tiene rutina que repetir, y con otra sesión abierta se rechaza
 5. Repetir copia la lista y rechaza un entreno libre y una segunda sesión abierta.
 6. Anular deja la sesión fuera del historial y del detalle, y es idempotente.
 7. Otra persona no lee ni anula lo ajeno.
+
+## ADR-039 — Las fotos de comida viven en un almacén privado S3
+
+**Estado:** aceptada para V1; su decisión 1 (el proveedor) está sustituida por ADR-042<br>
+**Fecha:** 4 de octubre de 2026
+
+> **Reemplazado en parte por [ADR-042](#adr-042-las-fotos-de-comida-viven-en-cloudflare-r2-en-estados-unidos)** el 6 de octubre de 2026: el almacén es Cloudflare R2 con jurisdicción de Estados Unidos, no AWS S3. Siguen vigentes el puerto propio, la clave que no sale de la API, el saneamiento y el orden de subida, commit y borrado.
+
+### Contexto
+
+`ADR-027` permite una foto por comida, que se sube en la revisión, se sanea y se lee
+con una URL firmada de 300 segundos como máximo. Nunca se construyó: no había dónde
+guardar archivos privados. Las portadas personales lo intentaron en PostgreSQL y en un
+bucket, y se retiraron (`20260919230000`). `ADR-002` adoptó Supabase solo como
+PostgreSQL, así que su almacenamiento no es opción.
+
+### Decisión
+
+**1. El almacén es AWS S3 en `us-east-1`.** El bucket es privado, cifrado con una llave
+KMS propia (SSE-KMS) y con bloqueo de acceso público. R2 costaba casi lo mismo a esta
+escala (menos de un dólar al mes con mil personas), pero no ofrece llaves propias ni
+residencia garantizada fuera de la UE y FedRAMP. Además, AWS ya es el proveedor de la
+empresa.
+
+**2. Queda detrás de un puerto propio, `packages/object-store`.** Solo sabe guardar
+unos bytes bajo una clave, firmar una lectura por unos segundos y borrar. El adaptador
+habla la API S3, así que MinIO en local o R2 son cambios de configuración. Solo ese
+paquete importa el SDK; ESLint rechaza cualquier otro import.
+
+**3. La clave no sale de la API.** Es `nutrition/{person}/{meal}/{uuid}.jpg` y se guarda
+en `meals.media_ref`. Al teléfono le llega la URL firmada de GET por 300 s, que no se
+registra en logs.
+
+**4. Se sanea antes de guardar.** `sharp` decodifica y vuelve a codificar en JPEG: no
+queda EXIF, ni GPS, ni cámara, ni hora. Antes la endereza con su propia orientación y
+la reduce a 1600 px por el lado mayor. Lo que no puede decodificar, lo rechaza (falla
+cerrada, 422).
+
+**5. El orden protege los dos lados.**
+- Se sube primero y después se hace el commit de la revisión.
+- Si el commit falla, la foto subida se borra (compensación).
+- La foto anterior, o la de una comida eliminada, entra a `nutrition.media_disposals` en
+  la misma transacción. Después del commit se borra del almacén y se sella.
+- Si el almacén se niega a borrarla, queda en la cola sin deshacer lo que la persona
+  hizo. El barrido de esa cola por el worker queda diferido.
+
+### Lo que esta decisión no hace
+
+- No crea el bucket ni sus credenciales en AWS. Los pasos están en el PR de
+  implementación.
+- No resuelve el DPA ni la transferencia internacional bajo la Ley 1581, igual que con
+  el proveedor de identidad.
+- No sirve fotos a Studio: el proxy autenticado de `OP-NUT-013` llega con Studio.
+
+## ADR-040 — Alcance V1 de nutrición en Space
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 4 de octubre de 2026
+
+### Contexto
+
+Los diseños N-1e a N-6 y N-3b piden en Space:
+- la línea del día;
+- registrar, ver, corregir y eliminar una comida;
+- el historial de 7, 14 o 31 días;
+- la meta propia;
+- la propuesta de un profesional.
+
+El contrato y `OP-NUT-001..008` ya estaban cerrados; faltaban la base, la API y la app.
+
+### Decisión
+
+**1. Las ocho tablas del diccionario (§10A), con funciones cerradas.**
+- Corregir reemplaza en el sitio bajo la revisión leída (`If-Match`, 409 si está
+  obsoleta), como fija `OP-NUT-003`.
+- Eliminar es borrado duro (`OP-NUT-004`).
+- La hora y el día de una comida quedan fijos al registrarla, en su zona.
+
+**2. El día se resume al leer** (`OP-NUT-005`): un nutriente sin registrar no tiene
+total, nunca cero.
+- La respuesta suma `streak_days`: los días seguidos con al menos una comida, que
+  terminan hoy o, mientras hoy siga vacío, ayer.
+- La zona del teléfono decide qué día es hoy.
+
+**3. Se añade la lectura de una comida** (`GET /meals/{id}`, dentro de `OP-NUT-002`),
+que el detalle necesita y que devuelve el ETag de la corrección.
+
+**4. La autoría de una propuesta incluye el nombre del profesional y de su organización.**
+La persona sabe quién la acompaña; lo que se sigue sin exponer es el contexto interno de
+la relación.
+
+**5. La app calcula lo que no es un dato:**
+- lo que queda frente a la meta, según su modo;
+- «Tu día queda así» antes de eliminar;
+- el promedio de los días con registro.
+
+También muestra los entrenos del día en la misma línea, leídos de `OP-EXE-014`.
+
+### Lo que esta decisión no hace
+
+- **Sin conexión:** no guarda comidas para enviarlas después (`HU-SP-067`, `069`, `070`);
+  queda diferido.
+- **Eventos:** no emite `nutrition.meal_*.v1` ni los de metas, porque el dominio aún no
+  escribe en el outbox.
+- **Studio:** no construye `OP-NUT-009..013`. Las propuestas se prueban con datos
+  sembrados.
+
+### Invariantes
+
+1. Ninguna fila ni total convierte un nutriente sin registrar en cero.
+2. Una sola meta activa por persona, y una decisión por propuesta, que no se reescribe.
+3. La clave de una foto nunca sale de la API.
+4. Solo la dueña lee, corrige o elimina sus comidas y decide sobre sus metas.
+
+## ADR-041 — Reconocer y buscar alimentos al registrar una comida
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 4 de octubre de 2026<br>
+**Reemplaza:** el punto 4 de ADR-027 en lo que toca al catálogo de alimentos, a los
+proveedores externos y a la IA nutricional. El resto de ADR-027 sigue vigente.
+
+### Contexto
+
+Registrar una comida a mano obliga a escribir las kcal y los macros de cada alimento.
+Los diseños R-0 a R-F5 y R-A0 a R-A5 abren dos caminos desde la cámara:
+- **Foto:** la app reconoce los alimentos y calcula porciones y nutrientes;
+- **Alimentos:** se busca en un catálogo y se elige la porción.
+
+ADR-027 había excluido de V1 el catálogo global, los proveedores externos y la IA
+nutricional. Esta decisión los admite con límites estrictos.
+
+La elección del modelo salió de tres pruebas con 12 fotos de platos colombianos de
+Wikimedia, por unos 0,74 USD en total:
+
+| Modelo | Aciertos | Latencia (mediana) | USD por foto |
+| --- | --- | --- | --- |
+| Gemini 3.8 Flash | 96–98 % | 8 s, con colas de 34 s | 0,0049 |
+| Gemini 3.5 Flash | 97 % | 8 s | 0,0112 |
+| Claude Sonnet 5.5 | 90 % | 3 s | 0,0045 |
+| **Gemini 3.5 Flash-Lite**, con el *prompt* final | **87–91 %** | **2,1 s** | **0,0010** |
+| GPT-5-mini | 87 % | 9,5 s | 0,0022 |
+| GPT-4o-mini | 86 % | 2,9 s | 0,0039 |
+| Gemini 2.5 Flash-Lite | 80 % | 1,7 s | 0,0002 |
+| Claude Haiku 4.5 | 67 %, con alimentos inventados | 3,2 s | 0,0020 |
+
+Los aciertos miden qué parte de los alimentos visibles, anotados a mano, nombró cada
+modelo. Los gramos no se pudieron validar porque las fotos no tienen peso real.
+
+### Decisión
+
+**1. El modelo dice qué ve y cuántos gramos; los nutrientes salen del catálogo.**
+- Cada alimento reconocido se cruza con el catálogo, y si cruza, sus nutrientes son los
+  del catálogo para esos gramos.
+- Si no cruza, el modelo da una **estimación** para la porción: energía y macros siempre,
+  y el detalle, las vitaminas y los minerales que pueda estimar con sentido. La app la
+  marca «IA», y la persona puede cambiar el alimento o los valores.
+- La persona revisa todo antes de guardar, y nada entra al diario sin su confirmación.
+
+**2. El reconocimiento usa un solo modelo, por versión exacta:**
+`google/gemini-3.5-flash-lite`, a través del AI Gateway de Vercel.
+- La API lo llama solo por Vertex AI de Google (`only: ['vertex']`), con retención cero
+  por petición: la retención cero cubre Vertex, no AI Studio.
+- **No hay respaldo automático entre modelos.** Si el proveedor falla, la app ofrece
+  la búsqueda.
+- Cambiar de modelo es configuración, nunca un alias que el proveedor mueva solo, y solo
+  después de pasar el set de prueba versionado en el repositorio.
+
+**3. La foto que se reconoce es la misma que después se guarda.**
+- Se limpia de EXIF y se reduce a 1024 px antes de salir, como fija ADR-039.
+- No se guarda en el proveedor.
+- Si la persona guarda la comida, la foto sigue el camino de ADR-039.
+
+**4. Hace falta un consentimiento explícito antes del primer reconocimiento.**
+- Es un dato sensible bajo la Ley 1581, y el reconocimiento lo procesa un tercero.
+- El consentimiento se guarda con la versión del texto aceptado.
+- Sin consentimiento, la API se niega: falla cerrado.
+- Buscar en el catálogo no lo necesita, porque nada sale de Allfit.
+
+**5. El catálogo es propio y vive en `nutrition`.**
+- Arranca con alimentos de **USDA FoodData Central**, que es de dominio público (CC0),
+  con nombres en español, sinónimos y porciones colombianas.
+- Los platos son **recetas de Allfit**, compuestas por esos ingredientes.
+- Los valores salen de los archivos de USDA, nunca escritos a mano.
+- Lo leen todas las personas; nadie lo escribe desde la API, porque se siembra por
+  migración.
+- **La tabla del ICBF no se copia:** su portal prohíbe la reproducción y el uso comercial
+  sin autorización previa y escrita. Esa autorización se pide en paralelo.
+- **Los productos empacados vienen de Open Food Facts** (ODbL), en tablas propias
+  (`nutrition.products` y sus hijas), aparte del catálogo de Allfit. Separados, forman
+  una obra colectiva junto al catálogo y no una base derivada, y el *share-alike* de la
+  ODbL alcanza solo a esos datos.
+  - Se importan los productos vendidos en Colombia, por migración de curación generada.
+    Como son datos colaborativos, entra solo lo que puede ser verdad por 100 g, con
+    nombre, código de barras y energía. Un mismo producto con varios códigos queda una vez.
+  - La app acredita «Open Food Facts (ODbL)» donde se muestre un producto.
+  - Se buscan por nombre y marca. Una foto nunca se cruza con un producto: distinguir la
+    marca de un vaso de leche no es del modelo.
+
+**6. La información nutricional es la de una etiqueta, medida contra una referencia.**
+- Se publican 31 nutrientes, cada uno en su unidad (`kcal`, `g`, `mg`, `mcg` o `ml`) y en
+  un grupo: macros, detalle (grasas saturadas y trans, colesterol, sodio, azúcares),
+  vitaminas y minerales.
+- El % de cada uno se mide contra la meta activa de la persona, para la energía y los
+  macros. Si no tiene meta, y para todo lo demás, se mide contra los valores diarios de
+  referencia para adultos de la **Resolución 810 de 2021**, artículo 15: la tabla 9 para
+  las necesidades y la tabla 10 para los máximos de grasas saturadas y trans, colesterol y
+  sodio. Los azúcares totales y el agua no tienen referencia en la norma, y se muestran sin
+  %.
+- Los azúcares añadidos no entran: USDA SR Legacy no los trae.
+
+**7. La cantidad se escribe como la dice la persona.**
+- Se escribe como número o como fracción («1 ½»), en una unidad que el alimento admite:
+  sus medidas propias o las de USDA (vaso, taza, cucharada…), la masa (g, kg, lb, oz) y,
+  solo para lo que se sirve líquido, el volumen (ml, l, fl oz) según su densidad.
+- Los nutrientes se calculan siempre en gramos. El ítem guarda además cómo lo dijo la
+  persona (`serving`, «1 ½ tazas»), para mostrarlo de vuelta.
+
+**8. Cada alimento registrado dice de dónde salió:**
+- `typed` si se escribió a mano, `catalog` si se eligió del catálogo, `photo` si se
+  reconoció;
+- su alimento del catálogo o su producto, cuando lo tiene; nunca los dos;
+- la comida guarda qué modelo la reconoció.
+
+### Invariantes
+
+1. Ningún nutriente del modelo se guarda sin que la persona lo haya visto marcado como
+   estimado («IA»).
+2. Ninguna foto sale de Allfit sin consentimiento vigente de su dueña, ni con EXIF.
+3. Un nombre que no sea texto llano (letras, espacios, tildes) no llega al diario.
+4. El catálogo y los productos solo cambian por migración.
+
+### Lo que esta decisión no hace
+
+- No escanea códigos de barras: el código se guarda, pero buscar por cámara queda fuera.
+- No mezcla los datos de Open Food Facts con el catálogo propio.
+- No configura evaluación por confianza entre modelos.
+- No resuelve los DPA de Vercel y Google ni la transferencia internacional bajo la Ley
+  1581, igual que con S3 y con el proveedor de identidad.
+- No lleva el reconocimiento a Studio ni lo permite sin conexión.
+
+### Pruebas
+
+`T-NUT-FOOD-*`, `T-NUT-PROD-*`, `T-NUT-FREQ-*`, `T-NUT-CONSENT-*`, `T-NUT-CUR-*`,
+`T-NUT-API-16..` y `T-REC-UNIT-*`,
+más el set de prueba del reconocimiento, que se corre a mano antes de cambiar de modelo
+(umbral: 85 % de aciertos y ninguna respuesta que devuelva solo el plato).
+
+## ADR-042 — Las fotos de comida viven en Cloudflare R2, en Estados Unidos
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 6 de octubre de 2026<br>
+**Supersede:** la decisión 1 de `ADR-039` (el proveedor). Sus decisiones 2 a 5 siguen vigentes.
+
+### Contexto
+
+`ADR-039` eligió AWS S3 por dos razones: una llave de cifrado propia (KMS) y que AWS ya
+era proveedor de la empresa. Antes de crear el bucket se compararon de nuevo los dos
+almacenes, con los precios y límites publicados el 6 de octubre de 2026.
+
+| | Cloudflare R2 | AWS S3 (`us-east-1`) |
+| --- | --- | --- |
+| Almacenamiento | US$ 0,015 por GB al mes; 10 GB gratis | US$ 0,023 por GB al mes |
+| Escrituras | US$ 4,50 por millón; 1 millón gratis al mes | US$ 5,00 por millón |
+| Lecturas | US$ 0,36 por millón; 10 millones gratis al mes | US$ 0,40 por millón |
+| Salida de datos (el teléfono descargando la foto) | Gratis | US$ 0,09 por GB, después de la franja gratuita de AWS (sin verificar en esta revisión) |
+| Tamaño máximo por objeto | 5 TiB | 5 TiB |
+| Enlaces firmados | Sí, hasta 7 días, solo en el dominio S3 de R2 | Sí |
+| Cifrado en reposo | AES-256 con llaves de Cloudflare | Con llave propia en KMS |
+| Llave propia | Solo SSE-C (la llave viaja en cada petición) | KMS |
+| Ubicación garantizada | Jurisdicciones de Estados Unidos, Unión Europea o FedRAMP | La región elegida |
+
+Con 1.000 personas, tres fotos al día de unos 250 KB y diez vistas por foto, al cabo de
+un año serían unos 270 GB guardados y unos 225 GB descargados al mes: alrededor de
+US$ 4 al mes en R2 y de US$ 18 a 20 en S3 con su llave. La diferencia es casi toda la
+salida de datos, que crece con las personas.
+
+**La llave propia protege poco en esta arquitectura.** Da un registro de cada uso, la
+posibilidad de dejar ilegible todo apagando la llave, y que leer exija dos permisos. Pero:
+
+- la API necesita los dos permisos para funcionar, así que quien la comprometa tiene ambos;
+- la foto llega al teléfono por un enlace firmado de 300 segundos, y quien tenga el enlace
+  la ve con o sin llave propia;
+- la Ley 1581 exige medidas de seguridad adecuadas, no una llave propia en particular. Lo
+  que protege las fotos es el bucket privado, los enlaces cortos y que la clave del objeto
+  nunca salga de la API, y eso no depende del proveedor.
+
+En R2 la única llave propia es SSE-C, que obliga a enviar la llave en cada lectura. Eso no
+funciona con enlaces firmados: la API tendría que servir cada foto ella misma.
+
+`ADR-039` descartó R2 porque no garantizaba residencia fuera de la Unión Europea y
+FedRAMP. Hoy R2 ofrece también la jurisdicción de **Estados Unidos**.
+
+### Decisión
+
+**1. El almacén es Cloudflare R2, en un bucket privado con jurisdicción de Estados
+Unidos.**
+- La jurisdicción se elige al crear el bucket («Specify jurisdiction» → *United States*) y
+  **no se puede cambiar después**. Sin ella, Cloudflare elige la región más cercana sin
+  garantía de que los datos se queden ahí.
+- Estados Unidos porque no existe una jurisdicción en Latinoamérica, es la más cercana a
+  Colombia, y es donde están ya el proveedor de identidad y el alojamiento de la API: un
+  solo país en el que responder dónde están los datos.
+- El punto de acceso S3 del bucket es `https://<cuenta>.us.r2.cloudflarestorage.com`.
+
+**2. La foto se sigue leyendo con un enlace firmado de GET por 300 segundos**, en el
+dominio S3 de R2. Los enlaces firmados de R2 no funcionan con dominios personalizados.
+
+**3. El cifrado en reposo es el de Cloudflare (AES-256).** No se usa SSE-C, porque rompería
+los enlaces firmados.
+
+**4. No cambia el código.** El puerto `packages/object-store` ya habla el protocolo S3 y su
+adaptador acepta cualquier punto de acceso. Cambiar de proveedor es cambiar las variables
+`OBJECT_STORE_*` de la API: con R2, el punto de acceso de la jurisdicción y la región
+`auto`. En local sigue MinIO.
+
+**5. Cloudflare es encargado del tratamiento.** Guardar las fotos fuera de Colombia es una
+*transmisión* internacional a un encargado, según la distinción del Decreto 1074 de 2025 que
+recoge la Circular Externa 003 de 2025 de la SIC. Exige un contrato de transmisión con
+Cloudflare. La SIC recomienda las cláusulas contractuales modelo de la Red Iberoamericana de
+Protección de Datos. Esto valdría igual con AWS.
+
+### Volver a S3 si hace falta
+
+Si un cliente o una auditoría pide llave propia, la mudanza es corta porque ninguna fila
+guarda una URL, solo la clave del objeto (`meals.media_ref`), y los enlaces se firman al leer:
+
+1. Crear el bucket privado en S3 con su llave KMS como cifrado por defecto.
+2. Copiar los objetos de R2 a S3 con las mismas claves (por ejemplo con `rclone`), sin
+   detener la app. Sacar datos de R2 no tiene costo.
+3. Cambiar las variables `OBJECT_STORE_*` de la API (y `OBJECT_STORE_KMS_KEY_ID`) y desplegar.
+4. Copiar otra vez lo que se haya subido durante la primera copia.
+5. Verificar que las fotos abren y, unos días después, borrar el bucket de R2.
+
+No cambia la app, ni la base de datos, ni el código de la API. Se estima en un día de
+trabajo más el tiempo de la copia.
+
+### Invariantes
+
+Siguen las de `ADR-039`: ninguna fila ni ninguna respuesta contiene una URL del almacén, la
+clave del objeto no sale de la API, y ninguna foto se guarda sin sanear.
+
+### Lo que esta decisión no hace
+
+- No crea el bucket ni sus credenciales en Cloudflare: es un paso de operación.
+- No firma el contrato de transmisión con Cloudflare ni revisa con un abogado si Estados
+  Unidos sigue en la lista de países con nivel adecuado de la SIC (Circular Externa 005
+  de 2017).
+- No verificó si R2 registra cada lectura de un objeto como lo hace S3.
+- No resuelve qué pasa si el almacén no responde: hoy la API espera los reintentos del
+  cliente S3 sin límite de tiempo propio, y eso queda para otra tarea.
+
+### Pruebas
+
+Sin pruebas nuevas: no cambia el código. `T-OBJ-UNIT-01..03` prueban el adaptador sin red:
+la configuración que falta, el enlace firmado y el direccionamiento por ruta con un punto de
+acceso propio, que es como se habla con R2. Los casos de uso de nutrición se prueban con el
+almacén en memoria. Ninguna prueba automática habla con R2; se verifica a mano al crear el
+bucket.

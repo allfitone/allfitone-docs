@@ -4326,6 +4326,10 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | `OP-NUT-011` | Consultar historial autorizado de objetivos | Consulta | `A3/A7` elegible |
 | `OP-NUT-012` | Proponer una versión de objetivos | Comando | `A3/A7` elegible |
 | `OP-NUT-013` | Obtener una foto de comida autorizada | Consulta | `A3/A7` elegible |
+| `OP-NUT-014` | Buscar alimentos en el catálogo | Consulta | `A2` |
+| `OP-NUT-015` | Consultar mis alimentos más registrados | Consulta | `A2` |
+| `OP-NUT-016` | Reconocer los alimentos de una foto | Consulta con proveedor externo | `A2` |
+| `OP-NUT-017` | Consultar y aceptar el consentimiento de reconocimiento | Consulta / Comando | `A2` |
 
 ---
 
@@ -4353,7 +4357,7 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /space/v1/nutrition/meals` |
+| **Superficie** | `GET /space/v1/nutrition/meals` · `GET /space/v1/nutrition/meals/{mealId}` (con su ETag, `ADR-040`) |
 | **Actor** | `A2` |
 | **Filtros obligatorios** | `person_id = access_control.person()` |
 | **Transacción** | Solo lectura por `nutrition.v_my_meals` |
@@ -4381,7 +4385,7 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Offline / concurrencia** | La estructura puede sincronizarse desde borrador; la foto se adjunta al recuperar conexión |
 | **Información sensible** | `nutrition`; foto separada por `nutrition_media` |
 | **Evento de dominio** | `nutrition.meal_revised.v1` |
-| **Reglas** | El servidor elimina EXIF/geolocalización antes de sustituir `media_ref`; el anterior se dispone después del commit |
+| **Reglas** | El servidor elimina EXIF/geolocalización antes de sustituir `media_ref`; el anterior se dispone después del commit vía `nutrition.media_disposals` (`ADR-039`). La hora y el día no cambian al corregir |
 | **Falla cerrada** | ETag obsoleto → `409`; saneamiento/almacenamiento fallido → no cambia fila ni medio |
 
 #### `OP-NUT-004` — Eliminar una comida
@@ -4417,7 +4421,7 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Offline / concurrencia** | Borradores locales no se presentan como resumen del servidor |
 | **Información sensible** | `nutrition` |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Suma únicamente nutrientes capturados; `NULL` no se convierte en cero |
+| **Reglas** | Suma únicamente nutrientes capturados; `NULL` no se convierte en cero. Responde cada día del rango y `streak_days`, contado hasta hoy en la zona que manda el teléfono (`ADR-040`) |
 | **Falla cerrada** | Un rango inválido se rechaza; no aproxima valores |
 
 #### `OP-NUT-006` — Consultar mis metas y propuestas
@@ -4434,7 +4438,7 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Offline / concurrencia** | Sin caché durable |
 | **Información sensible** | `nutrition` |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Conserva origen y publica autoría mínima (`kind`, `person_id`); no mezcla líneas por relación ni expone contexto interno del profesional |
+| **Reglas** | Conserva origen y publica autoría mínima: `kind`, `person_id` y, en una propuesta, el nombre del profesional y de su organización (`ADR-040`); no mezcla líneas por relación ni expone contexto interno del profesional |
 | **Falla cerrada** | Solo la persona ve versiones propias y profesionales |
 
 #### `OP-NUT-007` — Publicar una meta personal
@@ -4555,6 +4559,74 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Responde bytes `image/jpeg`, `image/png` o `image/webp`; nunca expone `media_ref`, query firmada o URL durable de storage |
 | **Falla cerrada** | Recurso inexistente, scope revocado, media aislada, relación/asignación/membresía inválida o credencial vencida producen el mismo `404` sin bytes |
+
+#### `OP-NUT-014` — Buscar alimentos en el catálogo
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/nutrition/foods?q=&limit=` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Solo alimentos y productos publicados; `q` de 1 a 80 caracteres; `limit` de 1 a 30 |
+| **Transacción** | `nutrition.search_foods` sobre nombre y sinónimos normalizados (minúsculas, sin tildes) de los alimentos, y nombre y marca de los productos de Open Food Facts |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | La frase exacta, luego como prefijo, al inicio de una palabra y contenida; después, todas las palabras en cualquier orden. A igualdad, primero el alimento propio y luego el nombre |
+| **Offline / concurrencia** | Solo online |
+| **Información sensible** | Ninguna: el catálogo es público para las personas |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Cada alimento sale con sus nutrientes por 100 g y sus porciones (`ADR-041`). Un producto sale como alimento de tipo `product`, con su marca, y la app acredita Open Food Facts (ODbL). No requiere consentimiento: nada sale de Allfit |
+| **Falla cerrada** | Una consulta vacía o demasiado larga se rechaza |
+
+#### `OP-NUT-015` — Consultar mis alimentos más registrados
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/nutrition/foods/frequent` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Persona propia; solo ítems con alimento o producto del catálogo |
+| **Transacción** | `nutrition.my_frequent_foods`, derivado de `meal_items` |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Veces registrado, luego el más reciente; máximo 10 |
+| **Offline / concurrencia** | Solo online |
+| **Información sensible** | `nutrition` |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Devuelve la última porción que la persona usó con cada alimento |
+| **Falla cerrada** | Sin historia devuelve una lista vacía, no sugerencias genéricas |
+
+#### `OP-NUT-016` — Reconocer los alimentos de una foto
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta con proveedor externo; no escribe nada |
+| **Superficie** | `POST /space/v1/nutrition/recognitions` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Consentimiento de reconocimiento vigente (`OP-NUT-017`) |
+| **Transacción** | Sanear la foto (sin EXIF, 1024 px), reconocer con el modelo configurado, validar la respuesta y cruzarla con el catálogo (`nutrition.match_foods`) |
+| **Idempotencia** | N/A: no guarda estado |
+| **Paginación y orden** | Ítems en el orden en que el modelo los devuelve |
+| **Offline / concurrencia** | Solo online; tiempo límite de 15 s |
+| **Información sensible** | `nutrition_media`, enviada a un encargado externo |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | El modelo solo aporta nombre, unidades, gramos, confianza y dónde está cada alimento en la foto; los nutrientes salen del catálogo. Nombres que no son texto llano se descartan. Un ítem con poca confianza, sin alimento del catálogo o que es un plato completo junto a sus partes se marca para revisión. Un solo modelo por versión exacta, sin respaldo automático (`ADR-041`) |
+| **Falla cerrada** | Sin consentimiento, `403 consent-required`; foto inválida, `422`; proveedor caído, respuesta inválida o nada reconocible, `503 upstream-unavailable`, sin resultado parcial inventado |
+
+#### `OP-NUT-017` — Consultar y aceptar el consentimiento de reconocimiento
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta / Comando |
+| **Superficie** | `GET` y `PUT /space/v1/nutrition/recognition-consent` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Persona propia |
+| **Transacción** | `nutrition.read_recognition_consent` y `nutrition.accept_recognition_consent` |
+| **Idempotencia** | `Idempotency-Key` y `Command-Id` en `PUT` |
+| **Paginación y orden** | N/A |
+| **Offline / concurrencia** | Solo online |
+| **Información sensible** | `nutrition` |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Guarda la versión del texto aceptado; una versión nueva exige aceptar otra vez |
+| **Falla cerrada** | Una versión desconocida se rechaza |
 
 ## 8. Catálogo de eventos de dominio
 

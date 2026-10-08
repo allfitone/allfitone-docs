@@ -966,6 +966,8 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 - **`T-RESULT-8` (negativa)** — Otra persona no lee el resumen de una ejecución ajena, ni la dueña el de una sin terminar.
 - **`T-RESULT-9` (positiva)** — La persona lista su historial y lee el resumen de un mes, sólo con sus ejecuciones terminadas (`OP-EXE-014`, `OP-EXE-022`).
 - **`T-RESULT-10` (negativa)** — Otra persona no ve en su listado ni en su mes ninguna ejecución ajena.
+- **`T-NUT-RLS-01..05` (positivas y negativas)** — La persona registra, lee, lista, corrige y elimina sus comidas, lee sus días y decide sobre sus metas; otra persona no ve, ni corrige, ni elimina, ni decide nada ajeno, y una decisión no se reescribe (`OP-NUT-001..008`, `ADR-040`).
+- **`T-NUT-RLS-25..28` (positivas y negativas)** — Los frecuentes y el consentimiento de reconocimiento son de la persona; el catálogo se lee pero no se escribe en runtime (`OP-NUT-014..017`, `ADR-041`).
 - **`T-RESULT-11` (positiva y negativa)** — La persona lee el detalle de su entreno terminado, lo corrige, lo anula y lo repite; otra persona no lo lee ni lo anula, y una revisión no se reescribe ni la dueña (`OP-EXE-007`, `OP-EXE-009`, `OP-EXE-023`, `OP-EXE-025`).
 
 #### `METRIC_SAMPLE`
@@ -1113,6 +1115,10 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 - **`T-NUT-RLS-22` (negativa)** — Otra persona, profesional o admin no decide una propuesta.
 - **`T-NUT-RLS-23` (positiva)** — Caso frozen válido ve solo guía profesional de esa relación con `goal_versions.created_at<=T`, incluida una versión creada exactamente en `T`.
 - **`T-NUT-RLS-24` (negativa)** — Frozen excluye comidas, medios, resúmenes, metas personales, otras relaciones y toda versión con `goal_versions.created_at>T`.
+- **`T-NUT-RLS-25` (negativa)** — Otra persona no lee los alimentos más registrados de nadie (`OP-NUT-015`, `ADR-041`).
+- **`T-NUT-RLS-26` (positiva y negativa)** — La persona lee y da su propio consentimiento de reconocimiento; otra persona no lo lee, no lo da en su nombre y la tabla no le muestra filas ajenas (`OP-NUT-017`).
+- **`T-NUT-RLS-27` (negativa)** — El rol de runtime no escribe en el catálogo de alimentos: solo cambia por curaduría (`ADR-041`).
+- **`T-NUT-RLS-28` (negativa)** — El rol de runtime no escribe productos de Open Food Facts: solo cambian por curaduría (`ADR-041`).
 
 ### 7.11 Pagos y planes
 
