@@ -260,12 +260,35 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-040` | Iniciar sesión en Space | Comando | `A0` → `A1`, `A2` |
 | `OP-IDN-041` | Renovar la sesión de Space | Comando | `A1`, `A2` |
 | `OP-IDN-042` | Pedir el restablecimiento de contraseña de Space | Comando | `A0` |
+| `OP-IDN-052` | Reenviar una invitación de equipo desde Backoffice | Comando | `A10` |
+| `OP-IDN-053` | Enviar a una persona el flujo oficial de recuperación desde Backoffice | Comando | `A10` |
+| `OP-IDN-054` | Reenviar una recuperación en curso desde Backoffice | Comando | `A10` |
+| `OP-IDN-055` | Cancelar una recuperación sospechosa desde Backoffice | Comando | `A10` |
+| `OP-IDN-049` | Consultar mi contexto de salud | Consulta | `A2` |
+| `OP-IDN-050` | Eliminar una declaración de contexto de salud | Comando | `A2` |
+| `OP-IDN-051` | Reenviar una invitación de cliente desde Backoffice | Comando | `A10` |
 | `OP-IDN-043` | Crear el Fitness ID en estado pendiente | Comando | `A1` → `A2` |
 | `OP-IDN-044` | Consultar el intento de onboarding abierto | Consulta | `A1` |
 | `OP-IDN-045` | Declarar el sexo biológico | Comando | `A2` |
 | `OP-IDN-046` | Declarar las zonas de énfasis | Comando | `A2` |
 | `OP-IDN-047` | Saltarse un paso del onboarding | Comando | `A2` |
 | `OP-IDN-048` | Cerrar sesión Space | Comando idempotente | sesión presente o ausente |
+
+> **`OP-IDN-045` a `OP-IDN-048` estuvieron asignados dos veces, y ya no.** Space los usa
+> para el sexo biológico, las zonas de énfasis, saltarse un paso y cerrar sesión. Las
+> cuatro operaciones de Backoffice que compartían esos números —reenviar una invitación
+> de equipo y las tres de recuperación de acceso— pasaron a `OP-IDN-052` … `OP-IDN-055`.
+>
+> No era sólo un problema de esta tabla: ambos lados escribían su código en
+> `system.idempotency_keys`, así que el recibo dejaba de identificar qué operación había
+> ocurrido y el panel técnico mostraba dos cosas distintas bajo el mismo nombre.
+>
+> Se movieron los de Backoffice y no los de Space por el mismo criterio que rige las
+> migraciones: **lo que ya está en historia compartida se queda**. Los de Space entraron
+> el `20260913…` y están en `main`; los de Backoffice llegaban sin fusionar. El cambio se
+> hizo archivo por archivo, no reemplazando la cadena: esos mismos códigos aparecen en
+> migraciones, en el cliente de cierre de sesión y en pantallas de onboarding de Space
+> con el otro significado.
 
 ---
 
@@ -371,6 +394,8 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | El despojo de metadatos ocurre en el servidor, no en el cliente. La galería del dispositivo nunca se expone: solo la selección explícita |
 | **Falla cerrada** | Si el despojo de metadatos falla, no se almacena la imagen |
 
+**Implementado (`identity.record_body_progress`, `POST /space/v1/body-progress` → 201).** El cuerpo trae exactamente `metric_code`, `value`, `unit_code` y `measured_on`; cualquier otro campo, incluido uno de imagen, responde 422 en vez de ignorarse. **La imagen todavía no se acepta:** el despojo de metadatos en el servidor es su propia pieza, y hasta entonces ningún registro dice tener una. El valor se convierte a la unidad canónica de la dimensión y lo que la persona escribió se conserva a su lado; una unidad de otra dimensión o un valor sobre el tope de la medida responde 422. Un replay con la misma llave devuelve el mismo registro con `Idempotent-Replay: true`; la misma llave con otro cuerpo responde 409. No hay `draft_local` ni `pending_sync` en el servidor: el dispositivo guarda el comando y lo reenvía con el mismo `Command-Id`.
+
 #### `OP-IDN-007` — Eliminar un registro de progreso corporal
 
 | Campo | Valor |
@@ -388,6 +413,8 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | Eliminar un dato propio no es una revocación de scope y no altera los grants. Un profesional que ya lo vio conserva su `ACCESS_EVENT`, no el dato |
 | **Falla cerrada** | Si el borrado del binario no puede confirmarse, el caso queda abierto y reintenta; no se reporta como completado |
 
+**Implementado (`identity.delete_body_progress`, `DELETE /space/v1/body-progress/{recordId}` → 200).** Todo ocurre en una transacción: abre el caso con origen `request` y su ítem bajo la política `body`/`CO` vigente, encola `privacy.disposition_case_opened.v1`, registra el evento de disposición, marca el ítem ejecutado soltando su target, borra la fila y cierra el caso. Responde `{body_progress_record_id, disposition_case_id, status: "deleted"}`. Como aún no hay binarios, no hay nada que propagar y el caso no queda abierto. Desde `20260922120000`, reintentar el registro de una medición ya borrada (`OP-IDN-006`) responde `410` en vez de un resultado vacío; lo mismo `OP-IDN-008` con una declaración. Un replay con la misma llave devuelve la misma respuesta; **un segundo borrado con otra llave responde 404**, igual que el registro de otra persona, porque la fila ya no existe. El mismo estado final sí converge.
+
 #### `OP-IDN-008` — Declarar contexto de salud fitness
 
 | Campo | Valor |
@@ -404,6 +431,8 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | `identity.health_context_declared.v1` |
 | **Reglas** | No representa historia clínica, diagnósticos, laboratorios, biometría continua ni documentos médicos. Un dolor registrado dentro de una sesión hereda esta clasificación y permanece oculto sin el scope, aunque la sesión sea visible |
 | **Falla cerrada** | Tipo fuera del catálogo minimizado, rechazo |
+
+**Implementado (`identity.record_health_context`, `POST /space/v1/health-context` → 201).** El cuerpo trae `context_type`, `description` y `valid_from`, y opcionalmente `body_area` y `valid_to`; cualquier otro campo responde 422 en vez de ignorarse. La descripción tiene hasta 500 caracteres y se guarda sin espacios alrededor; la zona sale de una lista cerrada de catorce; `valid_from` no es posterior a mañana y `valid_to`, si llega, es posterior a `valid_from`. La procedencia la fija el servidor en `person_declared`. Un campo opcional ausente viaja y se resume como `null`, así que un reintento que lo envía explícito repite el mismo registro. No hay `draft_local` en el servidor: el dispositivo guarda el comando y lo reenvía con el mismo `Command-Id`.
 
 #### `OP-IDN-009` — Decidir las intenciones de una invitación
 
@@ -524,6 +553,8 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Las URLs de imagen son firmadas, de vigencia corta y no enumerables |
 | **Falla cerrada** | — |
+
+**Implementado (`identity.list_body_progress`).** `limit` entre 1 y 200 (50 por defecto); el cursor es el par `before_measured_on` + `before_id`, los dos o ninguno. Responde `{items, has_more}`. Cada ítem trae el valor normalizado, el original, la fecha, `has_media` y `recorded_at`; nunca `person_id` ni la referencia del medio. Todavía no hay URLs de imagen porque todavía no hay imágenes.
 
 #### `OP-IDN-016` — Consultar una invitación por token protegido
 
@@ -940,6 +971,83 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | **Responde `202` siempre**, exista o no la cuenta y esté o no el proveedor en pie: HU-SP-004 criterio 2. Un fallo del proveedor tampoco es público, porque distinguirlo delataría igualmente qué direcciones existen. **Límite de intentos obligatorio**: sin él, este endpoint envía correos a cualquier dirección que le pidan |
 | **Falla cerrada** | Cualquier error se traga y se responde `202`; nada se crea |
 
+#### `OP-IDN-052` — Reenviar una invitación de equipo desde Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/organizations/{orgId}/team-invitations/{invitationId}/resends`; la lectura previa es `GET /backoffice/v1/organizations/{orgId}/team-invitations` (`NEW-IDN-RESEND`) |
+| **Actor** | `A10` con rol base, `diagnose_support_metadata`, AAL2 y deber vigente |
+| **Filtros obligatorios** | Invitación de equipo de esa organización, y organización `active`. El comando no lleva cuerpo: el contacto, el rol y la organización salen de la invitación |
+| **Transacción** | `identity.resend_team_invitation`. Una invitación vigente se extiende y se reenvía tal cual. Una vencida se reemite: invitación nueva idéntica, firmada por la persona de Allfit y su asignación de deber, con `reissues_invitation_id` hacia la vencida, que sigue vencida. Cada reenvío escribe `identity.invitation_resends` |
+| **Idempotencia** | `Idempotency-Key`; el reintento devuelve la invitación entregada sin reenviar |
+| **Paginación y orden** | La lectura devuelve las 50 invitaciones más recientes con `truncated` |
+| **Offline / concurrencia** | Falla cerrada. Aceptada, rechazada, revocada, ya reemitida o con una igual pendiente responde `409` |
+| **Información sensible** | Contacto del invitado, que solo viaja enmascarado; no revela persona, así que no escribe `access_events` |
+| **Evento de dominio** | `organization.staff_invited.v1` (y `identity.invitation_expired.v1` si la vencida seguía pendiente) |
+| **Reglas** | `HU-BO-011`, criterios 2 a 6. La ventana por destino que usa Studio (tres al día por organización y dirección) cuenta también los reenvíos de soporte: `429`. Un trigger rechaza una reemisión con otra organización, canal, contacto, propuesta o rol |
+
+#### `OP-IDN-053` — Enviar a una persona el flujo oficial de recuperación desde Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/people/{personId}/account-recoveries`; la lectura previa es `GET /backoffice/v1/people/{personId}/account-recovery?case_reference=` (`NEW-IDN-ACTION`) |
+| **Actor** | `A10` con rol base, `diagnose_support_metadata`, AAL2 y deber vigente; nunca sobre su propia persona (`42501`) |
+| **Filtros obligatorios** | Persona activa, con cuenta de acceso y correo verificado. El cuerpo lleva solo `case_reference`: la persona, el correo y el flujo salen de la base |
+| **Transacción** | `identity.start_account_recovery`: bloquea la persona, marca vencidas las solicitudes cuyo enlace caducó, crea `identity.identity_action_requests` en `initiated` con fingerprint y pista del correo, escribe `identity.identity_action_events` (`initiated`), encola `identity.account_recovery_requested.v1` y registra `privacy.access_events` |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; el `Command-Id` es el identificador de la solicitud y el reintento devuelve la misma sin encolar otro correo |
+| **Paginación y orden** | La lectura devuelve las diez solicitudes más recientes |
+| **Offline / concurrencia** | Falla cerrada. Sin cuenta, sin correo verificado, persona no activa o con una recuperación en curso responde `409` y no escribe nada. Tres correos de recuperación por persona en 24 horas: `429` |
+| **Información sensible** | El correo solo viaja enmascarado; el worker lo lee para entregarlo al proveedor. Enlace, token e identificador del reset de WorkOS nunca se guardan ni se devuelven |
+| **Evento de dominio** | `identity.account_recovery_requested.v1` (payload: `request_id`). El worker llama al proveedor, registra `delivered` con el vencimiento del enlace o `failed`; `identity.process_password_reset_succeeded` confirma la solicitud cuando la persona cambia su contraseña |
+| **Reglas** | `HU-BO-010`, criterios 3, 4, 5, 10 y 12. Solo la persona confirma. No hay recuperación por teléfono: V1 no tiene canal SMS |
+
+#### `OP-IDN-054` — Reenviar una recuperación en curso desde Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/people/{personId}/account-recoveries/{requestId}/resends` |
+| **Actor** | Igual que `OP-IDN-053` |
+| **Filtros obligatorios** | Solicitud de esa persona en `awaiting_verification` y con enlace vigente. El cuerpo lleva solo `case_reference` |
+| **Transacción** | `identity.resend_account_recovery`: comprueba que el correo verificado sigue siendo aquel con el que empezó (fingerprint), escribe `delivery_requested` y encola otra entrega de la misma solicitud |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; el reintento devuelve la solicitud sin encolar otro correo |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Una solicitud que todavía no salió, vencida, cancelada, confirmada, fallida o cuyo correo verificado cambió responde `409`; una vencida nunca revive y la reemplaza una nueva con `OP-IDN-053`. Comparte el límite diario: `429` |
+| **Información sensible** | Igual que `OP-IDN-053` |
+| **Evento de dominio** | `identity.account_recovery_requested.v1` |
+| **Reglas** | `HU-BO-011`, criterios 2 a 6, para la recuperación: reenviar no cambia sujeto, destino, finalidad ni acción |
+
+#### `OP-IDN-055` — Cancelar una recuperación sospechosa desde Backoffice
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/people/{personId}/account-recoveries/{requestId}/cancellation` |
+| **Actor** | Igual que `OP-IDN-053` |
+| **Filtros obligatorios** | Solicitud de esa persona en `initiated` o `awaiting_verification` y con enlace vigente. El cuerpo lleva solo `case_reference` |
+| **Transacción** | `identity.cancel_account_recovery`: pasa la solicitud a `cancelled` y escribe `cancelled` con persona, deber y caso |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Una solicitud que ya no está vigente responde `409`. Si la entrega estaba en cola, el worker ya no la envía; si el correo ya salió, se registra pero no reabre la solicitud |
+| **Información sensible** | Igual que `OP-IDN-053` |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | `HU-BO-010`, criterio 10. Un correo que ya salió no se puede retirar del buzón de la persona: un cambio de contraseña posterior ya no confirma la solicitud cancelada |
+
+#### `OP-IDN-049` — Consultar mi contexto de salud
+| **Superficie** | `POST /space/v1/onboarding-attempts/{id}/fitness-id` |
+| **Actor** | `A1`, dueño del intento. Al terminar, la cuenta pasa a tener persona y el actor es `A2` |
+| **Filtros obligatorios** | Intento abierto y propio, con `ELIGIBILITY_EVIDENCE` en estado `pass` vigente — **también al corregir**: una corrección no salta el control de adultez. Nombre y apellido no vacíos. Nombre de usuario con formato válido y libre para cualquier otra persona. **El proveedor debe confirmar la dirección de la credencial como verificada** al crear: sin eso no hay contacto que registrar |
+| **Transacción** | Una sola. Si la cuenta no tiene persona: crear `PERSON` en `pending_activation` con nombre, apellido, nombre de usuario, **correo de contacto y su sello de verificación**, `activated_at` nulo; vincular `ACCESS_ACCOUNT` a esa persona; y anotar `person_id` en el `ONBOARDING_ATTEMPT`, que sigue `open`. **Si ya la tiene: corregir** nombre, apellido y nombre de usuario sobre la misma persona. El contacto no se reescribe aquí: pertenece a la credencial y cambiarlo es `OP-IDN-021` |
+| **Idempotencia** | `Idempotency-Key`. Un reintento devuelve la misma `PERSON`; nunca crea una segunda, ni al crear ni al corregir. La unicidad del handle y del vínculo cuenta–persona se resuelven en la base |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | No admite `draft_local`: la unicidad del handle es autoritativa y no se puede prometer sin conexión. Dos peticiones concurrentes producen una sola persona |
+| **Información sensible** | Datos identificativos básicos **y contacto**. Clasificación `identity_pii`. Ninguna categoría fitness |
+| **Evento de dominio** | `identity.person_created_pending.v1` |
+| **Reglas** | **Crear la persona aquí es lo que permite que el resto del onboarding escriba directamente sobre ella**: sin esto, cada respuesta de perfil necesitaría una tabla de preparación y un segundo camino de escritura hacia `FITNESS_PROFILE_CLAIM`. La elegibilidad adulta se exige **antes**, que es lo que piden DT-012 y ADR-017: crear la fila más temprano no adelanta ningún control. Una persona `pending_activation` **no** puede crear organización ni perfil profesional; esas operaciones ya exigen estado activo. **No existe consulta de disponibilidad de usuario**: el choque vuelve como `conflict` sobre ese campo, porque preguntar si un handle está libre delata que alguien lo tiene. **El correo de contacto no se acepta como entrada**: es la dirección de la credencial —DT-016 los declara el mismo dato— y la API la consulta al proveedor por `sub`. Una dirección que mandara el cliente jamás puede guardarse como verificada: quedaría un contacto que nadie probó satisfaciendo el filtro de `OP-SYS-002`. Cambiarla es `OP-IDN-021`, con su propia verificación. **Límite de intentos obligatorio** |
+| **Falla cerrada** | Sin elegibilidad `pass` no hay persona ni corrección, aunque el nombre y el handle sean válidos. Usuario que otra persona tiene: `conflict`, y nada cambia. Si el proveedor no confirma la dirección como verificada: `forbidden` |
+
 #### `OP-IDN-043` — Crear el Fitness ID en estado pendiente
 
 | Campo | Valor |
@@ -962,6 +1070,19 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/health-context` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Persona = sujeto del token |
+| **Transacción** | `identity.list_health_context` resuelve el sujeto y lee sólo sus declaraciones |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Cursor `before_valid_from` + `before_id`, los dos o ninguno; `limit` de 1 a 200 (50 por defecto). Orden: inicio descendente, desempate por identificador |
+| **Offline / concurrencia** | Cacheable para presentación en el dispositivo; la respuesta es `no-store` |
+| **Información sensible** | **Contexto de salud.** Nunca devuelve `person_id` |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | `HU-SP-014`, `HU-SP-028`. La persona ve lo que declaró; la vista profesional es `OP-IDN-020` |
+| **Falla cerrada** | Un token que no resuelve a una persona activa responde `403` |
+
+#### `OP-IDN-050` — Eliminar una declaración de contexto de salud
 | **Superficie** | `GET /space/v1/onboarding-attempts/current` |
 | **Actor** | `A1`, dueño del intento |
 | **Filtros obligatorios** | Solo el intento abierto de la cuenta autenticada. Una cuenta nunca ve el intento de otra |
@@ -979,6 +1100,19 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
+| **Superficie** | `DELETE /space/v1/health-context/{claimId}` |
+| **Actor** | `A2`, dueño de la declaración |
+| **Filtros obligatorios** | La declaración pertenece a la persona autenticada |
+| **Transacción** | `identity.delete_health_context`: `privacy.dispose_on_owner_request` abre y cierra el caso unitario bajo la política `health`, y la fila se borra en la misma transacción |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`. Un reintento devuelve el mismo caso; un segundo borrado con otra llave responde `404` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada: una eliminación no se confirma desde el dispositivo |
+| **Información sensible** | Contexto de salud. Lo que queda es el caso: qué clase de dato se borró, bajo qué política y cuándo |
+| **Evento de dominio** | `privacy.disposition_case_opened.v1` |
+| **Reglas** | Hace para el contexto de salud lo que `OP-IDN-007` hace para el progreso corporal. Borrar un dato propio no revoca ningún grant. La declaración de otra persona y una que no existe responden igual, `404` |
+| **Falla cerrada** | Sin política `health`/`owner_request` publicada, el borrado se rechaza y no escribe nada |
+
+#### `OP-IDN-051` — Reenviar una invitación de cliente desde Backoffice
 | **Superficie** | `POST /space/v1/onboarding-attempts/{id}/biological-sex` |
 | **Actor** | `A2`, dueño del intento. La persona ya existe en `pending_activation` desde `OP-IDN-043` |
 | **Filtros obligatorios** | Intento abierto y propio con `ELIGIBILITY_EVIDENCE` en `pass`. La cuenta debe tener `PERSON` vinculada. El sujeto es siempre la persona autenticada; nadie declara el sexo de otra |
@@ -996,6 +1130,17 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/organizations/{orgId}/client-invitations/{invitationId}/resends`; la lectura previa es `GET /backoffice/v1/organizations/{orgId}/client-invitations` (`NEW-IDN-CLIENT-RESEND`) |
+| **Actor** | `A10` con rol base, `diagnose_support_metadata`, AAL2 y deber vigente |
+| **Filtros obligatorios** | Invitación de cliente de esa organización, y organización `active`. El comando no lleva cuerpo: el contacto, la organización y los permisos que pide salen de la invitación |
+| **Transacción** | `identity.resend_client_invitation`. Una invitación vigente se extiende y se reenvía tal cual. Una vencida se reemite: invitación nueva idéntica, firmada por la persona de Allfit y su asignación de deber, con `reissues_invitation_id` hacia la vencida, que sigue vencida. La reemisión **copia las opciones de `privacy.invitation_scope_options`** con el mismo `scope_definition_id`, nivel y propósito. Cada reenvío escribe `identity.invitation_resends` con `kind = 'service_relationship'` |
+| **Idempotencia** | `Idempotency-Key`; el reintento devuelve la invitación entregada sin reenviar |
+| **Paginación y orden** | La lectura devuelve las 50 invitaciones más recientes con `truncated` |
+| **Offline / concurrencia** | Falla cerrada. Aceptada, rechazada, revocada, ya reemitida o con una igual pendiente responde `409` |
+| **Información sensible** | Contacto del invitado, que solo viaja enmascarado, y los códigos de permiso que pidió. No revela persona —antes de que alguien acepte, una invitación no identifica a nadie—, así que no escribe `access_events`. El propósito que escribió el gimnasio y la redacción que leerá la persona no viajan a Backoffice |
+| **Evento de dominio** | `relationship.client_invited.v1` (y `identity.invitation_expired.v1` si la vencida seguía pendiente) |
+| **Reglas** | `HU-BO-011`, criterios 2 a 6. La ventana por destino que usa Studio cuenta también los reenvíos de soporte: `429`. Una política de lectura sobre `privacy.invitation_scope_options` habilita a `diagnose_support_metadata` a ver la oferta, y un trigger de restricción diferido rechaza con `23514` toda reemisión cuyo conjunto de permisos, nivel, propósito o versión no coincida con el original —incluida la que copió cero filas porque no pudo leerlos—, recomputando `proposal_hash` desde lo escrito |
+| **Falla cerrada** | Sin poder leer la oferta no se envía nada: la reemisión vacía no coincide con el `proposal_hash` heredado y la transacción se rechaza |
 | **Superficie** | `POST /space/v1/profile/focus-areas` |
 | **Actor** | `A2`. El sujeto es siempre la persona autenticada |
 | **Filtros obligatorios** | La cuenta tiene `PERSON` vinculada. Cada miembro del conjunto pertenece a `allowed_values` del atributo `focus_areas`. Sin miembros repetidos y sin nulos internos. `whole_body` llega solo o no llega |
@@ -1070,6 +1215,8 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | `OP-ORG-018` | Crear una organización y entregarla a su dueño | Comando | `A10` |
 | `OP-ORG-019` | Consultar catálogo de tipos de organización | Consulta | `A2` |
 | `OP-ORG-020` | Resolver el contexto de entrada de Studio | Consulta | `A1`, `A2` |
+| `OP-ORG-021` | Reenviar la invitación de propiedad | Comando | `A10` |
+| `OP-ORG-022` | Cancelar una organización que nadie reclamó | Comando | `A10` |
 
 ---
 
@@ -1437,6 +1584,39 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Evento de dominio** | `organization.created_unclaimed.v1` |
 | **Reglas** | Es la excepción acotada a la regla de que una organización la crea su dueño, y existe solo para venta asistida. Mientras esté `unclaimed` la organización **no opera**: no invita clientes, no publica planes, no recibe pagos y **no tiene membresías**. Allfit **no la administra** en ese intervalo: solo puede reenviar la invitación o cancelar la creación. Al aceptar, el destinatario obtiene la membresía `owner` y la organización pasa a `active`. Allfit **no crea las cuentas del equipo**: el dueño invita a los suyos con `OP-ORG-005` |
 | **Falla cerrada** | Si la invitación no puede crearse, no se crea la organización: no queda una organización huérfana sin destinatario |
+| **Implementación (`HU-BO-014`)** | `organizations.create_unclaimed_organization`. Una empresa se nombra al crear; una persona natural se nombra con su propia identidad al aceptar, así que el comando no acepta el nombre de una persona. La organización, su sede y la invitación registran a la persona de Allfit y la asignación de deber bajo la que actuó. Aceptar ocurre en `identity.decide_ownership_invitation` (`OP-IDN-009`); quien emitió la invitación no puede aceptarla |
+
+#### `OP-ORG-021` — Reenviar la invitación de propiedad
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/organizations/{orgId}/handover/resends` |
+| **Actor** | `A10` con rol base, `manage_organization_lifecycle`, AAL2 y deber vigente |
+| **Filtros obligatorios** | Organización `unclaimed` con una invitación de propiedad. El comando no lleva cuerpo: nunca cambia la dirección |
+| **Transacción** | Una invitación vigente se extiende y se reenvía tal cual, así que el enlace del primer correo sigue sirviendo. Una vencida o rechazada se reemplaza por una nueva a la misma dirección |
+| **Idempotencia** | `Idempotency-Key` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada; una organización ya reclamada o cancelada responde conflicto |
+| **Información sensible** | Contacto del futuro dueño, que la respuesta solo muestra enmascarado |
+| **Evento de dominio** | `organization.ownership_invited.v1` |
+| **Reglas** | Allfit no administra la organización en el intervalo: reenviar es una de sus dos únicas acciones (`HU-BO-014`, criterio 4). Cada reenvío queda en `identity.invitation_resends` (`HU-BO-011`, criterio 6), y la invitación nueva de una reemisión apunta a la reemplazada con `reissues_invitation_id` |
+
+#### `OP-ORG-022` — Cancelar una organización que nadie reclamó
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/organizations/{orgId}/cancellation` |
+| **Actor** | `A10` con rol base, `manage_organization_lifecycle`, AAL2 y deber vigente; no se deriva de `allfit_admin` |
+| **Filtros obligatorios** | Organización `unclaimed`. Una organización con dueño la cierra su propietario (`OP-ORG-012`), nunca Allfit desde aquí |
+| **Transacción** | Pasar a `cancelled` con `cancelled_at`, retirar las invitaciones pendientes y registrar `organization.cancelled.v1` con la persona y el deber de Allfit |
+| **Idempotencia** | `Idempotency-Key`. Cancelar una organización ya cancelada converge sin registrar una segunda cancelación |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada; una organización reclamada entretanto responde conflicto |
+| **Información sensible** | Ninguna |
+| **Evento de dominio** | `organization.cancelled.v1` |
+| **Reglas** | `HU-BO-015`. `cancelled` solo se alcanza desde `unclaimed` y conserva la auditoría |
 
 #### `OP-REL-001` — Invitar a una persona como cliente
 
@@ -1480,14 +1660,14 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Superficie** | `POST /studio/v1/organizations/{orgId}/relationships/{relId}/professional-assignments/reassignment` |
 | **Actor** | `A4`, `A5` |
 | **Filtros obligatorios** | Igual que `OP-REL-002`, más la existencia de un titular vigente |
-| **Transacción** | Una sola: cerrar la asignación anterior, abrir la nueva, notificar a la persona y registrar ambos eventos |
+| **Transacción** | Una sola: cerrar la asignación anterior, abrir la nueva y encolar el aviso. El evento lleva el aviso ya redactado —contacto, nombres y organización—, porque leerlos al entregarlo exigiría ampliar las políticas de fila que mantienen relaciones y personas fuera del alcance del worker; así el aviso dice además lo que era cierto cuando ocurrió el cambio |
 | **Idempotencia** | `Idempotency-Key` |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. La invalidación del acceso del actor anterior es inmediata, sin ventana de caché |
 | **Información sensible** | Cambia **quién** puede ejercer los grants vigentes |
 | **Evento de dominio** | `relationship.professional_reassigned.v1` |
 | **Reglas** | El grant se conserva porque no cambian organización, parte responsable, finalidad ni scope; lo que cambia es el actor autorizado. El profesional anterior pierde acceso de inmediato y conserva la autoría de lo que registró. La persona **es notificada**: la reasignación no es silenciosa |
-| **Falla cerrada** | Si la notificación no puede encolarse en la misma transacción, la reasignación no se confirma |
+| **Falla cerrada** | Si la notificación no puede encolarse en la misma transacción, la reasignación no se confirma. Esto es estructural, no una comprobación: el aviso es una fila del outbox escrita por la propia función, así que no existe camino donde el cambio se confirme y el aviso no. También falla cerrada si la persona no tiene contacto registrado — una reasignación que nadie puede comunicar es justo la silenciosa que la operación existe para impedir. Relación sin titular vigente, `409` |
 
 #### `OP-REL-004` — Proponer una suplencia
 
@@ -1639,7 +1819,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Offline / concurrencia** | Cacheable para presentación, nunca para decidir autorización |
 | **Información sensible** | Estado del vínculo, titular, suplencias y **estado** de los grants |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Devuelve qué scopes están concedidos y en qué versión, pero **no** el contenido que amparan. Saber que existe `health_context` concedido no es leer contexto de salud |
+| **Reglas** | Devuelve qué scopes están concedidos y en qué versión, pero **no** el contenido que amparan. Saber que existe `health_context` concedido no es leer contexto de salud. El documento es más estrecho para `A3`: la política de fila le muestra su propia asignación y no las demás, así que un coach no ve quién más atendió a esa persona. Una relación que el actor no puede ver responde **`404`**, no `403`: decirle a un coach que existe pero no es suya ya le cuenta que el gimnasio tiene a esa persona como clienta |
 | **Falla cerrada** | — |
 
 #### `OP-REL-012` — Listar mis relaciones
@@ -1723,6 +1903,7 @@ Reglas que gobiernan todo el dominio:
 | `OP-PRV-018` | Abrir un caso de acceso histórico | Comando | `A4`, `A5` |
 | `OP-PRV-019` | Cerrar un caso de acceso histórico | Comando | `A4`, `A5` |
 | `OP-PRV-020` | Consultar una relación histórica congelada | Consulta | `A3`, `A4`, `A5` autorizados por el caso |
+| `OP-PRV-021` | Seguir las solicitudes de eliminación | Consulta | `A6` con `manage_privacy_requests` |
 
 ---
 
@@ -1810,6 +1991,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `privacy.legal_hold_applied.v1` |
 | **Reglas** | Un hold **suspende disposición**; no concede ni mantiene acceso operativo. No existen holds globales ni indefinidos: alcance, motivo, vigencia y liberación son obligatorios y auditables |
 | **Falla cerrada** | Sin alcance acotado o sin vigencia, rechazo |
+| **Implementado** | `privacy.apply_legal_hold` sobre `POST /backoffice/v1/legal-holds`. La separación de deberes se comprueba **por persona**, no por caso: quien pidió o aprobó una ventana break-glass sobre alguien no puede suspender la disposición de esa persona. Responde `AF403`, distinto del `42501` general, para que la pantalla diga cuál de los dos 403 es. Un ítem ya ejecutado responde `55000` y uno inexistente `P0002` |
 
 #### `OP-PRV-010` — Liberar un hold legal
 
@@ -1827,6 +2009,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `privacy.legal_hold_released.v1` |
 | **Reglas** | Liberar reanuda la disposición de los ítems **dentro de su alcance** y solo de esos |
 | **Falla cerrada** | — |
+| **Implementado** | `privacy.release_legal_hold` sobre `POST /backoffice/v1/legal-holds/{id}/release`. Devuelve los ítems a `pending` y nunca los ejecuta; un hold ya liberado responde `55000`, y la misma separación de deberes aplica al liberar |
 
 #### `OP-PRV-011` — Publicar una versión de definición de scope
 
@@ -1998,6 +2181,24 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | No lista antiguos clientes, no reutiliza `/clients`, no admite escrituras ni exportación masiva. `relationship_training` conserva artefactos bilaterales; `prior_training_history` solo lo compartido; `body_progress` solo medidas estructuradas. Un derivado se sirve únicamente si existía en `T` y todos sus inputs siguen autorizados |
 | **Falla cerrada** | La respuesta ante inexistencia o falta de autorización es indistinguible; cualquier condición ausente devuelve vacío/problema genérico sin filtrar existencia |
 
+#### `OP-PRV-021` — Seguir las solicitudes de eliminación
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /backoffice/v1/erasure-requests` |
+| **Actor** | `A6` con rol `allfit_admin` y deber `manage_privacy_requests` vigente (AAL2 por la sesión de Backoffice) |
+| **Filtros obligatorios** | `status` (`open` o `closed`); sólo casos con `origin = 'request'` |
+| **Transacción** | Una sola, sin escrituras de dominio, que registra un `ACCESS_EVENT` por persona revelada antes de devolver nada |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Cursor `(instante, id)`; abiertas por `opened_at` ascendente (la que más ha esperado primero), resueltas por `closed_at` descendente |
+| **Offline / concurrencia** | `no-store`; el seguimiento cambia cuando la disposición avanza |
+| **Información sensible** | Ninguna del contenido dispuesto. Persona por identificador; la resolución se agrupa por clasificación, acción y estado |
+| **Evento de dominio** | Ninguno; `ACCESS_EVENT` es auditoría obligatoria |
+| **Reglas** | El plazo objetivo de `HU-BO-032` son 30 días desde `opened_at` y viaja como `due_at`, nunca como días restantes: los días se calculan en la zona de quien lee. Una disposición abierta por retención no es una solicitud y no se lista. `retained_until` sale de la política que decidió conservar, no del plazo de respuesta |
+| **Falla cerrada** | Sin rol o sin deber vigente responde `42501` y no registra acceso, porque no reveló nada |
+| **Implementado** | `privacy.list_erasure_requests` y `privacy.erasure_request_categories`. Hoy una solicitud del titular se abre, se ejecuta y se cierra en la misma transacción, así que la mitad abierta sólo tendrá filas cuando exista una disposición diferida o suspendida por obligación legal (`HU-BO-033`) |
+
 ### 7.5 Catálogo
 
 Dueño de `DISCIPLINE`, `ACTIVITY_TYPE`, `ACTIVITY_TYPE_ALIAS`, `MOVEMENT`, `MOVEMENT_ALIAS`, `MOVEMENT_VARIANT`, `MOVEMENT_INSTRUCTION`, `EQUIPMENT`, `MOVEMENT_EQUIPMENT`, `MUSCLE`, `MOVEMENT_MUSCLE`, `UNIT`, `RESULT_CONTRACT`, `ACTIVITY_TYPE_RESULT_CONTRACT` y `CONTRACT_FIXTURE`.
@@ -2013,6 +2214,8 @@ Reglas que gobiernan todo el dominio:
 | `OP-CAT-001` | Crear un movimiento privado | Comando | `A3`, `A4`, `A5` |
 | `OP-CAT-002` | Actualizar un movimiento privado | Comando | `A3`, `A4`, `A5` |
 | `OP-CAT-003` | Archivar un movimiento privado | Comando | `A4`, `A5` |
+| `OP-CAT-004` | Publicar contenido del catálogo global | Comando | `A11` |
+| `OP-CAT-005` | Archivar contenido del catálogo global | Comando | `A11` |
 | `OP-CAT-006` | Publicar o deprecar un contrato de resultados | Comando | `A11` |
 | `OP-CAT-007` | Listar disciplinas | Consulta | Autenticado |
 | `OP-CAT-008` | Listar tipos de actividad | Consulta | Autenticado |
@@ -2076,6 +2279,38 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `catalog.private_movement_archived.v1` |
 | **Reglas** | Archivar lo retira de la búsqueda para contenido nuevo, pero **no** lo elimina: las versiones publicadas y las ejecuciones que lo referencian siguen resolviéndolo. Un movimiento referenciado nunca se borra físicamente mientras exista historial |
 | **Falla cerrada** | — |
+
+#### `OP-CAT-004` — Publicar contenido del catálogo global
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/catalogue/disciplines` · `POST /backoffice/v1/catalogue/activity-types` · `POST /backoffice/v1/catalogue/movements`; la lectura previa es `GET /backoffice/v1/catalogue` (`NEW-CAT-GLOBAL-PUBLISH`) |
+| **Actor** | `A11` con rol base, `curate_global_catalog`, AAL2 y deber vigente |
+| **Filtros obligatorios** | El cuerpo lleva sólo código y nombre (el movimiento, disciplina y nombre). No hay campo de alcance ni de dueño: lo que publica Allfit es global por construcción. Un tipo de actividad o un movimiento exigen una disciplina publicada |
+| **Transacción** | `catalog.publish_discipline`, `publish_activity_type` o `publish_global_movement`: inserta la entrada como `published`, o vuelve a publicar una archivada **con el mismo nombre**. El nombre del movimiento se normaliza (minúsculas, espacios colapsados) y ese normalizado es único entre los globales |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`; el reintento devuelve la entrada sin publicar otra vez |
+| **Paginación y orden** | La lectura devuelve el catálogo completo: es pequeño y cerrado. Orden por código |
+| **Offline / concurrencia** | Falla cerrada. Un código ya publicado, uno que ya nombra otra cosa o un movimiento duplicado responden `409` |
+| **Información sensible** | Ninguna categoría personal: el catálogo no es dato de nadie, así que no escribe `access_events` |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | `HU-BO-022`, criterios 1, 2 y 4. Un gimnasio crea movimientos privados y nunca los sube al global: estas rutas no encuentran contenido con dueño. El equipamiento no tiene tabla en V1 y la lectura lo declara ausente en vez de devolver una lista vacía |
+
+#### `OP-CAT-005` — Archivar contenido del catálogo global
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/catalogue/disciplines/{code}/archival` · `.../activity-types/{code}/archival` · `.../movements/{movementId}/archival` |
+| **Actor** | Igual que `OP-CAT-004` |
+| **Filtros obligatorios** | La entrada es global y está publicada. El comando no lleva cuerpo |
+| **Transacción** | `catalog.archive_discipline`, `archive_activity_type` o `archive_global_movement`: pasa la entrada a `archived`. Archivar una disciplina exige que su contenido global ya lo esté: no hay cascada |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Una entrada que ya no está publicada, o una disciplina con contenido publicado, responden `409`; el contenido privado de un gimnasio responde `404` |
+| **Información sensible** | Ninguna categoría personal |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | `HU-BO-022`, criterio 3. Archivar retira de `/catalog/v1` pero **no borra**: un trigger rechaza (`55000`) borrar una entrada global y las FKs impiden dejar huérfano lo que la referencia, así que las sesiones y plantillas que ya la usaban siguen resolviéndola |
 
 #### `OP-CAT-006` — Publicar o deprecar un contrato de resultados
 
@@ -2871,6 +3106,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Admite `draft_local`: es el caso más común de uso sin conexión |
 | **Información sensible** | Entrenamiento. Por defecto es actividad **autónoma**: ninguna organización la ve sin `prior_training_history` |
 | **Evento de dominio** | `execution.session_started.v1` |
+| **Implementado** | `execution.start_session` sobre `/space/v1/executions` (`POST`). El `Command-Id` es el identificador de la sesión, de modo que el dispositivo la puede empezar sin conexión y reintentar sin crear dos. Devuelve `201` con `Location`, `ETag` `"execution:{id}:r0"` y el contrato congelado. |
 | **Reglas** | Existe sin planificación, sin relación y sin organización. Es el escenario Space-only completo |
 | **Falla cerrada** | Tipo de actividad sin contrato vigente, rechazo |
 
@@ -2905,6 +3141,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | El cliente puede finalizar offline y sincronizar. Escrituras concurrentes sobre la misma ejecución no la corrompen: la validación y el cierre ocurren bajo lock de la ejecución |
 | **Información sensible** | Entrenamiento, y las categorías heredadas por los datos capturados |
 | **Evento de dominio** | `execution.finalized.v1`, `execution.primary_resolved.v1` cuando aplica |
+| **Implementado** | `execution.finalize_session` sobre `/space/v1/executions/{id}/finalize` (`POST`), con `If-Match` de la revisión vista. Cierra `completed` y `pending`; no resuelve primaria porque no hay plan, y no certifica nivel mientras ADR-013 siga en revisión. |
 | **Reglas** | Solo una ejecución **completada y válida** puede ser primaria, y hay como máximo una por sesión planificada. La adherencia cuenta **un** cumplimiento como máximo; V1 rechaza el cumplimiento dividido entre varias ejecuciones. Niveles superiores cumplen los mínimos de los inferiores. Una ingesta `partial` no satisface `summary` ni alimenta progresión precisa. `sensor_enriched` exige un detalle válido, no muestras huérfanas |
 | **Falla cerrada** | Mínimos incumplidos, unidad incompatible o resultado de otra familia: rechazo con errores tipados y la ejecución permanece abierta |
 
@@ -3251,6 +3488,9 @@ Reglas que gobiernan todo el dominio:
 | `OP-PAY-021` | Cancelar mi Premium | Comando | `A2` |
 | `OP-PAY-022` | Habilitar o revocar el Premium de una organización | Comando | `A11` |
 | `OP-PAY-023` | Registrar el resultado de un cobro de plataforma | Comando | `A9` |
+| `OP-PAY-024` | Crear un plan de plataforma | Comando | `A11` |
+| `OP-PAY-025` | Proponer una versión de plan de plataforma | Comando | `A11` |
+| `OP-PAY-026` | Retirar una propuesta de versión de plan de plataforma | Comando | `A11` |
 
 ---
 
@@ -3480,15 +3720,15 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /backoffice/v1/platform-plans/{id}/versions` |
-| **Actor** | `A11` con rol base, `manage_platform_commercial`, AAL2 y deber vigente |
-| **Filtros obligatorios** | Monto positivo, moneda ISO 4217, periodo `month` o `year`; cada función referenciada existe en el catálogo |
-| **Transacción** | Crear `platform_plan_versions` inmutable con sus `platform_plan_features` |
-| **Idempotencia** | `Idempotency-Key` |
+| **Superficie** | `POST /backoffice/v1/platform-plans/{planId}/versions/{versionId}/publication`, sin cuerpo; la versión se propone antes con `OP-PAY-025` y la lectura es `GET /backoffice/v1/platform-plans` (`NEW-PAY-PLATFORM-PLAN`) |
+| **Actor** | `A11` con rol base, `manage_platform_commercial`, AAL2 y deber vigente, **distinto de quien propuso la versión** (`HU-BO-025`, criterio 5) |
+| **Filtros obligatorios** | La versión es la propuesta abierta del plan |
+| **Transacción** | `payments.publish_platform_plan_version`: retira (`deprecated`) la versión en vigor, publica la propuesta con su autor y la asignación de deber, y publica el plan si era su primera versión |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id` |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada; numeración serializada |
-| **Información sensible** | Ninguna categoría personal |
-| **Evento de dominio** | `payments.platform_plan_version_published.v1` |
+| **Offline / concurrencia** | Falla cerrada. Una propuesta abierta por plan (índice parcial), así que la versión contra la que se revisó sigue en vigor al publicar. Publicar la propia propuesta responde `403`; una que ya no está abierta, `409` |
+| **Información sensible** | Ninguna categoría personal: no escribe `access_events` |
+| **Evento de dominio** | `payments.platform_plan_version_published.v1`; `payments.platform_plan_published.v1` la primera vez |
 | **Reglas** | Una versión publicada no se edita jamás y **quien ya está suscrito conserva la suya**. Ninguna función de privacidad, consentimiento, portabilidad o supresión puede limitarse: el catálogo no las contiene y la publicación las rechaza |
 | **Falla cerrada** | Función desconocida o límite negativo: rechazo |
 
@@ -3593,6 +3833,57 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `payments.platform_subscription_suspended.v1` · `.reactivated.v1` |
 | **Reglas** | Igual que en el plan de organización: **este worker no puede terminar nada**, y la suspensión es indefinida hasta que se pague. Bajar a gratis **nunca elimina datos** |
 | **Falla cerrada** | Firma inválida o suscripción inexistente: se descarta y se registra el intento |
+
+#### `OP-PAY-024` — Crear un plan de plataforma
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/platform-plans` |
+| **Actor** | `A11` con rol base, `manage_platform_commercial`, AAL2 y deber vigente |
+| **Filtros obligatorios** | Código estable (`^[a-z][a-z0-9_]{1,39}$`), nombre y tipo `free` o `paid` |
+| **Transacción** | `payments.create_platform_plan`: el plan nace `draft`, sin nada en vigor, con su autor y asignación de deber |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Un código tomado o un segundo plan gratuito responden `409` |
+| **Información sensible** | Ninguna categoría personal |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | `HU-BO-025`, criterio 2. Hay **un solo plan gratuito**, siempre: sus límites cambian publicando versiones suyas, no reemplazándolo. Es más estricto que «un plan gratuito publicado» y hace innecesaria esa regla |
+| **Falla cerrada** | — |
+
+#### `OP-PAY-025` — Proponer una versión de plan de plataforma
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/platform-plans/{planId}/versions` |
+| **Actor** | Igual que `OP-PAY-024` |
+| **Filtros obligatorios** | Plan de pago: monto positivo en unidades menores, moneda ISO 4217 y periodo `month` o `year`. Plan gratuito: monto cero, sin moneda ni periodo (`IX-41`). Cada función del catálogo aparece exactamente una vez; ninguna fuera de él; una excluida no lleva límite; un límite es entero y no negativo |
+| **Transacción** | `payments.propose_platform_plan_version`: crea la versión `draft` con el siguiente número (nunca reutilizado), sus `platform_plan_features` y la versión que reemplazaría; rechaza la propuesta si no cambia nada frente a la versión en vigor |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Una propuesta abierta por plan: una segunda responde `409`, y también una que no cambia nada |
+| **Información sensible** | Ninguna categoría personal |
+| **Evento de dominio** | Ninguno: la versión no está en vigor hasta `OP-PAY-017` |
+| **Reglas** | `HU-BO-025` criterios 1 y 3, `HU-BO-026` criterios 1 a 4. La lectura devuelve con la propuesta qué cambia —precio, moneda, periodo y el estado de cada función— frente a la versión en vigor, para que quien revisa lea una diferencia y no dos versiones |
+| **Falla cerrada** | Función desconocida, omitida o repetida, o forma de precio inválida: `422` |
+
+#### `OP-PAY-026` — Retirar una propuesta de versión de plan de plataforma
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/platform-plans/{planId}/versions/{versionId}/withdrawal`, sin cuerpo |
+| **Actor** | Igual que `OP-PAY-024`: quien la propuso o quien la revisa |
+| **Filtros obligatorios** | La versión es la propuesta abierta del plan |
+| **Transacción** | `payments.withdraw_platform_plan_version`: la propuesta pasa a `archived` con quién la retiró y su asignación de deber |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada. Una propuesta que ya no está abierta responde `409` |
+| **Información sensible** | Ninguna categoría personal |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Quien propuso y cambió de idea y quien revisa y no está de acuerdo terminan igual. La propuesta retirada queda en el historial y nunca se publica |
+| **Falla cerrada** | — |
 
 ### 7.8 Procesos de sistema
 
@@ -3874,6 +4165,12 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Reglas** | Sólo lectura. Otro A10, un A12 o el mismo actor con otra solicitud no puede ejercer |
 | **Falla cerrada** | Cualquier falla de autorización o auditoría devuelve cero contenido |
 
+**Contenido implementado (`HU-BO-009`, mediciones).** Con `body_progress`, una lectura permitida responde `outcome: "allowed"` y `content.body_progress`, con hasta 500 mediciones de la persona del expediente, las más recientes primero, y la misma proyección que ve la persona: `has_media` sin referencia. `body_progress` lee sólo `identity.body_progress_records`; apuntarla a otro `resource_type` se registra y responde `denied` con `resource_out_of_scope`. Las categorías cuyos datos la plataforma todavía no guarda siguen respondiendo `content_unavailable`.
+
+**Contexto de salud implementado (`HU-BO-009`).** Con `health_context`, una lectura permitida devuelve `content.health_context` con hasta 500 declaraciones de la persona del expediente, la de inicio más reciente primero, con tipo, descripción, zona, procedencia y vigencia, y nunca `person_id`. `health_context` lee sólo `identity.health_context_claims`, y apuntarla a otro recurso se registra y responde `denied` con `resource_out_of_scope`.
+
+**Comidas implementadas (`HU-BO-009`).** Con `nutrition_intake`, una lectura permitida devuelve `content.nutrition_intake` con hasta 500 comidas de la persona del expediente, la más reciente primero, con sus ítems y valores y `has_media`, nunca la foto ni sus scopes (`BreakGlassMeal`). Lee sólo `nutrition.meals`. Con esto, las tres categorías restringidas devuelven contenido; `relationship_training`, `prior_training_history` y `nutrition_guidance` siguen en `content_unavailable`.
+
 #### `OP-SUP-004` — Cerrar mi ventana break-glass
 
 | Campo | Valor |
@@ -4053,6 +4350,8 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Reglas** | Al menos un ítem; `occurred_at`, zona y `local_date` quedan congelados; resúmenes se invalidan dentro del commit |
 | **Falla cerrada** | Sujeto, nutriente, unidad o payload inválido revierte todo |
 
+**Implementado (`nutrition.record_meal`, `POST /space/v1/nutrition/meals` → 201 con `Location` y `ETag` `"nutrition-meal:{id}:r0"`).** Sigue el contrato publicado: el cliente numera los ítems (1 a 100, sin repetir), cada nutriente lleva su `unit` y debe ser la única de su código, y una cantidad lleva su `quantity_unit` (una masa o un volumen del catálogo). Nota de hasta 1 000 caracteres; `occurred_at` no posterior a mañana. Cualquier campo fuera del contrato, incluida una foto, responde 422. **No hay foto ni resúmenes diarios en esta versión**, así que no hay nada que invalidar dentro del commit. Un replay devuelve la misma comida; si la comida se borró después, responde `410 command-effect-disposed` (`AF410`) y no la recrea.
+
 #### `OP-NUT-002` — Listar mis comidas
 
 | Campo | Valor |
@@ -4069,6 +4368,8 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Incluye URL firmada solo si existe medio; nunca devuelve `media_ref` |
 | **Falla cerrada** | Una fila ajena produce `404` en detalle y nunca aparece en lista |
+
+**Implementado (`nutrition.list_meals`).** `from` y `to` son días locales (`local_date`), de uno a 31 por lectura; `limit` de 1 a 100 (25 por defecto). El cursor opaco codifica el rango y la última comida, y no sirve para otro rango. No existe `v_my_meals`: la lectura es una función que resuelve el sujeto. `photo` es siempre `null` y `applied_scopes` vacío, porque la vista es la de la dueña y no hay fotos.
 
 #### `OP-NUT-003` — Revisar una comida o adjuntar/reemplazar su foto
 
@@ -4103,6 +4404,8 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Evento de dominio** | `nutrition.meal_deleted.v1` |
 | **Reglas** | No conserva snapshot navegable; holds suspenden la disposición |
 | **Falla cerrada** | No confirma si DB, disposición o outbox no convergen |
+
+**Implementado (`nutrition.delete_meal`, `DELETE /space/v1/nutrition/meals/{mealId}` → 204).** En una transacción: `privacy.dispose_on_owner_request` abre y cierra el caso bajo la política `nutrition`, se encola `nutrition.meal_deleted.v1` con sólo `meal_id`, y la comida se borra con sus ítems y valores en cascada. Un reintento con la misma llave responde 204 con `Idempotent-Replay`; con otra llave, 404. Holds, resúmenes y medios no existen todavía, así que no hay nada que suspender, recalcular ni propagar.
 
 #### `OP-NUT-005` — Consultar mis resúmenes diarios
 

@@ -65,6 +65,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Actores:** lee la propia persona; escribe solo la función que crea el Fitness ID pendiente (INSERT), la de activación (transición de estado) y el worker de privacidad (anonimización/cierre). Ningún profesional lee esta tabla directamente: usa `identity.v_client_identity`.
 - **RLS:** `access_control.is_self(id)` para lectura y update; INSERT bloqueado salvo función de activación.
 - **Consultas:** por `id`; join desde casi todos los dominios.
+- **Panel de negocio (`HU-BO-004`, `NEW-SUP-DASHBOARD`):** `support.read_business_panel` cuenta las personas registradas (todo estado salvo `closed`) y las que llegaron en los últimos siete días. Solo cuenta: no lee nombre ni contacto, no devuelve identificadores y no escribe `privacy.access_events`. Un conteo de personas menor que `minimum_aggregate` (5, número inventado y declarado) sale `below_threshold` sin valor; un cero verdadero se publica.
 - **Índices:** PK. `status` no se indexa (baja cardinalidad).
 - **Retención:** el cierre elimina PII —nombre, apellido, correo y teléfono— y deja tombstone técnico sin PII (`OP-SYS-008`); nunca `deleted_at`. El contacto es dato personal bajo la Ley 1581: clasificación `identity_pii`, misma política de disposición que el resto de la identidad.
 - **Eventos:** `identity.person_activated.v1`, `identity.contact_changed.v1`, `identity.contact_verified.v1`.
@@ -101,6 +102,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **RLS:** habilitada y forzada, sin policies de acceso directo para runtime.
 - **Consultas:** por `token_hash + surface`; reemplazo por `surface + provider_session_id`; sesiones activas por cuenta. La carga Backoffice revalida persona, rol, AAL2, quince minutos de inactividad y ocho horas absolutas, y actualiza actividad dentro de la función cerrada.
 - **Índices:** uniques anteriores; `(access_account_id)`; parcial `(access_account_id, surface) WHERE revoked_at IS NULL`.
+- **Panel de negocio (`HU-BO-004`):** es la única actividad que la plataforma registra. `support.read_business_panel` cuenta personas distintas con una sesión `studio` activa en los últimos siete días, y la etiqueta como profesionales trabajando en Studio. Space no persiste sesiones aquí, así que «personas activas esta semana» no tiene señal y se devuelve `not_modelled` con razón `space_sessions_not_recorded`, nunca cero ni el conteo de Studio en su lugar.
 - **Retención:** hasta revocación y purga operativa; cambiar `SESSION_ENCRYPTION_KEY` invalida los ciphertext existentes y fuerza reautenticación.
 - **Eventos:** ninguno de dominio.
 
@@ -112,7 +114,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Columnas:** `id uuid` UUIDv7 · `provider text` (`workos`) · `issuer text` · `provider_event_id text` · `occurred_at timestamptz` · `access_account_id uuid` (nullable) · `result identity.password_reset_receipt_result` (nullable solo dentro de la transacción) · `revoked_session_count integer` · `received_at timestamptz` · `processed_at timestamptz` (nullable solo mientras se procesa).
 - **FKs y borrado:** `access_account_id → identity.access_accounts(id) ON DELETE RESTRICT`; queda nulo si el subject firmado no tiene cuenta local.
 - **Uniques y checks:** `UNIQUE (provider, issuer, provider_event_id)`; proveedor cerrado a `workos`; issuer y evento no vacíos; conteo no negativo; resultado y fecha de procesamiento aparecen juntos.
-- **Actores:** ninguna lectura ni escritura directa desde runtime. `allfit_api` solo ejecuta `identity.process_password_reset_succeeded`; `PUBLIC` no ejecuta la función.
+- **Actores:** ninguna lectura ni escritura directa desde runtime. `allfit_api` solo ejecuta `identity.process_password_reset_succeeded`; `PUBLIC` no ejecuta la función. En la misma transacción la función confirma la recuperación en curso de la persona de esa cuenta (`identity.identity_action_requests`, `HU-BO-010`).
 - **RLS:** habilitada y forzada, con policy exclusiva de `allfit_owner`.
 - **Consultas:** reconocimiento de replay por `(provider, issuer, provider_event_id)`; asociación opcional por `access_account_id`.
 - **Índices:** unique anterior; parcial por `access_account_id WHERE access_account_id IS NOT NULL`.
@@ -157,6 +159,36 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Consultas / índices:** historia por `(factor_id, occurred_at DESC, id DESC)`.
 - **Retención:** evidencia durable de seguridad; no se elimina en runtime.
 - **Eventos:** la misma transacción solicita revocar sesiones/intentos y eliminar el factor externo.
+
+### 4.2.6 `identity.identity_action_requests`
+
+- **Propósito:** solicitud durable de una acción sobre la identidad que solo la persona confirma (PRE_PHASE_5 §5). El corte físico cubre solo `account_recovery`: la recuperación de acceso que soporte inicia para una persona que no puede entrar (`HU-BO-010`). Los cambios de contacto que la persona inicia desde Space llegarán como nuevos valores de `identity.identity_action_kind`, con las columnas de propuesta que necesiten.
+- **Dominio / fuente de verdad:** Identidad para el estado y la autoría; WorkOS conserva el enlace de recuperación, su token y el cambio de contraseña.
+- **Clasificación:** `identity_pii` minimizada; no guarda el contacto en claro, el enlace, el token ni un código.
+- **Columnas:** `id uuid` (Command-Id del comando que la abrió) · `person_id uuid` · `access_account_id uuid` · `action_kind identity.identity_action_kind` (`account_recovery`) · `status identity.identity_action_status` (`initiated`, `awaiting_verification`, `confirmed`, `expired`, `cancelled`, `failed`) · `initiated_by_kind text` (`support`) · `initiated_by_person_id uuid` · `initiated_by_duty_assignment_id uuid` · `case_reference text` · `delivery_channel text` (`email`) · `contact_fingerprint bytea` (SHA-256 del correo en minúsculas) · `contact_hint text` (enmascarado) · `expires_at timestamptz` · `delivered_at`, `confirmed_at`, `cancelled_at`, `failed_at timestamptz` (nullable) · `failure_code text` (`contact_changed`, `delivery_failed`; nullable) · `created_at` · `updated_at`.
+- **FKs y borrado:** `person_id` e `initiated_by_person_id → identity.people(id) RESTRICT`; `access_account_id → identity.access_accounts(id) RESTRICT`; `initiated_by_duty_assignment_id → support.platform_duty_assignments(id) RESTRICT`.
+- **Uniques y checks:** único parcial `(person_id, action_kind) WHERE status IN ('initiated','awaiting_verification')`: una sola solicitud en curso por persona y tipo, también para el dueño de la tabla. `ck_identity_action_requests_initiator`: la inicia soporte con asignación de deber y referencia de caso trazable, y nunca sobre su propia persona. `ck_identity_action_requests_lifecycle`: cada fecha terminal aparece exactamente con su estado, `awaiting_verification` y `confirmed` exigen `delivered_at` y `failure_code` existe solo en `failed`. Fingerprint de 32 bytes. `trg_identity_action_requests_transition` rechaza (`55000`) borrar, cambiar sujeto, destino o autoría, mover un estado terminal o volver de `awaiting_verification` a `initiated`.
+- **Actores:** Allfit (`A10` con `diagnose_support_metadata`) lee, inicia, reenvía y cancela (`NEW-IDN-ACTION`, `OP-IDN-053..055`). El worker prepara la entrega, la registra con el vencimiento que informa el proveedor o la da por fallida. `identity.process_password_reset_succeeded` la confirma cuando el proveedor informa que la persona cambió su contraseña. Nadie la confirma por la persona.
+- **RLS:** `FORCE ROW LEVEL SECURITY` con política única para `allfit_owner`; `allfit_api` sin privilegios de tabla. Entradas cerradas: `read_account_recovery`, `start_account_recovery`, `resend_account_recovery`, `cancel_account_recovery`, `prepare_account_recovery_delivery`, `record_account_recovery_delivery` y `fail_account_recovery_delivery`; cada lectura y cada comando de soporte escribe `privacy.access_events` (`support_metadata`) antes de devolver contenido.
+- **Consultas:** las diez más recientes de una persona; la solicitud en curso de una persona; por persona de la cuenta al confirmar.
+- **Índices:** PK; único parcial en curso; `(person_id, created_at DESC, id DESC)`; `(access_account_id)`.
+- **Retención:** evidencia de soporte; sigue la disposición de la identidad de la persona.
+- **Eventos:** `identity.account_recovery_requested.v1`, con solo `request_id` en el payload, al iniciar y al reenviar.
+- **Divergencias con PRE_PHASE_5 §5:** no guarda `provider_challenge_ref`, porque el identificador del reset de WorkOS devuelve el token por la API y es, por tanto, un camino al secreto. `person_id` no es nullable: la recuperación de soporte siempre parte de una persona resuelta. `idempotency_command_id` es el propio `id`.
+
+### 4.2.7 `identity.identity_action_events`
+
+- **Propósito:** historial append-only de cada transición y cada pedido de envío de una solicitud de identidad (`HU-BO-010`, criterio 12).
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `operational`; sin contacto, enlace, token ni código.
+- **Columnas:** `id uuid` · `request_id uuid` · `event_type text` (`initiated`, `delivery_requested`, `delivered`, `confirmed`, `expired`, `cancelled`, `failed`) · `actor_kind text` (`support`, `worker`, `person`, `system`) · `actor_person_id uuid` (nullable) · `actor_duty_assignment_id uuid` (nullable) · `case_reference text` (nullable) · `delivery_channel text` (`email`; nullable) · `result_code text` (nullable) · `occurred_at timestamptz`.
+- **FKs y borrado:** `request_id → identity.identity_action_requests(id) RESTRICT`; `actor_person_id → identity.people(id) RESTRICT`; `actor_duty_assignment_id → support.platform_duty_assignments(id) RESTRICT`.
+- **Uniques y checks:** `ck_identity_action_events_actor`: soporte inicia, pide reenvío y cancela con persona, deber y caso; el worker entrega o falla; la persona confirma; el sistema vence. `ck_identity_action_events_channel` y `ck_identity_action_events_result` cierran el canal y el código de falla. `trg_identity_action_events_append_only` rechaza (`55000`) toda actualización o borrado, también para el dueño.
+- **Actores:** escriben solo las funciones de la solicitud. El límite de tres correos de recuperación por persona en 24 horas se cuenta sobre `initiated` y `delivery_requested`.
+- **RLS:** igual que la solicitud.
+- **Consultas / índices:** por `(request_id, occurred_at, id)`.
+- **Retención:** con la solicitud.
+- **Eventos:** ninguno propio.
 
 ### 4.3 `identity.onboarding_attempts`
 
@@ -252,17 +284,31 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** medición, composición o foto corporal elegida por la persona.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `body`.
-- **Columnas:** `id uuid` (**Command-Id UUIDv7 del dispositivo para `OP-IDN-006`**) · `person_id uuid` · `metric_code text` · `value_numeric numeric` · `unit_code text` · `original_value numeric` (nullable) · `original_unit_code text` (nullable) · `measured_on date` · `media_ref text` (nullable, sin EXIF) · `has_media boolean`.
-- **FKs y borrado:** `person_id → people(id) RESTRICT`; `unit_code → catalog.units(code) RESTRICT`.
-- **Uniques y checks:** `CHECK (has_media = (media_ref is not null))`. Añadido al construir: `CHECK` cerrado sobre `metric_code` con los miembros de V1, y `CHECK ((original_value is null) = (original_unit_code is null))`, porque media pareja de original no dice nada.
-- **Miembros V1 de `metric_code`:** `body_weight` y `body_height`, declarados el 24 de agosto de 2026 con `HU-SP-011`. La ficha no le da FK ni catálogo, así que sin el check sería texto libre y un dedazo crearía una métrica fantasma que nadie vuelve a escribir. El prefijo `body_` no es adorno: `metric_code` existe también en los resultados de ejecución y en los derivados, donde `weight` es la carga levantada y no el peso de la persona. Añadir un miembro cuesta una migración, y ese coste es preferible.
+- **Columnas:** `id uuid` (**Command-Id UUIDv7 del dispositivo para `OP-IDN-006`**) · `person_id uuid` · `metric_code text` · `value_numeric numeric(12,3)` (en la unidad canónica de su dimensión) · `unit_code text` · `original_value numeric(12,3)` (nullable) · `original_unit_code text` (nullable) · `measured_on date` · `media_ref text` (nullable, sin EXIF) · `has_media boolean` · `created_at timestamptz`.
+- **FKs y borrado:** `person_id → people(id) RESTRICT`; `metric_code → body_progress_metrics(code) RESTRICT`; `unit_code` y `original_unit_code → catalog.units(code) RESTRICT`.
+- **Uniques y checks:** `CHECK (has_media = (media_ref is not null))`; `value_numeric > 0`; el valor original y su unidad van juntos o no van, y el original es positivo.
+- **Miembros de `metric_code`:** los que `identity.body_progress_metrics` tenga publicados; la FK sustituyó al `CHECK` cerrado que los enumeraba, así que añadir uno ya no cuesta una migración de restricción sino una fila. El prefijo `body_` no es adorno: `metric_code` existe también en los resultados de ejecución y en los derivados, donde `weight` es la carga levantada y no el peso de la persona.
 - **Canónico y original:** `value_numeric`/`unit_code` guardan **siempre** la unidad canónica de la dimensión, y `original_value`/`original_unit_code` lo que la persona vio. La conversión la hace la función con `catalog.units.to_canonical_factor` y nunca el cliente: el factor tiene una sola fuente de verdad, y guardar solo lo mostrado hace que 74 kg → 163 lb → 73,9 kg y el peso se mueva solo al cambiar de unidad y volver.
+- **Implementado (`HU-SP-025`, `HU-SP-026`, `HU-SP-027`, `HU-BO-009`):** el trigger `identity.body_progress_record_guard_tg` rechaza cualquier `UPDATE` (una medición se conserva o se borra, nunca se reescribe) y exige que `unit_code` sea la unidad canónica de la dimensión de la medida y que `original_unit_code` mida lo mismo. El tope por medida vive en `body_progress_metrics` y lo aplica `identity.record_body_progress`. **Fotos todavía no:** ningún comando escribe `media_ref`, así que ningún registro dice tener una; el despojo de metadatos en el servidor es su propia pieza. La tabla tiene RLS forzado y el runtime no tiene privilegios sobre ella: la persona entra sólo por `identity.record_body_progress`, `identity.list_body_progress` e `identity.delete_body_progress`, que resuelven el sujeto del token a la persona dentro de la transacción (`identity.require_space_person`), y soporte sólo por `support.exercise_break_glass`. La lectura profesional por `body_progress` llega con `relationships`.
 - **Actores:** la persona (lee, escribe, borra); el profesional con `body_progress` **read**; worker de privacidad.
 - **RLS:** `access_control.is_self(person_id)` **OR** `access_control.can_access(person_id,'body_progress','read')`. `relationship_training` **no** alcanza; Studio usa `identity.v_client_body_progress`.
 - **Consultas:** `(person_id, measured_on desc)`.
 - **Índices:** `(person_id, measured_on desc)`.
 - **Retención:** categoría `body`; borrado propio abre `disposition_case` unitario; imágenes con borrado propagado.
-- **Eventos:** `identity.body_progress_recorded.v1`.
+- **Eventos:** `identity.body_progress_recorded.v1`, cuyo payload lleva sólo `body_progress_record_id`: ni el valor ni la unidad salen al outbox.
+
+### 4.7.1 `identity.body_progress_metrics`
+
+- **Propósito:** las medidas corporales que Space acepta, con su dimensión y un tope que rechaza errores de tipeo, no cuerpos inusuales.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `operational`.
+- **Columnas:** `code text` (PK) · `name text` · `dimension text` (`mass`, `length`, `ratio`) · `maximum_value numeric` (en la unidad canónica) · `created_at timestamptz`.
+- **FKs y borrado:** ninguna saliente; `body_progress_records.metric_code` la referencia con `RESTRICT`.
+- **Uniques y checks:** código `^[a-z][a-z0-9_]{1,31}$`; nombre no vacío de hasta 60 caracteres; tope positivo.
+- **Contenido V1:** `weight` (700 kg), `muscle_mass` (400 kg), `body_fat` (100 %), `waist`, `hip` y `chest` (5 m), `arm` y `thigh` (3 m). Cambia sólo por migración.
+- **Actores / RLS:** RLS forzado y sin privilegios de runtime; las funciones de progreso corporal la leen.
+- **Retención:** permanente; una medida referenciada no se elimina.
+- **Eventos:** ninguno.
 
 ### 4.8 `identity.health_context_claims`
 
@@ -277,7 +323,8 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Consultas:** `(person_id, valid_from desc)`.
 - **Índices:** `(person_id, valid_from desc)`.
 - **Retención:** categoría `health`; disposición por su política.
-- **Eventos:** `identity.health_context_declared.v1`.
+- **Eventos:** `identity.health_context_declared.v1`, cuyo payload lleva sólo `health_context_claim_id`: lo declarado nunca sale al outbox.
+- **Implementado (`HU-SP-014`, `HU-SP-028`, `HU-BO-009`):** suma `created_at timestamptz`. `description` no queda vacía y tiene como máximo 500 caracteres (la función la guarda sin espacios alrededor); `body_area` es nula o una de catorce zonas (`neck`, `shoulder`, `upper_back`, `lower_back`, `chest`, `abdomen`, `arm`, `elbow`, `wrist_hand`, `hip`, `thigh`, `knee`, `lower_leg`, `ankle_foot`); `valid_to`, si existe, es posterior a `valid_from`. No hay columna para un diagnóstico, un examen ni un documento. `identity.provenance` se crea aquí con las cinco procedencias del glosario, y Space sólo escribe `person_declared`. `identity.health_context_claim_guard_tg` rechaza cualquier `UPDATE`: una declaración se conserva o se borra, y una posterior dice qué cambió. Índice `(person_id, valid_from desc, id desc)`, que es también el orden del cursor. La tabla tiene RLS forzado y el runtime no tiene privilegios sobre ella: la persona entra sólo por `identity.record_health_context`, `identity.list_health_context` e `identity.delete_health_context`, y soporte sólo por `support.exercise_break_glass`. La lectura profesional por `health_context` llega con `relationships`.
 
 ### 4.9 `identity.professional_profiles`
 
@@ -320,6 +367,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Consultas / índices:** `(professional_profile_id, status)`; `(supersedes_credential_id)`.
 - **Retención:** con la persona y las verificaciones asociadas.
 - **Eventos:** `identity.professional_credential_declared.v1`, `identity.professional_credential_revised.v1`, `identity.professional_credential_retired.v1`.
+- **Implementado (`HU-BO-021`):** declarar una credencial abre una solicitud de verificación pendiente para esa versión exacta (`trg_professional_credentials_open_verification_request`) y retirarla cancela la pendiente (`trg_professional_credentials_withdraw_verification_request`). Revisar es crear una versión nueva y retirar la anterior, así que el criterio 7 —una revisión abre su propia revisión y la verificación anterior queda intacta— sale de esos dos triggers en vez de ser una tercera regla. Nadie tiene que acordarse de pedir la verificación.
 
 ### 4.12 `identity.professional_credential_verifications`
 
@@ -335,36 +383,76 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Retención:** con la credencial verificada.
 - **Eventos:** `identity.professional_credential_verified.v1`, `identity.professional_credential_verification_revoked.v1`.
 - **Gobernanza:** ADR-026 y `T-VG-01..06`; solo credenciales profesionales y evidencia minimizada.
+- **Implementado (`HU-BO-021`):** `identity.decide_credential_verification` es `OP-IDN-011`. Añade `request_id` nullable con FK portadora `(request_id, professional_credential_id) → credential_verification_requests(id, professional_credential_id)`, y un único resultado por solicitud. Las decisiones anteriores a la cola conservan `request_id` nulo.
+  - **No hay resultado por defecto**: sin resultado la función responde `22023`. La política se deriva del método (`official_registry_lookup` ⇒ `professional_credential.registry.v1`, `issuer_confirmation` ⇒ `professional_credential.issuer.v1`) y no se acepta del cliente.
+  - **La vigencia se deriva, nunca se acepta**: la menor entre `decided_at + 12 meses`, `source_valid_to` y `expires_on` de la credencial. Una fuente que informa la credencial vencida no puede producir `verified`. El `CHECK` de la tabla sigue siendo una tercera defensa: al quitar la derivación en una prueba deliberada, fue el `CHECK` quien detuvo la inserción.
+  - `evidence_fingerprint` lo calcula la base como `sha256` de política, método, fuente, referencia, estado y `source_checked_at`. Ninguna proyección devuelve la huella ni `source_reference`.
+  - **Append-only real**: `identity.reject_credential_verification_rewrite` rechaza `UPDATE` y `DELETE` con `55000`, también para el dueño de la tabla. Renovar, revocar y apelar crean otra fila.
+  - **Conflictos (ADR-026 §2.4) comprobados contra los datos**: `identity.credential_verification_conflict` devuelve `verifier_is_holder` o `shared_active_membership`. Haber declarado o revisado es la misma persona que el titular en V1. **Pendientes**: la relación o asignación profesional efectiva no se puede comprobar porque `relationships` no existe —lo que también implica que hoy no puede existir ninguna—, y las apelaciones no están construidas. Cuando lleguen, su comprobación va en esa función.
+  - La autoridad la resuelve `identity.require_credential_verifier`: rol base más `verify_professional_credentials`. `curate_global_catalog` no la sustituye, y `T-IDN-VERIFY-01` lo asserta.
+- **Evento emitido:** `identity.professional_credential_verified.v1` sólo cuando el resultado es `verified`. Un `rejected` o `unverifiable` queda en la fila sin evento propio; la persona lo ve por la proyección de la credencial.
+
+### 4.12.1 `identity.credential_verification_requests`
+
+- **Propósito:** cola de trabajo de verificación: una solicitud por versión exacta de credencial. Cierra la brecha técnica de `HU-BO-021` que PRE_PHASE_5 §6 dejaba como `NEW-IDN-VERIFY-REQUEST`.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `identity_pii` (enlaza a la persona y a su credencial).
+- **Columnas:** `id uuid` · `professional_credential_id uuid` · `requested_by_person_id uuid` · `kind text` (`initial`, `renewal`) · `status text` (`pending`, `resolved`, `cancelled`) · `supersedes_request_id uuid` (nullable) · `created_at timestamptz` · `resolved_at timestamptz` (nullable) · `cancelled_at timestamptz` (nullable).
+- **Divergencia con PRE_PHASE_5 §6.2, deliberada:** el boceto incluía `verified`, `rejected`, `unverifiable`, `expired`, `appealed` e `in_review` entre los estados de la solicitud. Eso guardaría el resultado dos veces —aquí y en la verificación— y dos copias se desincronizan. **La solicitud no lleva resultado**: sólo `pending`, `resolved` o `cancelled`, y lo decidido vive únicamente en `professional_credential_verifications`. Tampoco se modelaron verificador asignado, `due_at` ni `in_review`: ningún criterio los exige y la concurrencia la resuelve el bloqueo de la fila al decidir.
+- **FKs y borrado:** credencial, solicitante y `supersedes_request_id` con `RESTRICT`. Clave portadora `UNIQUE (id, professional_credential_id)` para la verificación.
+- **Uniques y checks:** forma exacta de timestamps por estado; `UNIQUE (professional_credential_id) WHERE status = 'pending'` (una revisión vigente por versión, §6.3); sin auto-referencia. `identity.guard_credential_verification_request_transition` impide salir de un estado terminal o reescribir campos. **El borrado no se guarda**: el runtime no tiene DML sobre la tabla, y una solicitud decidida no puede borrarse porque su verificación la referencia.
+- **Actores:** los triggers de `professional_credentials` abren y cancelan; `A11/verify_professional_credentials` lee, decide y abre renovaciones mediante funciones cerradas.
+- **RLS:** sin DML de runtime; `force row level security` y política sólo para el dueño.
+- **Consultas:** `identity.list_credential_verification_requests` (cola pendiente; `viewer_can_decide` es pista para la pantalla, nunca autoridad) · `identity.list_due_credential_renewals` · `identity.open_credential_verification_renewal`. Las dos lecturas **escriben un `privacy.access_events` por titular devuelto** antes de devolverlo, porque muestran nombre, número de registro y dónde consultarlo.
+- **Renovación (criterio 4):** nadie corre en el instante en que una verificación vence, así que vencer no puede abrir una solicitud. La lista de renovaciones se calcula —credenciales activas cuya última verificación es `verified` y termina en menos de **30 días**— y un verificador abre la renovación, que es una solicitud nueva enlazada a la anterior y nunca extiende la verificación vieja. **Los 30 días son un número inventado**: ninguna fuente normativa fija esa ventana.
+- **Índices:** único parcial de pendientes; `(status, created_at, id)`.
+- **Retención:** con la credencial.
+- **Eventos:** ninguno propio; el evento es el de la verificación.
 
 ### 4.13 `identity.invitations`
 
 - **Propósito:** sobre temporal de entrega y seguridad; no crea persona provisional.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `identity_pii` (contacto del invitado).
-- **Columnas:** `id` · `organization_id uuid` · `issued_by_membership_id uuid` · `channel text` (`email`) · `contact citext` · `token_hash bytea` · `token_key_version smallint` · `proposal_hash bytea` · `responsible_party_schema_version smallint` (`1`) · `responsible_party jsonb` · `status identity.invitation_status` (`pending`, `completed`, `revoked`, `expired`) · `expires_at timestamptz` · `created_at` · `updated_at`.
-- **FKs y borrado:** `(issued_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`. **Sin** FK a persona destino (`IX-24`).
-- **Uniques y checks:** `UNIQUE token_hash`; único parcial `(organization_id, proposal_hash) WHERE status='pending'`; hashes de 32 bytes. El token se deriva por HMAC con clave versionada, nunca se guarda en claro ni en el outbox.
-- **Actores:** la organización emite, lista y revoca; el invitado resuelve y decide; el worker expira por lotes. Todos operan mediante funciones cerradas.
-- **RLS:** `FORCE ROW LEVEL SECURITY`; todo DML directo está revocado a `allfit_api`. Entradas cerradas: `issue_staff_invitation`, `resolve_staff_invitation`, `decide_staff_invitation`, `list_staff_invitations`, `revoke_staff_invitation` y `expire_staff_invitations`.
-- **Consultas:** por `token_hash`; por organización/estado y cursor de emisión; por expiración pendiente.
+- **Columnas:** `id` · `organization_id uuid` · `issued_by_membership_id uuid` (nullable) · `issued_by_person_id uuid` (nullable) · `issued_by_duty_assignment_id uuid` (nullable) · `reissues_invitation_id uuid` (nullable) · `channel text` (`email`) · `contact citext` · `token_hash bytea` · `token_key_version smallint` · `proposal_hash bytea` · `responsible_party_schema_version smallint` (`1`) · `responsible_party jsonb` · `status identity.invitation_status` (`pending`, `completed`, `revoked`, `expired`) · `expires_at timestamptz` · `created_at` · `updated_at`.
+- **FKs y borrado:** `(issued_by_membership_id, organization_id) → organizations.organization_memberships(id, organization_id) RESTRICT`; `issued_by_person_id → identity.people(id) RESTRICT`; `issued_by_duty_assignment_id → support.platform_duty_assignments(id) RESTRICT`; `reissues_invitation_id → identity.invitations(id) RESTRICT`. **Sin** FK a persona destino (`IX-24`).
+- **Uniques y checks:** `UNIQUE token_hash`; único parcial `(organization_id, proposal_hash) WHERE status='pending'`; hashes de 32 bytes. `ck_invitations_issuer` exige exactamente una autoría: la membresía que emite, o la persona de Allfit con la asignación de deber bajo la que actuó (`HU-BO-014`). Una membresía ausente nunca representa "lo emitió Allfit". El token se deriva por HMAC con clave versionada, nunca se guarda en claro ni en el outbox. `reissues_invitation_id` apunta a la invitación vencida que una reemisión reemplaza (`HU-BO-011`): `ck_invitations_reissue_author` exige que la firme Allfit y `ck_invitations_reissue_not_self` que no se apunte a sí misma. El trigger `trg_invitations_before_insert_reissue` rechaza (`23514`) una reemisión a otra organización, canal, contacto o propuesta, también para el dueño de la tabla.
+- **Actores:** la organización emite, lista y revoca invitaciones de equipo; Allfit (`A10` con `manage_organization_lifecycle`) emite, reenvía y retira la invitación de propiedad de una organización no reclamada (`OP-ORG-018`, `OP-ORG-021`, `OP-ORG-022`); Allfit (`A10` con `diagnose_support_metadata`) lista las invitaciones de equipo y de cliente de una organización con el contacto enmascarado y las reenvía (`NEW-IDN-RESEND`, `OP-IDN-052`; `NEW-IDN-CLIENT-RESEND`, `OP-IDN-051`, que además copia la oferta entera): una vigente se reenvía tal cual y una vencida se reemite igual, firmada por Allfit; nunca una aceptada, rechazada, revocada o ya reemitida. El invitado resuelve y decide; el worker expira por lotes y prepara la entrega. Todos operan mediante funciones cerradas.
+- **RLS:** `FORCE ROW LEVEL SECURITY`; todo DML directo está revocado a `allfit_api`. Entradas cerradas: `issue_staff_invitation`, `resolve_staff_invitation`, `decide_staff_invitation`, `list_staff_invitations`, `revoke_staff_invitation`, `expire_staff_invitations`, `organizations.create_unclaimed_organization`, `organizations.resend_ownership_invitation`, `organizations.cancel_unclaimed_organization`, `resolve_ownership_invitation`, `decide_ownership_invitation`, `prepare_ownership_invitation_delivery`, `list_backoffice_team_invitations` y `resend_team_invitation`. Las funciones de equipo filtran `kind = 'membership'`, así que un token de propiedad nunca se resuelve ni se decide como invitación de equipo.
+- **Consultas:** por `token_hash`; por organización/estado y cursor de emisión; por expiración pendiente; la invitación de propiedad más reciente de una organización.
 - **Índices:** único `token_hash`; único parcial de propuesta pendiente; `(organization_id, status, expires_at DESC)`; `(organization_id, created_at DESC, id DESC)`.
 - **Retención:** conserva evidencia; se purga tras plazo largo.
-- **Eventos:** `organization.staff_invited.v1` / `relationship.client_invited.v1`, `identity.invitation_revoked.v1`, `identity.invitation_expired.v1`.
+- **Eventos:** `organization.staff_invited.v1` / `relationship.client_invited.v1`, `organization.ownership_invited.v1` (entrega de la invitación de propiedad, también al reenviar), `identity.invitation_revoked.v1`, `identity.invitation_expired.v1`.
 
 ### 4.14 `identity.invitation_intents`
 
 - **Propósito:** propuesta tipada decidida de forma independiente; materializa ≤1 destino. Una intención `service_relationship` agrupa las opciones de scope que la persona decide en la misma confirmación, sin convertirlas en una aceptación global.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `operational`.
-- **Columnas:** `id` · `invitation_id uuid` · `kind identity.invitation_intent_kind` (`membership` en el corte físico) · `status identity.invitation_intent_status` (`pending`, `accepted`, `rejected`, `revoked`, `expired`) · `proposed_role_code text` · `materialized_membership_id uuid` (nullable) · `decided_at timestamptz` (nullable) · `created_at` · `updated_at`.
+- **Columnas:** `id` · `invitation_id uuid` · `kind identity.invitation_intent_kind` (`membership` y `ownership` en el corte físico) · `status identity.invitation_intent_status` (`pending`, `accepted`, `rejected`, `revoked`, `expired`) · `proposed_role_code text` · `materialized_membership_id uuid` (nullable) · `decided_at timestamptz` (nullable) · `created_at` · `updated_at`.
 - **FKs y borrado:** `invitation_id → invitations(id) ON DELETE CASCADE`; `proposed_role_code → organization_roles(code) RESTRICT`; `materialized_membership_id → organization_memberships(id) RESTRICT`.
-- **Uniques y checks:** una intención por `(invitation_id, kind)`; aceptar exige `materialized_membership_id`, los demás terminales lo prohíben.
+- **Uniques y checks:** una intención por `(invitation_id, kind)`; aceptar exige `materialized_membership_id`, los demás terminales lo prohíben. `ck_invitation_intents_ownership_role`: una intención `ownership` propone siempre `owner`, y ninguna otra lo propone. El trigger `trg_invitation_intents_before_insert_issuer` rechaza (`23514`) una intención `ownership` fuera de una invitación emitida por Allfit para una organización `unclaimed`, y cualquier otra intención en una invitación emitida por Allfit salvo que reemita una vencida (`HU-BO-011`): en ese caso la intención debe tener el mismo `kind` y `proposed_role_code` que la original. Aceptar una intención `ownership` activa la organización, crea la membresía `owner` y registra `organization.claimed.v1` en la misma transacción; quien emitió la invitación no puede aceptarla (`42501`).
 - **Actores:** la persona decide; la organización crea y revoca; el worker expira. El corte staff entra solo mediante funciones cerradas y no materializa dominios de cliente.
 - **RLS:** igual que la invitación: runtime sin DML directo.
 - **Consultas:** por `invitation_id`.
 - **Índices:** `invitation_id`.
 - **Retención:** con la invitación.
 - **Eventos:** `identity.invitation_intent_decided.v1`.
+
+### 4.14.1 `identity.invitation_resends`
+
+- **Propósito:** registro de cada reenvío de una invitación hecho por Allfit (`HU-BO-011`, criterio 6): qué se reenvió, si salió la misma invitación o una reemisión, quién y bajo qué deber.
+- **Dominio / fuente de verdad:** Identidad.
+- **Clasificación:** `operational`; no guarda contacto, token ni enlace.
+- **Columnas:** `id uuid` · `invitation_id uuid` (la invitación reenviada) · `delivered_invitation_id uuid` (la que salió: la misma, o la reemisión) · `kind identity.invitation_intent_kind` (`membership`, `ownership`) · `outcome text` (`redelivered`, `reissued`) · `actor_person_id uuid` · `actor_duty_assignment_id uuid` · `created_at timestamptz`.
+- **FKs y borrado:** `invitation_id` y `delivered_invitation_id → identity.invitations(id) RESTRICT`; `actor_person_id → identity.people(id) RESTRICT`; `actor_duty_assignment_id → support.platform_duty_assignments(id) RESTRICT`.
+- **Uniques y checks:** `ck_invitation_resends_outcome`: `redelivered` entrega la misma invitación y `reissued` una distinta. `trg_invitation_resends_append_only` rechaza (`55000`) toda actualización o borrado, también para el dueño.
+- **Actores:** escriben solo `identity.resend_team_invitation` (`OP-IDN-052`, `diagnose_support_metadata`), `identity.resend_client_invitation` (`OP-IDN-051`, `diagnose_support_metadata`) y `organizations.resend_ownership_invitation` (`OP-ORG-021`, `manage_organization_lifecycle`). `identity.list_backoffice_team_invitations` y `identity.list_backoffice_client_invitations` leen la fecha del último reenvío.
+- **RLS:** `FORCE ROW LEVEL SECURITY` con política única para `allfit_owner`; `allfit_api` sin privilegios de tabla.
+- **Consultas:** por invitación reenviada y fecha; por invitación entregada.
+- **Índices:** PK; `(invitation_id, created_at)`; `(delivered_invitation_id)`.
+- **Retención:** con la invitación; es evidencia de soporte.
+- **Eventos:** ninguno propio; la entrega usa `organization.staff_invited.v1` u `organization.ownership_invited.v1`.
 
 ### 4.15 `identity.notification_preferences`
 
@@ -390,13 +478,14 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** frontera estable de operación, autoría y permisos; conserva su `id` al crecer a equipo.
 - **Dominio / fuente de verdad:** Organizaciones.
 - **Clasificación:** `operational`; `legal_name` puede ser `identity_pii` y el JSON `responsible_party` contiene identidad/contacto restringido.
-- **Columnas:** `id uuid` · `type_code text` · `legal_name text` (nullable) · `display_name text` · `status text` (`active`, `closed`) · `responsible_party_schema_version smallint` (`1`) · `responsible_party jsonb` · `revision_number bigint` (`0`) · `created_at timestamptz` · `updated_at timestamptz`.
+- **Columnas:** `id uuid` · `type_code text` · `legal_name text` (nullable) · `display_name text` · `status organizations.organization_status` (`unclaimed`, `active`, `closed`, `cancelled`) · `responsible_party_schema_version smallint` (`1`) · `responsible_party jsonb` · `revision_number bigint` (`0`) · `claimed_at timestamptz` (nullable; default `clock_timestamp()`) · `cancelled_at timestamptz` (nullable) · `created_at timestamptz` · `updated_at timestamptz`.
 - **FKs y borrado:** `type_code → organization_types(code) RESTRICT`.
-- **Uniques y checks:** `CHECK (status in ('active','closed'))`; `revision_number >= 0`. El cambio de `type_code` exige una transición activa en `organization_type_transitions`.
-- **Actores:** miembros leen una proyección cerrada; admin/owner llaman `organizations.update_organization` para modificar por autoservicio solo `display_name`, `legal_name` y `type_code`. `responsible_party`, su `purpose`/schema version, `id`, `status` y timestamps no son editables por `OP-ORG-002`.
-- **RLS:** la función `organizations.read_organization` aplica `access_control.has_membership(id)` y devuelve columnas cerradas. `allfit_api` no recibe `SELECT` ni DML sobre la tabla base y escribe únicamente por funciones cerradas.
-- **Consultas:** por `id`; por membresía del actor.
-- **Índices:** PK.
+- **Uniques y checks:** `ck_organizations_lifecycle_shape`: `unclaimed` sin `claimed_at` ni `cancelled_at`; `active` con `claimed_at` y sin `cancelled_at`; `cancelled` con `cancelled_at` y nunca `claimed_at`; `closed` sin `cancelled_at` (su forma queda abierta hasta que exista el flujo de cierre). `ck_organizations_responsible_party` exige `party_kind`, `purpose = 'studio_operations'` y un `party_name` no vacío, salvo en una organización `unclaimed` o `cancelled` de persona natural, que no lo lleva: Allfit nunca escribe el nombre de una persona, y se toma de su propia identidad cuando acepta (`HU-BO-014`). La versión anterior del check aceptaba cualquier organización sin `party_name`, porque una clave ausente evaluaba a null y un check en null pasa. `revision_number >= 0`. El cambio de `type_code` exige una transición activa en `organization_type_transitions`. El trigger `trg_organization_memberships_before_insert_claimed` sobre `organization_memberships` rechaza (`55000`) cualquier membresía de una organización `unclaimed` o `cancelled`: reclamar pasa la organización a `active` antes de insertar al dueño, en la misma transacción. Las organizaciones existentes antes de `20260913150100` recibieron `claimed_at = created_at`, porque hasta entonces solo su dueño podía crearlas.
+- **Actores:** miembros leen una proyección cerrada; admin/owner llaman `organizations.update_organization` para modificar por autoservicio solo `display_name`, `legal_name` y `type_code`. `responsible_party`, su `purpose`/schema version, `id`, `status` y timestamps no son editables por `OP-ORG-002`. El equipo de Allfit (`allfit_admin` con `diagnose_support_metadata` o `manage_organization_lifecycle`, `HU-BO-012`, `NEW-SUP-ORG-SEARCH`) lee el directorio por `organizations.list_backoffice_organizations`: nombre visible, tipo, estado, `created_at`, `claimed_at`, `cancelled_at`, membresías activas y sedes activas. Nunca recibe `legal_name` ni `responsible_party`. `people_served` es null hasta que exista `relationships`: un cero afirmaría que la organización no atiende a nadie. La ficha de Backoffice (`HU-BO-013`, `NEW-SUP-ORG-DETAIL`) se lee por `organizations.read_backoffice_organization` con el mismo par de deberes: organización, dueño y equipo por identificador y rol, y sedes; nunca nombres, contactos ni `responsible_party`, y la dirección de la sede de una persona natural se reserva porque puede ser su casa. Cada miembro activo que devuelve queda en `privacy.access_events` (`support_metadata`) antes de responder; un exmiembro se cuenta y no se lista.
+- **RLS:** la función `organizations.read_organization` aplica `access_control.has_membership(id)` y devuelve columnas cerradas. `allfit_api` no recibe `SELECT` ni DML sobre la tabla base y escribe únicamente por funciones cerradas. El directorio de Backoffice exige el deber dentro de la función (`42501`) y no escribe `privacy.access_events`, porque no alcanza datos de ninguna persona.
+- **Consultas:** por `id`; por membresía del actor; directorio de Backoffice por `display_name` (búsqueda literal, desde 2 caracteres, sin tocar `legal_name`) y por estado, paginado por `(lower(display_name), id)`.
+- **Índices:** PK; `idx_organizations_directory (lower(display_name), id)`; `idx_organizations_status_created (status, created_at)`.
+- **Panel de negocio (`HU-BO-004`):** `support.read_business_panel` cuenta todas las organizaciones, las `unclaimed` y las que **operan**: `active` con al menos una membresía `active`. Una organización no es una persona, así que estos conteos no se someten al umbral mínimo.
 - **Retención:** el cierre termina relaciones y abre disposición; conserva activos propios.
 - **Eventos:** `organization.created.v1`, `organization.updated.v1`, `organization.ownership_transferred.v1`, `organization.closed.v1`.
 
@@ -525,10 +614,10 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** historia append-only de altas, cambios, transferencia de propiedad y cierre.
 - **Dominio / fuente de verdad:** Organizaciones.
 - **Clasificación:** `audit`; snapshots de `legal_name` o `address` domiciliaria heredan además tratamiento `identity_pii`.
-- **Columnas:** `id` · `organization_id uuid` · `event_type text` · `snapshot_schema_version smallint` (`1`) · `before jsonb` (nullable) · `after jsonb` (nullable) · `actor_membership_id uuid` (nullable).
-- **FKs y borrado:** `organization_id → organizations(id) ON DELETE CASCADE`; FK compuesta opcional `(actor_membership_id, organization_id) → organization_memberships(id, organization_id) RESTRICT` (`IX-25`).
-- **Uniques y checks:** append-only: `INSERT` directo, `UPDATE` y `DELETE` revocados al runtime. El snapshot v1 admite datos organizacionales, sede (`site_id`, `name`, `address`, `status`, `revision_number`) o transferencia (`previous_owner_membership_id`, `owner_membership_id`) según `event_type`; claves adicionales o combinaciones ajenas se rechazan.
-- **Actores:** las funciones cerradas del agregado insertan; admin/owner leen.
+- **Columnas:** `id` · `organization_id uuid` · `event_type text` · `snapshot_schema_version smallint` (`1`) · `before jsonb` (nullable) · `after jsonb` (nullable) · `actor_membership_id uuid` (nullable) · `actor_person_id uuid` (nullable) · `actor_duty_assignment_id uuid` (nullable).
+- **FKs y borrado:** `organization_id → organizations(id) ON DELETE CASCADE`; FK compuesta opcional `(actor_membership_id, organization_id) → organization_memberships(id, organization_id) RESTRICT` (`IX-25`); `actor_person_id → identity.people(id) RESTRICT`; `actor_duty_assignment_id → support.platform_duty_assignments(id) RESTRICT`.
+- **Uniques y checks:** append-only: `INSERT` directo, `UPDATE` y `DELETE` revocados al runtime. El snapshot v1 admite datos organizacionales, sede (`site_id`, `name`, `address`, `status`, `revision_number`), transferencia (`previous_owner_membership_id`, `owner_membership_id`) o reclamo (`owner_membership_id`) según `event_type`; claves adicionales o combinaciones ajenas se rechazan. `ck_organization_events_platform_actor`: la persona y la asignación de deber de Allfit van juntas, nunca con una membresía; `organization.created_unclaimed.v1` y `organization.cancelled.v1` exigen actor de Allfit, y `organization.claimed.v1` exige la membresía del nuevo dueño (`HU-BO-014`, `HU-BO-015`). Una membresía ausente nunca representa "lo hizo Allfit".
+- **Actores:** las funciones cerradas del agregado insertan; admin/owner leen. Allfit inserta la creación no reclamada, su sede y su cancelación por `create_unclaimed_organization` y `cancel_unclaimed_organization`; el dueño inserta el reclamo al aceptar.
 - **RLS:** hereda de la organización.
 - **Consultas:** `(organization_id, created_at desc)`.
 - **Índices:** `(organization_id, created_at desc)`.
@@ -660,6 +749,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Uniques y checks:** `UNIQUE code`.
 - **Actores:** lectura autenticada; escritura plataforma.
 - **RLS:** lectura abierta.
+- **Implementado:** las siete clasificaciones vienen sembradas por la migración, con `sensitivity_rank` creciente. `allfit_api` no tiene DML: agregar una clasificación es un cambio de esquema, no una operación.
 - **Consultas:** por `code`; por `sensitivity_rank` (para heredar la más restrictiva).
 - **Índices:** único `code`.
 - **Retención:** permanente.
@@ -675,6 +765,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Uniques y checks:** `UNIQUE (scope_code, version_number)`; clave portadora `UNIQUE (id, scope_code)`. `UPDATE`/`DELETE` revocados en runtime.
 - **Actores:** lectura autenticada; escritura plataforma.
 - **RLS:** `status='published'` para lectura.
+- **Implementado:** `privacy.publish_scope_definition` es la única escritura y **siempre agrega una versión**, nunca corrige una publicada: el número de versión lo asigna el servidor a partir del máximo existente. `privacy.list_scope_definitions` y `privacy.scope_definition_projection` son las lecturas. La inmutabilidad no depende de los grants: el trigger `privacy.prevent_published_scope_mutation` rechaza cualquier `UPDATE` o `DELETE` sobre una versión publicada, también al dueño de la tabla. Eso es lo que sostiene la promesa de que **quien aceptó una versión anterior la conserva**: un grant apunta a una versión congelada y esa fila no puede cambiar debajo.
 - **Consultas:** por `(scope_code, version_number)`; versión vigente.
 - **Índices:** único `(scope_code, version_number)`.
 - **Retención:** permanente (referenciada por grants históricos).
@@ -690,6 +781,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Uniques y checks:** `UNIQUE (scope_definition_id, resource, field)`. `CHECK` que todo campo tiene clasificación. `historical_readable` solo puede ser `true` cuando `is_excluded=false` y la acción máxima incluye lectura.
 - **Actores:** lectura autenticada; escritura plataforma.
 - **RLS:** lectura abierta de versiones publicadas.
+- **Implementado:** `privacy.access_level` es un enum (`read`, `contribute`), no texto con `CHECK`. Las reglas se insertan sólo dentro de `privacy.publish_scope_definition`, y `privacy.prevent_published_scope_rule_mutation` las congela con la versión. El duplicado de `(resource, field)` dentro de una misma publicación se rechaza en un trigger `before insert` y no en un `CHECK`: PostgreSQL no admite subconsultas en un `CHECK`, así que la comprobación que compara el arreglo contra su propio conjunto distinto no es expresable ahí.
 - **Consultas:** por `scope_definition_id`.
 - **Índices:** único compuesto.
 - **Retención:** con la versión.
@@ -784,10 +876,17 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** registro de toda lectura autorizada de una persona o de la proyección operativa cerrada de una organización; el actor humano es obligatorio.
 - **Dominio / fuente de verdad:** Privacidad.
 - **Clasificación:** `audit`.
-- **Columnas:** `id uuid` · `occurred_at timestamptz` (**clave de partición derivada del UUIDv7**) · `subject_person_id uuid` (nullable) · `subject_organization_id uuid` (nullable) · `actor_person_id uuid` · `actor_membership_id uuid` (nullable) · `relationship_id uuid` (nullable) · `data_grant_id uuid` (nullable) · `historical_access_case_id uuid` (nullable) · `scope_code text` (nullable) · `scope_version integer` (nullable) · `purpose text` · `access_mode privacy.access_mode` (`live`, `frozen`, `break_glass`, `organization_operational`) · `resource text` · `request_id uuid` · `result text` (`allowed`, `denied`).
+- **Columnas:** `id uuid` · `occurred_at timestamptz` (**clave de partición derivada del UUIDv7**) · `subject_person_id uuid` (nullable) · `subject_organization_id uuid` (nullable) · `actor_person_id uuid` · `actor_membership_id uuid` (nullable) · `relationship_id uuid` (nullable) · `data_grant_id uuid` (nullable) · `historical_access_case_id uuid` (nullable) · `scope_code text` (nullable) · `scope_version integer` (nullable) · `purpose text` · `access_mode privacy.access_mode` (`live`, `frozen`, `break_glass`, `organization_operational`, `support_metadata` — lectura del equipo de Allfit bajo un deber de plataforma, añadido en `20260910130000`) · `resource text` · `request_id uuid` · `result text` (`allowed`, `denied`).
 - **FKs y borrado:** `subject_person_id` y `actor_person_id` → `identity.people(id) RESTRICT`; `subject_organization_id → organizations.organizations(id) RESTRICT`. Las referencias de alto volumen a relación, grant y caso se validan en la entrada cerrada, no con FK dura sobre cada partición.
 - **Uniques y checks:** PK `(id,occurred_at)`; `CHECK (num_nonnulls(subject_person_id,subject_organization_id)=1)`; rango mensual; `access_events_id_partition_time_chk` exige UUIDv7 y `occurred_at=extensions.uuid_v7_timestamp(id)`. Actor humano obligatorio. La rama personal conserva sus reglas live/frozen/break-glass. La rama organización exige `access_mode='organization_operational'`, `actor_membership_id` activo del mismo tenant y de `actor_person_id`, `resource='organizations.organization_context'` y relación/grant/caso/scope/version nulos. `privacy.log_access_event` es la única entrada y `privacy.enforce_access_event_context_tg` valida `IX-23`.
 - **Actores:** la persona consulta las suyas mediante `privacy.v_my_access_events`; `A12` audita metadatos break-glass mediante `support.list_break_glass_audit_events`; `A10` consulta sus ejercicios en `support.break_glass_events`, no esta tabla. `privacy.log_access_event` inserta en la misma transacción de la lectura.
+- **Implementado (`HU-BO-030`, `OP-SUP-009`):** `privacy.list_access_events` y `privacy.count_withheld_access_events`. La autoridad —`audit_platform_access` sobre el rol base— la resuelve `privacy.require_access_log_auditor`, invocado con `perform` dentro de `plpgsql`: invocado como elemento del `FROM` en una función `language sql` devuelve `void`, el planificador puede eliminarlo y la comprobación no se ejecuta. Ese error se cometió primero y `T-PRV-AUD-01` lo detectó.
+  - **Append-only real desde `20260911030000`.** Antes de esa migración `UPDATE` y `DELETE` sobre esta tabla funcionaban: lo único que los impedía era que `allfit_api` no tiene permisos, lo que protege las rutas y no la tabla. `privacy.reject_access_event_rewrite` los rechaza con `55000`, también para el dueño. Soltar una partición mensual es DDL y un trigger de fila no la ve, así que la retención no se afecta.
+  - **Separación de deberes por caso, no global.** Un auditor que pidió o aprobó una ventana break-glass no audita *esa* ventana y sigue auditando todas las demás. La versión global es más fácil de escribir y dejaría el registro sin auditor posible para cualquiera que haya aprobado algo alguna vez.
+  - **Lo retenido se cuenta en su propia consulta**, para que sobreviva a una lista vacía: sin ese número, un auditor que filtra hasta su propia ventana lee «nadie accedió» cuando accedió él. Las dos consultas comparten un único predicado, `privacy.is_own_break_glass_case`, para que el conteo nunca describa un conjunto distinto del que se retiró, y la API las lee en una sola transacción.
+  - La proyección lleva el registro del acceso y nada de lo leído. `T-PRV-AUD-01` lo asegura contra el tipo de resultado declarado, así que una columna de contenido añadida después rompe la prueba en vez de filtrarse.
+  - Las lecturas de la cola de verificación (`HU-BO-021`) escriben aquí con `purpose = 'professional_credential_verification'` y `access_mode = 'support_metadata'`: quien verifica lee bajo un deber de plataforma, no bajo un permiso de la persona. La primera versión (`20260913120000`) escribía `live` y afirmaba que el enum no tenía un valor de plataforma, cuando `support_metadata` existía desde `20260910130000`; `20260913140000` lo corrige. Registrada como `live`, la lectura le habría dicho a un auditor que la persona consintió.
+- **Pendiente:** `support.list_break_glass_audit_events` **no existe todavía**. `support.exercise_break_glass` inserta aquí directamente, en la misma transacción que su propia evidencia, y desde `20260910170000` una FK exige que la fila exista — sin ella la evidencia del operador podía apuntar a una auditoría que nunca se escribió, y la persona no habría visto nunca el intento registrado en su contra. La revisión específica de `A12/audit_break_glass` sobre un expediente sigue pendiente, junto con la revisión posterior de `12.3`; la consulta general del registro ya existe y se describe arriba.
 - **RLS:** en la tabla base, `SELECT` solo cuando `subject_person_id = access_control.person()`; `privacy.v_my_access_events` nunca incluye sujetos organización. `INSERT` directo revocado. Ninguna organización, `A10` o `A12` recibe `SELECT` directo.
 - **Consultas:** `(subject_person_id, occurred_at desc)` para la persona; `(subject_organization_id, occurred_at desc)` solo para investigación restringida de plataforma.
 - **Índices:** ambos compuestos anteriores por partición.
@@ -808,6 +907,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** único compuesto.
 - **Retención:** permanente (gobierna a las demás).
 - **Eventos:** ninguno.
+- **Implementado (`HU-SP-027`):** checks de jurisdicción ISO de dos letras, versión positiva, periodo no negativo y `trigger` como código. `privacy.reject_disposition_policy_rewrite_tg` impide editar o borrar una política publicada: se publica otra versión. La única política sembrada es la que la operación ya declara: `body`, `CO`, versión 1, `delete`, periodo cero, `owner_request`. La retención por cualquier otro disparador es DB-P5-015 y no se decide aquí. `20260920120000` publica la segunda con la misma forma para `health`, y `20260921120000` la tercera para `nutrition`.
 
 ### 7.11 `privacy.erasure_requests`
 
@@ -838,6 +938,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** `(subject_person_id, status)`.
 - **Retención:** auditoría.
 - **Eventos:** `privacy.disposition_case_opened.v1`.
+- **Implementado (`HU-SP-027`):** suma `requested_by_person_id uuid` (nullable, `→ identity.people(id) RESTRICT`): un caso con origen `request` nombra a quien lo pidió y hoy sólo lo pide el propio sujeto (`CHECK`). `CHECK (status = 'closed') = (closed_at is not null)`. `erasure_request_id` y su FK llegan con `privacy.erasure_requests`. `privacy.disposition_case_guard_tg` impide borrar un caso, reabrir uno cerrado o cambiar su sujeto, origen, solicitante o apertura. El runtime no tiene privilegios: hoy sólo `identity.delete_body_progress` abre y cierra casos, en la misma transacción.
 
 ### 7.13 `privacy.disposition_items`
 
@@ -853,6 +954,9 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** `(status, due_at)`; sobre cada `target_*`.
 - **Retención:** auditoría de la disposición.
 - **Eventos:** ninguno propio (los produce el evento de ejecución).
+- **Implementado (`HU-SP-027`), con una desviación deliberada:** los targets entran por tipo a medida que su tabla existe; hoy sólo `target_body_progress_id`, acompañado de `target_kind text` (`body_progress`), `executed_at timestamptz` y `created_at timestamptz`. **Un ítem ejecutado con acción `delete` suelta su target:** el `CHECK` exige exactamente un target en cualquier otro estado y ninguno en ese. Con `ON DELETE RESTRICT` y «siempre uno no nulo», el borrado físico que el ítem existe para ejecutar sería imposible; así, un ítem pendiente retiene la fila y uno ejecutado conserva `target_kind` sin apuntar a una fila que ya no existe. `privacy.disposition_item_guard_tg` cubre `IX-26` (el target pertenece a `subject_person_id` y la política corresponde a la clasificación) y las transiciones (`pending → executed | suspended`, `suspended → pending | executed`; un ejecutado no se mueve, un target sólo cambia al soltarse y un ítem no se borra).
+- **Segundo tipo de target (`HU-SP-028`):** `target_health_context_id` (`→ identity.health_context_claims(id) RESTRICT`, indexado) y `target_kind` en (`body_progress`, `health_context`). El `CHECK` exige que el target no nulo sea el de su tipo, y el guard exige la clasificación de ese tipo (`body` o `health`) y que el target sea del sujeto. El borrado a pedido del dueño es ahora una sola función, `privacy.dispose_on_owner_request(sujeto, clasificación, tipo, target)`: toma la política `owner_request` vigente de esa clasificación, abre el caso y el ítem, encola `privacy.disposition_case_opened.v1`, registra el evento, ejecuta el ítem soltando el target y cierra el caso. Quien la llama borra su propia fila en la misma transacción. El runtime no puede ejecutarla.
+- **Tercer tipo de target (`HU-SP-070`):** `target_nutrition_meal_id` (`→ nutrition.meals(id) RESTRICT`, indexado), `target_kind` `nutrition_meal` y clasificación `nutrition`, con las mismas reglas que los otros dos.
 
 ### 7.14 `privacy.disposition_events`
 
@@ -868,6 +972,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** `(disposition_item_id, executed_at)` por partición.
 - **Retención:** auditoría prolongada.
 - **Eventos:** `privacy.disposition_executed.v1`, `privacy.disposition_reapplied.v1`.
+- **Implementado (`HU-SP-027`):** `result` en (`deleted`, `anonymized`, `retained`, `failed`) y `actor` en (`owner_request`, `privacy_worker`). La constraint de tiempo se llama `ck_disposition_events_time`, con el prefijo del repositorio. Particiones mensuales de 2026-09 a 2027-12 más una `default`, todas con RLS forzado. `privacy.reject_disposition_event_rewrite_tg` impide `UPDATE` y `DELETE`, también al dueño. Todavía no emite eventos de outbox: el borrado propio se ejecuta en la misma transacción que abre el caso, y ese caso ya emite `privacy.disposition_case_opened.v1`.
 
 ### 7.15 `privacy.legal_holds`
 
@@ -883,6 +988,13 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** `(status, valid_to)`.
 - **Retención:** auditoría.
 - **Eventos:** `privacy.legal_hold_applied.v1`, `privacy.legal_hold_released.v1`.
+- **Implementado (`HU-BO-033`), con dos desviaciones deliberadas:** `created_by text` quedó como
+  `applied_by_person_id uuid` resuelto de la sesión —un nombre escrito a mano no se puede
+  verificar y es en sí mismo dato personal—, y `reason` quedó como `reason_code` sobre lista
+  cerrada (`judicial_order`, `regulatory_request`, `service_dispute`,
+  `tax_or_accounting_obligation`), que es lo que pide el criterio 5. Suma `case_reference` (la
+  orden o requerimiento que sustenta el hold) y `released_by_person_id`. Un trigger impide
+  borrar la fila: un hold es evidencia.
 
 ### 7.16 `privacy.hold_applications`
 
@@ -898,6 +1010,10 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** ambos compuestos.
 - **Retención:** auditoría.
 - **Eventos:** ninguno propio.
+- **Implementado (`HU-BO-033`):** el parcial único `uidx_hold_applications_active` sostiene un
+  hold vigente por ítem, porque dos harían ambigua la liberación. Suma `released_at`. Liberar
+  devuelve el ítem a `pending` y a nada más: ejecutar la eliminación de alguien no es decisión
+  de quien revisa.
 
 ---
 
@@ -925,8 +1041,8 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Columnas:** `id` · `code text` · `name text` · `status catalog.publication_status`.
 - **FKs y borrado:** ninguna saliente; es una raíz de catálogo y las referencias entrantes usan `ON DELETE RESTRICT`.
 - **Uniques y checks:** `UNIQUE code`.
-- **Actores:** lectura autenticada; escritura curaduría.
-- **RLS:** lectura autenticada solo para filas `status='published'`; escritura exclusiva de la plataforma por la función de publicación.
+- **Actores:** lectura autenticada; escritura curaduría (`A11` con `curate_global_catalog`) por `catalog.publish_discipline` y `catalog.archive_discipline` (`OP-CAT-004`, `OP-CAT-005`). `catalog.list_global_catalog` es la única lectura que devuelve borradores y archivadas (`NEW-CAT-GLOBAL-PUBLISH`, `HU-BO-022`).
+- **RLS:** lectura autenticada solo para filas `status='published'`; escritura exclusiva de la plataforma por la función de publicación. `/catalog/v1` la lee por `catalog.list_disciplines()`, cerrada tras `catalog.require_catalog_reader()`, que exige una persona autenticada **y activa**: el catálogo es global, no público. Las policies `disciplines_select_platform`, `disciplines_insert_platform` y `disciplines_update_platform` habilitan la curaduría sólo cuando el actor es `support`.
 - **Consultas / índices:** por `code`; único `code`; `(status)` para la policy de publicación.
 - **Retención:** permanente; una disciplina referenciada se depreca o archiva, no se elimina.
 - **Eventos:** ninguno.
@@ -939,8 +1055,8 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Columnas:** `id` · `discipline_code text` · `code text` · `name text` · `content_scope catalog.content_scope` · `owner_organization_id uuid` (nullable) · `status catalog.publication_status`.
 - **FKs y borrado:** `discipline_code → disciplines(code) RESTRICT`; `owner_organization_id → organizations.organizations(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE (code)` para globales; `CHECK (content_scope='global') = (owner_organization_id is null)`.
-- **Actores:** personas autenticadas leen tipos globales publicados; miembros autorizados leen contenido de su organización; solo plataforma o owner organizacional autorizado escriben según `content_scope`.
-- **RLS:** `global` publicado abierto; privado solo a su organización.
+- **Actores:** personas autenticadas leen tipos globales publicados; miembros autorizados leen contenido de su organización; solo plataforma o owner organizacional autorizado escriben según `content_scope`. La curaduría global (`OP-CAT-004`, `OP-CAT-005`) publica y archiva únicamente filas `global`, sin dueño, y `trg_activity_types_before_delete_global` rechaza (`55000`) borrar una de ellas: archivar retira de la búsqueda y conserva lo que ya la referenciaba (`HU-BO-022`, criterio 3).
+- **RLS:** `global` publicado abierto; privado solo a su organización. `activity_types_all_platform` añade la curaduría: actor `support` y `content_scope = 'global'` sin dueño, nunca contenido de un gimnasio.
 - **Consultas / índices:** `(content_scope, owner_organization_id, status)`; `(content_scope, discipline_code, status)`.
 - **Retención:** permanente para globales; el contenido organizacional se archiva y sigue la disposición de su organización cuando no está referenciado.
 - **Eventos:** ninguno propio.
@@ -966,9 +1082,9 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Clasificación:** `operational`.
 - **Columnas:** `id` · `discipline_code text` · `name text` · `normalized_name text` · `content_scope catalog.content_scope` · `owner_organization_id uuid` (nullable) · `owner_person_id uuid` (nullable) · `successor_movement_id uuid` (nullable) · `status catalog.publication_status`.
 - **FKs y borrado:** `discipline_code → disciplines(code) RESTRICT`; `owner_organization_id → organizations.organizations(id) RESTRICT`; `owner_person_id → identity.people(id) RESTRICT`; `successor_movement_id → movements(id) RESTRICT`.
-- **Uniques y checks:** `CHECK` de un solo owner según `content_scope`; `UNIQUE parcial (owner_organization_id, normalized_name) WHERE content_scope='organization'`.
-- **Actores:** lectura autenticada de globales publicados; owner personal u organización con membresía vigente leen/escriben su contenido; la plataforma publica globales.
-- **RLS:** `global` abierto; `organization` solo a su organización con membresía; `person` solo a su dueño.
+- **Uniques y checks:** `CHECK` de un solo owner según `content_scope`; `UNIQUE parcial (owner_organization_id, normalized_name) WHERE content_scope='organization'`; `uidx_movements_global_name`, único parcial sobre `normalized_name WHERE content_scope='global'`: dos movimientos globales con el mismo nombre son el mismo escrito dos veces (`HU-BO-022`).
+- **Actores:** lectura autenticada de globales publicados; owner personal u organización con membresía vigente leen/escriben su contenido; la plataforma publica y archiva globales (`OP-CAT-004`, `OP-CAT-005`), y `trg_movements_before_delete_global` rechaza (`55000`) borrar uno.
+- **RLS:** `global` abierto; `organization` solo a su organización con membresía; `person` solo a su dueño. `movements_all_platform` añade la curaduría: actor `support` y `content_scope = 'global'` sin dueño.
 - **Consultas / índices:** `(content_scope, owner_organization_id, status)`; `(content_scope, discipline_code, status)`; índice sobre `normalized_name`.
 - **Retención:** archivado, no borrado, si está referenciado.
 - **Eventos:** `catalog.private_movement_created.v1`, `catalog.private_movement_updated.v1`, `catalog.private_movement_archived.v1`.
@@ -1047,6 +1163,8 @@ por eso son dos columnas: un código no se muestra y una frase no se consulta.
 - **Consultas / índices:** por `code`; por `dimension`.
 - **Retención:** permanente; una unidad referenciada no se elimina.
 - **Eventos:** ninguno.
+- **Sembrado por el progreso corporal:** `kg` (canónica) y `lb` en `mass`, `m` (canónica), `cm` e `in` en `length`, y `percent` (canónica) en `ratio`. Es SI donde lo hay: una cintura se guarda en metros para que la longitud tenga una sola unidad canónica, sea una cintura o una carrera.
+- **Sembrado por las comidas:** `g` en `mass` (factor 0,001), `kcal` (canónica) en `energy` y `ml` (canónica) en `volume`.
 
 ### 8.10 `catalog.result_contracts`
 
@@ -1057,8 +1175,8 @@ por eso son dos columnas: un código no se muestra y una frase no se consulta.
 - **FKs y borrado:** ninguna saliente; asociaciones y ejecuciones lo referencian con `ON DELETE RESTRICT`.
 - **Uniques y checks:** `UNIQUE (contract_code, version_number)`; inmutable. Los JSONB `envelope`/`minimums` describen la regla del contrato, no datos de negocio consultables por campo.
 - **Actores:** lectura autenticada; escritura curaduría.
-- **RLS:** lectura autenticada de contratos publicados; publicación exclusiva de plataforma y sin `UPDATE`/`DELETE` de versiones publicadas.
-- **Consultas / índices:** por `(contract_code, version_number)`.
+- **RLS:** lectura autenticada de contratos publicados; publicación exclusiva de plataforma y sin `UPDATE`/`DELETE` de versiones publicadas, garantizado por `catalog.prevent_published_result_contract_mutation` (`errcode 55000`). `catalog.publish_result_contract` y `catalog.deprecate_result_contract` son las únicas escrituras; el número de versión lo asigna el servidor, nunca el cliente.
+- **Consultas / índices:** por `(contract_code, version_number)`. `minimums` es un documento opaco: puede organizarse por nivel de completitud (`partial`, `summary`, `detailed`, `sensor_enriched`), pero **hoy nada lo valida** — ni el esquema, ni `publish_result_contract`, ni la pantalla de curaduría. Queda a cargo de quien publica.
 - **Retención:** permanente (ejecuciones lo congelan).
 - **Eventos:** `catalog.result_contract_published.v1`.
 
@@ -1071,8 +1189,8 @@ por eso son dos columnas: un código no se muestra y una frase no se consulta.
 - **FKs y borrado:** `activity_type_id → activity_types(id) RESTRICT`; `result_contract_id → result_contracts(id) RESTRICT`.
 - **Uniques y checks:** `UNIQUE parcial (activity_type_id) WHERE is_default AND valid_to is null`.
 - **Actores:** lectura para quien pueda leer el tipo de actividad; escritura exclusiva de curaduría de plataforma.
-- **RLS:** hereda la visibilidad de `activity_types`; solo permite asociar contratos publicados y escritura de plataforma.
-- **Consultas / índices:** por `activity_type_id`.
+- **RLS:** hereda la visibilidad de `activity_types`; solo permite asociar contratos publicados y escritura de plataforma. La lectura efectiva escondía la fila en cuanto pasaba `valid_to`, y PostgreSQL exige que una fila actualizada siga siendo visible, así que cerrar una asociación fallaba: lo resuelve `activity_type_result_contracts_select_platform`, acotada a `access_control.actor_kind() = 'support'`. La política del actor de producto no se tocó.
+- **Consultas / índices:** por `activity_type_id`. `/catalog/v1` la lee por `catalog.list_activity_type_result_contracts(uuid)`, que devuelve **solo asociaciones vigentes**: una superseded conserva su ventana para las ejecuciones congeladas bajo ella, pero no se ofrece para un borrador nuevo.
 - **Retención:** historial permanente de vigencias; una asociación deja de ser efectiva con `valid_to`, no se sobrescribe.
 - **Eventos:** ninguno propio.
 
@@ -1798,6 +1916,7 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Consultas / índices:** `(person_id, started_at desc)`, `(context_relationship_id, started_at desc)`.
 - **Retención:** categoría `training`; disposición por política; cierre anonimiza `person_id`.
 - **Eventos:** `execution.attempt_started.v1`, `execution.session_started.v1`, `execution.finalized.v1`, `execution.revised.v1`, `execution.annulled.v1`.
+- **Implementado (sesión libre):** la tabla existe con todas sus columnas, pero hasta que haya `relationships` toda sesión nace `is_autonomous=true` y con los dos IDs de contexto en `NULL`; el `CHECK` de contexto ya los exige juntos. `execution.start_session` congela el contrato por defecto vigente de la actividad, `replace_session_results` reemplaza el conjunto entero bajo la revisión que el dispositivo vio (`AF409` si ya no es la actual) y `finalize_session` cierra con `execution_status='completed'` y `validation_status='pending'`. `achieved_level` queda `NULL` a propósito: certificar el nivel depende de ADR-013, que sigue en revisión. Sólo se emiten `session_started.v1` y `finalized.v1`; `OP-EXE-005` no produce evento.
 
 ### 10.2 `execution.planned_session_executions`
 
@@ -1812,6 +1931,7 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Consultas / índices:** `(planned_session_id, attempt_number)`.
 - **Retención:** con la ejecución y la sesión planificada; los intentos históricos y el cambio de primaria no se borran.
 - **Eventos:** `execution.primary_resolved.v1`, `execution.primary_changed.v1`.
+- **Implementado:** nada todavía. Sin planificación no hay intento contra un plan, así que `OP-EXE-001` no está montado y la sesión libre no pasa por aquí.
 
 ### 10.3 `execution.session_segments`
 
@@ -2019,6 +2139,7 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Índices:** único `(code)`; `(status,code)`.
 - **Retención:** permanente; referenciado por historial.
 - **Eventos:** ninguno; ampliar códigos exige nueva versión de `nutrition_intake`. Al 5 de octubre de 2026 ese scope no tiene ninguna versión publicada con reglas de campos, así que la primera nace con los 31 códigos.
+- **Implementado (`20260927080000`, ampliado en `20261007100000`):** `maximum_value numeric` es el tope por ítem en la unidad canónica (10 000 kcal; 1 000 g de proteína, grasa y grasas saturada y trans; 2 000 g de carbohidratos y azúcares; 500 g de fibra; 10 000 ml de agua; 100 000 mg y 1 000 000 mcg para el resto) y la función de escritura lo exige. El `CHECK` que cerraba los seis códigos se reemplaza por el de unidad (`kcal`, `g`, `mg`, `mcg`, `ml`); se suman `nutrient_group` y `daily_reference`. `nutrition.reject_nutrient_rewrite_tg` impide editar o borrar una definición publicada: el historial la usa, y solo la migración que amplía el catálogo lo suspende para llenar las dos columnas nuevas de las seis primeras. RLS forzado; el runtime no tiene privilegios y las funciones de comida la leen.
 
 ### 10A.2 `nutrition.meals`
 
@@ -2034,6 +2155,7 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Índices:** `(person_id,occurred_at DESC,id DESC)`; `(person_id,local_date)`.
 - **Retención:** mientras cuenta activa o hasta borrado personal; disposición elimina hijos, media, vistas/derivados; hold suspende.
 - **Eventos:** `nutrition.meal_recorded.v1`, `nutrition.meal_revised.v1`, `nutrition.meal_deleted.v1`.
+- **Implementado (`HU-SP-067` a `HU-SP-070`, `HU-BO-009`; `20260927080000` y `20261007100000`):** `note` no queda vacía (la función la normaliza a `null`) y tiene hasta 1 000 caracteres; `timezone` de 3 a 100. `nutrition.meal_guard_tg` exige que la zona exista en `pg_timezone_names` y que `local_date` sea el día de `occurred_at` en esa zona, lo escriba quien lo escriba; desde que existe revisar (`OP-NUT-003`, `nutrition.revise_meal`) deja pasar la corrección y rechaza solo el cambio de momento, zona, día o persona. `media_ref` lo escribe solo la revisión, y la foto que deja de usarse va a `nutrition.media_disposals`. Los eventos llevan sólo `meal_id`. RLS forzado y sin privilegios de runtime: la persona entra por `nutrition.record_meal`, `read_meal`, `list_my_meals`, `revise_meal` y `delete_meal`, con la persona ya resuelta y el actor fijado; las políticas son `*_all_self` y `*_select_break_glass`, que abre la lectura solo bajo una ventana aprobada y vigente de `nutrition_intake`, y soporte entra por `support.exercise_break_glass`. Las vistas `v_my_meals` y `v_client_*` no existen: la lectura propia va por función, y la profesional llega con `relationships`. Borrar una comida pasa por `privacy.dispose_on_owner_request` con la política `nutrition`, anuncia `nutrition.meal_deleted.v1` y elimina en cascada ítems y valores.
 
 ### 10A.3 `nutrition.meal_items`
 
@@ -2043,6 +2165,7 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Columnas:** `id uuid` · `meal_id uuid` · `person_id uuid` · `position integer` · `name text` · `quantity_numeric numeric` (nullable) · `quantity_unit_code text` (nullable) · `serving text` (nullable, 1 a 40 caracteres: cómo dijo la persona la cantidad, «1 ½ tazas»; los nutrientes siguen los gramos) · `food_id uuid` (nullable, `ADR-041`) · `product_id uuid` (nullable, `ADR-041`) · `origin nutrition.item_origin` (`typed`, `catalog`, `photo`; por defecto `typed`) · `created_at timestamptz`.
 - **FKs y borrado:** `(meal_id,person_id) → meals(id,person_id) ON DELETE CASCADE`; `quantity_unit_code → catalog.units(code) RESTRICT`; claves portadoras `UNIQUE(id,meal_id,person_id)` y `UNIQUE(id,person_id)` (`IX-28`).
 - **Uniques y checks:** `UNIQUE(meal_id,position)`; `position>0`; cantidad/unidad aparecen juntas y cantidad `>0`; `origin='catalog'` exige exactamente uno de `food_id` y `product_id`, `origin='typed'` prohíbe los dos y `origin='photo'` prohíbe `product_id`; cada uno solo nombra un alimento o un producto publicado (función de escritura).
+- **Implementado:** `position` de 1 a 100 y la pone el cliente, como pide el contrato; `name` hasta 160 caracteres; `quantity_numeric numeric(12,3)`. `nutrition.meal_item_guard_tg` exige que la unidad de cantidad sea una masa o un volumen y rechaza cualquier `UPDATE`: una revisión reemplaza los ítems, no los edita. Índice `(meal_id, person_id)` para la FK portadora.
 - **Actores:** solo funciones de revisión de la persona.
 - **RLS:** hereda del meal mediante `EXISTS`; sin lectura profesional directa.
 - **Consultas:** por `meal_id` ordenado por posición.
@@ -2058,6 +2181,7 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Columnas:** `id uuid` · `meal_item_id uuid` · `meal_id uuid` · `person_id uuid` · `nutrient_definition_id uuid` · `value_numeric numeric` · `unit_code text` · `created_at timestamptz`.
 - **FKs y borrado:** `(meal_item_id,meal_id,person_id) → meal_items(id,meal_id,person_id) ON DELETE CASCADE`; `(meal_id,person_id) → meals(id,person_id) ON DELETE CASCADE`; `nutrient_definition_id → nutrient_definitions(id) RESTRICT`; `unit_code → catalog.units(code) RESTRICT` (`IX-28`).
 - **Uniques y checks:** `UNIQUE(meal_item_id,nutrient_definition_id)`; `value_numeric>=0`; unidad igual a la canónica mediante `nutrition.enforce_nutrient_unit_ct` (`IX-29`).
+- **Implementado:** `value_numeric numeric(12,3)`. El constraint trigger de `IX-29` es `deferrable initially immediate`: una revisión futura puede diferirlo, y hoy rechaza en el acto. `nutrition.reject_nutrient_value_rewrite_tg` rechaza cualquier `UPDATE`. Índices sobre cada FK.
 - **Actores:** solo funciones de comida.
 - **RLS:** hereda desde item→meal; sin lectura profesional directa.
 - **Consultas:** por ítem/nutriente; agregación por meal/persona mediante joins autorizados.
@@ -2182,11 +2306,13 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Propósito:** eventos de dominio escritos transaccionalmente; transportan identificadores, no contenido sensible.
 - **Dominio / fuente de verdad:** Sistema. Es la fuente de verdad del sobre transaccional y del estado de despacho de cada evento de dominio.
 - **Clasificación:** `operational`.
-- **Columnas:** `id` · `type text` · `aggregate_kind text` · `aggregate_id uuid` · `subject_person_id uuid` (nullable) · `organization_id uuid` (nullable) · `correlation_id uuid` · `payload_schema_version smallint` (`1`) · `payload jsonb` · `dispatched_at timestamptz` (nullable).
-- **FKs y borrado:** sin FK dura por excepción explícita: `aggregate_id` es un identificador opaco de sobre, no una relación navegable ni fuente de autorización; el evento debe sobrevivir al agregado. `INSERT` directo revocado; solo `system.enqueue_domain_event(...)` después de validar el contrato tipado.
+- **Columnas diseñadas:** `id` · `type text` · `aggregate_kind text` · `aggregate_id uuid` · `subject_person_id uuid` (nullable) · `organization_id uuid` (nullable) · `correlation_id uuid` · `payload_schema_version smallint` (`1`) · `payload jsonb` · `dispatched_at timestamptz` (nullable).
+- **Columnas implementadas:** `id` · `aggregate_type text` · `aggregate_id uuid` · `event_type text` · `payload_schema_version smallint` · `payload jsonb` · `occurred_at timestamptz` · `available_at timestamptz` · `published_at timestamptz` (nullable) · `attempt_count integer` · `last_error_code text` (nullable) · `dead_lettered_at timestamptz` (nullable). Los nombres difieren del diseño (`event_type` y `aggregate_type`, no `type` y `aggregate_kind`), no existen `subject_person_id`, `organization_id` ni `correlation_id`, y el despacho no es un solo `dispatched_at`: el reintento y la carta muerta son parte de la fila.
+- **FKs y borrado:** sin FK dura por excepción explícita: `aggregate_id` es un identificador opaco de sobre, no una relación navegable ni fuente de autorización; el evento debe sobrevivir al agregado. `INSERT` directo revocado; la única entrada es `system.enqueue_outbox_event(...)` — el diseño la nombraba `enqueue_domain_event`.
 - **Uniques y checks:** el `payload` nunca contiene datos sensibles (invariante documentada).
 - **Actores:** `allfit_api` inserta; `allfit_worker_outbox` despacha.
 - **RLS:** restringida a roles de sistema.
+- **Diagnóstico de Backoffice (`HU-BO-031`):** `support.list_operational_events` presenta esta tabla junto a `system.idempotency_keys` como una sola bandeja, y `support.outbox_event_state` deriva el estado que se muestra: `dead_lettered`, luego `delivered` si hay `published_at`, luego `retrying` si ya hubo un intento, y `pending` en otro caso. **`pending` y `retrying` se mantienen separados a propósito**, para que una cola sana no se lea como una pila de fallos. La proyección **nunca** entrega `payload`, y por eso el diagnóstico no necesita ventana break-glass ni deja registro de acceso: una cola de entrega no tiene sujeto.
 - **Consultas / índices:** `(dispatched_at, aggregate_id)` parcial sobre no despachados; orden por agregado.
 - **Retención:** se purga tras despacho confirmado + margen.
 - **Eventos:** es el mecanismo de eventos, no produce uno propio.
@@ -2201,11 +2327,14 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Uniques y checks:** uniques exactos de transporte `(principal_fingerprint,client_id,surface,operation_code,key)` y comando `(principal_fingerprint,surface,operation_code,command_id)`; hashes de 32 bytes; key/command UUIDv4/v7 para HTTP o UUIDv5 determinístico para `system`; aggregate tipo/ID emparejados; ventana de respuesta de 24 h. `system.enforce_idempotency_terminal_ct` impide confirmar `processing`; `system.expire_idempotency_response` es la única entrada que limpia response+versión tras expirar.
 - **Actores:** `allfit_api` crea/terminaliza en la transacción; `allfit_idempotency_worker` expira response y purga cuando `purge_after` lo permite.
 - **RLS:** restringida a API y worker dedicado; ningún runtime consulta receipts ajenos.
+- **Diagnóstico de Backoffice (`HU-BO-031`):** `support.command_state` deriva el estado visible desde `status` y `http_status`, y un comando que sigue `processing` **cinco minutos** después de empezar se lee `stalled`. Ese umbral es el único número inventado de la historia: ninguna fuente normativa lo fija, y queda aquí para que se discuta en vez de quedar enterrado en una función. La proyección no entrega `payload`, `response`, `principal_fingerprint` ni `request_hash`: un diagnóstico no abre los datos de nadie.
 - **Consultas / índices:** los dos uniques; `(response_expires_at,purge_after)`; parcial `(aggregate_type,aggregate_id) WHERE aggregate_id IS NOT NULL`.
 - **Retención:** response 24 h; tombstone mínimo durable mientras el actor o agregado sean invocables. Disposición marca el efecto y un retry devuelve `410`, sin recrearlo. Contrato completo en [`V1_IDEMPOTENCY_CONTRACT.md`](./V1_IDEMPOTENCY_CONTRACT.md).
 - **Eventos:** ninguno.
 
 ### 11.3 `system.job_runs`
+
+> **No implementada.** El esquema `system` en V1 tiene `outbox_events`, `outbox_delivery_circuits`, `idempotency_keys` e `invitation_rate_windows`. La idempotencia por ciclo de los workers se resuelve hoy con `system.idempotency_keys` y claves UUIDv5 determinísticas. Esta entrada queda como diseño, no como estado.
 
 - **Propósito:** registro de ejecución de workers; garantiza idempotencia de jobs por ciclo.
 - **Dominio / fuente de verdad:** Sistema. Es la fuente de verdad del estado y la idempotencia de cada ejecución de worker por ciclo.
@@ -2233,6 +2362,22 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 
 ---
 
+### 11.5 `system.outbox_delivery_circuits`
+
+- **Propósito:** estado del cortacircuitos por tipo de evento. Es lo que permite decir «un canal está caído» en vez de mostrar veinte fallos individuales y dejar que alguien deduzca la causa.
+- **Dominio / fuente de verdad:** Sistema.
+- **Clasificación:** `operational`.
+- **Columnas:** `event_type text` · `state text` (`closed`, `open`, `half_open`) · `window_started_at timestamptz` · `success_count integer` · `failure_count integer` · `opened_until timestamptz` (nullable).
+- **FKs y borrado:** ninguna; `event_type` es el mismo identificador opaco que en `outbox_events`.
+- **Actores:** el worker de outbox escribe; `A10` con deber de diagnóstico lee.
+- **RLS:** restringida a roles de sistema; la lectura de Backoffice pasa por función cerrada.
+- **Diagnóstico de Backoffice (`HU-BO-031`):** `support.list_delivery_circuits` es la lectura, y la pantalla **abre por aquí**, no por la bandeja de eventos: un canal abierto explica de golpe todos los eventos atascados que cuelgan de él, y mirarlos uno por uno es perder el tiempo.
+- **Panel de atención (`HU-BO-005`, `NEW-SUP-ATTENTION`):** `support.read_attention_panel` devuelve solo contadores y no escribe `privacy.access_events`, porque no revela a nadie. Lista los circuitos `open`/`half_open` y agrupa por `event_type` u `operation_code` lo que falla de forma repetida: cada intento fallido de un evento no publicado cuenta (uno que se rindió solo si fue en las últimas 24 horas) y cada comando `stalled` de las últimas 24 horas cuenta; un grupo aparece desde 2 fallas y la lista se corta en 20. Suma además las solicitudes `pending` de `identity.credential_verification_requests` y las renovaciones por vencer (mismo predicado que `identity.list_due_credential_renewals`), y las organizaciones `unclaimed` cuya última invitación `ownership` ya no está vigente. Cada aviso exige el deber de su destino y, sin él, llega `withheld` con conteos null; sin ningún deber que resuelva un aviso la lectura falla con `42501`. La ventana de 24 horas y el umbral de 2 son números inventados y declarados.
+- **Retención:** estado vivo; no es historia.
+- **Eventos:** ninguno.
+
+---
+
 ## 12. Schema `support`
 
 ### 12.1 `support.platform_role_assignments`
@@ -2245,7 +2390,7 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Uniques y checks:** `UNIQUE (person_id, platform_role) WHERE status = 'active'`; `CHECK (platform_role in ('allfit_admin'))` — catálogo cerrado que crece solo cuando exista alguien a quien asignarle el rol nuevo; `CHECK ((status = 'revoked') = (revoked_at IS NOT NULL))`; **`CHECK (granted_by_person_id <> person_id)`** — nadie se asigna su propio rol. **Nunca puede quedar cero `allfit_admin` activos**, garantizado por trigger.
 - **Actores:** `A12/manage_platform_access` asigna o revoca a otra persona; `A12/manage_platform_access` o `audit_platform_access` consulta. El bootstrap inicial usa exclusivamente una ceremonia `allfit_migrator`, con dos personas existentes y asignaciones cruzadas en una transacción. Ninguna organización ni persona externa.
 - **RLS:** exige rol base y deber de administración/auditoría vigentes, resueltos **en la transacción**; jamás desde grupo, cabecera o caché. El rol base nunca satisface por sí solo una policy de negocio. No existe función runtime de bootstrap; `allfit_migrator` se habilita sólo durante la ceremonia y conserva el mismo check de otorgante distinto.
-- **Consultas / índices:** `(person_id, status)`, `(platform_role, status)`.
+- **Consultas / índices:** `(person_id, status)`, `(platform_role, status)`. El inventario se lee por `support.list_platform_role_assignments`, cerrada tras `support.require_platform_access_reader`, que acepta `manage_platform_access` **o** `audit_platform_access`. Leer el inventario no concede autoridad: cada operación revalida su deber en su propia transacción.
 - **Retención:** **append-only sobre el historial**: retirar un rol cierra la fila, no la borra. `allfit_api` no tiene `DELETE` sobre esta tabla y **ningún rol lo tiene en runtime**. Sin eso, quien tuviera el rol podría borrar la evidencia de habérselo dado.
 - **Eventos:** `support.platform_role_granted.v1`, `support.platform_role_revoked.v1`.
 
@@ -2259,7 +2404,7 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Uniques y checks:** unique parcial `(person_id,duty_code) WHERE status IN ('scheduled','active','suspended')`; catálogo cerrado de ADR-028 y `actor_mode` derivado del código; `valid_to > valid_from` y `valid_to <= valid_from + interval '90 days'`; `required_aal = 2`; otorgante/recertificador/suspensor/revocador distintos de `person_id`; forma temporal exacta por estado.
 - **Actores:** sólo `A12/manage_platform_access` administra a otra persona; `A12/manage_platform_access` o `audit_platform_access` consulta.
 - **RLS:** tabla base sin acceso directo de cliente; funciones `support.assign_platform_duty`, `suspend_platform_duty` y `revoke_platform_duty` revalidan rol, deber, AAL2 y actor en la transacción. `access_control.has_platform_duty` es `SECURITY DEFINER`, `STABLE`, fail-closed y no acepta el código desde contexto no confiable.
-- **Consultas:** autoridad exacta por `(person_id,duty_code,status,valid_from,valid_to)` e inventario interno por estado/vencimiento.
+- **Consultas:** autoridad exacta por `(person_id,duty_code,status,valid_from,valid_to)` e inventario interno por estado/vencimiento, expuesto por `support.list_platform_duty_assignments`. El estado leído lo deriva `support.effective_platform_duty_status(status, valid_to)`: un deber vencido nunca se presenta como activo aunque la fila conserve `active`.
 - **Índices:** unique parcial anterior; `(person_id,status,valid_to)`; `(duty_code,status,valid_to)`; `(status,valid_to)`.
 - **Retención:** historial append-only lógico; no hay `DELETE` en runtime. Usa la clase `platform_security_authority`; la purga queda bloqueada hasta cerrar `DB-P5-015`.
 - **Eventos:** `support.platform_duty_granted.v1`, `support.platform_duty_suspended.v1`, `support.platform_duty_revoked.v1`, `support.platform_duty_expired.v1`, `support.platform_duty_recertified.v1`.
@@ -2274,10 +2419,19 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Uniques y checks:** requester ≠ subject; `request_expires_at = requested_at + interval '30 minutes'`; categorías no vacías, sin duplicados y del catálogo aprobable; tier/quorum/duración calculados (estándar 1/30, restringido 2/15); propósito cerrado y `case_reference` opaca/no vacía; forma exacta de ventana, cierre y revisión por estado; sujeto, alcance y propósito inmutables.
 - **Actores:** `A10/request_break_glass` crea y cierra sólo la propia; `A12` con deber compatible decide o revisa sin ejercer; la persona no consulta el expediente.
 - **RLS:** sin DML directo; `support.request_break_glass`, `decide_break_glass`, `close_break_glass` y `review_break_glass` revalidan rol base, deber exacto, AAL2, conflicto, quorum y timestamp. La falta de autoridad o de auditoría falla cerrada.
+- **Implementado:** `support.request_break_glass`, `decide_break_glass`, `exercise_break_glass`, `close_break_glass`, `list_break_glass_requests` y `break_glass_request_projection`. Derivan del alcance: `break_glass_category_tier`, `break_glass_scope_tier`, `break_glass_required_approvals`, `break_glass_duration_minutes`. La autoridad la comprueba `support.require_break_glass_duty`, sobre la que `allfit_api` **no** tiene `execute`: el runtime ejecuta las operaciones, nunca el guardia.
+- **Divergencias con el diseño, verificadas:**
+  - **`review_break_glass` no existe.** La revisión posterior por `A12` no está implementada, y las columnas `reviewed_by_person_id`, `reviewed_by_duty_assignment_id` y `review_outcome` sí existen: hoy las escribe la decisión, no una revisión aparte. La revisión sigue pendiente.
+  - **`status` nunca almacena `expired`.** El vencimiento no es una transición: nadie corre en el instante en que la ventana se cierra. `support.effective_break_glass_status(status, request_expires_at, window_ends_at)` lo **calcula** en cada lectura, así que una ventana pasada de hora y una solicitud que nadie decidió a tiempo leen `expired` sin que ningún proceso las haya tocado. Una lectura que confiara en la columna vería una ventana abierta que ya venció.
+  - `purpose` y `sensitivity_tier` son enums (`support.break_glass_purpose` con cinco propósitos, `support.break_glass_tier`), no texto con `CHECK`.
+  - Una **categoría prohibida no es un nivel más estricto: no tiene nivel**. `break_glass_scope_tier` lanza `42501` al encontrarla, así que no existe alcance ni precio que la conceda.
+  - El duplicado dentro de `categories` se rechaza en un trigger `before insert`, no en un `CHECK`: PostgreSQL no admite subconsultas en un `CHECK`.
+- **Retirada de deber:** `support.close_break_glass_for_withdrawn_duty(uuid)` cierra toda ventana efectiva del deber retirado y la invoca el comando de deber al suspender, revocar o vencer. `allfit_api` no tiene `execute` sobre ella — cerrar ventanas es consecuencia de administrar acceso, no algo que se pida desde la superficie de break-glass. Completa el criterio 5 de `HU-BO-028`.
 - **Consultas:** bandeja por estado/prioridad, solicitudes propias y vencimientos; nunca se usa como permiso sin revalidar aprobaciones y deber.
 - **Índices:** `(requester_person_id,status,request_expires_at)`; `(subject_person_id,requested_at desc)`; `(status,request_expires_at)`; `(status,window_ends_at)`; `(reviewed_at) WHERE status IN ('closed','expired')`.
 - **Retención:** clase `platform_security_access`; expediente e historia no se borran en runtime y su purga queda bloqueada por `DB-P5-015`.
-- **Eventos:** `support.break_glass_requested.v1`, `support.break_glass_window_opened.v1`, `support.break_glass_closed.v1`, `support.break_glass_expired.v1`, `support.break_glass_reviewed.v1`.
+- **Eventos diseñados:** `support.break_glass_requested.v1`, `support.break_glass_window_opened.v1`, `support.break_glass_closed.v1`, `support.break_glass_expired.v1`, `support.break_glass_reviewed.v1`.
+- **Eventos emitidos:** `support.break_glass_requested.v1`, `support.break_glass_decided.v1`, `support.break_glass_window_opened.v1`, `support.break_glass_closed.v1`. `break_glass_decided.v1` no estaba en el diseño y hace falta: un rechazo también es una decisión que alguien tiene que ver. **`break_glass_expired.v1` no se emite** porque el vencimiento se calcula y nadie corre en ese instante para emitirlo; si se quiere una notificación al vencer, hace falta un job que la produzca. `break_glass_reviewed.v1` espera a que exista la revisión.
 
 ### 12.4 `support.break_glass_approvals`
 
@@ -2289,6 +2443,7 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Uniques y checks:** `UNIQUE(request_id,approver_person_id)`; aprobador distinto de solicitante/sujeto y de todo aprobador previo, comprobado por trigger; decisión y columnas inmutables; un rechazo es terminal y una aprobación parcial no cambia la ventana.
 - **Actores:** sólo `A12/approve_break_glass` ajeno y sin conflicto inserta mediante función; auditor y A10 no insertan.
 - **RLS:** tabla base sin DML directo; lectura sólo por proyección de expediente para A12 autorizado. `support.decide_break_glass` serializa la solicitud y abre ventana únicamente al completar quorum.
+- **Implementado:** `support.enforce_break_glass_approver_independence` es el trigger que sostiene la separación de deberes, y `reject_break_glass_approval_rewrite` impide reescribir una decisión. La independencia vive ahí y **no se rederiva en la API ni en la pantalla**: `support.break_glass_viewer_projection` responde `viewer_is_requester`, `viewer_can_decide` y `viewer_can_exercise` para que el cliente no tenga una segunda copia de la regla que se desincronice. Son pistas, no autoridad: cada comando revalida por su cuenta. La sesión de Backoffice lleva `sub` y `sid` y ningún identificador de persona de dominio, así que sin esos tres campos el cliente no tendría forma de saberlo.
 - **Consultas:** quorum por solicitud y cola de solicitudes pendientes.
 - **Índices:** unique anterior; `(request_id,decision)`; `(approver_person_id,decided_at desc)`.
 - **Retención:** misma clase y plazo que la solicitud; sin `UPDATE`/`DELETE` runtime; purga bloqueada por `DB-P5-015`.
@@ -2300,10 +2455,14 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Dominio / fuente de verdad:** Soporte; `privacy.access_events` conserva el reflejo visible.
 - **Clasificación:** `highly_sensitive`.
 - **Columnas:** `id` · `request_id uuid` · `requester_person_id uuid` · `requester_duty_assignment_id uuid` · `subject_person_id uuid` · `category text` · `result text` (`allowed`, `denied`) · `resource_type text` · `resource_id uuid` (nullable) · `operation_code text` · `reason_code text` · `occurred_at timestamptz` · `access_event_id uuid` · `access_event_occurred_at timestamptz`.
-- **FKs y borrado:** FK compuesta `(request_id,requester_person_id,subject_person_id,requester_duty_assignment_id) → break_glass_requests(id,requester_person_id,subject_person_id,requester_duty_assignment_id) RESTRICT`; deber → `platform_duty_assignments(id) RESTRICT`; FK `(access_event_id,access_event_occurred_at) → privacy.access_events(id,occurred_at) RESTRICT`.
+- **FKs y borrado:** FK compuesta `(request_id,requester_person_id,subject_person_id,requester_duty_assignment_id) → break_glass_requests(id,requester_person_id,subject_person_id,requester_duty_assignment_id) RESTRICT`; deber → `platform_duty_assignments(id) RESTRICT`; FK `(access_event_occurred_at,access_event_id) → privacy.access_events(occurred_at,id) RESTRICT` — el orden de columnas va al revés de la lista porque `privacy.access_events` está particionada por `occurred_at` y su clave primaria es `(occurred_at, id)`, y una FK compuesta nombra las columnas en el orden que declara el unique.
 - **Uniques y checks:** `UNIQUE(access_event_id,access_event_occurred_at)`; categoría dentro del alcance de la solicitud; `occurred_at = access_event_occurred_at`; resultado/razón y recurso con forma exacta; append-only.
 - **Actores:** sólo el `A10` solicitante exacto genera el evento mediante la función de lectura; `A12/audit_break_glass` consulta metadatos; la persona ve el `access_event`, no esta tabla.
 - **RLS:** sin `INSERT` directo. La función de ejercicio revalida rol, deber, AAL2, solicitud, quorum, ventana, categoría y recurso, escribe ambos eventos y devuelve contenido sólo si `result='allowed'` y ambos inserts confirman.
+- **Implementado, y es la decisión más importante de la historia:** `support.exercise_break_glass` **nunca lanza excepción**, y eso es un requisito de correctitud, no de estilo. Un intento denegado tiene que dejar evidencia, y en PostgreSQL una excepción revierte la función completa — incluidas las dos filas que prueban que el intento ocurrió. La primera versión denegaba con `raise exception` y `T-SUP-BG-01` lo cazó: cuatro asserts fallaron porque la evidencia desaparecía junto con el error. La función devuelve su resultado, el contrato declara `denied` como resultado válido y la API responde **200 con la razón registrada** en vez de 403. **«Falla cerrada» significa no devolver contenido, no lanzar.**
+- **Escalera de denegación:** `not_the_requester` → `duty_not_effective` → `window_not_open` → `quorum_incomplete` → `category_out_of_scope`, en ese orden, para que a un impostor no se le informe que su categoría estaba fuera de alcance. Un intento autorizado escribe `reason_code='authorized_exercise'`.
+- **Contador:** `exercise_count` en la proyección cuenta sólo eventos con `result='allowed'`. Un intento denegado deja su fila pero no sube el contador.
+- **Sin contenido todavía:** `HU-BO-008` pide historial de sesiones, lo registrado y la agenda. Los esquemas `execution` y `nutrition` no existen, y `planning` sólo guarda `owner_person_id` y `author_person_id` — registra quién creó un programa, nunca a quién se le asignó, así que tampoco hay fuente de agenda. Hoy un ejercicio autorizado responde `content_unavailable` con `execution_and_nutrition_absent`: la ventana es válida, el intento queda registrado y no hay contenido. Es honesto, y no es el criterio cumplido.
 - **Consultas:** por solicitud, actor, sujeto, resultado y tiempo para revisión/incident response.
 - **Índices:** `(request_id,occurred_at)`; `(requester_person_id,occurred_at desc)`; `(subject_person_id,occurred_at desc)`; `(result,occurred_at desc)`.
 - **Retención:** misma clase y plazo que solicitud/aprobaciones; sin `UPDATE`/`DELETE` runtime; purga bloqueada por `DB-P5-015`.
@@ -2416,9 +2575,9 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 - **Propósito:** identidad estable de un plan que **Allfit** le vende a una persona. El precio vive en la versión.
 - **Dominio / fuente de verdad:** Pagos.
 - **Clasificación:** `operational`.
-- **Columnas:** `id` · `code text` · `name text` · `plan_kind text` (`free`, `paid`) · `status catalog.publication_status` · `created_at timestamptz`.
+- **Columnas:** `id` · `code text` · `name text` · `plan_kind text` (`free`, `paid`) · `status catalog.publication_status` (`draft` hasta publicar su primera versión, luego `published`) · `created_by_person_id uuid` · `created_by_duty_assignment_id uuid` · `created_at timestamptz`.
 - **FKs y borrado:** ninguna saliente. Es contenido global de plataforma.
-- **Uniques y checks:** `UNIQUE (code)`; `CHECK (plan_kind in ('free','paid'))`; **`UNIQUE (plan_kind) WHERE plan_kind = 'free' AND status = 'published'`** — existe exactamente un plan gratuito publicado. **El plan gratuito es un plan como cualquier otro**: sus límites son datos, no código, y cambiarlos no exige desplegar nada.
+- **Uniques y checks:** `UNIQUE (code)`; `UNIQUE (id, plan_kind)` como clave portadora hacia las versiones; `CHECK (plan_kind in ('free','paid'))`; **`uidx_platform_plans_single_free`, `UNIQUE (plan_kind) WHERE plan_kind = 'free'`** — existe un solo plan gratuito, siempre, más estricto que «uno publicado»: sus límites cambian con versiones suyas. **El plan gratuito es un plan como cualquier otro**: sus límites son datos, no código, y cambiarlos no exige desplegar nada. Un trigger impide cambiar código, nombre, tipo o autor, despublicar o borrar.
 - **Actores:** solo `A11`. Ninguna organización crea planes de plataforma.
 - **RLS:** `SELECT` para cualquier cuenta autenticada sobre `status = 'published'`; `INSERT` solo con deber de plataforma.
 - **Consultas / índices:** por `code`.
@@ -2432,9 +2591,9 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 - **Propósito:** versión publicada e inmutable del plan de Allfit, con su precio y periodo, y el conjunto de funciones que habilita.
 - **Dominio / fuente de verdad:** Pagos.
 - **Clasificación:** `operational`.
-- **Columnas:** `id` · `platform_plan_id uuid` · `version_number integer` · `amount_minor bigint` · `currency_code text` · `billing_period text` (`month`, `year`) · `status catalog.publication_status` · `published_at timestamptz` · `deprecated_at timestamptz` (nullable).
+- **Columnas:** `id` · `platform_plan_id uuid` · `plan_kind text` (portado desde el plan) · `version_number integer` · `amount_minor bigint` · `currency_code text` (nullable en el plan gratuito) · `billing_period text` (`month`, `year`) · `status catalog.publication_status` (`draft` es una propuesta en revisión; `archived`, una propuesta retirada) · `supersedes_version_id uuid` (nullable) · `proposed_by_person_id uuid` · `proposed_by_duty_assignment_id uuid` · `proposed_at timestamptz` · `published_by_person_id uuid` · `published_by_duty_assignment_id uuid` · `published_at timestamptz` · `deprecated_at timestamptz` · `withdrawn_by_person_id uuid` · `withdrawn_by_duty_assignment_id uuid` · `withdrawn_at timestamptz` (los de publicación, retiro y deprecación son nullable).
 - **FKs y borrado:** `platform_plan_id → platform_plans(id) RESTRICT`.
-- **Uniques y checks:** `UNIQUE (platform_plan_id, version_number)`; `CHECK (billing_period in ('month','year'))`; `CHECK (amount_minor >= 0)`; `billing_period` es nullable cuando el plan es gratuito. **`IX-41`** exige que una versión de plan `paid` tenga monto mayor que cero y que una de plan `free` tenga monto cero. Sin `UPDATE` en runtime salvo deprecación.
+- **Uniques y checks:** `UNIQUE (platform_plan_id, version_number)`; FK compuesta `(platform_plan_id, plan_kind) → platform_plans(id, plan_kind)`; **`IX-41`** como `CHECK` sobre el tipo portado: una versión `paid` tiene monto positivo (hasta 10^11), moneda ISO 4217 y periodo `month` o `year`; una `free` tiene monto cero, sin moneda ni periodo. Únicos parciales: una versión `published` y una `draft` por plan. `CHECK` de revisión: quien publica no es quien propuso (`HU-BO-025`, criterio 5), y cada paso lleva su autor y su asignación de deber. Un trigger solo permite `draft → published`, `draft → archived` y `published → deprecated`, nunca reescribe lo que la versión ofrece ni su autoría, y rechaza borrar.
 - **Actores:** solo `A11`.
 - **RLS:** `SELECT` de versiones publicadas para cualquier autenticado.
 - **Consultas / índices:** `(platform_plan_id, status)`.
@@ -2450,7 +2609,7 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 - **Clasificación:** `operational`.
 - **Columnas:** `code text` (PK) · `name text` · `unit text` (nullable; por ejemplo `weeks`, `items`) · `created_at timestamptz`.
 - **FKs y borrado:** ninguna.
-- **Uniques y checks:** `CHECK (code = lower(code))`. **Ninguna función de privacidad, consentimiento, portabilidad o supresión puede existir en este catálogo**, y hay una prueba negativa que lo verifica.
+- **Uniques y checks:** `CHECK (code ~ '^[a-z][a-z0-9_]{1,63}$')`. **Ninguna función de privacidad, consentimiento, portabilidad o supresión puede existir en este catálogo**: `ck_platform_features_not_privacy` rechaza los códigos que nombran una, y `T-PAY-PLAN-01` lo verifica. El catálogo cambia **solo por migración**, junto con el código que hace cumplir el límite; el runtime no tiene privilegio sobre la tabla. Se publicó vacío porque producto no ha decidido qué incluye cada plan (`HU-SP-084`).
 - **Actores:** solo `A11`.
 - **RLS:** legible por cualquier autenticado.
 - **Consultas / índices:** PK.
@@ -2466,7 +2625,7 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 - **Clasificación:** `operational`.
 - **Columnas:** `id` · `platform_plan_version_id uuid` · `feature_code text` · `limit_value integer` (nullable = ilimitado) · `enabled boolean`.
 - **FKs y borrado:** `platform_plan_version_id → platform_plan_versions(id) ON DELETE CASCADE`; `feature_code → platform_features(code) RESTRICT`.
-- **Uniques y checks:** `UNIQUE (platform_plan_version_id, feature_code)`; `CHECK (limit_value IS NULL OR limit_value >= 0)`.
+- **Uniques y checks:** `UNIQUE (platform_plan_version_id, feature_code)`; `CHECK (limit_value IS NULL OR limit_value >= 0)`; `CHECK (enabled OR limit_value IS NULL)`. Una versión declara cada función del catálogo. Un trigger solo admite filas mientras la versión es una propuesta y rechaza cambiarlas o borrarlas.
 - **Actores:** solo `A11`, dentro de la publicación de la versión.
 - **RLS:** vía la versión.
 - **Consultas / índices:** `(platform_plan_version_id, feature_code)`.
