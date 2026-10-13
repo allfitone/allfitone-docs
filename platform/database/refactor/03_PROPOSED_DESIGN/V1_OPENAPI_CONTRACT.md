@@ -43,6 +43,7 @@ generado son el inventario exhaustivo.
 | Asignar versión | `POST /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments` | `OP-PLN-010` | `ProgramAssignmentCreate` | `ProgramAssignment` | `no-store` |
 | Consultar agenda | `GET /space/v1/agenda` | `OP-PLN-016` | query `from`, `to`, `limit`, `cursor` | `AgendaPage` | `private, max-age=0, must-revalidate` + `ETag` |
 | Iniciar intento | `POST /space/v1/planned-sessions/{plannedSessionId}/attempts` | `OP-EXE-001` | `AttemptCreate` | `Attempt` | `no-store` |
+| Iniciar sesión libre | `POST /space/v1/executions` | `OP-EXE-004` | `FreeSessionCreate` | `FreeSession` | `no-store` |
 | Guardar resultados | `PUT /space/v1/executions/{executionId}/results` | `OP-EXE-005` | `ExecutionResultsReplace` | `ExecutionResultsState` | `no-store` |
 | Finalizar ejecución | `POST /space/v1/executions/{executionId}/finalize` | `OP-EXE-006` | `ExecutionFinalize` | `ExecutionFinalized` | `no-store` |
 | Leer resultado autorizado | `GET /studio/v1/organizations/{organizationId}/clients/{personId}/executions/{executionId}` | `OP-EXE-018` | path | `AuthorizedExecution` | `private, no-store` |
@@ -96,7 +97,7 @@ Todo comando de dominio durable exige:
 - `Command-Id`: UUIDv7 durable creado con la intención de usuario;
 - `Idempotent-Replay: true` cuando el servidor devuelve el resultado mínimo persistido de un replay.
 
-En `OP-EXE-001`, `Command-Id` también se convierte en `executed_session.id`. Guardar resultados y finalizar emplean `Command-Id` e `Idempotency-Key` propios.
+En `OP-EXE-001` y `OP-EXE-004`, `Command-Id` también se convierte en `executed_session.id`. Guardar resultados y finalizar emplean `Command-Id` e `Idempotency-Key` propios.
 
 Las operaciones técnicas `OP-IDN-025`, `OP-IDN-026` y `OP-IDN-028` no crean una intención durable del usuario y no usan esos headers. Su replay queda cerrado por `state`, unicidad de sesión, revocación e idempotencia de logout.
 
