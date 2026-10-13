@@ -53,7 +53,7 @@ Tres palabras que significan cosas distintas y no deben mezclarse:
 | Palabra | Qué es |
 | --- | --- |
 | **Programa** | El entrenamiento que la persona sigue: semanas de sesiones planificadas |
-| **Plan** | Lo que le paga a un gimnasio, o lo que le paga a Allfit por Premium |
+| **Plan** | Lo que le paga a un gimnasio, o lo que le paga a Allfit por Pro |
 | **Membresía** | Que alguien *trabaja* en una organización. Nunca se usa para lo que un cliente paga |
 | **Scope** | Contrato versionado que define una categoría, su finalidad y los campos que cubre |
 | **Grant** | Mi autorización para un scope, versión y nivel de acceso exactos |
@@ -1788,6 +1788,12 @@ bloque 4 ya introduce.
 
 ## E-SP-13 · Mi plan con el gimnasio
 
+> **Diferida de V1** (1 de octubre de 2026). En la primera versión la aplicación
+> **no procesa pagos de gimnasios**. Allfit crea cada gimnasio, el gimnasio le paga
+> a Allfit por fuera de la aplicación, y quien entra invitado por un gimnasio activo
+> recibe Pro (`E-SP-15`). Estas historias se conservan para cuando se abra esa
+> puerta; su prioridad pasa a `después`.
+
 Lo que la persona le paga a un gimnasio es un **plan comercial**, nunca una
 "membresía": esa palabra significa trabajar en la organización.
 
@@ -1801,7 +1807,7 @@ ninguno.
 **quiero** ver los planes que ofrece y su precio
 **para** elegir cuál me sirve.
 
-`E-SP-13` · imprescindible
+`E-SP-13` · después
 
 **Criterios**
 
@@ -1815,7 +1821,7 @@ ninguno.
 **quiero** suscribirme a uno de sus planes
 **para** empezar a usar su servicio.
 
-`E-SP-13` · imprescindible
+`E-SP-13` · después
 
 **Criterios**
 
@@ -1832,7 +1838,7 @@ ninguno.
 **quiero** ver en qué estado está mi plan y qué he pagado
 **para** saber si estoy al día.
 
-`E-SP-13` · imprescindible
+`E-SP-13` · después
 
 **Criterios**
 
@@ -1846,7 +1852,7 @@ ninguno.
 **quiero** cancelar mi plan cuando quiera
 **para** dejar de pagar.
 
-`E-SP-13` · imprescindible
+`E-SP-13` · después
 
 **Criterios**
 
@@ -1858,13 +1864,17 @@ ninguno.
 
 ## E-SP-14 · Qué pasa si no pago
 
+> **Diferida de V1** junto con `E-SP-13`: sin pagos a gimnasios no hay cobro que
+> pueda fallar. En V1 lo equivalente es que termine la relación con el gimnasio, y
+> eso lo describe `HU-SP-088`.
+
 ### HU-SP-083 — Entender qué pierdo si mi pago falla
 
 **Como** persona a la que se le venció la tarjeta
 **quiero** saber exactamente qué se me suspende y qué conservo
 **para** no asustarme y poder arreglarlo.
 
-`E-SP-14` · importante
+`E-SP-14` · después
 
 **Criterios**
 
@@ -1880,21 +1890,34 @@ ninguno.
 
 ---
 
-## E-SP-15 · Allfit Premium
+## E-SP-15 · Allfit Pro
 
 La regla que gobierna la épica: **nunca se cobra por controlar los propios
 datos.** Privacidad, permisos, registro de accesos, portabilidad y supresión son
-gratuitos siempre. Premium cobra por profundidad y volumen, no por control.
+gratuitos siempre. Pro cobra por profundidad y volumen, no por control.
 
 Y un límite **nunca borra nada**: quien baja a gratis conserva todo su historial
 y lo sigue viendo.
+
+**Dos planes y dos vías.** En V1 existen solo los planes de Allfit: el **gratuito** y
+**Pro**. A Pro se llega de dos formas:
+
+- **Pagándoselo a Allfit**, con la compra integrada de Apple en iPhone o de Google Play
+  en Android.
+- **Entrando invitado por un gimnasio activo.** Allfit crea los gimnasios, y uno activo
+  es uno que le está pagando a Allfit. Toda persona que acepta su invitación tiene
+  Pro mientras la relación siga vigente y el gimnasio siga activo.
+
+Dentro de la aplicación solo se ofrece la compra integrada de cada tienda: la App Store
+lo exige para suscripciones digitales (guía 3.1.1) y Google Play hace lo propio. El cobro
+web a los gimnasios pertenece a Backoffice y no pasa por Space (`ADR-043`).
 
 > **Qué incluye cada plan todavía no está decidido.** Es deliberado: la frontera
 > vive como configuración, así que puede cambiarse publicando otra versión de
 > plan, sin tocar código. Estas historias describen **cómo se comporta** el
 > sistema ante cualquier frontera, no cuál es.
 
-### HU-SP-084 — Ver qué me da Premium
+### HU-SP-084 — Ver qué me da Pro
 
 **Como** persona que usa Allfit
 **quiero** ver qué incluye cada plan y cuánto cuesta
@@ -1909,7 +1932,7 @@ y lo sigue viendo.
 3. Ninguna función de privacidad aparece como algo que deba pagar, porque ninguna puede limitarse.
 4. Si Allfit cambia qué incluye cada plan, lo veo reflejado sin tener que actualizar la aplicación.
 
-### HU-SP-085 — Suscribirme a Premium
+### HU-SP-085 — Suscribirme a Pro
 
 **Como** persona que entrena por su cuenta
 **quiero** pagarle a Allfit para tener la aplicación completa
@@ -1923,24 +1946,26 @@ y lo sigue viendo.
 2. Solo puedo tener una suscripción a Allfit a la vez.
 3. Pagarle a Allfit **no comparte ninguno de mis datos con nadie** ni cambia mis permisos.
 4. Mis datos de tarjeta no los guarda Allfit.
+5. Pago con la compra integrada de Apple en iPhone o de Google Play en Android. Allfit verifica la compra con la tienda antes de darme Pro.
+6. Si mi Pro ya viene de un gimnasio, se me dice dónde está el precio y **no se me ofrece pagar**: ya tengo Pro, y cobrarme otra vez no me daría nada. Si esa relación termina, puedo suscribirme (`HU-SP-088`).
 
-### HU-SP-086 — Saber si tengo Premium y por qué
+### HU-SP-086 — Saber si tengo Pro y por qué
 
 **Como** persona
-**quiero** ver si tengo Premium y de dónde me viene
+**quiero** ver si tengo Pro y de dónde me viene
 **para** entender de qué depende.
 
 `E-SP-15` · imprescindible
 
 **Criterios**
 
-1. Veo si tengo Premium y **por cuál vía**: porque le pago a Allfit, o porque mi gimnasio lo incluye.
-2. Si viene de mi gimnasio, veo **cuál** gimnasio, para saber qué pasa si dejo de pagarle.
+1. Veo si tengo Pro y **por cuál vía**: porque le pago a Allfit, o porque entré invitada por un gimnasio activo.
+2. Si viene de un gimnasio, veo **cuál**, para saber que lo pierdo si esa relación termina.
 3. Veo el límite vigente de cada función, incluido cuando estoy en el plan gratuito.
 4. Ante cualquier duda el sistema me trata como plan gratuito, nunca al revés.
 5. Si Allfit endurece el plan gratuito, **a mí no me quita nada si ya estaba suscrita**: conservo la versión que acepté.
 
-### HU-SP-087 — Cancelar mi Premium
+### HU-SP-087 — Cancelar mi Pro
 
 **Como** persona suscrita a Allfit
 **quiero** cancelar cuando quiera
@@ -1951,24 +1976,29 @@ y lo sigue viendo.
 **Criterios**
 
 1. **No se borra ni un solo dato mío.** Conservo mi historial completo y lo sigo viendo; lo que cambia son los límites.
-2. Si además tengo plan activo con un gimnasio que incluye Premium, **lo conservo por esa vía**.
+2. Si además tengo una relación vigente con un gimnasio activo, **lo conservo por esa vía**.
 3. Cancelar no afecta mi relación con ningún gimnasio ni ninguno de mis permisos.
+4. Cancelo desde la gestión de suscripciones de la tienda donde pagué, que la aplicación me abre; la tienda no permite hacerlo de otra forma.
+5. Conservo Pro hasta el final del periodo que ya pagué.
 
-### HU-SP-088 — Entender qué pasa con mi Premium si dejo de pagarle al gimnasio
+### HU-SP-088 — Entender qué pasa con mi Pro si termina mi relación con el gimnasio
 
-**Como** persona cuyo Premium viene de su gimnasio
-**quiero** saber qué pierdo si mi plan con ellos se suspende
+**Como** persona cuyo Pro viene de su gimnasio
+**quiero** saber qué pierdo si esa relación termina
 **para** no llevarme una sorpresa.
 
 `E-SP-15` · imprescindible
 
+*Reescrita el 1 de octubre de 2026: en V1 el Pro del gimnasio no depende de un cobro a la persona sino de la relación y de que el gimnasio esté activo.*
+
 **Criterios**
 
-1. Si mi plan con el gimnasio queda suspendido, mi Premium **baja a gratis**, porque venía de ese servicio.
-2. **Conservo todos mis datos.** Los sigo viendo completos; solo se limitan algunas funciones.
-3. Al pagarle al gimnasio, mi Premium vuelve **solo**, sin que yo haga nada.
-4. Puedo recuperarlo antes pagándole directamente a Allfit, y entonces deja de depender del gimnasio.
-5. Mi privacidad, mis permisos y mi historial **nunca** se ven afectados por esto.
+1. Si el gimnasio termina la relación conmigo desde Studio, o la termino yo, el Pro que venía de él **baja a gratis de inmediato**.
+2. Lo mismo pasa si el gimnasio deja de estar activo para Allfit: sus invitados pasan a gratis.
+3. **Conservo todos mis datos.** Los sigo viendo completos; solo se limitan algunas funciones.
+4. Si vuelvo a tener una relación vigente con un gimnasio activo, Pro vuelve **solo**, sin que yo haga nada.
+5. Puedo recuperarlo antes pagándole directamente a Allfit, y entonces deja de depender del gimnasio.
+6. Mi privacidad, mis permisos y mi historial **nunca** se ven afectados por esto.
 
 ---
 
@@ -2141,16 +2171,17 @@ presenta con la tarjeta de Hoy, que es además lo que va a ver cada mañana si a
 | `E-SP-10` Nutrición | `HU-SP-067` – `HU-SP-074`, `HU-SP-113`, `HU-SP-114` | 0 de 10 |
 | `E-SP-11` Sincronización con apps de salud | `HU-SP-075` | 0 de 1 |
 | `E-SP-12` Contacto y notificaciones | `HU-SP-076` – `HU-SP-078` | 0 de 3 |
-| `E-SP-13` Mi plan con el gimnasio | `HU-SP-079` – `HU-SP-082` | 4 de 4 |
-| `E-SP-14` Qué pasa si no pago | `HU-SP-083` | 0 de 1 |
-| `E-SP-15` Allfit Premium | `HU-SP-084` – `HU-SP-088` | 5 de 5 |
+| `E-SP-13` Mi plan con el gimnasio · diferida | `HU-SP-079` – `HU-SP-082` | 0 de 4 |
+| `E-SP-14` Qué pasa si no pago · diferida | `HU-SP-083` | 0 de 1 |
+| `E-SP-15` Allfit Pro | `HU-SP-084` – `HU-SP-088` | 5 de 5 |
 | `E-SP-16` Hoy y navegación | `HU-SP-089` – `HU-SP-094`, `HU-SP-100` | 4 de 7 |
-| **Total** | **99 historias** | **53 imprescindibles** |
+| **Total** | **99 historias** | **49 imprescindibles** |
 
 El camino mínimo para lanzar es: crear cuenta y entrar, activar el Fitness ID,
 ver qué toca hoy, entrenar y registrarlo aunque no haya señal, ver el historial,
 aceptar la invitación de un gimnasio, decidir qué se comparte y poder cortarlo,
-y pagar el plan.
+y tener Pro, por el gimnasio o pagándoselo a Allfit. En V1 no hay pagos a
+gimnasios dentro de la aplicación.
 
 **Nutrición no está entre lo imprescindible** aunque ya tenga todo el modelo
 listo: es la rebanada más independiente y puede entrar justo después del

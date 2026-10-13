@@ -656,14 +656,14 @@ separados y cada uno tiene su propio ciclo.
 
 ---
 
-## 17. Allfit Premium (DT-018)
+## 17. Allfit Pro (DT-018, `ADR-043`)
 
 ### 17.1 Qué entra
 
 - **Plan de plataforma** publicado por Allfit, con versiones inmutables de precio y periodo, igual que un plan de organización.
 - **Catálogo de funciones** con su límite por versión de plan: `NULL` significa sin límite.
-- **Suscripción de la persona a Allfit**, con los mismos estados `active`, `suspended` y `ended`.
-- **Habilitación de una organización** para otorgar Premium a sus clientes activos.
+- **Suscripción de la persona a Allfit**, comprada con la compra integrada de una tienda, con estados `active`, `grace`, `suspended` y `ended` (`ADR-043`).
+- **Pro por gimnasio**: toda persona con relación vigente con un gimnasio activo. No hay habilitación por gimnasio.
 - **Resolución del derecho efectivo**, calculada, nunca almacenada como bandera.
 
 ### 17.2 Qué no entra
@@ -672,9 +672,9 @@ separados y cada uno tiene su propio ciclo.
 - Sin pruebas gratuitas, cupones, descuentos ni precios promocionales.
 - Sin planes por país ni por moneda distinta a la del plan publicado.
 
-### 17.3 La frontera gratis/Premium **no está decidida, y es a propósito**
+### 17.3 La frontera gratis/Pro **no está decidida, y es a propósito**
 
-Qué queda en la capa gratuita y qué en Premium **todavía no se ha resuelto**, y
+Qué queda en la capa gratuita y qué en Pro **todavía no se ha resuelto**, y
 el modelo está construido para que resolverlo más tarde no cueste nada.
 
 Lo que sí está fijo son dos invariantes:
@@ -710,12 +710,15 @@ de producto pendiente**, registrada en `product/PENDING_PROPOSALS.md`.
 
 ### 17.4 Cómo se resuelve el derecho
 
+Sustituido el 12 de octubre de 2026 por `ADR-043`, que cierra `DB-P5-008`:
+
 ```text
 plan_efectivo(persona) =
-   SI existe suscripción de plataforma ACTIVA          → su versión de plan
-   SI NO, existe suscripción de organización ACTIVA
-          con organización habilitada                  → la versión de plan premium vigente
-   SI NO                                               → la versión publicada del plan GRATUITO
+   SI tiene una suscripción propia viva                → su versión congelada
+      (active o grace, con current_period_end futuro)
+   SI NO, tiene una relación active con una
+      organización active                              → la versión vigente del plan pro
+   SI NO                                               → la versión vigente del plan GRATUITO
 
 limite(persona, función) = el declarado por esa versión de plan
 ```

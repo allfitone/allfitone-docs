@@ -3483,10 +3483,11 @@ Reglas que gobiernan todo el dominio:
 | `OP-PAY-016` | Registrar el resultado de un cobro | Comando | `A9` |
 | `OP-PAY-017` | Publicar una versión de plan de plataforma | Comando | `A11` |
 | `OP-PAY-018` | Consultar los planes de Allfit | Consulta | `A2` |
-| `OP-PAY-019` | Suscribirme a Allfit Premium | Comando | `A2` |
-| `OP-PAY-020` | Consultar mi Premium y de dónde viene | Consulta | `A2` |
-| `OP-PAY-021` | Cancelar mi Premium | Comando | `A2` |
-| `OP-PAY-022` | Habilitar o revocar el Premium de una organización | Comando | `A11` |
+| `OP-PAY-019` | Suscribirme a Allfit Pro | Comando | `A2` |
+| `OP-PAY-020` | Consultar mi Pro y de dónde viene | Consulta | `A2` |
+| `NEW-PAY-PRO-PAYMENTS` | Consultar mis pagos de Pro | Consulta | `A2` |
+| `OP-PAY-021` | Cancelar mi Pro | Acción en la tienda | `A2` |
+| `OP-PAY-022` | Habilitar o revocar el Pro de una organización — obsoleta (`ADR-043`) | — | — |
 | `OP-PAY-023` | Registrar el resultado de un cobro de plataforma | Comando | `A9` |
 | `OP-PAY-024` | Crear un plan de plataforma | Comando | `A11` |
 | `OP-PAY-025` | Proponer una versión de plan de plataforma | Comando | `A11` |
@@ -3737,102 +3738,107 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /catalog/v1/platform-plans` |
-| **Actor** | `A2` |
-| **Filtros obligatorios** | Solo versiones publicadas y no deprecadas |
+| **Superficie** | `GET /space/v1/pro/plans` → `payments.list_pro_plans` |
+| **Actor** | `A2`, la propia persona |
+| **Filtros obligatorios** | Solo la versión publicada de cada plan |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
-| **Paginación y orden** | No aplica: el catálogo es pequeño y cerrado |
+| **Paginación y orden** | No aplica: el catálogo es pequeño y cerrado. El gratuito primero |
 | **Offline / concurrencia** | Cacheable con validación |
 | **Información sensible** | Ninguna |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Devuelve precio, periodo y **qué incluye cada plan con su límite exacto**, para que la persona compare antes de pagar |
+| **Reglas** | Devuelve **qué incluye cada plan con su límite exacto** y los productos de tienda con que se vende cada versión. El precio que se muestra es el localizado que da la tienda (`ADR-043`) |
 | **Falla cerrada** | — |
 
-#### `OP-PAY-019` — Suscribirme a Allfit Premium
+#### `OP-PAY-019` — Suscribirme a Allfit Pro
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/platform-subscription` |
-| **Actor** | `A2` |
-| **Filtros obligatorios** | Versión publicada y no deprecada; la persona no tiene otra suscripción de plataforma viva |
-| **Transacción** | Crear `platform_subscriptions` congelando la versión exacta |
-| **Idempotencia** | `Idempotency-Key`. Un reintento no crea dos suscripciones |
+| **Superficie** | `POST /space/v1/pro/purchases` → `payments.record_store_subscription` |
+| **Actor** | `A2`, la propia persona |
+| **Filtros obligatorios** | La API verificó la compra con la tienda; el token de cuenta de la compra es la persona; el producto vende una versión de pago |
+| **Transacción** | Crear `platform_subscriptions` congelando la versión del producto, con su evento y su cobro; reemplaza la suscripción viva anterior |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`. Volver a presentar la misma compra (restaurar) no crea otra |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
-| **Información sensible** | Vínculo comercial propio |
+| **Offline / concurrencia** | Serializada por persona; una referencia de tienda pertenece a una sola persona |
+| **Información sensible** | Vínculo comercial propio; ningún dato de tarjeta |
 | **Evento de dominio** | `payments.platform_subscription_started.v1` |
-| **Reglas** | Aquí **Allfit sí es el vendedor** y recibe el pago: no es intermediación, es ingreso propio. Sigue sin almacenar datos de tarjeta. Suscribirse **no concede ningún acceso a datos de nadie** ni cambia sus permisos |
-| **Falla cerrada** | Suscripción viva existente: converge devolviendo la actual |
+| **Reglas** | La tienda cobra y Allfit recibe el ingreso. Suscribirse **no concede ningún acceso a datos de nadie** ni cambia permisos |
+| **Falla cerrada** | Compra no verificada, de otra cuenta o de un producto que Allfit no vende: rechazo, sin Pro |
 
-#### `OP-PAY-020` — Consultar mi Premium y de dónde viene
+#### `OP-PAY-020` — Consultar mi Pro y de dónde viene
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /space/v1/entitlements` |
-| **Actor** | `A2` |
+| **Superficie** | `GET /space/v1/pro` → `payments.read_my_pro` |
+| **Actor** | `A2`, la propia persona |
 | **Filtros obligatorios** | `person_id = access_control.person()` |
-| **Transacción** | Ninguna. Resuelve el derecho **en la consulta**, nunca desde una bandera almacenada |
+| **Transacción** | Ninguna. Resuelve el derecho **en la consulta** (`payments.resolve_pro`), nunca desde una bandera almacenada |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Cacheable para presentación; **nunca** para decidir si una función está habilitada |
 | **Información sensible** | Estado comercial propio |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Devuelve si tiene Premium, **por qué vía** —suscripción propia con Allfit o plan activo con una organización habilitada— y el límite vigente de cada función. Si el origen es el gimnasio, se le dice cuál, para que entienda de qué depende |
-| **Falla cerrada** | Ante cualquier duda se resuelve como plan gratuito: **el derecho falla cerrado**, nunca abierto |
+| **Reglas** | Suscripción propia viva → su versión congelada; si no, relación `active` con una organización `active` → la versión vigente del plan `pro`; si no, el gratuito vigente. Devuelve **todas las vías vigentes**, con el gimnasio por nombre, y el límite de cada función |
+| **Falla cerrada** | Ante cualquier duda se resuelve como plan gratuito, nunca al revés |
 
-#### `OP-PAY-021` — Cancelar mi Premium
+#### `NEW-PAY-PRO-PAYMENTS` — Consultar mis pagos de Pro
 
 | Campo | Valor |
 | --- | --- |
-| **Tipo** | Comando |
-| **Superficie** | `POST /space/v1/platform-subscription/cancellation` |
-| **Actor** | `A2`, titular |
-| **Filtros obligatorios** | Suscripción de plataforma propia y viva |
-| **Transacción** | Cerrarla declarando a la persona como actor |
-| **Idempotencia** | `Idempotency-Key`; converge |
-| **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
-| **Información sensible** | Estado comercial propio |
-| **Evento de dominio** | `payments.platform_subscription_ended.v1` |
-| **Reglas** | Cancelar **no borra ni un solo dato**: la persona conserva su historial completo y lo sigue viendo; solo se limitan funciones. Si además tiene un plan activo con una organización habilitada, **conserva Premium por esa vía** |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/pro/payments` → `payments.list_my_pro_payments` |
+| **Actor** | `A2`, la propia persona |
+| **Filtros obligatorios** | `person_id = access_control.person()` |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Los 60 más recientes, del último al primero |
+| **Offline / concurrencia** | Cacheable para presentación |
+| **Información sensible** | Estado comercial propio; **ningún dato de tarjeta** |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Cada cobro que reportó la tienda, con su resultado. Los recibos y el medio de pago siguen en la cuenta de la tienda |
 | **Falla cerrada** | — |
 
-#### `OP-PAY-022` — Habilitar o revocar el Premium de una organización
+#### `OP-PAY-021` — Cancelar mi Pro
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Acción en la tienda |
+| **Superficie** | Sin ruta propia: Space abre la gestión de suscripciones de la tienda donde se pagó |
+| **Actor** | La persona, en la tienda |
+| **Filtros obligatorios** | — |
+| **Transacción** | La cancelación llega por `OP-PAY-023`: `auto_renews = false` y, al final del periodo pagado, `ended` |
+| **Idempotencia** | La de `OP-PAY-023` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | — |
+| **Información sensible** | Estado comercial propio |
+| **Evento de dominio** | `payments.platform_subscription_ended.v1` al vencer |
+| **Reglas** | Apple y Google no permiten cancelar desde la app (`ADR-043`). Cancelar **no borra ni un solo dato**, y quien tiene una relación vigente con un gimnasio activo **conserva Pro por esa vía** |
+| **Falla cerrada** | — |
+
+#### `OP-PAY-022` — Habilitar o revocar el Pro de una organización — obsoleta
+
+Sustituida por `ADR-043`: todo gimnasio activo da Pro a sus invitados con relación vigente,
+y eso se resuelve al leer. `organization_premium_entitlements` no se crea.
+
+#### `OP-PAY-023` — Aplicar lo que dice una notificación de la tienda
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /backoffice/v1/organizations/{orgId}/premium-entitlement` · `/revocation` |
-| **Actor** | `A11` con rol base, `manage_platform_commercial`, AAL2 y deber vigente |
-| **Filtros obligatorios** | Organización activa; referencia del acuerdo comercial declarada |
-| **Transacción** | Crear o cerrar `organization_premium_entitlements` |
-| **Idempotencia** | `Idempotency-Key`; converge |
+| **Superficie** | `POST /webhooks/app-store` · `POST /webhooks/google-play` → `payments.apply_store_notification` |
+| **Actor** | `A9` (`worker`) |
+| **Filtros obligatorios** | La API verificó la firma de Apple o el token OIDC de Pub/Sub y releyó el estado en la tienda |
+| **Transacción** | Mover la suscripción entre `active`, `grace`, `suspended` y `ended`, registrar su evento y el cobro reportado |
+| **Idempotencia** | `store_notification_receipts (store, notification_id)` con el hash del contenido; el mismo id con otro contenido se rechaza |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
-| **Información sensible** | Ninguna categoría personal |
-| **Evento de dominio** | `payments.organization_premium_granted.v1` · `payments.organization_premium_revoked.v1` |
-| **Reglas** | **Una organización no se habilita a sí misma.** Esta tabla **no modela ningún cobro**: el acuerdo entre Allfit y la organización se factura por fuera de la plataforma. Revocar baja a gratis a quienes dependían de esa vía y **no toca sus datos ni sus permisos** |
-| **Falla cerrada** | Sin referencia de acuerdo o sin deber de plataforma: rechazo |
-
-#### `OP-PAY-023` — Registrar el resultado de un cobro de plataforma
-
-| Campo | Valor |
-| --- | --- |
-| **Tipo** | Comando |
-| **Superficie** | `SYS` — consumidor del webhook del proveedor de Allfit |
-| **Actor** | `A9` |
-| **Filtros obligatorios** | Firma verificada; la suscripción de plataforma existe |
-| **Transacción** | Transicionar la suscripción entre `active` y `suspended` y registrar el evento |
-| **Idempotencia** | Clave derivada de la referencia externa del cobro; el reenvío no duplica |
-| **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Dos entregas concurrentes producen un solo efecto |
-| **Información sensible** | Estado comercial; **ningún dato de tarjeta** |
-| **Evento de dominio** | `payments.platform_subscription_suspended.v1` · `.reactivated.v1` |
-| **Reglas** | Igual que en el plan de organización: **este worker no puede terminar nada**, y la suspensión es indefinida hasta que se pague. Bajar a gratis **nunca elimina datos** |
-| **Falla cerrada** | Firma inválida o suscripción inexistente: se descarta y se registra el intento |
+| **Offline / concurrencia** | Una notificación más vieja que la última aplicada es `stale` y no cambia nada |
+| **Información sensible** | Estado comercial; **ningún dato de tarjeta ni el contenido de la notificación** |
+| **Evento de dominio** | `payments.platform_subscription_suspended.v1` · `.reactivated.v1` · `.ended.v1` |
+| **Reglas** | Bajar a gratis **nunca elimina datos**. Un cambio de producto termina la suscripción (`replaced`) y abre otra con la nueva versión |
+| **Falla cerrada** | Firma inválida: no llega a la base. Suscripción que nadie registró: se guarda como `ignored` |
 
 #### `OP-PAY-024` — Crear un plan de plataforma
 

@@ -192,6 +192,39 @@ disable the WorkOS endpoint before rolling back API code and keep the
 forward-only migration. Do not create a local retry worker and do not enable
 `password_reset.created`.
 
+## Allfit Pro rollout (ADR-043)
+
+Pro is bought through the App Store and Google Play and verified by the API.
+Deploy in this order:
+
+1. apply the forward-only migration `20261012100000_a_person_can_have_pro.sql`;
+2. publish the free plan and Pro through Backoffice (two people, one proposing and
+   another publishing), then load the store products of each paid version into
+   `payments.platform_store_products` with a curation script: a new price is a new
+   product;
+3. create the subscription products in App Store Connect and Google Play Console
+   with the same product ids;
+4. set the API's `APPLE_BUNDLE_ID`, `APPLE_APP_APPLE_ID` and
+   `APPLE_ENVIRONMENT=production`, and Google's `GOOGLE_PLAY_PACKAGE_NAME`,
+   `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`, `GOOGLE_PUBSUB_AUDIENCE` and
+   `GOOGLE_PUBSUB_SERVICE_ACCOUNT`;
+5. point App Store Server Notifications V2 at `{API_PUBLIC_URL}/webhooks/app-store`,
+   and a Pub/Sub push subscription with an OIDC token at
+   `{API_PUBLIC_URL}/webhooks/google-play`; and
+6. confirm an unsigned notification returns `400` with `Cache-Control: no-store`.
+
+A store left unset answers `503` to its purchases and grants nothing. A failed
+notification answers `503` so the store delivers it again; a repeated one is
+recognized by its id and changes nothing. **Never set `APPLE_ENVIRONMENT=xcode`
+outside a developer's machine**: it trusts StoreKit testing without a signature.
+
+Locally, `bun packages/db/scripts/publish-local-pro.ts` publishes both plans and the
+product `com.dinnartec.allfitspace.pro.monthly`, which the StoreKit configuration in
+`apps/space/storekit/AllfitPro.storekit` sells in the simulator when the app runs from
+Xcode with that file selected in its scheme. Because that catalogue occupies the one
+free plan, the payments pgTAP tests fail on a database where it was published; run
+them on a fresh database, as CI does.
+
 ## Backoffice AAL2 rollout and ceremonies
 
 Backoffice usa password + TOTP mediante la API MFA componible de WorkOS; no usa

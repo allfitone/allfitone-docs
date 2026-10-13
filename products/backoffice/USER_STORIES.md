@@ -163,7 +163,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 1. Veo cuántas personas se registraron y cuántas estuvieron activas esta semana.
 2. Veo cuántos gimnasios hay y cuántos están operando de verdad, no solo creados.
 3. Veo cuántas suscripciones activas hay y cuánto se está facturando.
-4. Veo cuántas personas tienen Premium y por cuál vía: pagándole a Allfit o por su gimnasio.
+4. Veo cuántas personas tienen Pro y por cuál vía: pagándole a Allfit o por su gimnasio.
 5. Cada número dice de qué periodo es. Un número sin periodo no se muestra.
 6. Si algo no se puede calcular aparece vacío, **no en cero**. Cero y "no sé" son cosas distintas.
 7. El panel exige el deber `view_platform_metrics`; sólo expone agregados con umbral mínimo y nunca permite navegar desde una cifra hasta el contenido de una persona.
@@ -215,7 +215,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 **Criterios**
 
 1. Veo identificador, estado de cuenta, antigüedad, contactos parcialmente ocultos y estado de verificación, sin valores completos.
-2. Veo que existen perfil, relaciones, plan, Premium y permisos, junto con sus estados y fechas; no veo objetivos, contenido, pagos ni destinatarios desde esta ficha.
+2. Veo que existen perfil, relaciones, plan, Pro y permisos, junto con sus estados y fechas; no veo objetivos, contenido, pagos ni destinatarios desde esta ficha.
 3. Para resolver un caso de entrenamiento uso `HU-BO-008`; para cuerpo, salud o nutrición uso `HU-BO-009`. Ninguna pantalla amplía silenciosamente la categoría aprobada.
 4. La ficha exige `diagnose_support_metadata`, referencia de caso y registra la consulta.
 5. La ficha carga aunque falten datos y representa desconocido como vacío, nunca como cero o falso.
@@ -330,7 +330,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 3. Veo cuántas personas atiende y en qué estado están esas relaciones.
 4. Veo sus planes publicados y sus suscriptores.
 5. Veo si tiene su medio de cobro conectado, **sin ver ninguna credencial**.
-6. Veo si está habilitado para dar Premium a sus clientes.
+6. Veo si está habilitado para dar Pro a sus clientes.
 
 ### HU-BO-014 — Crear un gimnasio y entregárselo a su dueño
 
@@ -380,7 +380,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 2. Un gimnasio suspendido **deja de operar**: no invita, no asigna programas, no publica planes ni cobra suscripciones nuevas.
 3. **Sus clientes conservan todo lo suyo**: su historial completo, su entrenamiento por su cuenta y su registro de comidas. Los programas que el gimnasio les asignó quedan pausados.
 4. **Los permisos no se tocan** y las relaciones no se terminan. Suspender no es cancelar.
-5. Si estaba habilitado para dar Premium a sus clientes, esos clientes bajan al plan gratuito mientras dure la suspensión, sin perder ningún dato.
+5. Si estaba habilitado para dar Pro a sus clientes, esos clientes bajan al plan gratuito mientras dure la suspensión, sin perder ningún dato.
 6. Levantar la suspensión **solo cierra el bloqueo de esa organización** y vuelve a calcular la operación con el estado vigente; no restaura una copia anterior de permisos, relaciones, membresías, asignaciones, suscripciones ni sesiones.
 7. Nadie repite una autorización que siga vigente, pero lo revocado, terminado, cambiado, cancelado, iniciado o vencido durante la suspensión **no revive**. Cualquier otro bloqueo vigente sigue aplicando.
 8. Queda registrado quién lo suspendió o reactivó, cuándo y con qué motivo.
@@ -418,7 +418,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 **Criterios**
 
-1. Veo su plan, con qué gimnasio, cuánto paga y cuándo es el próximo cobro.
+1. Veo su plan de Allfit, cuánto paga, por qué medio (Apple o Google Play) y cuándo es el próximo cobro. Si su Pro viene de un gimnasio, veo cuál.
 2. Veo cada cobro con su resultado, incluidos los fallidos y el motivo.
 3. Veo si está suspendida y desde cuándo.
 4. **Nunca veo datos de tarjeta**, porque Allfit no los guarda.
@@ -430,7 +430,9 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 **quiero** ver todas las suscripciones de un gimnasio
 **para** entender cómo le va y ayudarlo si algo falla.
 
-`E-BO-05` · importante
+`E-BO-05` · después
+
+*Diferida de V1 (1 de octubre de 2026): los gimnasios no le cobran a sus clientes a través de Allfit.*
 
 **Criterios**
 
@@ -439,10 +441,10 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 3. Si su medio de cobro no está conectado se ve claramente, porque explica que no tenga suscripciones.
 4. La consulta exige `view_billing_metadata` y sólo devuelve estados, periodos y agregados comerciales minimizados.
 
-### HU-BO-020 — Ver los ingresos de Allfit Premium
+### HU-BO-020 — Ver los ingresos de Allfit Pro
 
 **Como** fundador
-**quiero** ver quién le paga Premium a Allfit y cuánto entra
+**quiero** ver quién le paga Pro a Allfit y cuánto entra
 **para** seguir nuestro propio ingreso.
 
 `E-BO-05` · importante
@@ -450,7 +452,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 **Criterios**
 
 1. Veo las suscripciones a Allfit, activas y suspendidas, y lo que suman.
-2. Distingo quién paga directo de quién tiene Premium por su gimnasio.
+2. Distingo quién paga directo de quién tiene Pro por su gimnasio.
 3. Veo los cobros fallidos para poder hacer seguimiento.
 4. La consulta exige `view_platform_metrics`; identificar pagadores individuales requiere además `view_billing_metadata` y finalidad de soporte trazable.
 
@@ -531,13 +533,13 @@ nadie verifica, esa función no se puede usar.
 
 ---
 
-## E-BO-07 · Planes de Allfit y Premium
+## E-BO-07 · Planes de Allfit y Pro
 
 ### HU-BO-025 — Publicar un plan de Allfit
 
 **Como** fundador
 **quiero** publicar los planes que Allfit le vende a las personas
-**para** poder cobrar Premium.
+**para** poder cobrar Pro.
 
 `E-BO-07` · imprescindible
 
@@ -565,21 +567,40 @@ nadie verifica, esa función no se puede usar.
 4. Veo qué cambia respecto de la versión anterior antes de publicar.
 5. Publicar exige `manage_platform_commercial`, AAL2 y conserva actor, asignación de deber y versión anterior.
 
-### HU-BO-027 — Habilitar a un gimnasio para dar Premium
+### HU-BO-027 — Dar Pro a los invitados de un gimnasio activo
 
 **Como** fundador que cerró un acuerdo con un gimnasio
-**quiero** marcar que sus clientes activos tienen Premium
-**para** cumplir lo pactado.
+**quiero** que sus invitados tengan Pro mientras el gimnasio esté activo
+**para** cumplir lo pactado sin habilitar a nadie a mano.
 
 `E-BO-07` · importante
 
+*Modificada el 1 de octubre de 2026: Allfit crea cada gimnasio y un gimnasio activo es uno que le paga a Allfit, así que **todo** gimnasio activo da Pro a sus invitados. Ya no se habilita gimnasio por gimnasio.*
+
 **Criterios**
 
-1. Marco el gimnasio y anoto la referencia del acuerdo comercial.
-2. Sus clientes con plan **activo** obtienen Premium; los suspendidos no.
-3. Esto **no cobra nada**: lo que Allfit le cobre al gimnasio se factura por fuera.
-4. Al quitarlo, sus clientes vuelven al plan gratuito **sin perder ningún dato**.
+1. Toda persona con relación vigente con un gimnasio activo tiene Pro. No se marca persona por persona ni gimnasio por gimnasio.
+2. Al activar el gimnasio anoto la referencia del acuerdo comercial. Lo que Allfit le cobra al gimnasio se factura **por fuera** de la plataforma.
+3. Si suspendo o cancelo el gimnasio (`HU-BO-016`, `HU-BO-017`), sus invitados pasan al plan gratuito **sin perder ningún dato**.
+4. Cuántas personas puede tener el gimnasio lo fija `HU-BO-034`.
 5. La acción exige `manage_platform_commercial`, AAL2, referencia de acuerdo y auditoría del actor humano.
+
+### HU-BO-034 — Fijar el cupo de invitados de un gimnasio
+
+**Como** fundador que cerró una venta
+**quiero** fijar cuántas personas puede tener un gimnasio
+**para** que lo que usa corresponda a lo que paga.
+
+`E-BO-07` · imprescindible
+
+*Historia nueva del 1 de octubre de 2026, todavía sin construir. La consume `HU-STUDIO-087`.*
+
+**Criterios**
+
+1. Al crear el gimnasio, o después, defino su cupo: cuántas personas pueden tener relación vigente o invitación sin responder a la vez.
+2. Cambiar el cupo **no termina ninguna relación**. Si queda por debajo de lo ocupado, solo se bloquean invitaciones nuevas.
+3. Queda registrado quién lo cambió, cuándo y el valor anterior.
+4. Exige `manage_platform_commercial`, AAL2 y actor humano auditado.
 
 ---
 
@@ -730,12 +751,12 @@ donde se ven sus efectos y sus fallos, en `HU-BO-005` y `HU-BO-031`.
 | `E-BO-04` Gimnasios | `HU-BO-012` – `HU-BO-017` | 3 de 6 |
 | `E-BO-05` Suscripciones y pagos | `HU-BO-018` – `HU-BO-020` | 1 de 3 |
 | `E-BO-06` Contenido y verificación | `HU-BO-021` – `HU-BO-024` | 2 de 4 |
-| `E-BO-07` Planes y Premium | `HU-BO-025` – `HU-BO-027` | 2 de 3 |
+| `E-BO-07` Planes y Pro | `HU-BO-025` – `HU-BO-027`, `HU-BO-034` | 3 de 4 |
 | `E-BO-08` Equipo de Allfit | `HU-BO-028` – `HU-BO-031` | 2 de 4 |
 | `E-BO-09` Obligaciones legales | `HU-BO-032` – `HU-BO-033` | 0 de 2 |
-| **Total** | **33 historias** | **17 imprescindibles** |
+| **Total** | **34 historias** | **18 imprescindibles** |
 
-Las 17 imprescindibles son el Backoffice mínimo para lanzar: entrar, ver cómo va
+Las 18 imprescindibles son el Backoffice mínimo para lanzar: entrar, ver cómo va
 el negocio, encontrar a una persona y abrir su ficha y su entrenamiento, montar
-y entregar un gimnasio, ver sus pagos, verificar títulos, publicar el catálogo y
+y entregar un gimnasio con su cupo, ver los pagos a Allfit, verificar títulos, publicar el catálogo y
 los planes, y controlar quién del equipo tiene acceso.

@@ -193,12 +193,13 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 | `HU-STUDIO-078` | `HU-STUDIO-075` |
 | `HU-STUDIO-079` | `HU-STUDIO-078` |
 | `HU-STUDIO-080` | `HU-STUDIO-078` |
-| `HU-STUDIO-081` | `HU-STUDIO-016`, `HU-STUDIO-017`, `HU-STUDIO-025`, `HU-STUDIO-027`, `HU-STUDIO-055`, `HU-STUDIO-078` |
+| `HU-STUDIO-081` | `HU-STUDIO-016`, `HU-STUDIO-017`, `HU-STUDIO-025`, `HU-STUDIO-027`, `HU-STUDIO-055` |
 | `HU-STUDIO-082` | `HU-STUDIO-024` |
 | `HU-STUDIO-083` | `HU-STUDIO-035`, `HU-STUDIO-047`, `HU-STUDIO-051`, `HU-STUDIO-054`, `HU-STUDIO-056` |
 | `HU-STUDIO-084` | `HU-STUDIO-028`, `HU-STUDIO-032`, `HU-STUDIO-035` |
 | `HU-STUDIO-085` | `HU-STUDIO-014` |
 | `HU-STUDIO-086` | `HU-STUDIO-001`, `HU-STUDIO-085` |
+| `HU-STUDIO-087` | `HU-STUDIO-023` |
 
 ---
 
@@ -631,6 +632,8 @@ La resolución y decisión se realizan en Studio mediante `HU-STUDIO-085` y
 6. Si propongo un programa, su versión debe estar publicada y ser nuestra; si no, se rechaza la invitación completa.
 7. El programa inicial solo se materializa si la persona acepta la relación, acepta esa propuesta y concede `relationship_training` con el nivel requerido. Si falta una condición, el programa no se materializa.
 8. Hasta que la persona acepte, no existe relación, grant, asignación ni persona provisional en nuestro sistema.
+9. Quien acepta entra con **Allfit Pro** mientras la relación siga vigente y el gimnasio esté activo. No hay nada que habilitar persona por persona.
+10. Solo puedo invitar mientras quede cupo (`HU-STUDIO-087`).
 
 ### HU-STUDIO-024 — Ver el directorio de personas
 
@@ -675,6 +678,26 @@ La resolución y decisión se realizan en Studio mediante `HU-STUDIO-085` y
 1. Veo altas, cambios de responsable, suplencias, consentimientos y terminación, en orden.
 2. El registro no se edita ni se borra.
 3. Solo veo el motivo de terminación si lo declaramos nosotros.
+
+### HU-STUDIO-087 — Respetar el cupo de invitados del gimnasio
+
+**Como** owner o admin
+**quiero** saber cuántas personas puedo tener y que el sistema no me deje pasarme
+**para** que lo que usamos corresponda a lo que contratamos con Allfit.
+
+`E-STUDIO-03` · imprescindible
+
+*Historia nueva del 1 de octubre de 2026, todavía sin construir. Cada persona que invitamos entra con Pro, así que el cupo es lo que Allfit nos vendió.*
+
+**Criterios**
+
+1. El gimnasio tiene un **cupo de personas** que fija Allfit al crearlo o después (`HU-BO-034`). Nosotros no lo cambiamos.
+2. Veo cuántas personas ocupan el cupo y cuántos lugares quedan.
+3. Ocupan lugar las relaciones vigentes y las invitaciones sin responder. Una invitación rechazada, vencida o revocada libera su lugar, y también una relación terminada.
+4. Sin lugares libres no puedo enviar invitaciones nuevas, y se me dice por qué antes de escribirlas.
+5. Si la persona acepta cuando el cupo ya se llenó por otra vía, la aceptación se rechaza y nadie queda a medias.
+6. Que Allfit baje el cupo **nunca termina relaciones existentes**: solo impide invitaciones nuevas hasta que haya lugar.
+7. La protección es de **base de datos**: el cupo se valida en la misma transacción que crea la invitación y que la acepta, para que dos invitaciones simultáneas no lo superen.
 
 ---
 
@@ -1438,6 +1461,11 @@ falla antes de persistir nada.
 
 ## E-STUDIO-13 · Planes y cobro
 
+> **Diferida de V1** (1 de octubre de 2026). En la primera versión los gimnasios
+> **no le cobran a sus clientes a través de Allfit**: el gimnasio le paga a Allfit por
+> fuera de la plataforma, y cada persona que invita entra con Allfit Pro. Estas
+> historias se conservan para cuando se abra esa puerta; su prioridad pasa a `después`.
+
 **La plata nunca pasa por Allfit.** Cada organización conecta su propia cuenta de
 pasarela y cobra directo. Allfit refleja el estado y suspende o reactiva.
 
@@ -1450,7 +1478,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 **quiero** conectar nuestra cuenta de Mercado Pago o Wompi
 **para** poder cobrarles a nuestros clientes.
 
-`E-STUDIO-13` · imprescindible
+`E-STUDIO-13` · después
 
 **Criterios**
 
@@ -1465,7 +1493,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 **quiero** crear un plan comercial
 **para** ofrecérselo a nuestros clientes.
 
-`E-STUDIO-13` · imprescindible
+`E-STUDIO-13` · después
 
 **Criterios**
 
@@ -1479,7 +1507,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 **quiero** publicar el plan con su precio
 **para** que la gente pueda suscribirse.
 
-`E-STUDIO-13` · imprescindible
+`E-STUDIO-13` · después
 
 **Criterios**
 
@@ -1506,7 +1534,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 **quiero** ver los planes que ofrecemos
 **para** saber qué estamos vendiendo.
 
-`E-STUDIO-13` · imprescindible
+`E-STUDIO-13` · después
 
 **Criterios**
 
@@ -1519,7 +1547,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 **quiero** ver el estado de pago de nuestros clientes
 **para** administrar el negocio.
 
-`E-STUDIO-13` · imprescindible
+`E-STUDIO-13` · después
 
 **Criterios**
 
@@ -1533,7 +1561,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 **quiero** suspender o reactivar una suscripción manualmente
 **para** manejar casos que el cobro automático no cubre.
 
-`E-STUDIO-13` · importante
+`E-STUDIO-13` · después
 
 **Criterios**
 
@@ -1552,7 +1580,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 **quiero** terminar la suscripción de alguien
 **para** cerrar el vínculo comercial.
 
-`E-STUDIO-13` · importante
+`E-STUDIO-13` · después
 
 **Criterios**
 
@@ -1576,7 +1604,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 
 1. Veo lo que espera acción mía: invitaciones sin responder y relaciones aceptadas sin profesional asignado.
 2. Como coach veo mis clientes con sesiones sin registrar y sus resultados recién cerrados.
-3. Como admin veo el estado del equipo, las relaciones nuevas y los cobros que fallaron.
+3. Como admin veo el estado del equipo y las relaciones nuevas. Los cobros que fallaron se suman cuando se habilite `E-STUDIO-13`.
 4. **Lo que veo depende de mi rol.** Un coach no ve cobros; un staff no ve nada de entrenamiento.
 5. Desde cada aviso llego directo a donde se resuelve.
 6. Si no hay nada pendiente se dice, en lugar de mostrar una pantalla vacía.
@@ -1635,7 +1663,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 | `E-STUDIO-00` Entrar | `HU-STUDIO-001` – `HU-STUDIO-004` | 4 de 4 |
 | `E-STUDIO-01` Perfil y organización | `HU-STUDIO-005` – `HU-STUDIO-013` | 5 de 9 |
 | `E-STUDIO-02` Equipo, roles y membresías | `HU-STUDIO-014` – `HU-STUDIO-022`, `HU-STUDIO-085` – `HU-STUDIO-086` | 9 de 11 |
-| `E-STUDIO-03` Invitación de personas y directorio | `HU-STUDIO-023` – `HU-STUDIO-026` | 3 de 4 |
+| `E-STUDIO-03` Invitación de personas y directorio | `HU-STUDIO-023` – `HU-STUDIO-026`, `HU-STUDIO-087` | 4 de 5 |
 | `E-STUDIO-04` Responsable, suplencias y terminación | `HU-STUDIO-027` – `HU-STUDIO-033` | 3 de 7 |
 | `E-STUDIO-05` Qué nos autorizó cada persona | `HU-STUDIO-034` – `HU-STUDIO-035` | 1 de 2 |
 | `E-STUDIO-06` Contenido versionado | `HU-STUDIO-036` – `HU-STUDIO-045` | 6 de 10 |
@@ -1645,12 +1673,12 @@ estado de pago de una persona no es un dato de entrenamiento.
 | `E-STUDIO-10` Historial de una relación terminada | `HU-STUDIO-061` – `HU-STUDIO-063` | 0 de 3 |
 | `E-STUDIO-11` Catálogo privado de movimientos | `HU-STUDIO-064` – `HU-STUDIO-067` | 0 de 4 |
 | `E-STUDIO-12` Nutrición | `HU-STUDIO-068` – `HU-STUDIO-072` | 0 de 5 |
-| `E-STUDIO-13` Planes y cobro | `HU-STUDIO-073` – `HU-STUDIO-080` | 5 de 8 |
+| `E-STUDIO-13` Planes y cobro · diferida | `HU-STUDIO-073` – `HU-STUDIO-080` | 0 de 8 |
 | `E-STUDIO-14` Resumen del día | `HU-STUDIO-081` – `HU-STUDIO-084` | 3 de 4 |
-| **Total** | **86 historias** | **44 imprescindibles** |
+| **Total** | **87 historias** | **40 imprescindibles** |
 
 El camino mínimo para lanzar es: entrar, crear el gimnasio con su equipo,
-invitar a una persona, armar un programa y asignárselo, ver lo que ejecutó, y
-cobrarle su plan. En una sola confirmación, la persona acepta la relación y
+invitar a una persona dentro del cupo, armar un programa y asignárselo, y ver
+lo que ejecutó. En V1 no se cobra a las personas desde Studio. En una sola confirmación, la persona acepta la relación y
 decide cada scope de forma independiente; el coach trabaja desde el primer día
 únicamente con los grants que la persona concedió.

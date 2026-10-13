@@ -50,6 +50,7 @@
 | ADR-040 | Alcance V1 de nutrición en Space |
 | ADR-041 | Reconocer y buscar alimentos al registrar una comida |
 | ADR-042 | Las fotos de comida viven en Cloudflare R2, en Estados Unidos |
+| ADR-043 | Allfit Pro: se paga con la compra integrada de cada tienda y se resuelve al leer |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -5137,3 +5138,150 @@ la configuración que falta, el enlace firmado y el direccionamiento por ruta co
 acceso propio, que es como se habla con R2. Los casos de uso de nutrición se prueban con el
 almacén en memoria. Ninguna prueba automática habla con R2; se verifica a mano al crear el
 bucket.
+
+---
+
+## ADR-043 — Allfit Pro: se paga con la compra integrada de cada tienda y se resuelve al leer
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 12 de octubre de 2026<br>
+**Cierra:** `DB-P5-007` y `DB-P5-008`<br>
+**Supersede:** la regla de `V1_DATABASE_SCOPE.md` §17.4 que hacía depender el Premium del
+gimnasio de una suscripción de organización y de una habilitación por gimnasio
+(`organization_premium_entitlements`, `OP-PAY-022`).
+
+### Contexto
+
+El plan de pago de Allfit para personas se llamaba **Premium** y desde el 12 de octubre de
+2026 se llama **Pro**. Las historias de `E-SP-15` se reescribieron el 1 de octubre:
+
+- en V1 existen solo dos planes, ambos de Allfit: el **gratuito** y **Pro**;
+- los gimnasios no le cobran a sus clientes a través de Allfit (`E-SP-13`, `E-SP-14` y
+  `E-STUDIO-13` quedan diferidas);
+- a Pro se llega **pagándoselo a Allfit** o **entrando invitado por un gimnasio activo**, y
+  un gimnasio activo es uno que le está pagando a Allfit.
+
+El catálogo de planes (`HU-BO-025`, `HU-BO-026`) ya está construido en
+`20260927050000_platform_plan_catalogue.sql`. Dejó sin decidir, a propósito, de dónde sale
+el Pro de una persona. `DB-P5-008` hacía cinco preguntas que esta decisión responde.
+
+**Las tiendas.** La App Store (guía 3.1.1) exige la compra integrada para vender una
+suscripción digital dentro de la app. Los enlaces y pagos externos solo se permiten en la
+tienda de Estados Unidos desde mayo de 2025. Google Play exige su facturación salvo en el
+Espacio Económico Europeo, el Reino Unido y Estados Unidos. Colombia no está en ninguna de
+esas excepciones. Las aplicaciones de fitness de la región, como Fitia, cobran dentro de la
+app con la tienda y aparte en su web.
+
+### Decisión
+
+**1. Dentro de Space, Pro se paga solo con la compra integrada:** App Store en iPhone y
+Google Play Billing en Android. La tienda cobra; Allfit no procesa el pago ni ve una tarjeta.
+El cobro web de los gimnasios, con Mercado Pago, pertenece al dominio de Backoffice y no
+pasa por Space.
+
+**2. La API verifica cada compra con la tienda antes de registrarla.** La app nunca afirma
+que pagó:
+- **Apple:** la transacción llega firmada (JWS) y se verifica con la cadena raíz de Apple,
+  el `bundleId` y el entorno.
+- **Google:** con el token de compra se consulta la suscripción en la Google Play Developer
+  API, con una cuenta de servicio.
+
+Una compra que no se pudo verificar **no da Pro**.
+
+**3. Lo que pasa después lo cuenta la tienda.** Las renovaciones, la gracia, la suspensión,
+el vencimiento, el reembolso y la revocación llegan como notificaciones de servidor:
+- App Store Server Notifications V2, firmadas y verificadas igual que la compra;
+- las notificaciones en tiempo real de Google Play, por un push de Pub/Sub con token OIDC
+  verificado, y el estado se vuelve a leer en la API de Google.
+
+Cada notificación se deduplica por su identificador. Se guarda un hash del contenido, nunca
+el contenido.
+
+**4. Cancelar se hace en la tienda.** Ni Apple ni Google permiten cancelar una suscripción
+desde la app. Space abre la gestión de suscripciones de la tienda, y el cambio llega por la
+notificación. Pro sigue hasta el final del periodo pagado.
+
+**5. Cada versión de pago se vende con un producto de tienda propio.** La tabla
+`payments.platform_store_products` enlaza `(tienda, producto)` con una versión exacta del
+catálogo. Una versión con otro precio se vende con un producto nuevo, así que quien ya
+estaba suscrito conserva la suya. La app muestra el precio localizado que da la tienda; el
+catálogo dice qué incluye cada versión. El enlace se carga por curaduría; editarlo desde
+Backoffice es otra historia.
+
+**6. Pro se resuelve al leer y nunca se guarda como bandera.** En este orden:
+
+```text
+plan_efectivo(persona) =
+   SI tiene una suscripción propia viva                → su versión congelada
+      (active o grace, con current_period_end futuro)
+   SI NO, tiene una relación active con una
+      organización active                              → la versión vigente del plan pro
+   SI NO                                               → la versión vigente del plan gratuito
+```
+
+Las respuestas a las preguntas de `DB-P5-008`:
+
+1. **Qué versión recibe quien tiene Pro por su gimnasio:** la versión **vigente** del plan
+   de pago con código `pro`.
+2. **Si se congela por acuerdo:** no. Solo quien paga congela su versión, porque es quien
+   aceptó un precio. Si Allfit cambia lo que incluye Pro, a los invitados de gimnasio les
+   cambia también.
+3. **Varios gimnasios activos:** no hay conflicto, todos dan la misma versión vigente.
+4. **Prioridad:** suscripción propia, luego gimnasio, luego gratuito.
+5. **Suspensión:** una suscripción `suspended` no cuenta; una organización que no esté
+   `active` no da nada. Hoy las organizaciones no tienen estado `suspended`; cuando lo
+   tengan (`HU-BO-016`), la regla ya lo excluye.
+
+La lectura devuelve **todas las vías vigentes**, aunque solo una determine los límites, para
+que quien paga sepa si además tiene Pro por su gimnasio, y al revés.
+
+**7. Ante cualquier ambigüedad, el resultado es el plan gratuito.** Si no existe un plan
+`pro` publicado, una versión no tiene sus funciones o una suscripción no tiene versión,
+la persona recibe el gratuito. Nunca al revés.
+
+### Invariantes
+
+- Ninguna tabla guarda datos de tarjeta, PAN, token de tarjeta ni medio de pago reutilizable.
+- Una persona tiene como máximo una suscripción viva a Allfit.
+- Una referencia de tienda (`originalTransactionId` de Apple o el primer token de compra de
+  Google) pertenece a una sola persona. Otra persona que la presente recibe `conflict`.
+- La versión de una suscripción nunca cambia; cambiar de versión es otra suscripción.
+- Repetir una compra o una notificación no crea un segundo registro ni otro efecto.
+- Ningún cambio de Pro borra datos, toca permisos ni termina relaciones.
+- Ninguna función de privacidad puede limitarse (`ck_platform_features_not_privacy`).
+- `allfit_api` no tiene privilegios sobre las tablas: todo pasa por funciones cerradas.
+- Solo la persona lee su suscripción. Ninguna organización la lee.
+- Una transacción firmada por Xcode (StoreKit local) solo se acepta con la API configurada
+  para el entorno `xcode`, que nunca existe fuera del equipo de desarrollo.
+
+### Consecuencias
+
+- `organization_premium_entitlements` no se crea, y `OP-PAY-022` queda obsoleta. Qué
+  gimnasio está activo lo decide Backoffice al crearlo, suspenderlo o cancelarlo.
+- `HU-SP-088` se cumple sola: cuando una relación termine o un gimnasio deje de estar
+  activo, la resolución deja de contarlo sin ningún proceso extra.
+- Publicar en las tiendas exige la cuenta de Apple Developer y la de Google Play Console,
+  que también hacen falta para distribuir la app.
+- Las comisiones de las tiendas aplican a Pro comprado dentro de la app.
+
+### Lo que esta decisión no hace
+
+- No decide qué funciones limita Pro: el catálogo de funciones sigue vacío.
+- No crea los productos en App Store Connect ni en Google Play Console.
+- No modela el cobro web ni Mercado Pago.
+- No construye la terminación de relaciones ni la suspensión de gimnasios.
+- No ofrece pruebas gratuitas, cupones ni cambios entre planes de pago.
+
+### Escenarios de prueba obligatorios
+
+1. Sin suscripción ni relación, la persona resuelve al plan gratuito vigente.
+2. Con una suscripción viva, resuelve a su versión congelada, aun después de publicarse otra.
+3. Con una relación `active` y una organización `active`, resuelve al Pro vigente.
+4. Con la relación terminada o la organización no `active`, el gimnasio no da nada.
+5. Con las dos vías, mandan los límites de la suscripción y se devuelven ambas vías.
+6. Sin plan `pro` publicado, quien llega por su gimnasio resuelve al gratuito.
+7. Una suscripción `suspended`, `ended` o con el periodo vencido no da Pro.
+8. Repetir la misma compra o la misma notificación no crea otro registro.
+9. Otra persona no puede reclamar una referencia de tienda ajena ni leer la suscripción.
+10. Dos compras simultáneas de la misma persona dejan una sola suscripción viva.
+11. Una compra o notificación que no se pudo verificar no cambia nada.
