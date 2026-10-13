@@ -647,12 +647,12 @@ Allfit One puede capturar valor desde varios lados sin cobrar por cada acción.
 * Reservas y compras.
 * Comunidad.
 
-#### Premium
+#### Pro
 
 * Analítica avanzada.
 * Planificación adaptativa.
 * IA.
-* Programas premium.
+* Programas Pro.
 * Métricas híbridas.
 * Recuperación.
 * Historial avanzado.
@@ -664,7 +664,7 @@ Ingresos mediante Allfit Studio:
 
 * Suscripción mensual.
 * Planes por número de clientes o sedes.
-* Funciones premium.
+* Funciones Pro.
 * Marca blanca en casos empresariales.
 * Automatizaciones.
 * Analítica.

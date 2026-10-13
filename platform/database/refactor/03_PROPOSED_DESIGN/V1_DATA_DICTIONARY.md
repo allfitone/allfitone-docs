@@ -2636,33 +2636,48 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 
 ### 13.11 `payments.platform_subscriptions`
 
-- **Propósito:** la suscripción de una persona **a Allfit**. Aquí Allfit sí es el vendedor y recibe el dinero: no es intermediación, es ingreso propio.
-- **Dominio / fuente de verdad:** Pagos.
+- **Propósito:** la suscripción de una persona **a Allfit Pro**, comprada con la compra integrada de una tienda (`ADR-043`). La tienda cobra; Allfit registra lo que la tienda verificó.
+- **Dominio / fuente de verdad:** Pagos. Migración `20261012100000_a_person_can_have_pro.sql`.
 - **Clasificación:** `operational`.
-- **Columnas:** `id` · `person_id uuid` · `platform_plan_version_id uuid` · `status payments.subscription_status` · `external_subscription_ref text` (nullable) · `current_period_end date` (nullable) · `started_at timestamptz` · `suspended_at timestamptz` (nullable) · `ended_at timestamptz` (nullable) · `ended_by_kind identity.actor_kind` (nullable).
-- **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `platform_plan_version_id → platform_plan_versions(id) RESTRICT`.
-- **Uniques y checks:** `UNIQUE (person_id) WHERE status <> 'ended'`; los mismos checks de estado y actor humano que `plan_subscriptions`. **El worker de pagos no puede escribir `ended`.**
-- **Actores:** la persona se suscribe y cancela; el worker transiciona `active` ↔ `suspended`. **Ninguna organización lee esta tabla.**
-- **RLS:** `person_id = access_control.person()` y nada más. Ni `admin`, ni `owner`, ni `coach`.
-- **Consultas / índices:** `(person_id, status)`.
-- **Retención:** con la persona.
+- **Columnas:** `id` · `person_id uuid` · `platform_plan_version_id uuid` (congelada) · `store payments.platform_store` (`app_store`, `google_play`) · `store_product_id text` · `store_subscription_ref text` (el `originalTransactionId` de Apple, o el primer token de compra de Google con hash) · `environment text` (`production`, `sandbox`, `xcode`) · `status payments.platform_subscription_status` (`active`, `grace`, `suspended`, `ended`) · `auto_renews boolean` · `current_period_end timestamptz` · `grace_until timestamptz` (nullable) · `last_observed_at timestamptz` · `started_at` · `suspended_at` (nullable) · `ended_at` (nullable) · `ended_reason text` (`expired`, `refunded`, `revoked`, `replaced`) · `created_at` · `updated_at`.
+- **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `(store, store_product_id, platform_plan_version_id) → platform_store_products RESTRICT`, de modo que el producto y la versión no pueden contradecirse.
+- **Uniques y checks:** una suscripción viva por persona (`uidx_platform_subscriptions_live`); una referencia de tienda viva pertenece a una sola fila (`uidx_platform_subscriptions_ref_live`); `ended` exige `ended_at` y `ended_reason`; `grace` exige `grace_until`; `suspended` exige `suspended_at`. Un trigger impide cambiar persona, versión, tienda, producto, referencia y entorno, y prohíbe borrar.
+- **Actores:** la persona registra su compra (`OP-PAY-019`); el consumidor de notificaciones (`worker`) mueve el estado (`OP-PAY-023`). **Ninguna organización lee esta tabla.**
+- **RLS:** forzada; solo `allfit_owner`. `allfit_api` no tiene privilegios: todo pasa por funciones cerradas que exigen ser la propia persona.
+- **Retención:** con la persona. Es historia: nunca se borra.
 - **Eventos:** `payments.platform_subscription_started.v1`, `.suspended.v1`, `.reactivated.v1`, `.ended.v1`.
 
 ---
 
-### 13.12 `payments.organization_premium_entitlements`
+### 13.12 `payments.organization_premium_entitlements` — obsoleta
 
-- **Propósito:** registra que una organización otorga Premium a sus clientes activos. **No modela ningún cobro**: el acuerdo con Allfit se factura por fuera de la plataforma.
-- **Dominio / fuente de verdad:** Pagos.
-- **Clasificación:** `operational`.
-- **Columnas:** `id` · `organization_id uuid` · `status text` (`active`, `revoked`) · `agreement_ref text` (referencia del acuerdo comercial externo) · `granted_at timestamptz` · `revoked_at timestamptz` (nullable).
-- **FKs y borrado:** `organization_id → organizations.organizations(id) RESTRICT`.
-- **Uniques y checks:** `UNIQUE (organization_id) WHERE status = 'active'`; `CHECK (status in ('active','revoked'))`.
-- **Actores:** solo `A11`. **Una organización no se habilita a sí misma.**
-- **RLS:** `INSERT`/`UPDATE` solo con deber de plataforma; `SELECT` para la organización sobre su propia fila y para la persona a través de la resolución del derecho.
-- **Consultas / índices:** `(organization_id, status)`.
-- **Retención:** con la organización.
-- **Eventos:** `payments.organization_premium_granted.v1`, `payments.organization_premium_revoked.v1`.
+**No se crea** (`ADR-043`). En V1 todo gimnasio activo da Pro a sus invitados con relación vigente, y eso se resuelve al leer a partir de `relationships.service_relationships` y `organizations.organizations.status`. No hay nada que habilitar gimnasio por gimnasio.
+
+---
+
+### 13.13 `payments.platform_store_products`
+
+- **Propósito:** qué producto de tienda vende cada versión de pago. Una versión con otro precio se vende con otro producto.
+- **Columnas:** `store` · `product_id text` · `platform_plan_version_id uuid` · `created_at`.
+- **Uniques y checks:** PK `(store, product_id)`; `uq (store, product_id, platform_plan_version_id)` para la FK compuesta de la suscripción. Solo versiones `paid`; nunca se cambia ni se borra.
+- **Actores:** se carga por curaduría; editarlo desde Backoffice es otra historia.
+
+### 13.14 `payments.platform_subscription_events`
+
+- **Propósito:** la historia de cada suscripción: `started` y cada `changed`, con el estado, la renovación y el periodo observados.
+- **Retención:** con la suscripción. Solo se agrega.
+
+### 13.15 `payments.platform_payment_records`
+
+- **Propósito:** cada cobro que la tienda reportó.
+- **Columnas:** `platform_subscription_id` · `person_id` · `store` · `store_transaction_id` · `amount_minor` (nullable) · `currency_code` (nullable) · `result` (`succeeded`, `failed`) · `failure_code` · `occurred_at` · `recorded_at`.
+- **Uniques y checks:** `uq (store, store_transaction_id)`: una transacción se registra una sola vez. Sin datos de tarjeta. Solo se agrega.
+
+### 13.16 `payments.store_notification_receipts`
+
+- **Propósito:** deduplicar las notificaciones de las tiendas.
+- **Columnas:** `store` · `notification_id` · `payload_hash bytea` (32 bytes; **nunca el contenido**) · `outcome` (`processed`, `ignored`, `stale`) · `platform_subscription_id` (nullable) · `received_at`.
+- **Uniques y checks:** `uq (store, notification_id)`. El mismo id con otro hash se rechaza.
 
 ---
 

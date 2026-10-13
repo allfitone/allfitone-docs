@@ -82,8 +82,8 @@ El documento registra las decisiones de alcance aprobadas y las brechas de traza
 | `DB-P5-004` | P0 | Completar ciclo de vida de organizaciones | Pendiente |
 | `DB-P5-005` | P0 | Registrar actores de plataforma en eventos organizacionales | Pendiente |
 | `DB-P5-006` | P0 | Modelar suspensión reversible de servicio | Pendiente |
-| `DB-P5-007` | P0 | Completar persistencia de pagos y Premium | Pendiente |
-| `DB-P5-008` | P0 | Cerrar resolución determinística de entitlements | JIT: pendiente hasta la primera rebanada que implemente `HU-SP-086`, `HU-SP-088` o `HU-BO-027` |
+| `DB-P5-007` | P0 | Completar persistencia de pagos y Pro | Cerrado por `ADR-043` para la suscripción de la persona a Allfit (12 de octubre de 2026); los pagos de organización siguen diferidos |
+| `DB-P5-008` | P0 | Cerrar resolución determinística de entitlements | Cerrado por `ADR-043` el 12 de octubre de 2026 (`payments.resolve_pro`) |
 | `DB-P5-009` | P0 | Persistir cambios y recuperación de identidad | Pendiente |
 | `DB-P5-010` | P0 | Persistir solicitudes de verificación profesional | Pendiente |
 | `DB-P5-011` | P0 | Crear bandeja de avisos y entregas | Pendiente |

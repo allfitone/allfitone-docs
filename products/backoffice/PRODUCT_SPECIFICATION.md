@@ -77,9 +77,9 @@ El cierre unilateral de una organización ya reclamada está diferido y no gener
 
 - Consultar metadatos minimizados de pagos de una persona.
 - Consultar suscripciones de organizaciones.
-- Consultar ingresos agregados de Allfit Premium.
+- Consultar ingresos agregados de Allfit Pro.
 - Publicar planes de plataforma y definir sus entitlements.
-- Habilitar a una organización elegible para conceder Premium.
+- Habilitar a una organización elegible para conceder Pro.
 
 Backoffice no cobra, gira, concilia ni altera dinero. La pasarela es la fuente de los resultados de cobro.
 
