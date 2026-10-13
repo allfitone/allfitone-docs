@@ -1947,7 +1947,7 @@ web a los gimnasios pertenece a Backoffice y no pasa por Space (`ADR-043`).
 3. Pagarle a Allfit **no comparte ninguno de mis datos con nadie** ni cambia mis permisos.
 4. Mis datos de tarjeta no los guarda Allfit.
 5. Pago con la compra integrada de Apple en iPhone o de Google Play en Android. Allfit verifica la compra con la tienda antes de darme Pro.
-6. Si mi Pro ya viene de un gimnasio, se me dice antes de cobrarme: pagar solo me sirve para no depender de esa relación.
+6. Si mi Pro ya viene de un gimnasio, se me dice dónde está el precio y **no se me ofrece pagar**: ya tengo Pro, y cobrarme otra vez no me daría nada. Si esa relación termina, puedo suscribirme (`HU-SP-088`).
 
 ### HU-SP-086 — Saber si tengo Pro y por qué
 
