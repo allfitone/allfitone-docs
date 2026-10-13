@@ -3485,6 +3485,7 @@ Reglas que gobiernan todo el dominio:
 | `OP-PAY-018` | Consultar los planes de Allfit | Consulta | `A2` |
 | `OP-PAY-019` | Suscribirme a Allfit Pro | Comando | `A2` |
 | `OP-PAY-020` | Consultar mi Pro y de dónde viene | Consulta | `A2` |
+| `NEW-PAY-PRO-PAYMENTS` | Consultar mis pagos de Pro | Consulta | `A2` |
 | `OP-PAY-021` | Cancelar mi Pro | Acción en la tienda | `A2` |
 | `OP-PAY-022` | Habilitar o revocar el Pro de una organización — obsoleta (`ADR-043`) | — | — |
 | `OP-PAY-023` | Registrar el resultado de un cobro de plataforma | Comando | `A9` |
@@ -3782,6 +3783,23 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Suscripción propia viva → su versión congelada; si no, relación `active` con una organización `active` → la versión vigente del plan `pro`; si no, el gratuito vigente. Devuelve **todas las vías vigentes**, con el gimnasio por nombre, y el límite de cada función |
 | **Falla cerrada** | Ante cualquier duda se resuelve como plan gratuito, nunca al revés |
+
+#### `NEW-PAY-PRO-PAYMENTS` — Consultar mis pagos de Pro
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/pro/payments` → `payments.list_my_pro_payments` |
+| **Actor** | `A2`, la propia persona |
+| **Filtros obligatorios** | `person_id = access_control.person()` |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Los 60 más recientes, del último al primero |
+| **Offline / concurrencia** | Cacheable para presentación |
+| **Información sensible** | Estado comercial propio; **ningún dato de tarjeta** |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Cada cobro que reportó la tienda, con su resultado. Los recibos y el medio de pago siguen en la cuenta de la tienda |
+| **Falla cerrada** | — |
 
 #### `OP-PAY-021` — Cancelar mi Pro
 
