@@ -3107,7 +3107,7 @@ Reglas que gobiernan todo el dominio:
 | **Información sensible** | Entrenamiento. Por defecto es actividad **autónoma**: ninguna organización la ve sin `prior_training_history` |
 | **Evento de dominio** | `execution.session_started.v1`, previsto: ninguna función de ejecución escribe todavía en el outbox |
 | **Implementado (anterior, retirado)** | `execution.start_session` sobre `/space/v1/executions` (`POST`). El `Command-Id` es el identificador de la sesión, de modo que el dispositivo la puede empezar sin conexión y reintentar sin crear dos. Devuelve `201` con `Location`, `ETag` `"execution:{id}:r0"` y el contrato congelado. Se construyó en la rama de Backoffice y se descartó al integrar. |
-| **Implementado** | `execution.start_free_session` (migración `20261013120000`) sobre `POST /space/v1/executions`. Congela el único tipo de actividad global publicado de la disciplina pedida y su contrato por defecto vigente, la misma regla de las rutinas propias. El `Command-Id` es el id de la sesión y la repetición devuelve la misma. Devuelve `201` con `Location`. `execution.read_open_free_session` le dice a Hoy cuál retomar. |
+| **Implementado** | `execution.start_free_session` (migración `20261019120000`) sobre `POST /space/v1/executions`. Congela el único tipo de actividad global publicado de la disciplina pedida y su contrato por defecto vigente, la misma regla de las rutinas propias. El `Command-Id` es el id de la sesión y la repetición devuelve la misma. Devuelve `201` con `Location`. `execution.read_open_free_session` le dice a Hoy cuál retomar. |
 | **Reglas** | Existe sin planificación, sin relación y sin organización. Es el escenario Space-only completo |
 | **Falla cerrada** | Tipo de actividad sin contrato vigente, rechazo |
 
