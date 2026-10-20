@@ -2052,6 +2052,7 @@ web a los gimnasios pertenece a Backoffice y no pasa por Space (`ADR-043`).
 11. **Cada programa se me presenta con la misma tarjeta con la que veré mis rutinas** cuando lo tome: la fotografía ocupa la tarjeta entera, y encima leo su nombre, las zonas que trabaja y sus cifras. El primer día y el día ciento uno son la misma pantalla con distinto contenido, no dos productos que se parecen.
 12. **Elegir no es comprometerse.** La tarjeta me lleva al programa entero, que es donde lo tomo; desde la lista no se me asigna nada, porque ocho semanas no se aceptan con un toque sobre una fotografía.
 13. **El programa se ve antes de leerse.** Su fotografía encabeza el detalle, cada día del reparto lleva la suya —la misma que esa rutina tendrá en mi inicio cuando lo tome— y cada ejercicio su demostración. Decido mirando lo que voy a hacer, no una lista de nombres; y donde todavía no hay imagen curada no se inventa ninguna: se lee igual, sólo que sin foto.
+14. **Cada programa de Allfit trae su meta de nutrición, ajustada a mí.** Veo la energía del día y las tres macros, calculadas con mi último peso para el objetivo del programa —el mío, si el programa lo sirve—. Al tomarlo puedo adoptarla como mi meta, y mi meta anterior queda en el historial; si no la quiero, no cambia nada. Sin peso registrado no se me muestra ninguna: no se inventan cifras.
 
 **Por qué existe esta historia.** La escribimos el 31 de agosto de 2026, después de
 detectar —como con `HU-SP-099`— que el diseño tenía la pantalla y ninguna historia la
