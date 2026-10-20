@@ -2234,6 +2234,17 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Retención:** con la versión.
 - **Eventos:** ninguno propio.
 
+### 10A.7a `nutrition.goal_references`
+
+- **Propósito:** la meta de referencia que cada objetivo de entrenamiento le da a un programa de Allfit, por kilo de peso (PN-1, `HU-SP-100`).
+- **Dominio / fuente de verdad:** Nutrición. La escribe solo la curaduría (`packages/db/curation/007_goal_references.sql`).
+- **Clasificación:** contenido de referencia, no personal.
+- **Columnas:** `goal_code text` · `nutrient_code text` · `mode nutrition.goal_target_mode` · `minimum_per_kg numeric` (nullable) · `maximum_per_kg numeric` (nullable) · `exact_per_kg numeric` (nullable) · `updated_at timestamptz`.
+- **Uniques y checks:** `PK(goal_code, nutrient_code)`; `goal_code` en la lista cerrada de objetivos de programa; nutrientes `energy`, `protein`, `carbohydrates`, `fat`; `range` con mínimo y máximo, `exact` con exacto.
+- **Actores:** lectura por `nutrition.reference_targets`; sin privilegios para `allfit_api`.
+- **RLS:** forzada; solo lectura para `allfit_owner`.
+- **Retención:** indefinida; una meta ya adoptada no depende de ella, porque se congela en la versión de la persona.
+
 ### 10A.8 `nutrition.goal_decisions`
 
 - **Propósito:** aceptación o rechazo personal append-only de una propuesta profesional.
