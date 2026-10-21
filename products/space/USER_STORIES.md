@@ -481,6 +481,14 @@ ti— y esta dice **dónde y cómo** ocurre.
 6. Abrir la invitación no acepta nada.
 7. Las invitaciones para integrarse al staff o equipo no se abren ni se deciden en Space; pertenecen exclusivamente a Studio.
 
+> **Alcance de la primera entrega (`TECH-28`).** La invitación me dice quién me invita y que
+> Allfit Pro va incluido, y la encuentro también desde la aplicación, por mi correo
+> verificado, aunque el enlace del correo se pierda. **Ofrecer un programa dentro de la
+> invitación no está construido** y queda para una entrega aparte. Mi coach lo asigna el
+> gimnasio después, desde Studio (`HU-STUDIO-023`). Mientras el enlace web no exista, el
+> correo abre la aplicación directamente. Con una cuenta todavía sin Fitness ID solo sé que
+> una invitación me espera: qué me pide lo leo al terminar el registro (criterio 3).
+
 ### HU-SP-017 — Aceptar o rechazar cada propuesta por separado
 
 **Como** persona invitada
@@ -504,6 +512,10 @@ ti— y esta dice **dónde y cómo** ocurre.
 11. Reintentar la decisión no crea vínculos ni grants duplicados.
 12. Esta historia no crea membresías ni roles de equipo; esas decisiones pertenecen exclusivamente a Studio.
 
+> **Alcance de la primera entrega (`TECH-28`).** Decido la relación y cada permiso. Los
+> criterios 1, 8 y 9 esperan a que la invitación pueda ofrecer un programa, que todavía no
+> está construido.
+
 ### HU-SP-018 — Ver mis relaciones profesionales
 
 **Como** persona
@@ -517,6 +529,9 @@ ti— y esta dice **dónde y cómo** ocurre.
 1. Veo mis relaciones activas y también las terminadas.
 2. Cuando volví a trabajar con la misma organización, veo el enlace a la relación anterior.
 3. Ver la continuidad no concede a la relación nueva ningún acceso a lo de la anterior.
+
+> **Alcance de la primera entrega (`TECH-28`).** Cada relación muestra también el nombre de
+> mi coach titular.
 
 ### HU-SP-019 — Ver la historia de una relación
 
@@ -552,6 +567,9 @@ ti— y esta dice **dónde y cómo** ocurre.
 8. La suplencia caduca automáticamente en su fecha de fin aunque nadie ejecute otra acción.
 9. Mi decisión y cualquier terminación quedan en el historial; reintentar no las duplica.
 
+> **Alcance de la primera entrega (`TECH-28`).** Acepto o rechazo una sola vez. La
+> aceptación queda en el historial; el rechazo todavía no aparece en él (criterio 9).
+
 ### HU-SP-020 — Terminar una relación profesional
 
 **Como** persona
@@ -570,6 +588,10 @@ ti— y esta dice **dónde y cómo** ocurre.
 6. Mi programa asignado queda pausado y esperando **mi** decisión, no la de nadie más.
 7. Declarar un motivo es opcional.
 8. Si algo falla durante la terminación, no queda a medias: o se aplica completa o no se aplica.
+
+> **Alcance de la primera entrega (`TECH-28`).** Terminar es inmediato y no se puede hacer
+> dos veces. El criterio 6 todavía no aplica: un gimnasio aún no puede asignarme un
+> programa, así que no hay programa que pausar.
 
 ---
 

@@ -44,6 +44,12 @@ generado son el inventario exhaustivo.
 | Consultar agenda | `GET /space/v1/agenda` | `OP-PLN-016` | query `from`, `to`, `limit`, `cursor` | `AgendaPage` | `private, max-age=0, must-revalidate` + `ETag` |
 | Iniciar intento | `POST /space/v1/planned-sessions/{plannedSessionId}/attempts` | `OP-EXE-001` | `AttemptCreate` | `Attempt` | `no-store` |
 | Iniciar sesión libre | `POST /space/v1/executions` | `OP-EXE-004` | `FreeSessionCreate` | `FreeSession` | `no-store` |
+| Listar mis invitaciones de cliente | `GET /space/v1/client-invitations` | `OP-IDN-056` | sin body | `ClientInvitationPendingList` | `no-store` |
+| Leer una invitación de cliente por id | `GET /space/v1/client-invitations/{invitationId}` | `OP-REL-015` | path | `ClientInvitationPresentation` | `no-store` |
+| Decidir una invitación de cliente | `POST /space/v1/client-invitations/decisions` | `OP-IDN-009` | `ClientInvitationDecisionCreate` con `token` o `invitation_id` | `ClientInvitationDecisionResult` | `no-store` |
+| Leer el historial de mi relación | `GET /space/v1/relationships/{relationshipId}/events` | `OP-REL-014` | query `limit`, `cursor` | `RelationshipHistoryPage` | `private, no-store` |
+| Decidir una suplencia | `POST /space/v1/relationships/{relationshipId}/substitutions/{substitutionId}/decision` | `OP-REL-005` | `SubstitutionDecisionCreate` | `RelationshipSubstitutionDecision` | `no-store` |
+| Terminar mi relación | `POST /space/v1/relationships/{relationshipId}/termination` | `OP-REL-007` | `RelationshipTerminationCreate` | `MyRelationshipTermination` | `no-store` |
 | Guardar resultados | `PUT /space/v1/executions/{executionId}/results` | `OP-EXE-005` | `ExecutionResultsReplace` | `ExecutionResultsState` | `no-store` |
 | Finalizar ejecución | `POST /space/v1/executions/{executionId}/finalize` | `OP-EXE-006` | `ExecutionFinalize` | `ExecutionFinalized` | `no-store` |
 | Leer resultado autorizado | `GET /studio/v1/organizations/{organizationId}/clients/{personId}/executions/{executionId}` | `OP-EXE-018` | path | `AuthorizedExecution` | `private, no-store` |
