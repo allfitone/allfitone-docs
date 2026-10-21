@@ -53,6 +53,7 @@ generado son el inventario exhaustivo.
 | Guardar resultados | `PUT /space/v1/executions/{executionId}/results` | `OP-EXE-005` | `ExecutionResultsReplace` | `ExecutionResultsState` | `no-store` |
 | Finalizar ejecución | `POST /space/v1/executions/{executionId}/finalize` | `OP-EXE-006` | `ExecutionFinalize` | `ExecutionFinalized` | `no-store` |
 | Leer resultado autorizado | `GET /studio/v1/organizations/{organizationId}/clients/{personId}/executions/{executionId}` | `OP-EXE-018` | path | `AuthorizedExecution` | `private, no-store` |
+| Listar lo que comparto | `GET /space/v1/consents` | `OP-PRV-013` | sin body | `SpaceConsentList` | `private, no-store` |
 | Revocar consentimiento | `POST /space/v1/consents/{grantId}/revocation` | `OP-PRV-005` | sin body | `ConsentRevocation` | `no-store` |
 | Registrar/listar comidas | `POST/GET /space/v1/nutrition/meals` | `OP-NUT-001/002` | `NutritionMealCreate` / query | `NutritionMeal` / `NutritionMealPage` | `no-store` |
 | Revisar/eliminar comida | `PATCH/DELETE /space/v1/nutrition/meals/{mealId}` | `OP-NUT-003/004` | `NutritionMealPatch` / sin body | `NutritionMeal` / `204` | `no-store` |
