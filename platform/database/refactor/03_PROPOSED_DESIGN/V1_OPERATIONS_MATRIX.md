@@ -264,6 +264,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-053` | Enviar a una persona el flujo oficial de recuperación desde Backoffice | Comando | `A10` |
 | `OP-IDN-054` | Reenviar una recuperación en curso desde Backoffice | Comando | `A10` |
 | `OP-IDN-055` | Cancelar una recuperación sospechosa desde Backoffice | Comando | `A10` |
+| `OP-IDN-056` | Listar mis invitaciones de cliente pendientes | Consulta | `A1`, `A2` |
 | `OP-IDN-049` | Consultar mi contexto de salud | Consulta | `A2` |
 | `OP-IDN-050` | Eliminar una declaración de contexto de salud | Comando | `A2` |
 | `OP-IDN-051` | Reenviar una invitación de cliente desde Backoffice | Comando | `A10` |
@@ -439,7 +440,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/invitations/decisions` para staff; `POST /space/v1/invitations/decisions` para clientes. El token viaja en el cuerpo |
+| **Superficie** | `POST /studio/v1/invitations/decisions` para staff; `POST /space/v1/client-invitations/decisions` para clientes. El cuerpo nombra la invitación por `token` o, en Space, por `invitation_id`: exactamente uno de los dos |
 | **Actor** | `A2` |
 | **Filtros obligatorios** | Invitación pendiente, vigente y dirigida al email verificado exacto de la persona autenticada. Staff admite una única intención `membership`; cliente decide cada intención y cada `INVITATION_SCOPE_OPTION` presentada |
 | **Transacción** | Staff: bloquear invitación, aceptar o rechazar, crear/reutilizar membresía activa y añadir solo el rol faltante. Cliente: materializar **como máximo un destino** por intención; relación, consentimientos, grants concedidos y programa dependiente se confirman juntos. Los dos flujos preservan evidencia y no mezclan entidades |
@@ -450,6 +451,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | `identity.invitation_intent_decided.v1`, más los eventos del dominio destino y `privacy.grant_created.v1` / `privacy.grant_rejected.v1` por opción decidida |
 | **Reglas** | Staff se decide exclusivamente en Studio y nunca crea perfil de cliente, relación, scope o grant. Cliente se decide exclusivamente en Space: relación, programa y cada scope son independientes aunque se confirmen en una sola acción. Activar la persona no acepta ninguna intención |
 | **Falla cerrada** | Dependencia faltante, la intención queda pendiente y no se materializa nada |
+| **Implementado (cliente, Space)** | `identity.decide_client_invitation` por token e `identity.decide_my_client_invitation` por identificador (migración `20261021120000`). La segunda solo busca el hash del token de esa invitación y llama a la primera, así que la prueba del correo verificado exacto y todas las reglas de la decisión viven en un solo lugar (`ADR-001`): tener el identificador no basta, igual que no basta tener el enlace. El token nunca se guarda en claro, solo su hash. Un identificador inexistente responde `404`, igual que una invitación inválida o vencida: no se distinguen (`ADR-008`). El cuerpo con `token` e `invitation_id` a la vez, o con ninguno, es `400`. **Ofrecer un programa dentro de la invitación no está construido en ninguna capa**: `OP-REL-001` no emite la intención `program_assignment` y aquí no hay nada que decidir sobre ella; queda en un ticket aparte. El titular se asigna después, en Studio (`HU-STUDIO-023`, `OP-REL-002`) |
 
 #### `OP-IDN-010` — Crear o actualizar perfil profesional
 
@@ -1034,6 +1036,23 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Información sensible** | Igual que `OP-IDN-053` |
 | **Evento de dominio** | Ninguno |
 | **Reglas** | `HU-BO-010`, criterio 10. Un correo que ya salió no se puede retirar del buzón de la persona: un cambio de contraseña posterior ya no confirma la solicitud cancelada |
+
+#### `OP-IDN-056` — Listar mis invitaciones de cliente pendientes
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/client-invitations` |
+| **Actor** | `A1` o `A2`: una cuenta que todavía se está registrando también puede preguntar |
+| **Filtros obligatorios** | Invitaciones `pending` y no vencidas, con intención `service_relationship` pendiente, cuyo contacto es **exactamente** el correo verificado del actor (`ADR-001`). Sin correo verificado, rechazo |
+| **Transacción** | `identity.list_my_client_invitations`. Lectura; no resuelve vencimientos: una vencida simplemente no aparece |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Sin cursor. Orden: la que vence antes primero, desempate por identificador |
+| **Offline / concurrencia** | No cacheable (`no-store`) |
+| **Información sensible** | Que una organización invitó a esta dirección, el nombre de la organización y el de quien la invita. **No** devuelve las opciones de scope: eso es `OP-REL-015` |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | `HU-SP-016`. Responde identificador de invitación y de intención, organización (id y nombre), `invited_by` —nombre de la persona cuya membresía la emitió, nulo si no se puede resolver— y `expires_at`. Existe para que una invitación no se pierda con el correo que la trajo: la clave es la misma que ya exige la decisión, así que no amplía quién puede decidir. A una cuenta sin persona se le dice que algo la espera, no qué pide; leerla y decidirla exige `A2`. Una invitación dirigida a otro correo nunca aparece |
+| **Falla cerrada** | Actor anónimo o sin correo verificado: `403` |
 
 #### `OP-IDN-049` — Consultar mi contexto de salud
 | **Superficie** | `POST /space/v1/onboarding-attempts/{id}/fitness-id` |
@@ -1702,6 +1721,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Evento de dominio** | `relationship.substitution_decided.v1` |
 | **Reglas** | El suplente aceptado ejerce **los mismos grants ya vigentes**, sin ampliarlos: no obtiene un scope que el titular no tenga. Rechazar no afecta la relación ni al titular. Cada acceso del suplente queda en `ACCESS_EVENT` con su identidad real |
 | **Falla cerrada** | Suplencia vencida, rechazo |
+| **Implementado** | `relationships.decide_substitution` (migración `20261021120000`) sobre `POST /space/v1/relationships/{relationshipId}/substitutions/{substitutionId}/decision`, con cuerpo cerrado `{decision: accepted \| rejected}`. Solo una suplencia `proposed`, no vencida, de una relación propia y `active`, y una sola vez. Aceptar fija `accepted_by_person_at` y la deja `active`; rechazar la deja `rejected`, sin aceptación: el check `ck_relationship_professional_assignments_accepted` admite ahora ese estado. El silencio no es ninguna de las dos (`ADR-022`). Suplencia o relación ajena o inexistente: `P0002` → `404`. Ya decidida o vencida: `P0004` → `409`. Un reintento con la misma `Idempotency-Key` devuelve la decisión registrada con `Idempotent-Replay`. **Todavía no** escribe `relationship.substitution_decided.v1` en el outbox, y el historial (`OP-REL-014`) muestra la aceptación pero no el rechazo |
 
 #### `OP-REL-006` — Terminar una suplencia
 
@@ -1736,6 +1756,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Evento de dominio** | `relationship.terminated.v1`, `privacy.grant_frozen.v1` por grant, `planning.assignment_detached.v1` por asignación |
 | **Reglas** | El efecto es inmediato: no hay preaviso para la persona. La organización **conserva su vista congelada del histórico compartido hasta `T`**, más su contenido propio; los datos creados después de `T` nunca son visibles para ella. Congelar **no** es revocar: un estado `revoked` corta el acceso del todo, cierra los casos históricos abiertos e invalida derivados. La lectura solo ocurre por la superficie restringida de ADR-023, con `historical_access_case`, actor elegible, MFA, propósito y `access_control.can_read_frozen`; nunca por pertenencia administrativa ni endpoints operativos. Si la persona elimina su cuenta, la anonimización alcanza también lo que ve un grant congelado. El Fitness ID no se toca. El motivo es **opcional** |
 | **Falla cerrada** | Si cualquier paso falla, se revierte todo: no existe una terminación a medias |
+| **Implementado** | `relationships.end_my_relationship` (migración `20261021120000`) sobre `POST /space/v1/relationships/{relationshipId}/termination`, con `reason` opcional. Cierra con `ended_by_kind = 'person'` mediante `relationships.close_relationship`, la misma función que ahora usa `OP-REL-008`, así que la regla de congelamiento vive en un solo lugar: en un único instante `T` termina la relación, congela los grants `active` —uno ya revocado sigue revocado— y cierra la asignación del titular y las suplencias aceptadas. Una relación ya terminada converge al mismo `T` sin cerrarse dos veces, y el reintento con la misma `Idempotency-Key` responde `Idempotent-Replay`. Relación ajena o inexistente: `404`. **Todavía no**: desacoplar asignaciones de programa y pausar sesiones —no hay qué desacoplar: `ck_program_assignments_no_origin` obliga a que `origin_relationship_id` sea nulo, así que ninguna asignación viene aún de una relación—, cancelar propuestas pendientes, ni avisar a la organización por el outbox |
 
 #### `OP-REL-008` — Terminar la relación (organización)
 
@@ -1793,9 +1814,9 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `POST /space/v1/client-invitations/resolve` |
+| **Superficie** | `POST /space/v1/client-invitations/resolve` (por token) · `GET /space/v1/client-invitations/{invitationId}` (por identificador, desde `OP-IDN-056`) |
 | **Actor** | `A2` |
-| **Filtros obligatorios** | La invitación cuyo hash de token coincide, con intención `service_relationship`. El contacto invitado debe ser el correo verificado del actor |
+| **Filtros obligatorios** | La invitación cuyo hash de token coincide —o cuyo identificador coincide—, con intención `service_relationship`. El contacto invitado debe ser el correo verificado del actor, en las dos rutas |
 | **Transacción** | Ninguna, salvo el vencimiento resuelto en la lectura |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | No aplica. Las opciones de scope vuelven ordenadas por código |
@@ -1804,6 +1825,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Evento de dominio** | `identity.invitation_expired.v1` cuando la lectura encuentra la invitación vencida |
 | **Reglas** | **No resuelve de forma anónima**, a diferencia de `OP-IDN-016` (equipo) y de la de titularidad. Aquellas revelan el nombre de una organización y un rol propuesto, que el destinatario ya leyó en el correo; esta revela categorías de datos de salud, así que aplica la misma prueba de destinatario que la decisión: tener el token no basta.<br><br>Un actor que no supere esa prueba recibe rechazo, **no** una invitación con oferta vacía: una oferta vacía seguiría confirmando que la invitación existe.<br><br>El vencimiento se resuelve al leer, como en las invitaciones de equipo: entre que pasa el plazo y alguien llega con el enlace no corre nada más, y una invitación que se lea como vigente después de vencer sería respondida |
 | **Falla cerrada** | Actor anónimo, hash que no mide 32 bytes, o correo verificado distinto del contacto invitado |
+| **Implementado** | `identity.resolve_client_invitation` (por token) e `identity.read_my_client_invitation` (por identificador), migración `20261021120000`. La segunda solo encuentra el hash de esa invitación y llama a la primera: la prueba del destinatario es una sola. Las dos responden además **`invited_by`**, el nombre de la persona cuya membresía emitió la invitación —nulo si no se puede resolver—, porque quién invita es parte de lo que la persona decide. Inexistente, inválida y vencida responden igual, `404` (`ADR-008`). La pantalla dice quién invita y que Allfit Pro va incluido; **no ofrece ningún programa**, porque esa intención no está construida en ninguna capa (ver `OP-IDN-009`) |
 
 #### `OP-REL-011` — Consultar una relación
 
@@ -1838,6 +1860,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Incluye relaciones cerradas y, cuando existe, el enlace a la relación anterior con la misma organización: la continuidad se muestra sin que ello conceda ningún acceso a la relación nueva |
 | **Falla cerrada** | — |
+| **Implementado** | `relationships.list_my_relationships`. Desde la migración `20261021120000` responde también **`holder_name`**: el nombre del coach titular vigente, nulo si la relación no tiene titular (`HU-SP-018`) |
 
 #### `OP-REL-013` — Consultar suplencias de una relación
 
@@ -1872,6 +1895,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Evento de dominio** | Ninguno |
 | **Reglas** | `RELATIONSHIP_EVENT` es append-only. El motivo de terminación, cuando existe, es visible solo para la parte que lo declaró |
 | **Falla cerrada** | — |
+| **Implementado (Space)** | `relationships.read_relationship_history` admite desde la migración `20261021120000` a la persona leyendo su propia relación, sin organización y nunca a través de una membresía que no tiene. Responde `private, no-store`. Cada lector ve solo el motivo que declaró su lado: el motivo que dio el gimnasio nunca se le muestra a ella, ni el de ella al gimnasio; `declared_by_us` dice cuál es el caso. Relación ajena o inexistente: `404`, como en `OP-REL-011` |
 
 ### 7.4 Privacidad
 

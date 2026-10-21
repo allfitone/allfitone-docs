@@ -325,11 +325,15 @@ intentos, así que `support.list_operational_events` reportaba cada invitación 
 cliente emitida como `pending` indefinidamente: la cola crecía con trabajo que nadie
 hacía y el panel técnico de `HU-BO-031` se leía como una avería.
 
-El consumidor existe y está probado. **Permanece apagado**, porque la pantalla donde
-la persona resuelve y decide su invitación no existe todavía: `/space/v1/client-invitations/resolve`
-y `/space/v1/client-invitations/decisions` están servidos, pero Space no los consume y
-no hay dominios asociados para enlaces universales. Activarlo antes enviaría un enlace
-muerto a alguien a quien se le piden permisos sobre datos de salud.
+El consumidor existe y está probado. **Permanece apagado.** Desde `TECH-28` (migración
+`20261021120000`) Space ya resuelve y decide la invitación, y además la encuentra sin el
+enlace: `GET /space/v1/client-invitations` (`OP-IDN-056`) lista las pendientes dirigidas
+al correo verificado de la persona. Lo que falta es el enlace universal `https`: los
+dominios asociados esperan la cuenta de pago de Apple. Hasta entonces la app abre
+`allfitspace://client-invitations#token=…`; el token viaja en el fragmento, se retiene
+en memoria y nunca entra en una URL que vea la API. Un esquema propio no abre nada en un
+teléfono sin la app instalada, así que encender la entrega con él enviaría un enlace
+muerto a quien todavía no la tiene.
 
 Los gates son independientes:
 
@@ -356,7 +360,8 @@ Despliegue en este orden:
 
 1. integrar con `CLIENT_INVITATION_DELIVERY_ENABLED` apagado; el evento sigue sin
    reclamar, igual que antes del cambio;
-2. construir la pantalla de Space y publicar la ruta pública que la abre;
+2. construir la pantalla de Space —hecho en `TECH-28`— y publicar la ruta pública que
+   la abre, que espera el enlace universal;
 3. configurar `CLIENT_INVITATION_PUBLIC_BASE_URL` apuntando a esa ruta y desplegar el
    worker todavía apagado;
 4. revisar el inventario de invitaciones de cliente pendientes. Las emitidas antes de
