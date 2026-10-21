@@ -762,6 +762,12 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 3. Veo también los gimnasios con los que terminé y qué conservan de lo que compartí.
 4. A los 12 meses se me recuerda revisar esto. Si no respondo **no se corta nada**: es un recordatorio, no un vencimiento.
 
+> **Alcance de la primera entrega (`TECH-29`).** «Lo que compartes», desde mi perfil, me
+> muestra por cada gimnasio qué categorías comparto, cuáles rechacé y cuáles quité, y desde
+> cuándo. Los gimnasios con los que terminé aparecen con lo que conservan, y eso también lo
+> puedo quitar. El recordatorio a los 12 meses (criterio 4) todavía no está construido:
+> espera a los avisos.
+
 ### HU-SP-031 — Dejar de compartir una categoría
 
 **Como** persona que compartió información
@@ -779,6 +785,12 @@ Lo que conservo es lo importante: puedo **quitar** una categoría cuando quiera 
 5. Un permiso revocado nunca se reactiva: volver a compartir exige un consentimiento nuevo.
 6. Si la organización tenía abierta una consulta del historial de una relación terminada, queda cerrada.
 7. Si el sistema no puede garantizar que todo lo derivado dejó de ser legible, la revocación no se reporta como hecha: se reintenta.
+
+> **Alcance de la primera entrega (`TECH-29`).** Quito una categoría a la vez, después de
+> confirmarlo, y el corte es inmediato: nada guarda una copia de mis permisos que tarde en
+> enterarse. El historial de la relación dice cuándo dejé de compartirla. El criterio 6
+> todavía no aplica: las consultas del historial de una relación terminada aún no existen,
+> así que no hay ninguna que cerrar. Al gimnasio no se le avisa.
 
 ### HU-SP-032 — Ocultar una sesión propia para una organización
 

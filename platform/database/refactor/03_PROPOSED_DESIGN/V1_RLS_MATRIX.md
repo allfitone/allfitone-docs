@@ -629,6 +629,7 @@ Es el dominio donde una policy mal escrita produce una fuga real. Todas sus fich
 - **Grants mínimos** — `allfit_api`: `SELECT`; `INSERT` solo mediante `identity.decide_invitation_intent`. Sin `UPDATE` ni `DELETE`: el evento de consentimiento es evidencia inmutable.
 - **Índice para la policy** — `consent_events`: `(person_id, decided_at DESC)`, `(relationship_id, scope_code, decided_at DESC)`, `(organization_id, decided_at DESC)`; `invitation_scope_options`: único `(invitation_intent_id,scope_code)`.
 - **`T-CONSENT-1` (positiva)** — Rechazar o revocar conserva la evidencia sin dejar grant activo.
+- **Nota (`TECH-29`)** — Revocar no escribe aquí: un `CONSENT_EVENT` responde una opción de invitación y una revocación no responde ninguna. Su evidencia es el `DATA_GRANT` revocado, inmutable, más `privacy.grant_revoked.v1` (`OP-PRV-005`).
 - **`T-CONSENT-2` (positiva)** — El evento conserva el **snapshot exacto** que se presentó a la persona, aunque después se publique otra versión del scope.
 - **`T-CONSENT-3` (negativa)** — Ningún endpoint Studio crea opciones para una relación activa; un scope rechazado o revocado no reaparece como pendiente.
 - **`T-CONSENT-4` (positiva)** — Una confirmación puede aceptar la relación y cualquier subconjunto de scopes; produce un evento por opción y grants solo para las concedidas.
@@ -644,7 +645,7 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 | `A4`, `A5` | Los de su organización | — | — | — |
 | `A9` privacy | Por disposición | — | Cierre | — |
 
-- **Condición RLS** — `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** existe `service_relationships(id=relationship_id, organization_id=access_control.org())`). `INSERT` exclusivo de `identity.decide_invitation_intent`, que exige sujeto, invitación, relación recién materializada y opción exactos. `UPDATE` solo mediante `privacy.revoke_grant` o `relationships.terminate_relationship`; el trigger de transición valida columnas y dirección.
+- **Condición RLS** — `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** existe `service_relationships(id=relationship_id, organization_id=access_control.org())`). `INSERT` exclusivo de `identity.decide_invitation_intent`, que exige sujeto, invitación, relación recién materializada y opción exactos. `UPDATE` solo mediante `privacy.revoke_grant` —implementada como `privacy.revoke_my_grant`, migración `20261022120000`— o `relationships.terminate_relationship`; el trigger de transición valida columnas y dirección.
 - **Contexto requerido** — Completo.
 - **Grants mínimos** — `allfit_api`: `SELECT`, `INSERT` restringido y `UPDATE(status, frozen_at, revoked_at, last_reviewed_at)`. **Sin `DELETE`**. Policies + trigger solo permiten: consentimiento `INSERT`; persona `active/frozen → revoked`; terminación `active → frozen`; mantenimiento de `last_reviewed_at` sin cambiar autoridad.
 - **Índice para la policy** — **crítico**: único parcial `(relationship_id, scope_code) WHERE status IN ('active','frozen')`, `(person_id, status)`, `(organization_id, status)` y parcial `(relationship_id, scope_code, frozen_at) WHERE status='frozen'`.

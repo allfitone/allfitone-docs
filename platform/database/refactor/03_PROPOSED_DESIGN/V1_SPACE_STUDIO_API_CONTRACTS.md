@@ -236,8 +236,8 @@ Sujeto implícito: la persona autenticada. Ningún endpoint recibe un `person_id
 | `GET` | `/client-invitations` | `OP-IDN-056` | Las invitaciones pendientes y vigentes dirigidas a su correo verificado, con quién invita. Admite una cuenta que todavía se registra |
 | `GET` | `/client-invitations/{invitationId}` | `OP-REL-015` | Lo mismo que `resolve`, por identificador y con la misma prueba del correo verificado |
 | `POST` | `/client-invitations/decisions` | `OP-IDN-009` | Decide la relación y cada scope en una sola llamada. Un scope omitido cuenta como rechazado. Nombra la invitación por `token` o por `invitation_id`, exactamente uno |
-| `GET` | `/consents` | `OP-PRV-013` | Panel de control del consentimiento |
-| `POST` | `/consents/{id}/revocation` | `OP-PRV-005` | Invalidación transaccional |
+| `GET` | `/consents` | `OP-PRV-013` | Panel de control del consentimiento: por relación y scope, su respuesta y, si aceptó, el estado del grant (`active`, `frozen` o `revoked`). Implementado en `TECH-29` |
+| `POST` | `/consents/{id}/revocation` | `OP-PRV-005` | Solo ese grant, `active` o `frozen`; nunca se reabre. Implementado en `TECH-29`: no hay proyecciones ni cachés sobre grants que invalidar, y cada lector comprueba el estado en la misma sentencia |
 | `GET` | `/visibility-denials` | `OP-PRV-017` | |
 | `PUT` | `/executions/{id}/visibility` | `OP-PRV-006` | Ocultar por relación |
 | `DELETE` | `/executions/{id}/visibility/{relId}` | `OP-PRV-007` | |
@@ -917,7 +917,7 @@ Comandos con varias escrituras que deben ser atómicas. La API los invoca dentro
 | `relationships.terminate_relationship(rel_id)` | `OP-REL-007/008` | **La más crítica:** toma el actor del contexto y usa un instante `T` único; **congela** grants (`frozen`, `frozen_at = T`), cierra asignaciones y suplencias, cierra periodos de gestión, desacopla asignaciones, pausa sesiones futuras, cancela correcciones y propuestas nutricionales de esa relación, invalida read models |
 | `open_historical_access_case(rel_id, membership_id, purpose, reference, expires_at)` | `OP-PRV-018` | Valida relación terminada, actor elegible, capacidad de gestión, MFA y ventana `<=24h`; crea un caso exacto |
 | `close_historical_access_case(case_id)` | `OP-PRV-019` | Cierra el caso e invalida cualquier contexto asociado |
-| `privacy.revoke_grant(grant_id)` | `OP-PRV-005` | Acepta `active` o `frozen`, fija `revoked_at`, cierra casos históricos abiertos e invalida proyecciones y cachés antes de confirmar |
+| `privacy.revoke_grant(grant_id)` | `OP-PRV-005` | Acepta `active` o `frozen`, fija `revoked_at`, cierra casos históricos abiertos e invalida proyecciones y cachés antes de confirmar. Implementada como `privacy.revoke_my_grant` (migración `20261022120000`): todavía no hay casos históricos ni proyecciones que tocar |
 | `privacy.log_access_event(subject_person_id, subject_organization_id, relationship_id, data_grant_id, historical_access_case_id, scope_code, scope_version, access_mode, resource, result)` | `OP-PRV-015`, `OP-ORG-013` y toda lectura amparada | Exige exactamente un sujeto; la rama organización valida membership activo/tenant, modo/recurso cerrados y contexto personal nulo; toma actor, membresía, propósito, request y tiempo del contexto y falla la lectura si no puede registrar |
 | `create_assignment(rel_id, program_version_id, starts_on, tz)` | `OP-PLN-010` | Asignación + periodo de gestión + materialización de sesiones: **completa** si la versión tiene fecha de fin, **la semana de la asignación** si no la tiene. En ningún caso queda pendiente de un job de calendario |
 | `resolve_detached_assignment(asg_id, choice)` | `OP-PLN-015` | Reutiliza la misma asignación o cancela solo sesiones futuras no iniciadas |
