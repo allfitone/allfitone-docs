@@ -1928,6 +1928,7 @@ Reglas que gobiernan todo el dominio:
 | `OP-PRV-019` | Cerrar un caso de acceso histórico | Comando | `A4`, `A5` |
 | `OP-PRV-020` | Consultar una relación histórica congelada | Consulta | `A3`, `A4`, `A5` autorizados por el caso |
 | `OP-PRV-021` | Seguir las solicitudes de eliminación | Consulta | `A6` con `manage_privacy_requests` |
+| `OP-PRV-022` | Consultar las categorías de información | Consulta | `A2`, `A3`–`A6` |
 
 ---
 
@@ -2225,6 +2226,24 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | El plazo objetivo de `HU-BO-032` son 30 días desde `opened_at` y viaja como `due_at`, nunca como días restantes: los días se calculan en la zona de quien lee. Una disposición abierta por retención no es una solicitud y no se lista. `retained_until` sale de la política que decidió conservar, no del plazo de respuesta |
 | **Falla cerrada** | Sin rol o sin deber vigente responde `42501` y no registra acceso, porque no reveló nada |
 | **Implementado** | `privacy.list_erasure_requests` y `privacy.erasure_request_categories`. Hoy una solicitud del titular se abre, se ejecuta y se cierra en la misma transacción, así que la mitad abierta sólo tendrá filas cuando exista una disposición diferida o suspendida por obligación legal (`HU-BO-033`) |
+
+#### `OP-PRV-022` — Consultar las categorías de información
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /catalog/v1/information-categories` |
+| **Actor** | `A2`, `A3`–`A6`. Persona autenticada y activa; un actor de soporte es rechazado |
+| **Filtros obligatorios** | Ninguno: las siete categorías de V1, siempre completas |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | No aplica. Orden fijo: entrenamiento, historial previo, cuerpo, salud y después las de nutrición — el orden en que `HU-STUDIO-034` las nombra |
+| **Offline / concurrencia** | `private, no-store` como el resto de la superficie; el contenido es inmutable y se puede memorizar en el cliente |
+| **Información sensible** | Ninguna. No lleva datos de ninguna persona, por eso no escribe `ACCESS_EVENT` |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | **No es `OP-PRV-012`.** Aquella responde qué recursos y campos alcanza una versión **publicada** y no dice nada hasta que Backoffice cure el catálogo; ésta es el vocabulario: redacción fija, sin versión y sin publicación, disponible desde el primer día. Devuelve el resumen de una línea —el texto de quien pide— junto a la descripción, que es la mitad que dice dónde **para** el permiso. Las dos viajan juntas: con sólo el resumen, alguien marca «cuerpo» creyendo que alcanza lesiones |
+| **Falla cerrada** | Un actor que no sea persona activa recibe `42501`, no una lista vacía: la política de `privacy.scope_presentations` sólo admite `person`, y cero filas se leería como «no hay categorías» |
+| **Implementado** | `privacy.list_information_categories`. Lee `privacy.scope_presentations` sola, sin unirse a `scope_definitions`, que es lo que la mantiene libre del bloqueo de publicación. El segundo criterio de la historia —la definición no cambia bajo los pies de quien lee— lo sostiene la forma de la tabla: no tiene columna de versión |
 
 ### 7.5 Catálogo
 
