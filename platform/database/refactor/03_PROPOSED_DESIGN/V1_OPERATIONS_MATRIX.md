@@ -1929,6 +1929,7 @@ Reglas que gobiernan todo el dominio:
 | `OP-PRV-020` | Consultar una relación histórica congelada | Consulta | `A3`, `A4`, `A5` autorizados por el caso |
 | `OP-PRV-021` | Seguir las solicitudes de eliminación | Consulta | `A6` con `manage_privacy_requests` |
 | `OP-PRV-022` | Consultar las categorías de información | Consulta | `A2`, `A3`–`A6` |
+| `OP-PRV-023` | Ver qué nos autorizó cada persona | Consulta | `A3`–`A5` con capacidad de directorio |
 
 ---
 
@@ -2244,6 +2245,24 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | **No es `OP-PRV-012`.** Aquella responde qué recursos y campos alcanza una versión **publicada** y no dice nada hasta que Backoffice cure el catálogo; ésta es el vocabulario: redacción fija, sin versión y sin publicación, disponible desde el primer día. Devuelve el resumen de una línea —el texto de quien pide— junto a la descripción, que es la mitad que dice dónde **para** el permiso. Las dos viajan juntas: con sólo el resumen, alguien marca «cuerpo» creyendo que alcanza lesiones |
 | **Falla cerrada** | Un actor que no sea persona activa recibe `42501`, no una lista vacía: la política de `privacy.scope_presentations` sólo admite `person`, y cero filas se leería como «no hay categorías» |
 | **Implementado** | `privacy.list_information_categories`. Lee `privacy.scope_presentations` sola, sin unirse a `scope_definitions`, que es lo que la mantiene libre del bloqueo de publicación. El segundo criterio de la historia —la definición no cambia bajo los pies de quien lee— lo sostiene la forma de la tabla: no tiene columna de versión |
+
+#### `OP-PRV-023` — Ver qué nos autorizó cada persona
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /studio/v1/organizations/{organizationId}/authorized-scopes` |
+| **Actor** | `A3`–`A5`. Miembro activo con `view_directory` o `view_assigned_directory` |
+| **Filtros obligatorios** | La organización. Un coach queda estrechado además a sus asignados, y eso no lo decide la función |
+| **Transacción** | Una, de solo lectura |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Keyset por `(display_name, grant_id)`, 1–100 por página. Una fila por autorización, no por persona: agrupar en la base rompe el cursor cuando las categorías de alguien caen a caballo entre dos páginas |
+| **Offline / concurrencia** | `private, no-store`. El registro refleja el instante en que se leyó y nada garantiza que siga vigente al mostrarse |
+| **Información sensible** | El **estado** de cada permiso, nunca lo que ampara. No escribe `ACCESS_EVENT` porque no hay dato personal cuya lectura registrar |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | **El filtro sale del vínculo, no del permiso.** La política de `privacy.data_grants` estrecha a la organización —`person_id = person() or organization_id = org()`— y no sabe de asignación. En la ficha de un vínculo eso basta, porque la proyección de permisos sólo se alcanza después de que el vínculo pasó su guarda; en un registro a través de clientes no, y leer `data_grants` sola entrega a un coach lo que autorizaron clientes que no atiende. La unión obligatoria con `relationships.service_relationships` es la guarda, no una conveniencia. **Criterio 5:** esto es un informe y nunca la fuente que decide un acceso; quien vaya a leer un dato resuelve la política en ese instante, dentro de la transacción que escribe el registro de acceso |
+| **Falla cerrada** | Sin capacidad de directorio, `42501`. Un cursor a medias o un tamaño de página fuera de rango, `22023` — no la primera página, que se leería como filas saltadas |
+| **Implementado** | `privacy.list_authorized_scopes`. Cubierta por `T-PRV-SCOPES-01`, cuya aserción de negación se escribió **antes** de la unión y se vio fallar: un coach recibía tres filas donde dos eran suyas. El test se cae el día que alguien quite esa unión |
 
 ### 7.5 Catálogo
 
