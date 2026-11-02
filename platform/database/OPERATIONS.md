@@ -431,3 +431,30 @@ professional until the organization reassigns them. To roll back the API
 deployment, keep the migration. A terminated person rejoins only through a new
 team invitation, which creates a new membership; the terminated one keeps its
 history.
+
+## Studio membership resignation (STUDIO-15)
+
+Migration `20261102232627_resign_memberships.sql` introduces OP-ORG-010 and
+must be applied before the `POST .../me/membership/resignation` route and the
+worker release that claims `organization.membership_resigned.v1`. It widens the
+membership event contract to accept the resigned event; existing rows already
+satisfy the new check. The operation requires a Studio session, an allowed
+origin, `Idempotency-Key` and `Command-Id`; it takes no body and returns the
+membership and its `ended_at` with `Cache-Control: no-store`.
+
+The notice email rides the existing invitation delivery job and the
+`STAFF_INVITATION_DELIVERY_ENABLED` switch, like the reassignment notice. While
+the switch is off, notices stay in the outbox and are delivered once it is
+turned on. A payload the worker cannot read is dead-lettered as
+`invalid_delivery_projection`.
+
+`T-ORG-RESIGN-01` covers tenant isolation, impersonation, the owner refusal,
+rollback when a notice cannot be written, idempotency, convergence, the
+recipients, the surviving relationship and authorship.
+`membership-resignation-concurrency.test.ts` covers a resignation racing a
+termination and two concurrent resignations. On a transient `55P03` the API
+returns 409 with `Retry-After: 1`; retry with the original identifiers.
+
+To roll back the API or worker deployment, keep the migration. A person who
+resigned rejoins only through a new team invitation, which creates a new
+membership.

@@ -186,6 +186,32 @@ A second command for an already terminated membership converges on the original
 `organization_id`, `person_id`, `status` snapshot, with `before` and `after`
 both required.
 
+## Studio membership resignation (OP-ORG-010)
+
+`organizations.resign_membership` ends the actor's own active membership with
+the same coordinated closing as `OP-ORG-009`: every open role and every holder
+or accepted substitute assignment closes at one instant, service relationships
+stay active without a professional, and consent and authorship are untouched.
+The membership is resolved from the person in the context, never from the
+request, and no role is required. A membership that holds `owner` is refused
+with `22023`.
+
+The organization row is locked before the idempotency receipt, as in
+`OP-ORG-009`, so a resignation and a termination of the same member serialize.
+The tenant lookup also accepts a former member, so a retry after leaving still
+replays. A new command after a resignation converges on the original `ended_at`;
+a membership an administrator terminated answers `P0002`, because it was not a
+resignation.
+
+The administration is notified in the same transaction: one
+`organization.membership_resigned.v1` outbox row per current owner or
+administrator with a contact on file, carrying the recipient contact, the
+organization name and the member name, like the reassignment notice. A
+resignation that cannot write its notices does not commit. Recipients without a
+contact are skipped rather than keeping a person inside an organization they
+asked to leave; the `organization.membership_resigned.v1` membership event stays
+the durable record either way.
+
 ## Review checklist
 
 - Can the schema rebuild from zero?
