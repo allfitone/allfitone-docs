@@ -140,6 +140,28 @@ See [OPERATIONS.md](OPERATIONS.md) for credentials and runbooks.
 - Retention, deletion, export and incident access are explicit per domain.
   Production access is time-limited, attributable and audited.
 
+## Studio membership role revocation (OP-ORG-008)
+
+`organizations.revoke_membership_role` coordinates the role period, membership
+event and durable idempotency receipt in one transaction. Only a current owner or
+administrator may revoke `admin`, `coach` or `staff`; `owner` is excluded. The
+coordinator establishes the authorized organization context before invoking
+`relationships.end_assignments_for_membership`, which is private to database
+owners and retains Relationships ownership of assignment changes.
+
+Only coach revocation ends active holder and accepted substitute assignments.
+An accepted future substitute becomes `ended` immediately, with
+`valid_to = greatest(effective_at, valid_from)`: its future interval is empty and
+its original start and acceptance evidence survive. Pending proposals remain
+pending; activation requires an active membership and a current coach role.
+Relationships, consent grants, other roles and other tenants remain unchanged.
+
+Assignment creation and activation take membership and coach-role share locks
+with `NOWAIT`. This avoids a reverse-order deadlock with a substitution decision
+that already holds its assignment row. SQLSTATE `55P03` is a retryable conflict;
+the retry rechecks current authority. Replaying a completed revoke references
+the original role period, so a later regrant remains effective.
+
 ## Review checklist
 
 - Can the schema rebuild from zero?

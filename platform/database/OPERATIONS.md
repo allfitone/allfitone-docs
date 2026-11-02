@@ -375,3 +375,36 @@ Despliegue en este orden:
 Para rollback, apagar `CLIENT_INVITATION_DELIVERY_ENABLED`. El evento vuelve a quedar
 sin reclamar y nada más cambia. `apps/worker/src/delivery-coverage.test.ts` impide que
 un evento de entrega nuevo vuelva a quedarse sin consumidor sin que nadie lo note.
+
+## Studio role revocation (STUDIO-13)
+
+Migration `20261102184047_revoke_membership_roles.sql` introduces OP-ORG-008 and
+must be applied before the DELETE route is deployed. The operation requires a
+Studio session, an allowed origin, `Idempotency-Key` and `Command-Id`; it takes no
+body and returns the role and its closing instant with `Cache-Control: no-store`.
+
+Before deploying, rebuild the local database, run `db:lint`, `db:test` and
+`db:test:concurrency`, generate `db:types` and run `check:db-types`. The
+`T-ORG-REVOKE-01` test covers tenant isolation, permissions, consent preservation,
+future substitutions, idempotency and rollback. The
+`membership-role-revocation-concurrency.test.ts` suite covers the races between
+assignment, substitution acceptance and revocation. Local validation on
+2 November 2026 with PostgreSQL 17.6: a rebuild of 178 migrations, 2666 SQL tests
+across 120 files and 37 integration and concurrency tests passed. Types were
+regenerated from PostgreSQL and `check:db-types` passed; `db:lint` finished without
+errors, with warnings on pre-existing functions. Run the SQL tests before the
+concurrency suite: that suite loads a persistent catalogue that collides with SQL
+fixtures if the order is reversed. On Windows, port 54322 can fall inside a range
+the system reserves; restarting the `winnat` service from an elevated shell frees
+it, or a different local port can be used temporarily.
+
+On a transient `55P03` conflict the API returns 409 with `Retry-After: 1`. Retry
+the same intent with its original identifiers; the transaction re-evaluates the
+current role. A completed revocation keeps its receipt even if the same role is
+granted again. Do not edit receipts or assignment rows by hand to resolve the
+conflict.
+
+If the evidence write or the assignment closure fails, the whole transaction rolls
+back. To roll back the API deployment, keep the migration and its authority guard.
+Restoring a role requires a new grant command; ended assignments keep their history
+and need a new assignment or substitution decision through their usual flow.
