@@ -473,13 +473,10 @@ Cookie: allfit_studio_session=<opaque>
 Origin: https://studio.allfit.one
 Idempotency-Key: <uuid-v4>
 Command-Id: <uuid-v7>
-Content-Type: application/json
-
-{}
 ```
 
 ```json
-{ "membership_id": "019c...", "status": "terminated", "outcome": "resigned", "ended_at": "2026-08-17T10:45:00-05:00" }
+{ "membership_id": "019c...", "ended_at": "2026-08-17T10:45:00-05:00" }
 ```
 
 Terminar o renunciar cierra asignaciones incondicionalmente. La renuncia está
