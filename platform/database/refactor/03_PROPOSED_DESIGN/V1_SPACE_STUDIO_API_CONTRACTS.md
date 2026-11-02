@@ -461,13 +461,10 @@ Cookie: allfit_studio_session=<opaque>
 Origin: https://studio.allfit.one
 Idempotency-Key: <uuid-v4>
 Command-Id: <uuid-v7>
-Content-Type: application/json
-
-{}
 ```
 
 ```json
-{ "membership_id": "019c...", "status": "terminated", "ended_at": "2026-08-17T10:40:00-05:00" }
+{ "membership_id": "019c...", "ended_at": "2026-08-17T10:40:00-05:00" }
 ```
 
 ```http

@@ -169,7 +169,9 @@ the member's professional authority at one instant, in one transaction with the
 `organization.membership_terminated.v1` event and the durable idempotency
 receipt. Only a current owner or administrator (`manage_memberships`) may
 terminate, and a membership that holds `owner` is refused with `22023`:
-ownership leaves only through `organizations.transfer_ownership`.
+ownership leaves only through `organizations.transfer_ownership`. The actor's
+own membership is also refused with `22023`: leaving is `OP-ORG-010`, so a
+departure is always recorded as a resignation.
 
 The coordinator reuses the private `relationships.end_assignments_for_membership`
 unconditionally, so holder and accepted substitute assignments end while
