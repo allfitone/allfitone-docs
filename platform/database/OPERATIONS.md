@@ -408,3 +408,26 @@ If the evidence write or the assignment closure fails, the whole transaction rol
 back. To roll back the API deployment, keep the migration and its authority guard.
 Restoring a role requires a new grant command; ended assignments keep their history
 and need a new assignment or substitution decision through their usual flow.
+
+## Studio membership termination (STUDIO-14)
+
+Migration `20261102215626_terminate_memberships.sql` introduces OP-ORG-009 and
+must be applied before the `POST .../memberships/{membershipId}/termination`
+route is deployed. It also widens the membership event contract to accept
+`organization.membership_terminated.v1`; existing rows already satisfy the new
+check. The operation requires a Studio session, an allowed origin,
+`Idempotency-Key` and `Command-Id`; it takes no body and returns the membership
+and its `ended_at` with `Cache-Control: no-store`.
+
+`T-ORG-TERMINATE-01` covers tenant isolation, permissions, the owner refusal,
+rollback, idempotency, the surviving relationship, consent and authorship.
+`membership-termination-concurrency.test.ts` covers the races between
+termination, a concurrent assignment and a second termination. On a transient
+`55P03` the API returns 409 with `Retry-After: 1`; retry with the original
+identifiers.
+
+After deployment, the relationships the member held have no responsible
+professional until the organization reassigns them. To roll back the API
+deployment, keep the migration. A terminated person rejoins only through a new
+team invitation, which creates a new membership; the terminated one keeps its
+history.
