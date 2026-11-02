@@ -10,7 +10,7 @@
 
 Define qué expone la API a cada producto: superficies, convenciones, endpoints, el **field-set y la versión de scope** que cada proyección exige, las funciones SQL internas para comandos con varias escrituras atómicas, las vistas de contrato, los eventos del outbox y cómo se distribuyen los DTOs dentro del monorepo.
 
-No define esquemas de columnas. La serialización ejecutable de la primera rebanada vertical está fijada antes del código en [`allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml); este documento conserva el contexto funcional del contrato.
+No define esquemas de columnas. La serialización ejecutable de la primera rebanada vertical está fijada antes del código en [`allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml`](https://github.com/allfitone/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml); este documento conserva el contexto funcional del contrato.
 
 ## 2. Arquitectura del contrato
 
@@ -188,7 +188,7 @@ Tres reglas que no se negocian:
 
 ### 3.7 Autoridad OpenAPI y gate de implementación
 
-[`allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml) es la fuente canónica de rutas, DTOs, ejemplos y caché para las operaciones HTTP implementadas de la primera rebanada vertical ampliada. [`V1_OPENAPI_CONTRACT.md`](./V1_OPENAPI_CONTRACT.md) registra su alcance y sus pruebas contractuales.
+[`allfitone/packages/contracts/openapi/allfit-v1.openapi.yaml`](https://github.com/allfitone/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml) es la fuente canónica de rutas, DTOs, ejemplos y caché para las operaciones HTTP implementadas de la primera rebanada vertical ampliada. [`V1_OPENAPI_CONTRACT.md`](./V1_OPENAPI_CONTRACT.md) registra su alcance y sus pruebas contractuales.
 
 Un endpoint estable de producto listado más adelante pero ausente del YAML todavía es **diseño**, no una superficie implementable. Debe incorporarse contract-first con su `x-allfit-operation` antes de crear el handler.
 

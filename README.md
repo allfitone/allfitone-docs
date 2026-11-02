@@ -31,14 +31,14 @@ New products use an additional `products/<slug>/` directory.
 
 ## Repository topology
 
-- [`dinnartec/allfitone`](https://github.com/dinnartec/allfitone) is the platform
+- [`allfitone/allfitone`](https://github.com/allfitone/allfitone) is the platform
   implementation monorepo. It contains the API, worker, Studio, Space,
   Backoffice and the shared authentication, queue, contract and database
   packages.
 - `allfitone-docs` is the only durable documentation repository and the
   normative source for product, architecture, engineering and operations.
 - The executable OpenAPI source belongs to
-  [`allfitone/packages/contracts/openapi`](https://github.com/dinnartec/allfitone/tree/main/packages/contracts/openapi),
+  [`allfitone/packages/contracts/openapi`](https://github.com/allfitone/allfitone/tree/main/packages/contracts/openapi),
   beside the code that validates and consumes it.
 - `allfitone-design-system` is the published UI library and
   `allfitone-landing-page` is the public marketing site.

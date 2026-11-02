@@ -80,7 +80,7 @@ La revisión utiliza como fuentes:
 9. [`V1_RLS_MATRIX.md`](../03_PROPOSED_DESIGN/V1_RLS_MATRIX.md).
 10. [`V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md`](../03_PROPOSED_DESIGN/V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md).
 11. [`V1_SPACE_STUDIO_API_CONTRACTS.md`](../03_PROPOSED_DESIGN/V1_SPACE_STUDIO_API_CONTRACTS.md).
-12. [`V1_OPENAPI_CONTRACT.md`](../03_PROPOSED_DESIGN/V1_OPENAPI_CONTRACT.md) y [`allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml).
+12. [`V1_OPENAPI_CONTRACT.md`](../03_PROPOSED_DESIGN/V1_OPENAPI_CONTRACT.md) y [`allfit-v1.openapi.yaml`](https://github.com/allfitone/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml).
 13. [`V1_DEGRADATION_AND_RECOVERY_MATRIX.md`](../03_PROPOSED_DESIGN/V1_DEGRADATION_AND_RECOVERY_MATRIX.md).
 14. [`V1_IDEMPOTENCY_CONTRACT.md`](../03_PROPOSED_DESIGN/V1_IDEMPOTENCY_CONTRACT.md).
 15. [`POSTGRES_MODELING_STANDARD.md`](../03_PROPOSED_DESIGN/POSTGRES_MODELING_STANDARD.md).
@@ -482,7 +482,7 @@ El cierre exige y confirma:
 
 ### P1-01 — Resuelto: contrato HTTP implementable para la primera rebanada
 
-[`V1_OPENAPI_CONTRACT.md`](../03_PROPOSED_DESIGN/V1_OPENAPI_CONTRACT.md) y [`allfit-v1.openapi.yaml`](https://github.com/dinnartec/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml) cierran:
+[`V1_OPENAPI_CONTRACT.md`](../03_PROPOSED_DESIGN/V1_OPENAPI_CONTRACT.md) y [`allfit-v1.openapi.yaml`](https://github.com/allfitone/allfitone/blob/main/packages/contracts/openapi/allfit-v1.openapi.yaml) cierran:
 
 - 25 operaciones HTTP distribuidas en 22 paths: las ocho originales, `OP-NUT-001..013` y `OP-IDN-025..028`;
 - mapeo unívoco mediante `x-allfit-operation`, sin `operationId` duplicados;

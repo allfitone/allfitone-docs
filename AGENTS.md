@@ -37,7 +37,7 @@ Any change to migrations, RLS, roles, Supabase environments, database CI/CD,
 backups, restore procedures or runtime database credentials must update these
 documents in the same change or in a linked documentation pull request.
 
-The executable implementation remains in `dinnartec/allfitone` under
+The executable implementation remains in `allfitone/allfitone` under
 `packages/db`, `scripts/check-db-policy.mjs` and the database workflows.
 
 ## Validation
