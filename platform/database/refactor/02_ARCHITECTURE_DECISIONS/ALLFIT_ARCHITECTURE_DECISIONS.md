@@ -51,6 +51,7 @@
 | ADR-041 | Reconocer y buscar alimentos al registrar una comida |
 | ADR-042 | Las fotos de comida viven en Cloudflare R2, en Estados Unidos |
 | ADR-043 | Allfit Pro: se paga con la compra integrada de cada tienda y se resuelve al leer |
+| ADR-044 | La persona trae su historial de otra app, y entra como entrenamiento suyo |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -5285,3 +5286,171 @@ la persona recibe el gratuito. Nunca al revés.
 9. Otra persona no puede reclamar una referencia de tienda ajena ni leer la suscripción.
 10. Dos compras simultáneas de la misma persona dejan una sola suscripción viva.
 11. Una compra o notificación que no se pudo verificar no cambia nada.
+
+---
+
+## ADR-044 — La persona trae su historial de otra app, y entra como entrenamiento suyo
+
+**Estado:** aceptada para V1<br>
+**Fecha:** 3 de noviembre de 2026<br>
+**Operaciones:** `OP-EXE-027`, `OP-EXE-028`, `OP-EXE-029` y `OP-EXE-030`<br>
+**Supersede:** la fila «Importar historial masivo desde un tercero» de
+`V1_OPERATIONS_MATRIX.md` §9, que dejaba toda importación fuera de V1.
+
+### Contexto
+
+Quien llega a Space desde otra app de fuerza trae años de entrenamiento. Si empieza de cero
+pierde sus récords, su «última vez» y la progresión que le dice cuánto cargar. Esa pérdida
+es la razón más concreta para no cambiarse de app.
+
+Hevy, una de las apps de registro de fuerza más usadas, exporta el historial completo
+desde sus ajustes en un archivo CSV. Se analizaron dos exportaciones reales de la misma
+cuenta: 340 entrenos y 7.322 series entre 2023 y 2026, una con la app en inglés y otra en
+español.
+
+- **Hay una fila por serie**, con 14 columnas fijas: `title`, `start_time`, `end_time`,
+  `description`, `exercise_title`, `superset_id`, `exercise_notes`, `set_index`, `set_type`,
+  `weight_kg`, `reps`, `distance_km`, `duration_seconds` y `rpe`. La sesión se repite en
+  cada fila y no trae identificador.
+- **La fecha se escribe en el idioma de la app**, sin zona horaria: `Aug 4, 2026, 3:09 PM`
+  en inglés y `4 ago 2026, 15:09` en español, donde septiembre es `sept`. Las dos
+  exportaciones dan el mismo instante local en las 7.322 filas.
+- **El nombre del ejercicio llega siempre en inglés**, cualquiera sea el idioma de la app,
+  con el equipo entre paréntesis: `Lat Pulldown (Cable)`.
+- **`set_type` tiene los cuatro valores de `ADR-033`**: `normal`, `warmup`, `dropset` y
+  `failure`. El peso vacío es peso corporal, y el RPE admite medios puntos.
+
+`ADR-034` ya dice que una sesión es una lista de ejercicios con sus series, y `ADR-036`
+deriva récords, racha y número de entreno de las sesiones terminadas. Lo que Hevy exporta
+cabe en ese modelo sin cambiarlo.
+
+### Decisión
+
+**1. Se importa un archivo que la persona exportó, no una cuenta ajena.** Space no se
+conecta a la cuenta de otra app, no guarda sus credenciales ni sincroniza en segundo plano.
+La persona elige el archivo en su teléfono y lo sube.
+
+**2. Cada fuente tiene un lector, y todos producen el mismo modelo.** Un lector reconoce su
+formato y lo traduce a un modelo intermedio propio y versionado, `imported_history.v1`:
+sesiones con título, inicio y fin locales, descripción y ejercicios en orden; cada ejercicio
+con su nombre de origen, su nota, su superserie y sus series; cada serie con su tipo, su
+carga en kilos, sus repeticiones y su RPE. La primera fuente es `hevy_csv`. Otra app es otro
+lector; el resto del sistema no cambia.
+
+- El lector reconoce el formato por su cabecera exacta y las fechas por el idioma en que
+  vienen. Un formato o una fecha que no reconoce **rechaza el archivo** con el motivo y la
+  fila; nunca adivina.
+- Lo que el modelo no admite se informa, no se descarta en silencio: una serie con
+  distancia o duración llega como aviso de serie no soportada.
+
+**3. El archivo se lee en la misma petición y no se guarda.** La API lo lee al recibirlo y
+solo conserva lo que leyó. El original no va al almacén de objetos ni a ningún otro lugar.
+El texto viaja tal cual, sin base64, con un tope de 4.000.000 de caracteres, por debajo del
+límite de cuerpo de la plataforma. La exportación analizada pesa 0,9 MB.
+
+**4. Importar tiene tres pasos: dejar en espera, confirmar y, si hace falta, deshacer.**
+
+- **En espera** (`OP-EXE-027`): lo leído queda en una zona de espera de la persona, sin
+  tocar su historial. La respuesta es una vista previa: cuántos entrenos y series, entre qué
+  fechas, cuáles ya estaban y cómo se resolvió cada ejercicio. Subir el mismo archivo otra
+  vez devuelve la misma importación. Una importación que no se confirma en 7 días expira y
+  su zona de espera se borra.
+- **Confirmar** (`OP-EXE-028`): con las elecciones de la persona, todos los entrenos nuevos
+  entran al historial en una sola transacción. Si uno falla, no entra ninguno. La zona de
+  espera se vacía.
+- **Deshacer** (`OP-EXE-029`): anula todos los entrenos de esa importación con el motivo
+  `import_undone`, con la semántica de anular de `ADR-038`. Lo que ya se compartió con un
+  profesional se trata como cualquier anulación.
+- **Leer** (`OP-EXE-030`): la persona ve sus importaciones, su estado y sus conteos.
+
+**5. Un entreno importado es un entreno terminado de la persona.** Se crea cerrado:
+`completed` y `valid`, autónomo, sin relación ni organización, con el tipo de actividad y el
+contrato de resultados de fuerza que usa un entreno libre. Su captura es
+`capture_source = 'import'` y su procedencia, `person_declared` (`ADR-018`): la persona
+declara lo que hizo, aunque lo haya anotado en otra app. El inicio y el fin son la hora
+local del archivo en la zona horaria que la persona confirma al importar. La zona horaria
+del teléfono se propone por defecto, porque el archivo no la trae.
+
+**6. Lo importado cuenta para todo.** Récords, «la última vez», racha, número de entreno,
+resumen de la semana y comparación de periodos leen el historial completo, y un entreno
+importado es parte de él. Ningún lector lo filtra. El plan gratuito conserva su corte de un
+mes de historial visible (`ADR-043`, `training_history_months`). Los récords se calculan
+contra todo lo anterior, incluido lo que el corte no muestra.
+
+**7. Cada ejercicio se resuelve contra el catálogo por capas.** El primer resultado que
+aparece manda:
+
+1. lo que la persona eligió para ese nombre en una importación anterior;
+2. una tabla global curada de nombres de cada fuente a movimientos del catálogo;
+3. una sugerencia por nombre o alias, que la persona confirma;
+4. sin movimiento.
+
+Un ejercicio sin movimiento **se importa igual**: conserva su nombre y su nota de origen, y
+sus series cuentan en tiempo, series y kilos. No genera récords, porque un récord es de un
+movimiento (`ADR-036`). La persona puede corregir cualquier resolución antes de confirmar,
+y su elección se recuerda para la próxima importación.
+
+**8. Un entreno no entra dos veces.** Cada entreno importado tiene una huella: su fuente,
+su inicio local y su título. Mientras haya un entreno vivo con esa huella, el mismo entreno
+no vuelve a entrar, aunque llegue en otro archivo. Así, subir una exportación más nueva
+solo agrega lo que falta. Deshacer libera las huellas y el historial se puede volver a
+importar.
+
+**9. Lo importado dice de dónde vino.** El historial y el detalle de un entreno indican la
+fuente («Importado de Hevy»), el título de origen y el nombre original de cada ejercicio
+que quedó sin movimiento.
+
+### Invariantes
+
+- Nunca se guarda el archivo original ni una copia de él.
+- La zona de espera solo la lee y la escribe su persona, y se vacía al confirmar, deshacer
+  o expirar.
+- Confirmar es todo o nada: no existe una importación a medias en el historial.
+- Un entreno importado nunca queda abierto, nunca tiene relación ni organización y nunca
+  dice ser de un dispositivo ni de un profesional.
+- Una huella viva identifica a lo sumo un entreno de la persona.
+- Repetir cualquier comando con su misma clave no crea otro efecto (`ADR-025`).
+- Una fecha que el lector no reconoce rechaza el archivo; ninguna fila se interpreta a
+  medias.
+- `allfit_api` no tiene privilegios sobre las tablas: todo pasa por funciones cerradas.
+
+### Consecuencias
+
+- `capture_source` admite `import` además de `manual` y `device`.
+- Aparecen una zona de espera por persona, el vínculo de cada entreno importado con su
+  importación y su título de origen, el nombre y la nota de origen de cada ejercicio, la
+  tabla global de nombres externos y la memoria de elecciones de cada persona.
+- Las lecturas de historial (`OP-EXE-014`, `OP-EXE-022`) y de detalle (`OP-EXE-023`)
+  devuelven la fuente de cada entreno.
+- Importar años de historial cambia de inmediato los récords y la racha de la persona. Es
+  lo esperado: es su entrenamiento.
+- La cobertura de la tabla global decide cuánto trabajo le queda a la persona al revisar.
+  Se siembra con los nombres de las exportaciones analizadas y crece por curaduría.
+
+### Lo que esta decisión no hace
+
+- No conecta cuentas de terceros, no usa la API de Hevy ni sincroniza en segundo plano.
+- No importa nada que no sea fuerza: ni distancia, ni duración por serie, ni cardio.
+- No importa rutinas, programas, medidas corporales ni fotos.
+- No construye todavía la cola de curaduría de nombres sin resolver en Backoffice.
+- No agrega más fuentes que `hevy_csv`.
+- No exporta desde Space.
+
+### Escenarios de prueba obligatorios
+
+1. Las exportaciones en inglés y en español del mismo historial producen el mismo modelo y
+   los mismos instantes.
+2. Un archivo con una cabecera ajena o una fecha ilegible se rechaza con el motivo y la
+   fila, sin dejar nada en espera.
+3. Dejar en espera no cambia el historial, los récords ni la racha.
+4. Subir el mismo archivo dos veces devuelve la misma importación.
+5. Confirmar crea todos los entrenos cerrados, con su fuente, o ninguno.
+6. Una segunda importación que repite entrenos solo agrega los nuevos.
+7. Deshacer anula todos los entrenos de la importación, y después se pueden volver a
+   importar.
+8. Lo importado aparece en el historial, cuenta para récords y racha, y el plan gratuito
+   sigue viendo un solo mes.
+9. Un ejercicio sin movimiento conserva su nombre de origen y no genera récords.
+10. La elección de una persona se recuerda en su próxima importación y no la ve nadie más.
+11. Otra persona no puede leer, confirmar ni deshacer una importación ajena.
+12. Repetir cualquier comando con la misma clave no crea otro efecto.
