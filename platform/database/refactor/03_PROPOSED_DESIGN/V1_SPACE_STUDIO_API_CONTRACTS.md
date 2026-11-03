@@ -932,6 +932,17 @@ Las funciones que actúan como entrada cerrada sobre tablas sin DML directo —`
 
 Los contratos interdominio `relationships.end_assignments_for_membership`, `relationships.terminate_for_organization`, `privacy.apply_organization_closure`, `planning.detach_for_organization_closure`, `execution.cancel_proposals_for_organization_closure` y `nutrition.cancel_proposals_for_organization_closure` también son `SECURITY DEFINER`, pertenecen al owner lógico y schema del dominio destino, fijan `search_path = pg_catalog` y califican cada objeto. `PUBLIC` y `allfit_api` no reciben `EXECUTE` directo sobre ellos: solo los coordinadores `organizations.revoke_membership_role`, `organizations.terminate_membership`, `organizations.resign_membership` y `organizations.close_organization`, ejecutados como `allfit_owner`, pueden llamarlos. `allfit_api` y Organizaciones conservan cero DML cross-schema.
 
+**Status (STUDIO-11).** Built: `organizations.close_organization`,
+`relationships.terminate_for_organization`, `privacy.apply_organization_closure`
+and `nutrition.cancel_proposals_for_organization_closure`, plus two contracts the
+table above does not list: `payments.check_organization_closure` (refuses while a
+client subscription is live) and `identity.revoke_invitations_for_organization_closure`.
+The coordinator's real signature is `close_organization(person_id,
+organization_id, idempotency_key, command_id, request_hash)`. Pending:
+`planning.detach_for_organization_closure` (HU-STUDIO-046) and
+`execution.cancel_proposals_for_organization_closure` (HU-STUDIO-059), each
+added with the slice that first lets its domain hold organization-originated rows.
+
 `relationships.terminate_relationship` corta inmediatamente las rutas operativas y de escritura; no revoca los grants. ADR-023 publica una superficie histórica separada, ejercida únicamente por el caso exacto y `access_control.can_read_frozen`. `privacy.revoke_grant` acepta `active` o `frozen`; al revocar uno congelado también cierra todos los casos abiertos de la relación antes de confirmar.
 
 Los lookups `access_control.grant_of(relationship_id,scope_code)` y `access_control.frozen_grant_of(relationship_id,scope_code)` son `STABLE SECURITY DEFINER`: el primero devuelve exclusivamente el grant `active`; el segundo, exclusivamente el `frozen` e incluye `frozen_at`. `access_control.can_access` consume solo el primero y `access_control.can_read_frozen`, solo el segundo.

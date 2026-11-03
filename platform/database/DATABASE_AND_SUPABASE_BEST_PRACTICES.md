@@ -248,6 +248,21 @@ admits nothing, and the function returns counts only. Reuse this pattern for
 any other aggregate that must not depend on the actor; never return rows from
 inside the token window.
 
+### Writing rows another person owns from a domain contract
+
+The same token, generalized, lets a closure contract act on rows whose only
+policy is `is_self`. `access_control.open_contract_scope(purpose, scope_id)` sets
+`app.contract_scope_purpose`, `app.contract_scope_id` and an HMAC token keyed by
+`access_control.contract_scope_keys.secret`; `access_control.contract_scope(purpose)`
+returns the scope id only while that token is valid; and
+`access_control.close_contract_scope()` clears all three. A policy for
+`allfit_owner` compares the row's organization with
+`(select access_control.contract_scope('<purpose>'))`. Open the scope immediately
+before the write and close it immediately after it, inside the contract function.
+`nutrition.cancel_proposals_for_organization_closure` is the first user. Do not
+use a capability policy instead: it would widen every owner function that reads
+the table.
+
 ## Review checklist
 
 - Can the schema rebuild from zero?
