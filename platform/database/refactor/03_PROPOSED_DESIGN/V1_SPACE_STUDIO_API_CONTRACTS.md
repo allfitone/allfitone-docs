@@ -542,11 +542,15 @@ expiración.
 | `POST` | `.../substitutions` | `OP-REL-004` | Ninguno |
 | `POST` | `/organizations/{orgId}/relationships/{id}/termination` | `OP-REL-008` | Ninguno |
 | `POST` | `/organizations/{orgId}/relationships/{id}/termination-requests` | `OP-REL-009` | Ninguno |
+| `POST` | `.../termination-requests/{terminationRequestId}/withdrawal` | `OP-REL-017` | None |
+| `POST` | `.../termination-requests/{terminationRequestId}/rejection` | `OP-REL-018` | None |
 | `GET` | `/organizations/{orgId}/grants` | `OP-PRV-014` | Ninguno — estado del consentimiento |
 | `POST` | `/organizations/{orgId}/historical-access-cases` | `OP-PRV-018` | `manage_historical_access`; no concede lectura |
 | `POST` | `/organizations/{orgId}/historical-access-cases/{caseId}/closure` | `OP-PRV-019` | `manage_historical_access`; no concede lectura |
 
 Que ninguna de estas operaciones exija scope es deliberado: **gestionar la relación no es acceder a los datos.** Un `admin` administra clientes sin ver un solo registro fitness.
+
+**Termination requests (STUDIO-26).** A request answers as `RelationshipTerminationRequest {request_id, relationship_id, status, reason, resolution, requested_by, resolved_by, created_at, resolved_at}`, with `status` one of `pending`, `withdrawn`, `rejected`, `resolved`, `superseded`. `OP-REL-009` answers `201`; `OP-REL-017` and `OP-REL-018` answer `200`. `OP-REL-011` carries the latest request as `termination_request`, or null: only the coach who asked and an owner or administrator ever receive one. Errors: `403` for an actor who could end the relationship herself, who is not the holder, or who may not withdraw or refuse; `404` for a relationship or request the actor cannot see; `409` for a second pending request or a request already settled; `422` for a blank reason or resolution.
 
 ### 5.4 Datos de clientes
 
