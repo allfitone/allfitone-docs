@@ -162,6 +162,30 @@ that already holds its assignment row. SQLSTATE `55P03` is a retryable conflict;
 the retry rechecks current authority. Replaying a completed revoke references
 the original role period, so a later regrant remains effective.
 
+## Studio membership termination (OP-ORG-009)
+
+`organizations.terminate_membership` closes the membership, every open role and
+the member's professional authority at one instant, in one transaction with the
+`organization.membership_terminated.v1` event and the durable idempotency
+receipt. Only a current owner or administrator (`manage_memberships`) may
+terminate, and a membership that holds `owner` is refused with `22023`:
+ownership leaves only through `organizations.transfer_ownership`. The actor's
+own membership is also refused with `22023`: leaving is `OP-ORG-010`, so a
+departure is always recorded as a resignation.
+
+The coordinator reuses the private `relationships.end_assignments_for_membership`
+unconditionally, so holder and accepted substitute assignments end while
+Relationships keeps ownership of that table. Service relationships stay active
+without a responsible professional and must be reassigned (`OP-REL-005`);
+consent grants and authorship are untouched. Pending proposals stay pending and
+cannot be activated, because the assignment guard requires an active
+membership.
+
+A second command for an already terminated membership converges on the original
+`ended_at` without writing new evidence. The event uses the closed
+`organization_id`, `person_id`, `status` snapshot, with `before` and `after`
+both required.
+
 ## Review checklist
 
 - Can the schema rebuild from zero?
