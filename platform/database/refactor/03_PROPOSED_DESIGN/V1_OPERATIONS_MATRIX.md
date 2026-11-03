@@ -2691,6 +2691,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `planning.session_template_version_published.v1` |
 | **Reglas** | Publicar **no** actualiza programas existentes ni asignaciones históricas: quien apuntaba a v1 sigue en v1. Una versión publicada no se edita jamás; corregir exige publicar otra |
 | **Falla cerrada** | Borrador incompleto, rechazo con la lista de faltantes |
+| **Implemented** | Convergence compares only with the **latest** version, and only while it is `published`: when the latest is deprecated, the same content is published as a new version. A new version takes the draft's `derived_from_version_id` (see `OP-PLN-004`) |
 
 #### `OP-PLN-004` — Derivar una versión desde otra
 
@@ -2708,6 +2709,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `planning.session_template_version_derived.v1` |
 | **Reglas** | La derivación conserva la procedencia. Derivar desde una versión de otra organización no es posible en V1: no hay contenido compartido entre organizaciones |
 | **Falla cerrada** | — |
+| **Implemented** | A template has **one** draft, so deriving **replaces** that draft with the content of version `v` instead of creating another, and requires `If-Match` with the current draft's ETag. The source must be `published`: a deprecated version is not a starting point (`404`). Provenance lives on the draft through every edit and passes to the next version published from it, after which the draft continues from that version (migration `20261103150000_organization_content_stays_in_the_organization.sql`) |
 
 #### `OP-PLN-005` — Deprecar una versión de plantilla
 
@@ -2742,6 +2744,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `planning.program_created.v1`, `planning.program_draft_updated.v1` |
 | **Reglas** | El borrador **no** puede referenciar "la última versión" de una plantilla: la referencia es siempre exacta y explícita. Un programa compuesto por versiones deprecadas puede seguir editándose, pero al publicar se advierte |
 | **Falla cerrada** | Referencia a un borrador de plantilla, rechazo |
+| **Implemented** | "Accessible" depends on whose program it is. An **organization** program accepts that organization's templates and published `global` ones, never a routine its author owns personally; a **personal** program accepts the person's own and `global` ones. Until migration `20261103150000_organization_content_stays_in_the_organization.sql` the shared guards also let a coach compose her gym's program with her own Space routine |
 
 #### `OP-PLN-008` — Publicar una versión de programa
 
@@ -2752,7 +2755,7 @@ Reglas que gobiernan todo el dominio:
 | **Actor** | `A3`–`A5`; `A2` para programas personales |
 | **Filtros obligatorios** | Borrador con al menos una posición; cada posición apunta a una versión de plantilla **publicada**; si el borrador declara `repeats_forever`, es booleano |
 | **Transacción** | Crear `PROGRAM_VERSION` inmutable con sus `PROGRAM_VERSION_SESSION` y su numeración. El borrador puede declarar `repeats_forever` —opcional, ausente es `false`— y **la versión publicada la lleva**: es contenido, entra en el canónico y por tanto en el `content_hash` (`ADR-032`) |
-| **Idempotencia** | `Idempotency-Key`. Publicaciones equivalentes convergen a una sola versión |
+| **Idempotencia** | `Idempotency-Key`. Publicaciones equivalentes convergen a una sola versión: la **última**, mientras esté publicada; contenido igual a una versión anterior se publica como la siguiente (`ADR-009`) |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada; numeración serializada |
 | **Información sensible** | Contenido de entrenamiento |
@@ -2776,6 +2779,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `planning.program_version_deprecated.v1` |
 | **Reglas** | Impide asignaciones nuevas. **No** cancela ni altera las asignaciones vigentes ni sus sesiones |
 | **Falla cerrada** | — |
+| **Implemented** | Status change only, owner or admin (`403` for a coach). Blocking new assignments is enforced by whoever assigns: `OP-PLN-011` checks `status = 'published'` today, and `OP-PLN-010` must do the same when it lands (STUDIO-39) |
 
 #### `OP-PLN-010` — Asignar una versión de programa a una relación
 
@@ -3101,7 +3105,7 @@ queda en `OP-PLN-025`.
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /studio/v1/organizations/{orgId}/session-templates/{id}/versions/{v}` · `GET /space/v1/assignments/{id}/program-version` · `GET /space/v1/programs/{programVersionId}` |
+| **Superficie** | `GET /studio/v1/organizations/{orgId}/session-templates/{id}/versions/{v}` · `GET /studio/v1/organizations/{orgId}/programs/{id}/versions/{v}` · `GET /space/v1/assignments/{id}/program-version` · `GET /space/v1/programs/{programVersionId}` |
 | **Actor** | `A2`, `A3`–`A5` |
 | **Filtros obligatorios** | La versión pertenece al contexto del actor, le fue asignada a la persona autenticada, **o es contenido `global` publicado**. Una versión que se puede asignar se puede leer: son la misma regla de acceso que `OP-PLN-011`, y decidir sin ver el contenido no es decidir |
 | **Transacción** | Ninguna |
@@ -3112,6 +3116,7 @@ queda en `OP-PLN-025`.
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Una persona puede leer íntegramente la versión que le fue asignada, aunque pertenezca a una organización: es el contenido que va a ejecutar. Eso **no** le da acceso al resto del catálogo de esa organización. Ausente y prohibido responden igual: distinguirlos haría enumerable el catálogo ajeno de identificador en identificador. **`weeks` puede venir nula** cuando la versión no tiene fecha de fin, y quien la dibuja escribe «sin fecha de fin» en lugar de un total que no existe (`ADR-032`). **La portada del detalle es la misma que la de la lista**: la del juego de quien pregunta, resuelta por `planning.cover_for`, y una mezcla estable para quien declinó decir su sexo. La versión sigue siendo inmutable y la portada no forma parte de ella —cuelga del programa—, así que **la respuesta es cacheable por juego y no por versión**: dos personas pueden recibir imágenes distintas del mismo contenido congelado, y una caché indexada solo por identificador de versión le serviría a una la portada de la otra. No se guarda ni se registra nada por haber elegido una. **Cada día del reparto responde también su portada**: la de su rutina, que `planning.pick_routine_cover` resuelve con la región que esa rutina trabaja y con el juego de quien pregunta, de modo que es la misma que enseñará en Hoy cuando el programa se tome. Sale nula donde la curaduría todavía no llegó, que es el estado normal de un catálogo que crece y no un error: quien la dibuja enseña la fila sin imagen. Se responde la dirección compuesta y nunca la clave (`ADR-031`). **La demostración de cada ejercicio no la responde esta operación**, aunque la pantalla la dibuje: ya tiene dueño en el catálogo de movimientos (`OP-CAT-003`) y quien la necesita la cruza por identificador. Colgarla también del paso pondría la misma imagen en dos respuestas, y el paso es una forma compartida con la sesión, que no la pide. **La meta de nutrición del programa** (`nutrition`) viene solo en versiones `global`: `planning.program_nutrition` elige el objetivo —el declarado por la persona si el programa lo sirve; si no, el primero del programa— y `nutrition.reference_targets` lo calcula con el último peso registrado. Sin peso o sin referencia sale nula, y por eso también es por persona y no cacheable por versión |
 | **Falla cerrada** | — |
+| **Implemented (Studio, programs)** | `planning.read_organization_program_version` (migration `20261103150000_organization_content_stays_in_the_organization.sql`) answers the `ProgramVersion` publishing names in `Location`: every day's exact template version, `repeats_forever` and the template versions retired since. Same rules as the template read: content managers of `{orgId}` only, audited before it returns, absent and forbidden alike (`404`), revalidated by ETag. Space keeps `planning.read_program_version`, a different read with another shape |
 
 ### 7.7 Ejecución
 

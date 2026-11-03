@@ -538,3 +538,46 @@ assert it cannot happen.
 recipients, but no worker claims them yet, as with `relationship.terminated.v1`.
 Until a consumer exists, administrators learn of a request from the relationship
 screen, not by email.
+
+## Organization content stays in the organization (STUDIO-29..36)
+
+Migration `20261103150000_organization_content_stays_in_the_organization.sql` closes a tenancy hole
+in program composition: the shared guards `planning.program_content_errors` and
+`planning.lock_program_template_versions` accepted any routine the actor owns,
+so a coach could put her own Space routine into her organization's program. An
+organization program now accepts only that organization's templates and
+published global ones. The migration also keeps derivation provenance through
+edits, returns `repeats_forever` on every program version, adds
+`planning.read_organization_program_version` behind
+`GET /studio/v1/organizations/{organizationId}/programs/{programId}/versions/{versionNumber}`,
+and revokes a direct `allfit_api` grant on `planning.planned_sets`. Apply it
+before deploying the API release that mounts the route; until then the route
+answers `503`.
+
+Existing rows are not rewritten. When the migration runs it counts organization
+program drafts and published versions that already hold a personal routine, and
+emits `WARNING: organization programs holding personal routines: N drafts, M
+published versions` in the deployment log when either is not zero. No warning
+means nothing is affected. With a warning, list the cases read-only:
+
+```sql
+select program.owner_organization_id, program.id as program_id,
+       version.version_number, template.owner_person_id
+from planning.program_versions as version
+join planning.programs as program on program.id = version.program_id
+join planning.program_version_sessions as session on session.program_version_id = version.id
+join planning.session_template_versions as template_version
+  on template_version.id = session.template_version_id
+join planning.session_templates as template on template.id = template_version.template_id
+where program.owner_organization_id is not null
+  and template.owner_person_id is not null;
+```
+
+A draft in that state fails validation (`template-version`) on its next edit or
+publication until the personal routine is removed. A published version is
+immutable: the organization retires it (`OP-PLN-009`) and publishes a corrected
+one. Nothing reaches a client until organizations can assign programs
+(STUDIO-39).
+
+`T-PLN-ORGCONTENT-01` covers the guard, cross-organization and role denials,
+provenance, `repeats_forever` and the audited read.

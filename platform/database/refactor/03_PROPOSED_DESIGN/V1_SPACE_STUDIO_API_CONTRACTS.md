@@ -633,10 +633,12 @@ El header `X-Historical-Access-Case` contiene un UUID opaco. El backend lo valid
 | `GET` · `POST` | `/organizations/{orgId}/session-templates` | `OP-PLN-019` · `OP-PLN-001` |
 | `PUT` | `.../session-templates/{id}/draft` | `OP-PLN-002` |
 | `POST` | `.../session-templates/{id}/versions` | `OP-PLN-003` |
+| `GET` | `.../session-templates/{id}/versions/{v}` | `OP-PLN-021` |
 | `POST` | `.../versions/{v}/derivation` · `/deprecation` | `OP-PLN-004` · `OP-PLN-005` |
 | `GET` · `POST` | `/organizations/{orgId}/programs` | `OP-PLN-020` · `OP-PLN-006` |
 | `PUT` | `.../programs/{id}/draft` | `OP-PLN-007` |
 | `POST` | `.../programs/{id}/versions` · `/versions/{v}/deprecation` | `OP-PLN-008` · `OP-PLN-009` |
+| `GET` | `.../programs/{id}/versions/{v}` | `OP-PLN-021` |
 | `POST` | `.../relationships/{relId}/assignments` | `OP-PLN-010` |
 | `GET` | `.../relationships/{relId}/assignments` | `OP-PLN-018` |
 | `PATCH` | `/organizations/{orgId}/planned-sessions/{id}` | `OP-PLN-012` |
