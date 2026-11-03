@@ -263,6 +263,14 @@ before the write and close it immediately after it, inside the contract function
 use a capability policy instead: it would widen every owner function that reads
 the table.
 
+The scope is a single slot, and a contract can run inside a command that holds a
+scope of its own. A helper that may be nested saves the three settings before
+opening its scope and restores them afterwards instead of clearing them, as
+`relationships.settle_termination_requests` does. It runs inside
+`close_relationship`, which `OP-ORG-012` calls, and in a trigger on assignments,
+so it settles a request whoever is acting: a person ending her own relationship,
+or a coach whose membership is ending, sees no request.
+
 ## Review checklist
 
 - Can the schema rebuild from zero?

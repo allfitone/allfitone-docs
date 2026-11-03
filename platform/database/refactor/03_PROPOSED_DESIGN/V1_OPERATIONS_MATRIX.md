@@ -1597,6 +1597,8 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | `OP-REL-013` | Consultar suplencias de una relación | Consulta | `A2`, `A3`–`A5` |
 | `OP-REL-014` | Consultar el historial de una relación | Consulta | `A2`, `A4`, `A5` |
 | `OP-REL-015` | Consultar qué pide una invitación de cliente | Consulta | `A2` |
+| `OP-REL-017` | Withdraw a termination request (coach) | Command | `A3` |
+| `OP-REL-018` | Refuse a termination request | Command | `A4`, `A5` |
 
 ---
 
@@ -1804,6 +1806,39 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Evento de dominio** | `relationship.termination_requested.v1` |
 | **Reglas** | La solicitud **no** cambia el estado de la relación ni corta accesos: solo `A4`/`A5` o la persona terminan. La solicitud existe únicamente para el coach **sin poder de terminación**: un coach que también es `admin` u `owner` no necesita solicitar nada. Un coach que ya no quiere atender puede además renunciar a su asignación, lo que deja la relación sin titular pero vigente. La persona atendida no ve la solicitud: es deliberación interna de la organización |
 | **Falla cerrada** | Solicitante con capacidad de terminar, o solicitud pendiente ya existente para esa relación: rechazo |
+| **Implemented** | `relationships.request_relationship_termination` (migration `20261103090000`) behind `POST /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/termination-requests`, with an optional `reason` (1–2000). The power to end is whatever `OP-REL-008` checks, `assign_professionals`, and the same capability refuses the request (`403`), including an administrator who also coaches the relationship. Only the current holder may ask: a cover or staff member gets `403`, a coach with no assignment `404`. A second pending request violates `uidx_relationship_termination_requests_pending` (`409`). The command takes `FOR SHARE` locks on the relationship and on the holder assignment, so a concurrent termination or reassignment either waits and settles the request, or makes it fail (`409`). It enqueues `relationship.termination_requested.v1` carrying the contact of every owner and administrator; **no worker delivers it yet**. The request settles on its own: `resolved` (with the actor's membership) when the organization ends the relationship through `close_relationship`, including `OP-ORG-012`; `superseded` when the person ends it, or when the holder assignment stops being active (reassignment, resignation, removal, role loss) through `trg_professional_assignments_after_update_supersede_requests`. Settling runs under the contract scope `termination_request_settlement`, because those actors cannot see the request. `OP-REL-011` now returns the latest request as `termination_request`, narrowed by the row policy |
+
+#### `OP-REL-017` — Withdraw a termination request (coach)
+
+| Field | Value |
+| --- | --- |
+| **Type** | Command |
+| **Surface** | `POST /studio/v1/organizations/{orgId}/relationships/{id}/termination-requests/{terminationRequestId}/withdrawal` |
+| **Actor** | `A3`, the coach who made the request |
+| **Mandatory filters** | The request belongs to the relationship and to `{orgId}`; the actor owns `requested_by_membership_id` |
+| **Transaction** | The `pending` request becomes `withdrawn`, with `resolved_by_membership_id` = the requester and `resolved_at` |
+| **Idempotency** | `Idempotency-Key`. Withdrawing a request already withdrawn converges to it |
+| **Offline / concurrency** | Fails closed; the request row is locked `FOR UPDATE` |
+| **Sensitive information** | None |
+| **Domain event** | None |
+| **Rules** | Nobody else may withdraw it, the administration included (`403`). A request settled any other way is a `409` |
+| **Implemented** | `relationships.withdraw_termination_request` (migration `20261103090000`) |
+
+#### `OP-REL-018` — Refuse a termination request
+
+| Field | Value |
+| --- | --- |
+| **Type** | Command |
+| **Surface** | `POST /studio/v1/organizations/{orgId}/relationships/{id}/termination-requests/{terminationRequestId}/rejection` |
+| **Actor** | `A4`, `A5` (`assign_professionals`, the same power `OP-REL-008` requires) |
+| **Mandatory filters** | The request belongs to the relationship and to `{orgId}` and is `pending` |
+| **Transaction** | The request becomes `rejected` with the `resolution` text, `resolved_by_membership_id` = the actor and `resolved_at` |
+| **Idempotency** | `Idempotency-Key` |
+| **Offline / concurrency** | Fails closed; the request row is locked `FOR UPDATE` |
+| **Sensitive information** | None |
+| **Domain event** | `relationship.termination_request_rejected.v1` to the requester, when she has a contact |
+| **Rules** | A refusal always carries a `resolution` (1–2000). Accepting a request is not an operation: ending the relationship with `OP-REL-008` settles it as `resolved`. A coach is refused (`403`); a settled request is a `409` |
+| **Implemented** | `relationships.reject_termination_request` (migration `20261103090000`). **No worker delivers the event yet** |
 
 #### `OP-REL-010` — Listar el directorio de clientes
 

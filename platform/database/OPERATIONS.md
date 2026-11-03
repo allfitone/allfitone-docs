@@ -512,3 +512,29 @@ full rollback, every effect of the closure, the untouched other tenant, replay
 and convergence, and the contract scope. `organization-closure-concurrency.test.ts`
 races an acceptance against the closure. On a transient `55P03` the API returns
 409 with `Retry-After: 1`; retry with the original identifiers.
+
+## Relationship termination requests (STUDIO-26)
+
+Migration `20261103090000_a_coach_asks_the_gym_to_end_a_relationship.sql` adds
+`relationships.relationship_termination_requests`, the commands `OP-REL-009`,
+`OP-REL-017` and `OP-REL-018`, and a new `termination_request` field on
+`OP-REL-011`. It also replaces `relationships.close_relationship` and
+`relationships.read_relationship_state`, and adds the trigger
+`trg_professional_assignments_after_update_supersede_requests`. Apply it before
+deploying the API release that mounts the three `termination-requests` routes.
+An API deployed first answers `503` on those routes and reports
+`termination_request` as null on the relationship read.
+
+Asking never changes a relationship. Every request ends settled: `resolved` when
+the organization ends the relationship (including an organization closing),
+`rejected` or `withdrawn` by the commands, and `superseded` when the person ends
+it or the coach stops being its holder. A request found `pending` on a
+relationship that is terminated, or whose requester no longer holds it, is a
+defect; `T-REL-TERMREQ-INT-17` and `termination-request-concurrency.test.ts`
+assert it cannot happen.
+
+`relationship.termination_requested.v1` and
+`relationship.termination_request_rejected.v1` are enqueued with their
+recipients, but no worker claims them yet, as with `relationship.terminated.v1`.
+Until a consumer exists, administrators learn of a request from the relationship
+screen, not by email.
