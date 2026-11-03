@@ -5355,13 +5355,31 @@ límite de cuerpo de la plataforma. La exportación analizada pesa 0,9 MB.
   fechas, cuáles ya estaban y cómo se resolvió cada ejercicio. Subir el mismo archivo otra
   vez devuelve la misma importación. Una importación que no se confirma en 7 días expira y
   su zona de espera se borra.
-- **Confirmar** (`OP-EXE-028`): con las elecciones de la persona, todos los entrenos nuevos
-  entran al historial en una sola transacción. Si uno falla, no entra ninguno. La zona de
-  espera se vacía.
+- **Confirmar** (`OP-EXE-028`): los entrenos nuevos entran al historial **por tandas de a
+  lo sumo 25**, del más antiguo al más reciente. Cada tanda es una transacción: entra
+  entera o no entra. La primera fija la zona horaria y las elecciones de la persona y
+  resuelve una sola vez el movimiento de cada nombre; la importación queda `committing`
+  y la respuesta dice cuántos entrenos faltan. La app repite la llamada, con una clave
+  nueva y la misma zona, hasta que no falta ninguno y la importación queda `committed`.
+  Una llamada que continúa no lee elecciones: ya están resueltas, y una app que se reabre
+  a mitad ya no las tiene. Lo que va entrando sale de la zona de espera.
 - **Deshacer** (`OP-EXE-029`): anula todos los entrenos de esa importación con el motivo
   `import_undone`, con la semántica de anular de `ADR-038`. Lo que ya se compartió con un
   profesional se trata como cualquier anulación.
 - **Leer** (`OP-EXE-030`): la persona ve sus importaciones, su estado y sus conteos.
+
+**Por qué por tandas y no en el worker.** Confirmar un historial en una sola petición
+tardaba unos 4 s con 340 entrenos en local y crece con el historial: una base de datos más
+pequeña o un historial de varios miles pasa del tiempo que el balanceador espera (60 s) y
+del que la plataforma admite para un comando. La alternativa obvia, responder enseguida y
+procesarlo en el worker, obliga a que un proceso escriba los entrenos de la persona: o
+actúa como ella, algo que hoy ningún proceso hace en tiempo de ejecución, o se abren las
+políticas de esas tablas a escrituras del worker. Las dos debilitan la frontera de la
+persona sobre sus datos de salud. Por tandas, cada escritura sigue siendo un comando firmado
+por la propia persona, cada petición dura lo mismo sea cual sea el historial (unos 0,2 s
+por tanda; la primera, que resuelve los nombres, unos 1,6 s) y la app muestra el avance
+real. El costo es que, si la persona cierra la app a mitad, la importación queda a medias
+hasta que vuelva y la continúe o la deshaga.
 
 **5. Un entreno importado es un entreno terminado de la persona.** Se crea cerrado:
 `completed` y `valid`, autónomo, sin relación ni organización, con el tipo de actividad y el
@@ -5403,9 +5421,12 @@ que quedó sin movimiento.
 ### Invariantes
 
 - Nunca se guarda el archivo original ni una copia de él.
-- La zona de espera solo la lee y la escribe su persona, y se vacía al confirmar, deshacer
-  o expirar.
-- Confirmar es todo o nada: no existe una importación a medias en el historial.
+- La zona de espera solo la lee y la escribe su persona. Se vacía a medida que se confirma,
+  y del todo al deshacer o expirar.
+- Cada tanda es todo o nada. Una importación a medias (`committing`) tiene en el historial
+  sus entrenos más antiguos completos, y nada más; se continúa o se deshace.
+- La zona horaria y la resolución de cada nombre se fijan en la primera tanda y valen para
+  todas.
 - Un entreno importado nunca queda abierto, nunca tiene relación ni organización y nunca
   dice ser de un dispositivo ni de un profesional.
 - Una huella viva identifica a lo sumo un entreno de la persona.
@@ -5424,6 +5445,8 @@ que quedó sin movimiento.
   devuelven la fuente de cada entreno.
 - Importar años de historial cambia de inmediato los récords y la racha de la persona. Es
   lo esperado: es su entrenamiento.
+- La app repite la confirmación hasta terminar y muestra el avance. Una importación que
+  quedó a medias se ofrece para continuar o deshacer al abrirla.
 - La cobertura de la tabla global decide cuánto trabajo le queda a la persona al revisar.
   Se siembra con los nombres de las exportaciones analizadas y crece por curaduría.
 
@@ -5444,7 +5467,9 @@ que quedó sin movimiento.
    fila, sin dejar nada en espera.
 3. Dejar en espera no cambia el historial, los récords ni la racha.
 4. Subir el mismo archivo dos veces devuelve la misma importación.
-5. Confirmar crea todos los entrenos cerrados, con su fuente, o ninguno.
+5. Confirmar crea los entrenos cerrados, con su fuente, por tandas de a lo sumo 25, cada una
+   completa o nada; la última cierra la importación. Una tanda que continúa no cambia la
+   zona horaria y escribe los nombres como los resolvió la primera.
 6. Una segunda importación que repite entrenos solo agrega los nuevos.
 7. Deshacer anula todos los entrenos de la importación, y después se pueden volver a
    importar.
@@ -5454,3 +5479,4 @@ que quedó sin movimiento.
 10. La elección de una persona se recuerda en su próxima importación y no la ve nadie más.
 11. Otra persona no puede leer, confirmar ni deshacer una importación ajena.
 12. Repetir cualquier comando con la misma clave no crea otro efecto.
+13. Deshacer una importación a medias anula lo que entró y descarta lo que faltaba.

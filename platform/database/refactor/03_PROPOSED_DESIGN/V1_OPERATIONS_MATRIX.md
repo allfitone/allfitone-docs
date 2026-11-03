@@ -3612,14 +3612,14 @@ Reglas que gobiernan todo el dominio:
 | **Superficie** | `POST /space/v1/history-imports/{id}/commit` |
 | **Actor** | `A2` |
 | **Filtros obligatorios** | Importación propia en espera y no expirada |
-| **Transacción** | Crear cerradas todas las sesiones en espera que no estén duplicadas, con sus ejercicios y series, guardar las elecciones de la persona y vaciar la zona de espera; todo o nada |
+| **Transacción** | Por llamada, una tanda de a lo sumo 25 sesiones en espera, de la más antigua a la más reciente: crear cerradas las que no estén duplicadas, con sus ejercicios y series, y sacarlas de la zona de espera; cada tanda es todo o nada. La primera guarda las elecciones de la persona y fija la zona y la resolución de cada nombre |
 | **Idempotencia** | `Idempotency-Key` |
 | **Paginación y orden** | N/A |
-| **Offline / concurrencia** | Una segunda confirmación de la misma importación no crea nada más |
+| **Offline / concurrencia** | Requiere conexión. La importación queda `committing` y responde cuántas sesiones faltan; la app repite la llamada con una clave nueva hasta `committed`, y continúa una importación a medias al reabrirla. Las llamadas de una misma importación se serializan |
 | **Información sensible** | Entrenamiento propio |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Cada sesión entra `completed` y `valid`, autónoma, con `capture_source = 'import'` y procedencia `person_declared`, en la zona horaria elegida. Un ejercicio sin movimiento conserva su nombre de origen. Lo importado cuenta para récords, racha y número (`ADR-044`) |
-| **Falla cerrada** | Ajena, inexistente, confirmada, deshecha o expirada: rechazo sin efecto |
+| **Reglas** | Cada sesión entra `completed` y `valid`, autónoma, con `capture_source = 'import'` y procedencia `person_declared`, en la zona horaria elegida. Un ejercicio sin movimiento conserva su nombre de origen. Lo importado cuenta para récords, racha y número. Una llamada que continúa no lee elecciones. Por tandas y no en el worker, para que cada escritura sea un comando de la persona (`ADR-044`) |
+| **Falla cerrada** | Ajena o inexistente: no encontrada. Confirmada, deshecha, expirada, o una continuación en otra zona horaria: rechazo sin efecto |
 
 #### `OP-EXE-029` — Deshacer una importación de historial
 
@@ -3628,8 +3628,8 @@ Reglas que gobiernan todo el dominio:
 | **Tipo** | Comando |
 | **Superficie** | `POST /space/v1/history-imports/{id}/undo` |
 | **Actor** | `A2` |
-| **Filtros obligatorios** | Importación propia confirmada o en espera |
-| **Transacción** | Anular todas las sesiones de la importación con el motivo `import_undone`, liberar sus huellas y vaciar la zona de espera |
+| **Filtros obligatorios** | Importación propia en espera, a medias o confirmada |
+| **Transacción** | Anular todas las sesiones que la importación ya trajo con el motivo `import_undone`, liberar sus huellas y vaciar la zona de espera, también si quedó a medias |
 | **Idempotencia** | `Idempotency-Key` |
 | **Paginación y orden** | N/A |
 | **Offline / concurrencia** | Deshacer lo ya deshecho no cambia nada |
