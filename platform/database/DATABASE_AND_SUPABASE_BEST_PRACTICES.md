@@ -212,6 +212,42 @@ contact are skipped rather than keeping a person inside an organization they
 asked to leave; the `organization.membership_resigned.v1` membership event stays
 the durable record either way.
 
+## Guest quota enforcement (HU-STUDIO-087)
+
+`identity.issue_client_invitation` and `identity.decide_client_invitation` enforce
+the guest quota stored by `HU-BO-034`. Both lock the organization row `FOR NO KEY
+UPDATE` and ask `organizations.guest_places_exhausted`, which reads the single
+definition of what occupies a place, `organizations.organization_guest_occupancy`:
+live relationships plus unanswered, unexpired invitations. A new invitation is
+refused when no place is left; reusing a pending invitation takes no second
+place. Acceptance converts the place its invitation already held, so it is
+refused only when the organization is over its quota by another way, for
+example after Allfit lowered it. A missing quota means no limit. The refusal is
+SQLSTATE `AF409`, which the API answers as `409` `guest-quota-exhausted`.
+
+Locks are taken in the order invitation, then organization, in both functions,
+so an issue that reuses the invitation a person is accepting cannot deadlock
+with that acceptance.
+
+### Counting rows the actor cannot read
+
+`relationships.service_relationships` forces row-level security even for its
+owner, so a `SECURITY DEFINER` count returns only what the actor may see. A coach
+without `view_directory` and a person answering from Space would both
+undercount. Do not widen a read policy to fix a count.
+
+`organization_guest_occupancy` instead proves it is the caller with a counting
+token: an HMAC of the organization id, `pg_backend_pid()` and the transaction
+start, keyed by `relationships.occupancy_count_keys.secret`, which the runtime
+role cannot read. The function sets `app.occupancy_count_org` and
+`app.occupancy_count_token`, counts, and clears both before it returns. The
+policy `service_relationships_select_occupancy_count` admits the rows of that
+organization only while the token is valid, and evaluates it once per query
+through a sub-select. A forged token, or a real one in another transaction,
+admits nothing, and the function returns counts only. Reuse this pattern for
+any other aggregate that must not depend on the actor; never return rows from
+inside the token window.
+
 ## Review checklist
 
 - Can the schema rebuild from zero?
