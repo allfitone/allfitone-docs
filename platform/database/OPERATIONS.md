@@ -458,3 +458,31 @@ returns 409 with `Retry-After: 1`; retry with the original identifiers.
 To roll back the API or worker deployment, keep the migration. A person who
 resigned rejoins only through a new team invitation, which creates a new
 membership.
+
+## Guest quota enforcement (STUDIO-158)
+
+Migration `20261103003415_enforce_guest_quota.sql` enforces `HU-STUDIO-087` in
+`identity.issue_client_invitation` and `identity.decide_client_invitation`. It
+creates `relationships.occupancy_count_keys` with one random 32-byte secret,
+generated in each environment when the migration runs; the secret never leaves
+the database and is not configuration. Apply the migration before deploying the
+API release that maps `AF409` to `409 guest-quota-exhausted`. An API deployed
+before the migration only misses the refusal; one deployed after it without the
+mapping answers the refusal as `503`.
+
+Existing organizations have no quota and stay unlimited. Lowering a quota below
+the occupancy ends nothing: new invitations and acceptances are refused until a
+place frees up. The quota projection in Backoffice keeps reading the same
+occupancy function, which now counts every live relationship regardless of who
+asks.
+
+To rotate the counting secret, update the single row of
+`relationships.occupancy_count_keys` with `extensions.gen_random_bytes(32)` as
+the owner; tokens live only inside one function call, so rotation needs no
+coordination.
+
+`T-REL-QUOTA-01` covers the coach and Space actors, reuse, expiry, the lowered
+quota, the refused acceptance, the unlimited organization and the token policy
+(forged and expired tokens, unreadable key). `guest-quota-concurrency.test.ts`
+races two invitations for the last place. On a transient `55P03` the API returns
+409 with `Retry-After: 1`; retry with the original identifiers.
