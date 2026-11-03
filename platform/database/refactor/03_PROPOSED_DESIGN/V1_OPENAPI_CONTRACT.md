@@ -84,7 +84,7 @@ y no se declaran sincronizadas con el YAML o los tipos generados:
 | `POST /studio/v1/organizations/{organizationId}/memberships/{membershipId}/termination` | `OP-ORG-009` | `cookieAuth` + `Origin` + command headers; no body | terminated membership + `ended_at` |
 | `POST /studio/v1/organizations/{organizationId}/me/membership/resignation` | `OP-ORG-010` | `cookieAuth` + `Origin` + command headers; no body | resigned membership + `ended_at` |
 | `POST /studio/v1/organizations/{organizationId}/ownership-transfers` | `OP-ORG-011` | `cookieAuth` + `Origin` + `target_membership_id` + headers de comando | owner nuevo/anterior + `transferred_at` |
-| `POST /studio/v1/organizations/{organizationId}/closure` | `OP-ORG-012` | `cookieAuth` + `Origin` + objeto vacío cerrado + headers de comando | cierre confirmado sin estado parcial |
+| `POST /studio/v1/organizations/{organizationId}/closure` | `OP-ORG-012` | `cookieAuth` + `Origin` + no body + command headers | `200 OrganizationClosure {organization_id, closed_at, relationships_terminated}`; `422` while a client subscription is not ended or the organization is not active; no partial state |
 
 Cada operación declara objetos cerrados, errores comunes más `404` uniforme para
 recurso ajeno/inexistente y `Cache-Control: no-store`; los comandos exigen ambos

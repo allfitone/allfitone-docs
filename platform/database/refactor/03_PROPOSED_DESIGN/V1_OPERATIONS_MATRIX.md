@@ -1443,6 +1443,19 @@ Regla que gobierna todo el dominio: **una membresía no concede acceso al Fitnes
 | **Reglas** | Los contratos públicos son estrechos y reciben `organization_id`, un instante efectivo único y el command ID; cada dominio conserva ownership de sus invariantes. Ejecución cancela propuestas de corrección pendientes y Nutrición cancela propuestas nutricionales pendientes. Cerrar no elimina el Fitness ID ni ejecuciones. La organización conserva únicamente evidencia bilateral mínima bajo finalidad, acceso restringido y plazo; retener no es mantener acceso ordinario |
 | **Falla cerrada** | Si cualquier contrato de Relaciones, Privacidad, Planificación, Ejecución o Nutrición falla, la transacción entera se revierte |
 
+**Implementation note (STUDIO-11).** The coordinator first calls
+`payments.check_organization_closure`, which refuses with `22023` while a client
+subscription is not ended: no contract ends an external charge. It also calls
+`identity.revoke_invitations_for_organization_closure`, so no pending invitation
+can be accepted after the closure. `privacy.apply_organization_closure` verifies
+that no grant of the organization is still active; `close_relationship` already
+froze them. `planning.detach_for_organization_closure` and
+`execution.cancel_proposals_for_organization_closure` are not built yet, because
+no program assignment can originate from an organization
+(`ck_program_assignments_no_origin`, lifted by HU-STUDIO-046) and correction
+proposals do not exist (HU-STUDIO-059). Only an `active` organization can be
+closed. A new command after the closure converges on the original instant.
+
 #### `OP-ORG-013` — Consultar la organización
 
 | Campo | Valor |

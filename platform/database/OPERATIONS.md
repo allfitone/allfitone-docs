@@ -486,3 +486,29 @@ quota, the refused acceptance, the unlimited organization and the token policy
 (forged and expired tokens, unreadable key). `guest-quota-concurrency.test.ts`
 races two invitations for the last place. On a transient `55P03` the API returns
 409 with `Retry-After: 1`; retry with the original identifiers.
+
+## Organization closure (STUDIO-11)
+
+Migration `20261103014500_close_organizations.sql` adds `OP-ORG-012`
+(`organizations.close_organization`) and its domain contracts. It creates
+`access_control.contract_scope_keys` with one random 32-byte secret, generated
+in each environment when the migration runs; rotate it the same way as the
+occupancy key. It also adds `organization.closed.v1` to the organization event
+contract. Apply the migration before deploying the API release that mounts
+`POST /studio/v1/organizations/{organizationId}/closure`; until then, the route
+answers `503`.
+
+A closure is terminal. Relationships end with their grants frozen, memberships
+close and pending invitations are revoked, so there is no reopen path; restoring
+an organization needs a new organization. An owner whose clients still have
+subscriptions that are not ended receives `422` until each one is ended.
+
+`relationship.terminated.v1` notices are enqueued for clients with an address,
+but no worker claims that event yet; the same is true for `OP-REL-008`. Until a
+consumer exists, those notices are not emailed.
+
+`T-ORG-CLOSURE-01` covers authorization, the subscription and grant refusals with
+full rollback, every effect of the closure, the untouched other tenant, replay
+and convergence, and the contract scope. `organization-closure-concurrency.test.ts`
+races an acceptance against the closure. On a transient `55P03` the API returns
+409 with `Retry-After: 1`; retry with the original identifiers.
