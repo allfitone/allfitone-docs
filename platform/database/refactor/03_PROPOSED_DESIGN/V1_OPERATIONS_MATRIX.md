@@ -199,12 +199,12 @@ Toda sesión conserva la zona horaria de la persona en el momento del hecho. La 
 | Privacidad | 13 | 7 | 20 |
 | Catálogo | 4 | 8 | 12 |
 | Planificación | 19 | 10 | 29 |
-| Ejecución | 13 | 7 | 20 |
+| Ejecución | 17 | 13 | 30 |
 | Nutrición | 8 | 5 | 13 |
 | Pagos | 16 | 7 | 23 |
 | Sistema | 10 | 1 | 11 |
 | Soporte | 6 | 5 | 11 |
-| **Total** | **129** | **69** | **198** |
+| **Total** | **133** | **75** | **208** |
 
 Algunas fichas cubren dos identificadores cuando la operación es simétrica —crear y editar un borrador, listar y consultar el detalle—. En esos casos el encabezado nombra ambos y el contenido aplica a los dos.
 
@@ -3156,6 +3156,11 @@ Reglas que gobiernan todo el dominio:
 | `OP-EXE-023` | Leer el detalle de un entreno terminado | Consulta | `A2` |
 | `OP-EXE-024` | Anticipar qué cambia si anulo un entreno | Consulta | `A2` |
 | `OP-EXE-025` | Repetir un entreno terminado | Comando | `A2` |
+| `OP-EXE-026` | Comparar mi entrenamiento por semana o por mes | Consulta | `A2` |
+| `OP-EXE-027` | Dejar en espera un historial exportado de otra app | Comando | `A2` |
+| `OP-EXE-028` | Confirmar una importación de historial | Comando | `A2` |
+| `OP-EXE-029` | Deshacer una importación de historial | Comando | `A2` |
+| `OP-EXE-030` | Listar y consultar mis importaciones de historial | Consulta | `A2` |
 
 ---
 
@@ -3569,6 +3574,91 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Es otro intento, no reemplaza al primero (`HU-SP-051`); la lista conserva orden, superseries y descanso (`ADR-038`) |
 | **Falla cerrada** | Un entreno libre no tiene rutina que repetir: rechazo |
+
+#### `OP-EXE-026` — Comparar mi entrenamiento por semana o por mes
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/progress/periods?timezone=&period=&count=&program=` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Ejecuciones propias terminadas y no anuladas; plan con `period_analysis` |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Periodos del más reciente al más antiguo, hasta `count` |
+| **Offline / concurrencia** | Cacheable en el dispositivo |
+| **Información sensible** | Agregados de entrenamiento propios |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Por periodo: entrenos, tiempo, series de trabajo, volumen, cumplimiento del plan, series por músculo primario y volumen por día; por movimiento, su mejor carga contra el periodo anterior en que se entrenó. Los calentamientos nunca cuentan y lo que no se pesó no es cero. `program` lee un programa, `free` o todo |
+| **Falla cerrada** | Sin `period_analysis` responde que la función es de Pro |
+
+#### `OP-EXE-027` — Dejar en espera un historial exportado de otra app
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/history-imports` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | La persona autenticada; fuente con lector registrado (`hevy_csv`) |
+| **Transacción** | Leer el archivo en la API, sin guardarlo, y dejar las sesiones leídas en la zona de espera de la persona, marcando las que ya existen por su huella |
+| **Idempotencia** | `Idempotency-Key`; `Command-Id` es el id de la importación. El mismo contenido devuelve la importación viva que ya existe |
+| **Paginación y orden** | Sesiones por inicio; ejercicios distintos por nombre de origen |
+| **Offline / concurrencia** | Requiere conexión. Más de 4.000.000 de caracteres se rechaza |
+| **Información sensible** | Entrenamiento propio; el archivo no se conserva |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Responde una vista previa: entrenos, series, rango de fechas, duplicados, avisos por fila y cada ejercicio con su resolución (elección previa, tabla global, sugerencia o sin movimiento). Una importación no confirmada en 7 días expira (`ADR-044`) |
+| **Falla cerrada** | Una cabecera o una fecha que el lector no reconoce rechaza el archivo con el motivo y la fila; nada queda en espera |
+
+#### `OP-EXE-028` — Confirmar una importación de historial
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/history-imports/{id}/commit` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Importación propia en espera y no expirada |
+| **Transacción** | Por llamada, una tanda de a lo sumo 25 sesiones en espera, de la más antigua a la más reciente: crear cerradas las que no estén duplicadas, con sus ejercicios y series, y sacarlas de la zona de espera; cada tanda es todo o nada. La primera guarda las elecciones de la persona y fija la zona y la resolución de cada nombre |
+| **Idempotencia** | `Idempotency-Key` |
+| **Paginación y orden** | N/A |
+| **Offline / concurrencia** | Requiere conexión. La importación queda `committing` y responde cuántas sesiones faltan; la app repite la llamada con una clave nueva hasta `committed`, y continúa una importación a medias al reabrirla. Las llamadas de una misma importación se serializan |
+| **Información sensible** | Entrenamiento propio |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Cada sesión entra `completed` y `valid`, autónoma, con `capture_source = 'import'` y procedencia `person_declared`, en la zona horaria elegida. Un ejercicio sin movimiento conserva su nombre de origen. Lo importado cuenta para récords, racha y número. Una llamada que continúa no lee elecciones. Por tandas y no en el worker, para que cada escritura sea un comando de la persona (`ADR-044`) |
+| **Falla cerrada** | Ajena o inexistente: no encontrada. Confirmada, deshecha, expirada, o una continuación en otra zona horaria: rechazo sin efecto |
+
+#### `OP-EXE-029` — Deshacer una importación de historial
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/history-imports/{id}/undo` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Importación propia en espera, a medias o confirmada |
+| **Transacción** | Anular todas las sesiones que la importación ya trajo con el motivo `import_undone`, liberar sus huellas y vaciar la zona de espera, también si quedó a medias |
+| **Idempotencia** | `Idempotency-Key` |
+| **Paginación y orden** | N/A |
+| **Offline / concurrencia** | Deshacer lo ya deshecho no cambia nada |
+| **Información sensible** | Entrenamiento propio |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Anular sigue `ADR-038`. Después, el mismo historial se puede volver a importar |
+| **Falla cerrada** | Ajena o inexistente: no encontrada |
+
+#### `OP-EXE-030` — Listar y consultar mis importaciones de historial
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/history-imports` y `GET /space/v1/history-imports/{id}` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Importaciones propias |
+| **Transacción** | Ninguna |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | De la más reciente a la más antigua |
+| **Offline / concurrencia** | N/A |
+| **Información sensible** | Entrenamiento propio |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Cada importación con su fuente, estado, fechas y conteos; el detalle de una importación en espera devuelve su vista previa |
+| **Falla cerrada** | Ajena o inexistente: no encontrada |
 
 ### 7.11 Pagos y planes
 
@@ -4783,7 +4873,7 @@ Se enumeran para que su ausencia sea una decisión registrada y no un olvido. Ni
 | Reservar clases, recursos o cupos | Booking diferido |
 | Cualquier operación de cobro, orden, reembolso o membresía comercial | Commerce diferido |
 | Conectar un wearable o ingerir raw de sensores en producción | `sensor_enriched` se valida con fixtures, sin conectores |
-| Importar historial masivo desde un tercero | Solo importaciones controladas de fixture; una ingesta real quedaría `partial` |
+| Importar historial desde la cuenta de un tercero (API, conector o sincronización) | `ADR-044` solo admite un archivo que la persona exportó, y solo de fuerza |
 | Un endpoint que devuelva "todos los datos" de una persona | No existe `all_data` en ninguna forma |
 | Operaciones sobre menores, representantes o cuentas tuteladas | V1 es exclusiva para personas adultas |
 | Mensajería, comunidad y eventos sociales | Diferidos |
