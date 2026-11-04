@@ -626,3 +626,52 @@ Space and termination; `T-REL-TERMINATE-01` and `T-ORG-CLOSURE-01` cover
 detachment on every way a relationship ends, and
 `relationship-assignment-concurrency.test.ts` an assignment crossing a
 termination.
+
+## A coach manages what the gym assigned (STUDIO-41..43)
+
+Migration `20261105090000_a_coach_manages_what_the_gym_assigned.sql` lets the
+coach who attends a client move a session of a program the gym manages
+(`OP-PLN-012`), adjust its prescription for that one person (`OP-PLN-013`), and
+lets the coach, an administrator or the owner stop it (`OP-PLN-014`). It adds
+`planned_sessions.revision_number`, `planning.planned_session_reschedules` and
+`planning.prescription_revisions`, the row policies and two contract scopes
+(`planned_session_lookup`, `assignment_administration`). It also redefines
+`execution.read_execution` and `planning.read_week_plan`, so Space reads the
+adjusted target, plus `relationship_assignment_item`,
+`detach_relationship_assignments` and `plant_my_open_week`. Apply it before
+deploying the API release that mounts the three routes; until then they answer
+`503`. The Space release needs no change: its projections keep their shape.
+
+Nothing is backfilled: `revision_number` starts at `0` for every existing
+session. As with `OP-PLN-010`, **production cannot exercise it until the scope
+catalogue is published**: all three commands require `relationship_training`
+at `contribute`, administrators included, and answer `403 scope-required`
+until a grant exists.
+
+The invariant to watch is that a cancelled assignment has nothing left to train.
+This read-only query must return nothing:
+
+```sql
+select session.id, session.status, period.assignment_id
+from planning.assignment_management_periods as period
+join planning.planned_sessions as session on session.assignment_id = period.assignment_id
+where period.end_reason = 'cancelled'
+  and session.status in ('scheduled', 'paused')
+  and (session.scheduled_at at time zone session.timezone)::date
+      >= (period.ended_at at time zone session.timezone)::date
+  and not exists (
+    select 1 from execution.planned_session_executions as attempt
+    where attempt.planned_session_id = session.id
+  );
+```
+
+Three domain events are enqueued and no worker consumes them yet:
+`planning.session_rescheduled.v1`, `planning.prescription_revised.v1` and
+`planning.assignment_cancelled.v1`. Administrators and owners can cancel, but
+`OP-PLN-018` refuses them, so Studio has no read that gives them an assignment
+id yet.
+
+`T-PLN-MANAGE-01` covers authorization, the three commands, Space's adjusted
+reads and every row policy; `managed-assignment-concurrency.test.ts` covers a
+start, a planted week and a termination crossing each command. The PR records
+mutation evidence for every guard and policy.

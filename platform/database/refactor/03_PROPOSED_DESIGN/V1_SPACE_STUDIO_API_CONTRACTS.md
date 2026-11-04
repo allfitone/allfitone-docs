@@ -644,6 +644,8 @@ El header `X-Historical-Access-Case` contiene un UUID opaco. El backend lo valid
 | `PATCH` | `/organizations/{orgId}/planned-sessions/{id}` | `OP-PLN-012` |
 | `POST` | `/organizations/{orgId}/assignments/{id}/prescription-revisions` | `OP-PLN-013` |
 | `POST` | `/organizations/{orgId}/assignments/{id}/cancellation` | `OP-PLN-014` |
+
+**As implemented (STUDIO-41..43).** `PATCH …/planned-sessions/{plannedSessionId}` takes `PlannedSessionReschedule` `{scheduled_on, expected_revision}` and returns the session as `RelationshipAssignmentSession`; the optimistic version is `expected_revision` in the body rather than `If-Match`, and a stale one answers `409 stale-draft` with `current_state`. `POST …/prescription-revisions` takes `PrescriptionRevisionCreate` `{planned_step_id, kind, value, unit_code}` and answers `201` with `PrescriptionRevision`. `POST …/cancellation` takes an empty body and answers `200` with `AssignmentCancellation`. All three are commands with `Idempotency-Key`, `cookieAuth`, `no-store`; a missing grant is `403 scope-required` naming `relationship_training:contribute`, and an assignment the organization no longer manages is `409 conflict`. Planning's CORS now allows `PATCH`.
 | `POST` · `PATCH` | `/organizations/{orgId}/movements[/{id}]` | `OP-CAT-001` · `OP-CAT-002` |
 | `POST` | `.../movements/{id}/archival` | `OP-CAT-003` |
 

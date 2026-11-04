@@ -42,6 +42,9 @@ generado son el inventario exhaustivo.
 | Publicar versión | `POST /studio/v1/organizations/{organizationId}/programs/{programId}/versions` | `OP-PLN-008` | `ProgramVersionCreate` | `ProgramVersion` | `no-store` |
 | Asignar versión | `POST /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments` | `OP-PLN-010` | `ProgramAssignmentCreate` | `ProgramAssignment` | `no-store` |
 | List a relationship's assignments | `GET /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments` | `OP-PLN-018` | `limit`, `cursor` | `RelationshipAssignmentPage` | `private, no-store` |
+| Move a managed session | `PATCH /studio/v1/organizations/{organizationId}/planned-sessions/{plannedSessionId}` | `OP-PLN-012` | `PlannedSessionReschedule` | `RelationshipAssignmentSession` | `no-store` |
+| Adjust a prescription | `POST /studio/v1/organizations/{organizationId}/assignments/{assignmentId}/prescription-revisions` | `OP-PLN-013` | `PrescriptionRevisionCreate` | `PrescriptionRevision` | `no-store` |
+| Cancel a managed assignment | `POST /studio/v1/organizations/{organizationId}/assignments/{assignmentId}/cancellation` | `OP-PLN-014` | command headers + empty object | `AssignmentCancellation` | `no-store` |
 | Consultar agenda | `GET /space/v1/agenda` | `OP-PLN-016` | query `from`, `to`, `limit`, `cursor` | `AgendaPage` | `private, max-age=0, must-revalidate` + `ETag` |
 | Iniciar intento | `POST /space/v1/planned-sessions/{plannedSessionId}/attempts` | `OP-EXE-001` | `AttemptCreate` | `Attempt` | `no-store` |
 | Iniciar sesión libre | `POST /space/v1/executions` | `OP-EXE-004` | `FreeSessionCreate` | `FreeSession` | `no-store` |
