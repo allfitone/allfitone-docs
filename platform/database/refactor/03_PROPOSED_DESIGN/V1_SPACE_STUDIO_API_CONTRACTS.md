@@ -769,6 +769,8 @@ Las 24 sesiones se materializan **dentro de esta transacción**, porque este pro
 
 Sin `relationship_training` vigente: `403 scope-required`.
 
+**As implemented (STUDIO-39/40).** `timezone` is optional and only a fallback: the calendar uses the zone of the person's most recent personal assignment, which her device sent. The response also carries `starts_on`, the resolved `timezone` and `schedule_overlaps`. `403 scope-required` names `required_scope: {code: relationship_training, level: contribute}`. `Location` points to the collection, which `OP-PLN-018` reads; there is no single-assignment read. `GET` on the same route returns `RelationshipAssignmentPage`: each assignment with its version, management period and planted sessions (`scheduled_on` in the person's zone), `private, no-store`.
+
 ### 8.3 Space consulta la agenda
 
 ```http
