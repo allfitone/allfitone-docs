@@ -1042,7 +1042,7 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **FKs y borrado:** ninguna saliente; es una raíz de catálogo y las referencias entrantes usan `ON DELETE RESTRICT`.
 - **Uniques y checks:** `UNIQUE code`.
 - **Actores:** lectura autenticada; escritura curaduría (`A11` con `curate_global_catalog`) por `catalog.publish_discipline` y `catalog.archive_discipline` (`OP-CAT-004`, `OP-CAT-005`). `catalog.list_global_catalog` es la única lectura que devuelve borradores y archivadas (`NEW-CAT-GLOBAL-PUBLISH`, `HU-BO-022`).
-- **RLS:** lectura autenticada solo para filas `status='published'`; escritura exclusiva de la plataforma por la función de publicación. `/catalog/v1` la lee por `catalog.list_disciplines()`, cerrada tras `catalog.require_catalog_reader()`, que exige una persona autenticada **y activa**: el catálogo es global, no público. Las policies `disciplines_select_platform`, `disciplines_insert_platform` y `disciplines_update_platform` habilitan la curaduría sólo cuando el actor es `support`.
+- **RLS:** lectura autenticada solo para filas `status='published'`; escritura exclusiva de la plataforma por la función de publicación. Backoffice la lee en `/backoffice/v1/catalog/disciplines` por `catalog.list_disciplines()`, cerrada tras `catalog.require_catalog_reader()`, que exige una persona autenticada **y activa**: el catálogo es global, no público. Las policies `disciplines_select_platform`, `disciplines_insert_platform` y `disciplines_update_platform` habilitan la curaduría sólo cuando el actor es `support`.
 - **Consultas / índices:** por `code`; único `code`; `(status)` para la policy de publicación.
 - **Retención:** permanente; una disciplina referenciada se depreca o archiva, no se elimina.
 - **Eventos:** ninguno.
@@ -1190,7 +1190,7 @@ por eso son dos columnas: un código no se muestra y una frase no se consulta.
 - **Uniques y checks:** `UNIQUE parcial (activity_type_id) WHERE is_default AND valid_to is null`.
 - **Actores:** lectura para quien pueda leer el tipo de actividad; escritura exclusiva de curaduría de plataforma.
 - **RLS:** hereda la visibilidad de `activity_types`; solo permite asociar contratos publicados y escritura de plataforma. La lectura efectiva escondía la fila en cuanto pasaba `valid_to`, y PostgreSQL exige que una fila actualizada siga siendo visible, así que cerrar una asociación fallaba: lo resuelve `activity_type_result_contracts_select_platform`, acotada a `access_control.actor_kind() = 'support'`. La política del actor de producto no se tocó.
-- **Consultas / índices:** por `activity_type_id`. `/catalog/v1` la lee por `catalog.list_activity_type_result_contracts(uuid)`, que devuelve **solo asociaciones vigentes**: una superseded conserva su ventana para las ejecuciones congeladas bajo ella, pero no se ofrece para un borrador nuevo.
+- **Consultas / índices:** por `activity_type_id`. Backoffice la lee en `/backoffice/v1/catalog/activity-types/{id}/result-contracts` por `catalog.list_activity_type_result_contracts(uuid)`, que devuelve **solo asociaciones vigentes**: una superseded conserva su ventana para las ejecuciones congeladas bajo ella, pero no se ofrece para un borrador nuevo.
 - **Retención:** historial permanente de vigencias; una asociación deja de ser efectiva con `valid_to`, no se sobrescribe.
 - **Eventos:** ninguno propio.
 
