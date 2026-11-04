@@ -31,7 +31,6 @@ Server-only variables:
 | `ANALYTICS_PSEUDONYM_ACTIVE_VERSION` | Positive integer |
 | `ANALYTICS_PSEUDONYM_KEY_V<n>` | Environment-specific base64 32-byte secret |
 | `ANALYTICS_STUDIO_CLIENT_ENABLED` | Remote Studio gate |
-| `ANALYTICS_BACKOFFICE_CLIENT_ENABLED` | Remote Backoffice gate |
 | `ANALYTICS_SPACE_CLIENT_ENABLED` | Remote Space gate |
 
 Keys, pseudonyms and gates are exposed only when the resolved runtime
@@ -44,7 +43,7 @@ Public build variables use the current environment's project token:
 
 | Surface | Variables |
 | --- | --- |
-| Studio and Backoffice | `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST`, `NEXT_PUBLIC_ANALYTICS_ENVIRONMENT`, `NEXT_PUBLIC_APP_RELEASE` |
+| Studio | `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST`, `NEXT_PUBLIC_ANALYTICS_ENVIRONMENT`, `NEXT_PUBLIC_APP_RELEASE` |
 | Space | `EXPO_PUBLIC_POSTHOG_KEY`, `EXPO_PUBLIC_POSTHOG_HOST`, `EXPO_PUBLIC_ANALYTICS_ENVIRONMENT`, `EXPO_PUBLIC_APP_RELEASE` |
 
 Project tokens are public configuration. Personal API keys, project secret keys
@@ -153,8 +152,8 @@ server gate is active. Enable it only after the first successful
 6. Enable API and worker first. Verify permitted events and sanitized
    operational logs in PostHog US.
 7. Grant consent on a synthetic Studio device, enable Studio and confirm there
-   is no SDK or gate request before consent. Enable Backoffice and then Space
-   through EAS, validating each surface before continuing.
+   is no SDK or gate request before consent. Enable Space through EAS and
+   validate it before continuing.
 8. Close each remote gate once and verify capture stops within five minutes.
    Events produced while closed must not appear after the gate reopens.
 9. Observe web/server for 30 minutes and the mobile release for 24 hours.

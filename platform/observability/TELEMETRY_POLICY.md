@@ -4,7 +4,7 @@
 
 **Provider:** PostHog US
 
-**Applies to:** Studio, Space, Backoffice, API and worker
+**Applies to:** Studio, Space, API and worker
 
 ## Purpose and defaults
 
@@ -13,6 +13,11 @@ performance. Client telemetry is optional and disabled until a person grants
 consent on that device. API and worker telemetry is always anonymous and
 aggregated. A missing gate, key, consent record or provider response disables
 capture and must never change authentication, authorization or business work.
+
+The Backoffice has no client telemetry. Its operators are Allfit One staff, and
+consent that an employer asks of its own staff is not freely given, so the
+Backoffice loads no SDK, has no gate and asks for no decision. Its sessions carry
+no analytics pseudonym.
 
 The current rollout captures only production telemetry in `Allfit One
 Production`. Development and preview capture remain disabled. If
@@ -39,7 +44,7 @@ project, project token and pseudonym key; data must not be copied or merged.
 - Logout and any HTTP 401 reset the SDK identity without changing the consent
   decision.
 - Client SDK code, the remote gate request and event delivery must not run before
-  consent. The gate is `GET /{surface}/v1/telemetry-config`, cached for five
+  consent. The gate is `GET /{studio|space}/v1/telemetry-config`, cached for five
   minutes and fail-closed. Each refresh first stops capture, then waits at most
   five seconds for a valid response. A disabled gate, timeout, invalid response
   or error stops and opts out the SDK, cancels pending initialization and
