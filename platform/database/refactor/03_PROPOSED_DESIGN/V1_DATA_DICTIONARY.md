@@ -1380,6 +1380,7 @@ idempotencia.
 - **RLS:** vía la plantilla.
 - **Consultas / índices:** por `template_id`.
 - **Retención:** se reemplaza de forma controlada mientras es borrador y se elimina con la plantilla; publicar crea una versión inmutable separada.
+- **Provenance (`derived_from_version_id`, as implemented).** Set when the draft is derived from a version (`OP-PLN-004`) and kept through every Studio edit. The next version published from the draft takes it, and the draft then drops it: from there it continues linearly from the version it just became. Until migration `20261103150000_organization_content_stays_in_the_organization.sql` an edit cleared it, so a variant almost never recorded its source.
 - **Eventos:** `planning.session_template_draft_updated.v1`.
 
 ### 9.3 `planning.session_template_versions`
@@ -1856,7 +1857,7 @@ un programa sin fin (`ADR-032`).
 - **FKs y borrado:** `planned_step_id → planned_steps(id) ON DELETE CASCADE`; `target_load_unit_code → catalog.units(code) RESTRICT`.
 - **Uniques y checks:** `UNIQUE (planned_step_id, set_order)`; `set_order > 0` y consecutivo desde 1 dentro del paso; `target_reps > 0` si existe; **`kind = 'to_failure'` exige `target_reps IS NULL`**; load y unidad aparecen juntos y load es `>=0`; RPE entre 0 y 10.
 - **Actores:** los mismos de la versión de plantilla; escritura sólo durante la publicación atómica.
-- **RLS:** `EXISTS` por `planned_step_id → planned_steps → session_template_versions → session_templates`, igual que los targets.
+- **RLS:** `EXISTS` por `planned_step_id → planned_steps → session_template_versions → session_templates`, igual que los targets. `allfit_api` holds no direct grant on this table; a stray `select, insert` grant was revoked by migration `20261103150000_organization_content_stays_in_the_organization.sql`.
 - **Consultas / índices:** único `(planned_step_id, set_order)`, que es también el orden de lectura.
 - **Retención:** con la versión publicada; inmutable tras publicación.
 - **Eventos:** ninguno propio.
