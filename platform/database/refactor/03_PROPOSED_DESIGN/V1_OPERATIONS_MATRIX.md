@@ -113,10 +113,12 @@ No hay roles personalizados en V1. No hay alcance de rol por sede: `ORGANIZATION
 | --- | --- | --- | --- |
 | Space | `api.allfit.com/space/v1` | La persona autenticada | Space |
 | Studio | `api.allfit.com/studio/v1` | La organización en la que actúa el profesional | Studio |
-| Catálogo | `api.allfit.com/catalog/v1` | Ninguno: contenido global de lectura | Ambos |
+| Catálogo | `api.allfit.com/catalog/v1` | Ninguno: contenido global de lectura | Space |
 | Backoffice | `api.allfit.com/backoffice/v1` | Persona del equipo + rol base + deber vigente | Backoffice |
 
 Cada superficie versiona su propio ciclo de vida y publica su propio documento OpenAPI. Las cuatro comparten `components` y se sirven desde el mismo despliegue.
+
+`/catalog/v1` is Space's surface, authenticated with a bearer token. Studio and Backoffice do not read the catalogue there: their session cookies carry `Path=/studio/v1` and `Path=/backoffice/v1`, and the browser sends neither anywhere else, so every such read answered 401. Each web product reads the global catalogue inside its own surface, under `/studio/v1/catalog/...` and `/backoffice/v1/catalog/...`, with the same content, the same closed functions and the same operation in this matrix. The contract enforces it: an operation that accepts a cookie outside that cookie's `Path` fails the tests.
 
 En Studio, la organización viaja explícita en la ruta bajo `/organizations/{orgId}/...`. Ninguna operación de Studio que toque datos de una persona puede resolver la organización desde el token o desde una preferencia guardada.
 
@@ -2281,7 +2283,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /catalog/v1/information-categories` |
+| **Superficie** | `GET /studio/v1/catalog/information-categories` |
 | **Actor** | `A2`, `A3`–`A6`. Persona autenticada y activa; un actor de soporte es rechazado |
 | **Filtros obligatorios** | Ninguno: las siete categorías de V1, siempre completas |
 | **Transacción** | Ninguna |
@@ -2423,7 +2425,7 @@ Reglas que gobiernan todo el dominio:
 | **Offline / concurrencia** | Falla cerrada. Una entrada que ya no está publicada, o una disciplina con contenido publicado, responden `409`; el contenido privado de un gimnasio responde `404` |
 | **Información sensible** | Ninguna categoría personal |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | `HU-BO-022`, criterio 3. Archivar retira de `/catalog/v1` pero **no borra**: un trigger rechaza (`55000`) borrar una entrada global y las FKs impiden dejar huérfano lo que la referencia, así que las sesiones y plantillas que ya la usaban siguen resolviéndola |
+| **Reglas** | `HU-BO-022`, criterio 3. Archivar retira de las lecturas del catálogo publicado pero **no borra**: un trigger rechaza (`55000`) borrar una entrada global y las FKs impiden dejar huérfano lo que la referencia, así que las sesiones y plantillas que ya la usaban siguen resolviéndola |
 
 #### `OP-CAT-006` — Publicar o deprecar un contrato de resultados
 
@@ -2447,7 +2449,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /catalog/v1/disciplines` · `GET /catalog/v1/activity-types` |
+| **Superficie** | `GET /backoffice/v1/catalog/disciplines` · `GET /backoffice/v1/catalog/activity-types` (Backoffice). Space los leerá en `GET /catalog/v1/disciplines` · `GET /catalog/v1/activity-types` con su token; todavía no están servidas |
 | **Actor** | Cualquier cuenta autenticada |
 | **Filtros obligatorios** | Solo contenido global publicado y no archivado |
 | **Transacción** | Ninguna |
@@ -2515,7 +2517,7 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /catalog/v1/activity-types/{id}/result-contracts` |
+| **Superficie** | `GET /backoffice/v1/catalog/activity-types/{id}/result-contracts` (Backoffice). Space la leerá en `GET /catalog/v1/activity-types/{id}/result-contracts` con su token; todavía no está servida |
 | **Actor** | Cualquier cuenta autenticada |
 | **Filtros obligatorios** | Asociaciones vigentes del tipo de actividad |
 | **Transacción** | Ninguna |
