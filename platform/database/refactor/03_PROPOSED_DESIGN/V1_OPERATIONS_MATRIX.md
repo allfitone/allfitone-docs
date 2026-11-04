@@ -1451,11 +1451,12 @@ subscription is not ended: no contract ends an external charge. It also calls
 `identity.revoke_invitations_for_organization_closure`, so no pending invitation
 can be accepted after the closure. `privacy.apply_organization_closure` verifies
 that no grant of the organization is still active; `close_relationship` already
-froze them. `planning.detach_for_organization_closure` and
-`execution.cancel_proposals_for_organization_closure` are not built yet, because
-no program assignment can originate from an organization
-(`ck_program_assignments_no_origin`, lifted by HU-STUDIO-046) and correction
-proposals do not exist (HU-STUDIO-059). Only an `active` organization can be
+froze them. Program assignments are
+detached by `close_relationship` itself, which `terminate_for_organization` runs
+for every relationship, so there is no separate
+`planning.detach_for_organization_closure` (STUDIO-39/40; `T-ORG-CLOSURE-INT-19/21/22`).
+`execution.cancel_proposals_for_organization_closure` is not built yet, because
+correction proposals do not exist (HU-STUDIO-059). Only an `active` organization can be
 closed. A new command after the closure converges on the original instant.
 
 #### `OP-ORG-013` — Consultar la organización
@@ -1773,7 +1774,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Evento de dominio** | `relationship.terminated.v1`, `privacy.grant_frozen.v1` por grant, `planning.assignment_detached.v1` por asignación |
 | **Reglas** | El efecto es inmediato: no hay preaviso para la persona. La organización **conserva su vista congelada del histórico compartido hasta `T`**, más su contenido propio; los datos creados después de `T` nunca son visibles para ella. Congelar **no** es revocar: un estado `revoked` corta el acceso del todo, cierra los casos históricos abiertos e invalida derivados. La lectura solo ocurre por la superficie restringida de ADR-023, con `historical_access_case`, actor elegible, MFA, propósito y `access_control.can_read_frozen`; nunca por pertenencia administrativa ni endpoints operativos. Si la persona elimina su cuenta, la anonimización alcanza también lo que ve un grant congelado. El Fitness ID no se toca. El motivo es **opcional** |
 | **Falla cerrada** | Si cualquier paso falla, se revierte todo: no existe una terminación a medias |
-| **Implementado** | `relationships.end_my_relationship` (migración `20261021120000`) sobre `POST /space/v1/relationships/{relationshipId}/termination`, con `reason` opcional. Cierra con `ended_by_kind = 'person'` mediante `relationships.close_relationship`, la misma función que ahora usa `OP-REL-008`, así que la regla de congelamiento vive en un solo lugar: en un único instante `T` termina la relación, congela los grants `active` —uno ya revocado sigue revocado— y cierra la asignación del titular y las suplencias aceptadas. Una relación ya terminada converge al mismo `T` sin cerrarse dos veces, y el reintento con la misma `Idempotency-Key` responde `Idempotent-Replay`. Relación ajena o inexistente: `404`. **Todavía no**: desacoplar asignaciones de programa y pausar sesiones —no hay qué desacoplar: `ck_program_assignments_no_origin` obliga a que `origin_relationship_id` sea nulo, así que ninguna asignación viene aún de una relación—, cancelar propuestas pendientes, ni avisar a la organización por el outbox |
+| **Implementado** | `relationships.end_my_relationship` (migración `20261021120000`) sobre `POST /space/v1/relationships/{relationshipId}/termination`, con `reason` opcional. Cierra con `ended_by_kind = 'person'` mediante `relationships.close_relationship`, la misma función que ahora usa `OP-REL-008`, así que la regla de congelamiento vive en un solo lugar: en un único instante `T` termina la relación, congela los grants `active` —uno ya revocado sigue revocado— y cierra la asignación del titular y las suplencias aceptadas. Una relación ya terminada converge al mismo `T` sin cerrarse dos veces, y el reintento con la misma `Idempotency-Key` responde `Idempotent-Replay`. Relación ajena o inexistente: `404`. Since migration `20261104090000_a_gym_assigns_a_program_through_the_relationship.sql` (STUDIO-39/40) `close_relationship` also calls `planning.detach_relationship_assignments` at the same `T`: each `active` assignment of the relationship becomes `detached_pending_choice`, its management period closes with `relationship_ended`, every session nobody started pauses, and `planning.assignment_detached.v1` is enqueued. **Not yet:** cancelling pending proposals, and notifying the organization through the outbox |
 
 #### `OP-REL-008` — Terminar la relación (organización)
 
@@ -1791,6 +1792,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Evento de dominio** | `relationship.terminated.v1` y derivados |
 | **Reglas** | Efecto inmediato, sin preaviso en V1. La persona es notificada y conserva su asignación desacoplada para decidir (`OP-PLN-015`). Un `coach` **no** puede ejecutar esta operación |
 | **Falla cerrada** | Igual que `OP-REL-007` |
+| **Implemented** | Detachment as in `OP-REL-007`, through the same `close_relationship` (STUDIO-39/40). `T-REL-TERMINATE-01` asserts it: the assignment waits for the person's choice, its period closes at `T`, a completed session stays completed and the next one pauses |
 
 #### `OP-REL-009` — Solicitar la terminación (coach)
 
@@ -2781,7 +2783,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `planning.program_version_deprecated.v1` |
 | **Reglas** | Impide asignaciones nuevas. **No** cancela ni altera las asignaciones vigentes ni sus sesiones |
 | **Falla cerrada** | — |
-| **Implemented** | Status change only, owner or admin (`403` for a coach). Blocking new assignments is enforced by whoever assigns: `OP-PLN-011` checks `status = 'published'` today, and `OP-PLN-010` must do the same when it lands (STUDIO-39) |
+| **Implemented** | Status change only, owner or admin (`403` for a coach). Blocking new assignments is enforced by whoever assigns: `OP-PLN-011` and `OP-PLN-010` (STUDIO-39) both refuse a version that is not `published` |
 
 #### `OP-PLN-010` — Asignar una versión de programa a una relación
 
@@ -2799,6 +2801,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `planning.assignment_created.v1` |
 | **Reglas** | La agenda se materializa **en el momento de asignar**, no por un job periódico: no existe una ventana de calendario que dependa de que un worker corra a tiempo, y `ADR-032` no crea ninguno. De un programa con fecha de fin se materializa la composición entera; de uno sin fecha de fin, la semana de la asignación, y cada semana posterior la siembra la lectura que va a enseñarla —`OP-PLN-016` y `OP-PLN-022`— un instante antes de mostrarla. La relación de origen es inmutable. No hay límite de asignaciones activas simultáneas; los solapamientos de agenda se **advierten**, no se bloquean |
 | **Falla cerrada** | Sin grant `relationship_training` vigente, rechazo |
+| **Implemented** | `planning.assign_program_from_relationship` (migration `20261104090000_a_gym_assigns_a_program_through_the_relationship.sql`). The actor is the holder or an accepted cover with `assign_programs`; staff and administrators who do not coach get `403`, a relationship the actor does not attend `404`. A missing grant raises `AF430` with `relationship_training:contribute` as detail, and the API answers `403 scope-required` with `required_scope`. The version must be `published`, of a non-archived program owned by `{orgId}`; anything else is `422 program-version`. The zone is the one of the person's most recent personal assignment (her device), and the request's `timezone` only when she has none; an unknown zone is `422 timezone`, a start before today in that zone `422 starts-on`. The new assignment goes in front of her order, opens its management period and plants the calendar (whole when finite, the first week when open-ended). `schedule_overlaps` is true when a session still waiting in another `personal` or `active` assignment falls inside the new span; it never blocks and never says which. Reading her other assignments for zone, order and overlap uses the contract scope `relationship_assignment`. `FOR SHARE` on the relationship serializes it against termination: a crossing termination either waits and detaches it, or the assignment fails `409`. Tests: `T-PLN-RELASSIGN-01`, `relationship-assignment-concurrency.test.ts`, `T-PLN-API-010/046..049` |
 
 #### `OP-PLN-011` — Autoasignarse un programa
 
@@ -2935,6 +2938,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Una organización **no** ve las asignaciones personales de la persona ni las creadas por otra organización. Tras la terminación, deja de ver la asignación desacoplada y sus sesiones posteriores |
 | **Falla cerrada** | Sin grant vigente, ninguna fila |
+| **Implemented** | `planning.list_relationship_assignments` (migration `20261104090000_a_gym_assigns_a_program_through_the_relationship.sql`). Holder or accepted cover; anyone else in the organization, including owners and administrators who see the relationship through the directory, gets `404`. Only rows whose `origin_relationship_id` is this relationship, newest first by `assigned_at` (keyed to the millisecond the cursor carries), each with its version and every planted session. An access event with grant and scope version is written before anything is returned; without `app.request_id` the read does not happen. **Deviation:** without a live grant it raises `AF430` and the API answers `403 scope-required` naming `relationship_training:read`, rather than an empty list, so Studio can tell "nothing assigned" from "not shared". Both fail closed. Tests: `T-PLN-RELASSIGN-RLS-09..14`, `RLS-26/27`, `T-PLN-API-018/046` |
 
 #### `OP-PLN-019` — Listar plantillas y versiones · `OP-PLN-020` — Listar programas y versiones
 

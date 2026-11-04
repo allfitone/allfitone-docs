@@ -581,3 +581,48 @@ one. Nothing reaches a client until organizations can assign programs
 
 `T-PLN-ORGCONTENT-01` covers the guard, cross-organization and role denials,
 provenance, `repeats_forever` and the audited read.
+
+## A gym assigns programs through the relationship (STUDIO-39..40)
+
+Migration `20261104090000_a_gym_assigns_a_program_through_the_relationship.sql` lifts
+`ck_program_assignments_no_origin`: an organization can now give a client a
+program through the relationship (`OP-PLN-010`) and read back what it gave
+(`OP-PLN-018`). It adds `planning.assignment_management_periods`, the
+`access_control.grant_of` and `access_control.can_access` helpers, row policies
+for the coach and the person, and makes `relationships.close_relationship`
+detach managed assignments at the instant it ends the relationship. Apply it
+before deploying the API release that mounts
+`/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments`;
+until then the route answers `503`. The Space API release that returns
+`managed_by` needs it too, because `planning.read_my_programs` gains that
+column.
+
+Nothing is backfilled: no assignment could have an origin before this
+migration. **Production cannot exercise it until the scope catalogue is
+published**: assigning needs an active `relationship_training` grant, and no
+grant exists while `privacy.scope_definitions` has no published version. Until
+then every attempt answers `403 scope-required`, which is the correct refusal,
+not a fault.
+
+The invariant to watch is that no managed assignment outlives its relationship.
+This read-only query must return nothing:
+
+```sql
+select assignment.id, assignment.origin_relationship_id, relationship.status
+from planning.program_assignments as assignment
+join relationships.service_relationships as relationship
+  on relationship.id = assignment.origin_relationship_id
+where assignment.lifecycle = 'active'
+  and relationship.status <> 'active';
+```
+
+A detached assignment stays `detached_pending_choice`, with its sessions
+`paused`, until the person decides (`OP-PLN-015`, not built yet); until then
+Space does not show it. Two domain events are enqueued and no worker consumes
+them: `planning.assignment_created.v1` and `planning.assignment_detached.v1`.
+
+`T-PLN-RELASSIGN-01` covers authorization, the calendar, the list and its audit,
+Space and termination; `T-REL-TERMINATE-01` and `T-ORG-CLOSURE-01` cover
+detachment on every way a relationship ends, and
+`relationship-assignment-concurrency.test.ts` an assignment crossing a
+termination.

@@ -41,6 +41,7 @@ generado son el inventario exhaustivo.
 | Revocar invitación de equipo | `POST /studio/v1/organizations/{organizationId}/invitations/{invitationId}/revocation` | `OP-ORG-006` | headers de comando + objeto vacío | `TeamInvitationRevoked` | `no-store` |
 | Publicar versión | `POST /studio/v1/organizations/{organizationId}/programs/{programId}/versions` | `OP-PLN-008` | `ProgramVersionCreate` | `ProgramVersion` | `no-store` |
 | Asignar versión | `POST /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments` | `OP-PLN-010` | `ProgramAssignmentCreate` | `ProgramAssignment` | `no-store` |
+| List a relationship's assignments | `GET /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments` | `OP-PLN-018` | `limit`, `cursor` | `RelationshipAssignmentPage` | `private, no-store` |
 | Consultar agenda | `GET /space/v1/agenda` | `OP-PLN-016` | query `from`, `to`, `limit`, `cursor` | `AgendaPage` | `private, max-age=0, must-revalidate` + `ETag` |
 | Iniciar intento | `POST /space/v1/planned-sessions/{plannedSessionId}/attempts` | `OP-EXE-001` | `AttemptCreate` | `Attempt` | `no-store` |
 | Iniciar sesión libre | `POST /space/v1/executions` | `OP-EXE-004` | `FreeSessionCreate` | `FreeSession` | `no-store` |

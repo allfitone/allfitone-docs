@@ -147,6 +147,8 @@ La última condición no la resuelve RLS: la resuelve la proyección. Las nueve 
 
 Esta fórmula cubre exclusivamente acceso profesional **en vivo** con relación y asignación efectivas. Un grant `frozen` nunca satisface `access_control.can_access`.
 
+**As implemented (STUDIO-39/40, migration `20261104090000_a_gym_assigns_a_program_through_the_relationship.sql`).** The first physical version is `access_control.can_access(relationship_id, scope_code, level)`, keyed by **relationship** rather than by person: a person can be a client of several organizations, and a managed assignment names the relationship it came from, so the relationship is what a policy has at hand. It evaluates: actor kind `person` (Studio runs on the person actor, with the membership set by the command); the relationship `active` in `access_control.org()` with the organization `active`; the actor is the holder or an accepted cover (`relationships.actor_is_assigned`); and an `active` grant from `access_control.grant_of` whose level covers the one requested (`contribute` covers `read`). The capability is checked by the command (`assign_programs` for `OP-PLN-010`), not inside the formula. `session_denied` and the field-set condition do not exist yet; the only reads it guards today are planned content, not executions. Commands raise `AF430` with `scope:level` when the grant is missing, and the API answers `403 scope-required`.
+
 ### 5.2 La fórmula `frozen`, escrita
 
 ```text

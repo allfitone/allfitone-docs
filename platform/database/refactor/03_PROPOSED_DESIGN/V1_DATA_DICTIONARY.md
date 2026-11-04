@@ -1711,7 +1711,7 @@ que toca en la semana de programa `n` es `((n - 1) % ciclo) + 1`, que con ciclo 
 - **Clasificación:** `training`.
 - **Columnas:** `id` · `person_id uuid` · `program_version_id uuid` · `origin_relationship_id uuid` (nullable) · `lifecycle planning.assignment_lifecycle` · `starts_on date` · `timezone text` · `assigned_at timestamptz`.
 - **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `program_version_id → program_versions(id) RESTRICT`; FK compuesta opcional `(origin_relationship_id, person_id) → relationships.service_relationships(id, person_id) RESTRICT` (`IX-11`).
-- **Uniques y checks:** clave portadora `UNIQUE (id, person_id)`; `program_day` entre 1 y 7.
+- **Uniques and checks:** carrier key `UNIQUE (id, person_id)`; `ck_program_assignments_managed_origin`: `active` and `detached_pending_choice` require `origin_relationship_id`. (An earlier revision listed `program_day` here; that column belongs to `planned_sessions`, §9.16.)
 - **Actores:** la persona (autoasigna, decide continuidad); el coach con `contribute` (asigna, cancela).
 - **RLS:** `person_id = access_control.person()` **OR** (`origin_relationship_id` visible **AND** grant `relationship_training`).
 - **Consultas / índices:** `(person_id, lifecycle)`, `(origin_relationship_id, lifecycle)`.
@@ -1730,6 +1730,8 @@ persona hizo, y un entrenamiento tiene que poder explicarse después de que el p
 lo pedía ya no esté. Terminar es distinto de cancelar: `cancelled` lo escribe quien
 administraba desde una relación, y `ended` lo escribe la persona sobre lo suyo.
 
+**Managed assignments, as implemented (STUDIO-39/40, migration `20261104090000_a_gym_assigns_a_program_through_the_relationship.sql`).** `ck_program_assignments_no_origin` is gone: an assignment created through `OP-PLN-010` carries `origin_relationship_id` and `lifecycle = 'active'`. The composite FK `fk_program_assignments_origin` keeps the origin on one of the person's own relationships, and `trg_program_assignments_before_update_origin` refuses changing the origin or the person afterwards, so a later relationship never inherits what an earlier one managed. A `personal` row may keep an origin once the person continues a detached program (`OP-PLN-015`, not built yet). Ending the relationship moves `active` to `detached_pending_choice`; nothing writes `cancelled` until `OP-PLN-014`. Row policies: the person reads her own (`_select_self`); the organization reads and inserts through `access_control.can_access(origin_relationship_id, 'relationship_training', level)` (`_select_managing`, `_insert_managing`, level `contribute` to insert); the contract scope `relationship_assignment` (keyed by person) lets the assigning command read her other assignments for zone, order and overlap; `relationship_detachment` (keyed by relationship) lets the detachment read and update them. `planned_sessions` inherit from a visible managed assignment. The person reads the program version she was given (`program_versions_select_assigned`) and the template versions planted for her (`session_template_versions_select_planned`), nothing else of the organization's catalogue. Space projections that list what to train include `active`, and `read_my_programs` returns `managed_by`, the managing organization's display name.
+
 ### 9.14 `planning.assignment_management_periods`
 
 - **Propósito:** separa la gestión efectiva de la procedencia; un solo periodo vigente por asignación.
@@ -1743,6 +1745,7 @@ administraba desde una relación, y `ended` lo escribe la persona sobre lo suyo.
 - **Consultas / índices:** `(assignment_id, ended_at)`.
 - **Retención:** con la asignación como historial de gestión; un periodo cerrado no se elimina ni se reactiva.
 - **Eventos:** ninguno propio.
+- **As implemented (migration `20261104090000_a_gym_assigns_a_program_through_the_relationship.sql`).** Adds `end_reason` (`cancelled`, `relationship_ended`) with `ck_assignment_management_periods_end`: `ended_at` and `end_reason` are set together and `ended_at >= started_at`. Both FKs are `ON DELETE RESTRICT`, not `CASCADE`: assignments are never deleted. Indexes: `uidx_assignment_management_periods_open (assignment_id) WHERE ended_at IS NULL` and `idx_assignment_management_periods_relationship_open (relationship_id) WHERE ended_at IS NULL`. `trg_assignment_management_periods_before_change_close_only` allows only closing an open period; no update reopens one and no row is deleted. RLS is forced and the table has its own policies rather than inheriting: the person reads hers; the organization reads with `can_access(relationship_id, …, 'read')` and inserts an open period with `contribute`; the detachment scope reads and closes. Detachment closes the period at the relationship's `T`, or at `started_at` if that is later.
 
 ### 9.15 `planning.prescription_revisions`
 
