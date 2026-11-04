@@ -675,3 +675,54 @@ id yet.
 reads and every row policy; `managed-assignment-concurrency.test.ts` covers a
 start, a planted week and a termination crossing each command. The PR records
 mutation evidence for every guard and policy.
+
+## An invitation can offer a first program (STUDIO-16)
+
+Migration `20261106090000_an_invitation_can_offer_a_first_program.sql` lets a coach's client invitation offer a first program
+(`HU-STUDIO-023` criteria 2, 6 and 7) that the person answers on its own in
+Space (`HU-SP-016` criterion 1, `HU-SP-017` criteria 1, 8 and 9). It adds five
+columns and three checks to `identity.invitation_intents`, the helper
+`identity.client_proposal_hash`, `planning.plant_invited_program`,
+`identity.client_program_outcome`, the contract scope `invitation_program` and
+three row policies. It recreates `issue_client_invitation`,
+`client_invitation_projection`, `resolve_client_invitation`,
+`read_my_client_invitation`, `decide_client_invitation` and
+`decide_my_client_invitation`, and replaces `resend_client_invitation`,
+`invitation_intent_issuer_tg` and `enforce_reissued_offer_matches`.
+
+**Apply it before deploying the API release.** The new arguments default to
+null and the functions only gain result columns, so the API already in
+production keeps working against the migrated database; the new API calls the
+longer signatures and fails against a database without them. The Space app
+needs no release: an app that does not send `program_decision` declines the
+program, and the new response fields are ignored.
+
+Nothing is backfilled: no invitation issued before carries a program, and its
+`proposal_hash` is unchanged. As with `OP-PLN-010`, **production cannot
+exercise it until the scope catalogue is published**: a proposal needs
+`relationship_training` offered at `contribute`, and issuing fails without a
+published definition.
+
+The invariant to watch is that a created program is the one proposed, managed
+through the relationship the same invitation created. This read-only query
+must return nothing:
+
+```sql
+select program.id
+from identity.invitation_intents as program
+join identity.invitation_intents as relationship_intent
+  on relationship_intent.invitation_id = program.invitation_id
+ and relationship_intent.kind = 'service_relationship'
+join planning.program_assignments as assignment
+  on assignment.id = program.materialized_assignment_id
+where assignment.program_version_id is distinct from program.proposed_program_version_id
+   or assignment.origin_relationship_id is distinct from relationship_intent.materialized_relationship_id;
+```
+
+A decision with a program now enqueues one `identity.invitation_intent_decided.v1`
+per intent decided, and `planning.assignment_created.v1` when the program is
+created; no worker consumes either yet. The Studio and Space screens are not
+built. `T-REL-INVITE-PROGRAM-01` covers issuing, reading, deciding, the row
+policies, the checks and the reissue; `invitation-program-concurrency.test.ts`
+covers a retirement crossing the acceptance and the issue, and two answers at
+once. The PR records mutation evidence for every guard and policy.
