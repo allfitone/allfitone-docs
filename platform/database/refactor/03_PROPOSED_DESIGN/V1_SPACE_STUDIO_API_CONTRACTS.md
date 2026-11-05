@@ -238,9 +238,9 @@ Sujeto implícito: la persona autenticada. Ningún endpoint recibe un `person_id
 | `POST` | `/client-invitations/decisions` | `OP-IDN-009` | Decide la relación y cada scope en una sola llamada. Un scope omitido cuenta como rechazado. Nombra la invitación por `token` o por `invitation_id`, exactamente uno |
 | `GET` | `/consents` | `OP-PRV-013` | Panel de control del consentimiento: por relación y scope, su respuesta y, si aceptó, el estado del grant (`active`, `frozen` o `revoked`). Implementado en `TECH-29` |
 | `POST` | `/consents/{id}/revocation` | `OP-PRV-005` | Solo ese grant, `active` o `frozen`; nunca se reabre. Implementado en `TECH-29`: no hay proyecciones ni cachés sobre grants que invalidar, y cada lector comprueba el estado en la misma sentencia |
-| `GET` | `/visibility-denials` | `OP-PRV-017` | |
-| `PUT` | `/executions/{id}/visibility` | `OP-PRV-006` | Ocultar por relación |
-| `DELETE` | `/executions/{id}/visibility/{relId}` | `OP-PRV-007` | |
+| `GET` | `/visibility-denials` | `OP-PRV-017` | Her active denials, newest first, with the gym and the session. Implemented in STUDIO-47/48 |
+| `PUT` | `/executions/{id}/visibility` | `OP-PRV-006` | Ocultar por relación. Body `{relationship_id}`; never from the relationship the session was produced in. Implemented in STUDIO-47/48 |
+| `DELETE` | `/executions/{id}/visibility/{relId}` | `OP-PRV-007` | Shares it again from now on; never reopens a frozen window. Implemented in STUDIO-47/48 |
 | `GET` | `/access-events` | `OP-PRV-015` | Quién leyó qué y cuándo |
 | `POST` | `/erasure-requests` | `OP-PRV-008` | |
 | `GET` | `/erasure-requests/{id}` | `OP-PRV-016` | Resolución por categoría |
@@ -563,8 +563,8 @@ Todas exigen la fórmula completa y escriben `ACCESS_EVENT`.
 | `GET` | `/organizations/{orgId}/clients/{personId}/profile` | `OP-IDN-018` | `relationship_training` · `read` |
 | `GET` | `.../clients/{personId}/body-progress` | `OP-IDN-019` | `body_progress` · `read` |
 | `GET` | `.../clients/{personId}/health-context` | `OP-IDN-020` | `health_context` · `read` |
-| `GET` | `.../clients/{personId}/executions` | `OP-EXE-017` | `relationship_training` y/o `prior_training_history` · `read` |
-| `GET` | `.../clients/{personId}/executions/{id}` | `OP-EXE-018` | Igual, evaluado por ejecución |
+| `GET` | `.../clients/{personId}/executions` | `OP-EXE-017` | `relationship_training` y/o `prior_training_history` · `read`. Only the coach who attends her; nothing shared is an empty page (STUDIO-47) |
+| `GET` | `.../clients/{personId}/executions/{id}` | `OP-EXE-018` | Igual, evaluado por ejecución. `403 scope-required` only when she shares nothing; otherwise an unseen session is `404` (STUDIO-48) |
 | `GET` | `.../clients/{personId}/progress` | `OP-EXE-019` | El más restrictivo de sus inputs |
 | `POST` | `.../clients/{personId}/observations` | `OP-EXE-010` | Scope del contenido · `contribute` |
 | `POST` | `.../observations/{id}/revisions` | `OP-EXE-011` | `contribute` + autoría propia |

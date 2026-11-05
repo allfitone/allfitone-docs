@@ -857,6 +857,20 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** único de par + `(relationship_id, status)`.
 - **Retención:** con la persona.
 - **Eventos:** `privacy.session_visibility_denied.v1`, `privacy.session_visibility_restored.v1`.
+- **As implemented (STUDIO-47/48, migration `20261107090000_a_coach_reviews_what_a_client_trained.sql`).** Constraints:
+  - `pk_session_visibility_denials`;
+  - `uq_session_visibility_denials_pair`;
+  - `fk_session_visibility_denials_session` and `fk_session_visibility_denials_relationship`, both composite with `person_id` and `RESTRICT`;
+  - `ck_session_visibility_denials_status`;
+  - `ck_session_visibility_denials_restored`: `restored_at` is set exactly when the denial is `reverted`.
+
+  Indexes: `idx_session_visibility_denials_relationship_status`, and `idx_session_visibility_denials_person_denied`, partial on `active`, for her list.
+
+  Triggers:
+  - `trg_session_visibility_denials_before_update_keep` keeps the person, session and relationship, and never changes `frozen_denied_at` once it is set;
+  - `IX-36` is `trg_session_visibility_denials_after_insert_own_relationship`, a deferrable constraint trigger that also refuses a session it cannot see.
+
+  `allfit_api` has no privilege on the table; it writes through `privacy.hide_session` and `privacy.restore_session`. **RLS deviation:** see `V1_RLS_MATRIX.md` § `SESSION_VISIBILITY_DENIAL`.
 
 ### 7.8 `privacy.historical_access_cases`
 
@@ -1936,6 +1950,13 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Retención:** categoría `training`; disposición por política; cierre anonimiza `person_id`.
 - **Eventos:** `execution.attempt_started.v1`, `execution.session_started.v1`, `execution.finalized.v1`, `execution.revised.v1`, `execution.annulled.v1`.
 - **Implementado (sesión libre):** la tabla existe con todas sus columnas, pero hasta que haya `relationships` toda sesión nace `is_autonomous=true` y con los dos IDs de contexto en `NULL`; el `CHECK` de contexto ya los exige juntos. `execution.start_free_session` congela el contrato por defecto vigente del único tipo de actividad global publicado de la disciplina y nace sin ejercicios; `replace_execution_results` reemplaza el conjunto entero bajo la revisión que el dispositivo vio (`AF409` si ya no es la actual) y `finalize_execution` cierra con `execution_status='completed'` y `validation_status='valid'`. Una persona tiene a lo sumo una sesión libre abierta. `achieved_level` queda `NULL` a propósito: certificar el nivel depende de ADR-013, que sigue en revisión. Ninguna función de ejecución escribe todavía en el outbox: `session_started.v1` y `finalized.v1` están previstos.
+
+- **Implemented (STUDIO-47/48, migration `20261107090000_a_coach_reviews_what_a_client_trained.sql`): where a session was produced.**
+  - `ck_executed_sessions_autonomous` becomes `(is_autonomous and both context ids null) or (not is_autonomous and both set)`. The constraint also gets `fk_executed_sessions_context`, and there is a new partial index `idx_executed_sessions_context_started (context_relationship_id, started_at desc, id desc)`.
+  - `execution.start_planned_session_attempt` stores the relationship and its organization when three things hold: the planned session belongs to an `active` managed assignment, the assignment has an open management period on its origin relationship, and that relationship is `active`. It locks the relationship `for share` before the planned session, in the order a termination takes them. Free sessions and personal programs stay autonomous, and so does a program she kept after the gym let go.
+  - `trg_executed_sessions_before_update_context` makes the context immutable (`23514`).
+  - **Backfill:** an existing attempt whose `started_at` falls inside a management period of its assignment was moved inside that period's relationship.
+  - Professional reads go through the policy `executed_sessions_select_screening` and two closed functions. There is no `execution.v_client_executions`.
 
 ### 10.2 `execution.planned_session_executions`
 

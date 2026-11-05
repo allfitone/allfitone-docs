@@ -726,3 +726,68 @@ built. `T-REL-INVITE-PROGRAM-01` covers issuing, reading, deciding, the row
 policies, the checks and the reissue; `invitation-program-concurrency.test.ts`
 covers a retirement crossing the acceptance and the issue, and two answers at
 once. The PR records mutation evidence for every guard and policy.
+
+## A coach reviews what a client trained (STUDIO-47..48)
+
+Migration `20261107090000_a_coach_reviews_what_a_client_trained.sql` lets the coach who attends a person read what she trained
+(`HU-STUDIO-054`, `HU-STUDIO-055`) and lets her hide one session from one gym
+(`HU-SP-032` to `HU-SP-034`). It does five things:
+
+- relaxes `ck_executed_sessions_autonomous` and makes a session's context
+  immutable;
+- redefines `execution.start_planned_session_attempt`;
+- adds `privacy.session_visibility_denials`, with its triggers and two policies;
+- adds the session policy `executed_sessions_select_screening`;
+- adds five closed functions for the API: the two Studio reads and the three
+  Space commands and query.
+
+**Apply it before deploying the API release.** The old API keeps working
+against the migrated database. `start_planned_session_attempt` keeps its
+signature, and the old API calls none of the new functions. The new API's
+routes fail with `503` until the migration is applied. Merging deploys the API
+automatically, so expect that gap between the merge and the manual database
+deploy. Neither the Studio nor the Space screens exist yet, so nobody reaches
+those routes in the meantime.
+
+**Backfill.** The migration moves every existing attempt of a planned session
+whose `started_at` falls inside a management period of its assignment into
+that period's relationship. Managed programs exist only since `OP-PLN-010`
+(STUDIO-39..40), so few rows, if any, are touched. The check is dropped and
+re-added around the update inside the same transaction. With
+`lock_timeout = 5s`, a busy `execution.executed_sessions` makes the migration
+fail rather than queue; retry it.
+
+As with `OP-PLN-010`, **production cannot show a coach anything until the
+scope catalogue is published**. With no grant, both reads record a refused
+attempt, the list is empty, and the detail answers `403 scope-required`.
+
+Two invariants must hold, and these read-only queries must return nothing:
+
+```sql
+-- A session inside a relationship belongs to that relationship's person and gym.
+select session.id
+from execution.executed_sessions as session
+join relationships.service_relationships as relationship
+  on relationship.id = session.context_relationship_id
+where relationship.person_id <> session.person_id
+   or relationship.organization_id <> session.context_organization_id;
+
+-- No denial hides a session from the relationship it was produced in (IX-36).
+select denial.id
+from privacy.session_visibility_denials as denial
+join execution.executed_sessions as session on session.id = denial.executed_session_id
+where session.context_relationship_id = denial.relationship_id;
+```
+
+The commands enqueue `privacy.session_visibility_denied.v1` and
+`privacy.session_visibility_restored.v1`. No worker consumes either yet, and
+no aggregate over sessions exists to recompute.
+
+Tests:
+
+- `T-EXE-AUTHORIZED-01` covers the origin, the policies, both reads and the
+  access record.
+- `T-PRV-HIDE-01` covers the three Space operations, the frozen window and
+  `IX-36`.
+- `authorized-execution-concurrency.test.ts` covers a start crossing a
+  termination, in both orders, and two hides crossing each other.
