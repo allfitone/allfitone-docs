@@ -50,7 +50,7 @@ generado son el inventario exhaustivo.
 | Iniciar sesión libre | `POST /space/v1/executions` | `OP-EXE-004` | `FreeSessionCreate` | `FreeSession` | `no-store` |
 | Listar mis invitaciones de cliente | `GET /space/v1/client-invitations` | `OP-IDN-056` | sin body | `ClientInvitationPendingList` | `no-store` |
 | Leer una invitación de cliente por id | `GET /space/v1/client-invitations/{invitationId}` | `OP-REL-015` | path | `ClientInvitationPresentation` | `no-store` |
-| Decidir una invitación de cliente | `POST /space/v1/client-invitations/decisions` | `OP-IDN-009` | `ClientInvitationDecisionCreate` con `token` o `invitation_id` | `ClientInvitationDecisionResult` | `no-store` |
+| Decidir una invitación de cliente | `POST /space/v1/client-invitations/decisions` | `OP-IDN-009` | `ClientInvitationDecisionCreate` con `token` o `invitation_id`, y opcionalmente `program_decision` y `timezone` | `ClientInvitationDecisionResult` | `no-store` |
 | Leer el historial de mi relación | `GET /space/v1/relationships/{relationshipId}/events` | `OP-REL-014` | query `limit`, `cursor` | `RelationshipHistoryPage` | `private, no-store` |
 | Decidir una suplencia | `POST /space/v1/relationships/{relationshipId}/substitutions/{substitutionId}/decision` | `OP-REL-005` | `SubstitutionDecisionCreate` | `RelationshipSubstitutionDecision` | `no-store` |
 | Terminar mi relación | `POST /space/v1/relationships/{relationshipId}/termination` | `OP-REL-007` | `RelationshipTerminationCreate` | `MyRelationshipTermination` | `no-store` |
@@ -69,6 +69,8 @@ generado son el inventario exhaustivo.
 | Obtener foto Studio | `GET .../nutrition/meals/{mealId}/photo` | `OP-NUT-013` | path + bearer | bytes JPEG/PNG/WebP | `private, no-store` |
 | Leer resúmenes Studio | `GET .../nutrition/daily-summaries` | `OP-NUT-010` | rango | `NutritionDailySummaryPage` | `private, no-store` |
 | Leer/proponer guía Studio | `GET/POST .../nutrition/goals/versions` | `OP-NUT-011/012` | query / `ProfessionalNutritionGoalVersionCreate` | `NutritionGoalVersionPage` / `NutritionGoalVersion` | `private, no-store` / `no-store` |
+
+**First program in a client invitation (STUDIO-16).** `ClientInvitationCreate` (`OP-REL-001`) takes an optional `ClientInvitationProgramRequest` `{program_version_id, starts_on, timezone}`, and `ClientInvitation` answers `program_proposal` (`ClientInvitationProgramProposal` or null). `ClientInvitationPresentation` adds `program_proposal` (`ClientInvitationProgramOffer` or null); `ClientInvitationDecisionCreate` adds optional `program_decision` and `timezone`; `ClientInvitationDecisionResult` adds `program_proposal` (`ClientInvitationProgramOutcome` or null: `invitation_intent_id`, `intent_status`, `assignment_id`, `unmaterialized_reason`). Every addition to a response is required and nullable; nothing existing changes. The identity routes keep their legacy error envelope, and a `422` from a program rule carries the field's JSON pointer in `error.detail`.
 
 La lectura Studio posterior a la revocación reutiliza las operaciones GET correspondientes y, salvo la excepción de medios, responde `403 scope-required`; la revocación no crea operaciones adicionales. `OP-NUT-013` es la excepción cerrada: ante recurso inexistente o cualquier autorización no efectiva responde siempre el mismo `404` sin bytes para no revelar la existencia de la foto.
 

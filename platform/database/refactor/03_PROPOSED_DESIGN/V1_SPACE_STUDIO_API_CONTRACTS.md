@@ -245,6 +245,8 @@ Sujeto implícito: la persona autenticada. Ningún endpoint recibe un `person_id
 | `POST` | `/erasure-requests` | `OP-PRV-008` | |
 | `GET` | `/erasure-requests/{id}` | `OP-PRV-016` | Resolución por categoría |
 
+**As implemented (STUDIO-16).** `resolve` and `GET /client-invitations/{invitationId}` add `program_proposal`: the program the organization offers, with its length, tentative start and the scope it needs, or null. `decisions` takes an optional `program_decision` (absent declines the program) and an optional `timezone` from her device, and answers `program_proposal` with what became of it: `assignment_id` when it was created, `unmaterialized_reason` when she accepted it but it could not be.
+
 ### 4.4 Planificación y agenda
 
 | Método | Ruta | Operación | Notas |
@@ -534,7 +536,7 @@ expiración.
 | Método | Ruta | Operación | Scope exigido |
 | --- | --- | --- | --- |
 | `GET` | `/organizations/{orgId}/clients` | `OP-REL-010` | **Ninguno** — directorio sin datos fitness |
-| `POST` | `/organizations/{orgId}/client-invitations` | `OP-REL-001` | Ninguno — ofrecer no es conceder |
+| `POST` | `/organizations/{orgId}/client-invitations` | `OP-REL-001` | Ninguno — ofrecer no es conceder. An optional `program` needs `assign_programs` and a request for `relationship_training` at `contribute` (STUDIO-16) |
 | `GET` | `/organizations/{orgId}/relationships/{id}` | `OP-REL-011` | Ninguno — estado, no contenido |
 | `GET` | `/organizations/{orgId}/relationships/{id}/events` | `OP-REL-014` | Ninguno |
 | `POST` | `/organizations/{orgId}/relationships/{relId}/professional-assignments` | `OP-REL-002` | Ninguno |
