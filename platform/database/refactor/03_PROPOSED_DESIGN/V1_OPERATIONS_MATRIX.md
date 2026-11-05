@@ -4306,7 +4306,7 @@ Regla que gobierna todo el dominio: un worker es **idempotente y auditable**. Re
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /{surface}/v1/telemetry-config`, donde `surface` es `studio`, `space` o `backoffice` |
+| **Superficie** | `GET /{surface}/v1/telemetry-config`, donde `surface` es `studio` o `space`. El Backoffice no tiene compuerta: es interno y no mide nada en el navegador |
 | **Actor** | `A0` |
 | **Filtros obligatorios** | Superficie cerrada de la ruta; no acepta sujeto, identificadores ni parámetros |
 | **Transacción** | Ninguna; lee solo configuración de despliegue |
