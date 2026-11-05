@@ -56,7 +56,11 @@ generado son el inventario exhaustivo.
 | Terminar mi relación | `POST /space/v1/relationships/{relationshipId}/termination` | `OP-REL-007` | `RelationshipTerminationCreate` | `MyRelationshipTermination` | `no-store` |
 | Guardar resultados | `PUT /space/v1/executions/{executionId}/results` | `OP-EXE-005` | `ExecutionResultsReplace` | `ExecutionResultsState` | `no-store` |
 | Finalizar ejecución | `POST /space/v1/executions/{executionId}/finalize` | `OP-EXE-006` | `ExecutionFinalize` | `ExecutionFinalized` | `no-store` |
+| Listar resultados autorizados | `GET /studio/v1/organizations/{organizationId}/clients/{personId}/executions` | `OP-EXE-017` | query `limit`, `cursor` | `AuthorizedExecutionPage` | `private, no-store` |
 | Leer resultado autorizado | `GET /studio/v1/organizations/{organizationId}/clients/{personId}/executions/{executionId}` | `OP-EXE-018` | path | `AuthorizedExecution` | `private, no-store` |
+| Ocultar una sesión a una relación | `PUT /space/v1/executions/{executionId}/visibility` | `OP-PRV-006` | `SessionVisibilityDenialCreate` | `SessionVisibilityDenial` | `no-store` |
+| Volver a compartirla | `DELETE /space/v1/executions/{executionId}/visibility/{relationshipId}` | `OP-PRV-007` | path | `SessionVisibilityDenial` | `no-store` |
+| Listar mis ocultaciones | `GET /space/v1/visibility-denials` | `OP-PRV-017` | query `limit`, `cursor` | `SessionVisibilityDenialPage` | `private, no-store` |
 | Listar lo que comparto | `GET /space/v1/consents` | `OP-PRV-013` | sin body | `SpaceConsentList` | `private, no-store` |
 | Revocar consentimiento | `POST /space/v1/consents/{grantId}/revocation` | `OP-PRV-005` | sin body | `ConsentRevocation` | `no-store` |
 | Registrar/listar comidas | `POST/GET /space/v1/nutrition/meals` | `OP-NUT-001/002` | `NutritionMealCreate` / query | `NutritionMeal` / `NutritionMealPage` | `no-store` |
@@ -69,6 +73,12 @@ generado son el inventario exhaustivo.
 | Obtener foto Studio | `GET .../nutrition/meals/{mealId}/photo` | `OP-NUT-013` | path + bearer | bytes JPEG/PNG/WebP | `private, no-store` |
 | Leer resúmenes Studio | `GET .../nutrition/daily-summaries` | `OP-NUT-010` | rango | `NutritionDailySummaryPage` | `private, no-store` |
 | Leer/proponer guía Studio | `GET/POST .../nutrition/goals/versions` | `OP-NUT-011/012` | query / `ProfessionalNutritionGoalVersionCreate` | `NutritionGoalVersionPage` / `NutritionGoalVersion` | `private, no-store` / `no-store` |
+
+**Authorized executions and session visibility (STUDIO-47/48).**
+
+- **Studio.** `OP-EXE-018` moves from `bearerAuth` to `cookieAuth`, like every Studio read. `AuthorizedExecution` is reshaped as an `AuthorizedExecutionSummary` (`origin` as `AuthorizedExecutionOrigin`, `planned_session_id`, `applied_scope`) plus the recorded results. Those results reuse the item schemas `ExecutionDetail` already had, now named and shared: `ExecutionDetailSegment`, `ExecutionDetailStrengthSet`, `ExecutionDetailEnduranceLap`, `ExecutionDetailIntervalResult`, `ExecutionDetailRoundResult` and `ExecutionDetailMobilityResult`.
+- **Removed.** `AuthorizedStrengthSet` and `MeasuredValue` are gone, with pain and body weight: the detail no longer carries them at all.
+- **Space.** It adds `SessionVisibilityDenialCreate` (`{relationship_id}`, nothing else), `SessionVisibilityDenial` and `SessionVisibilityDenialPage`. Both commands take `Idempotency-Key` and `Command-Id`.
 
 **First program in a client invitation (STUDIO-16).** `ClientInvitationCreate` (`OP-REL-001`) takes an optional `ClientInvitationProgramRequest` `{program_version_id, starts_on, timezone}`, and `ClientInvitation` answers `program_proposal` (`ClientInvitationProgramProposal` or null). `ClientInvitationPresentation` adds `program_proposal` (`ClientInvitationProgramOffer` or null); `ClientInvitationDecisionCreate` adds optional `program_decision` and `timezone`; `ClientInvitationDecisionResult` adds `program_proposal` (`ClientInvitationProgramOutcome` or null: `invitation_intent_id`, `intent_status`, `assignment_id`, `unmaterialized_reason`). Every addition to a response is required and nullable; nothing existing changes. The identity routes keep their legacy error envelope, and a `422` from a program rule carries the field's JSON pointer in `error.detail`.
 

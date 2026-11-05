@@ -681,6 +681,12 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 - **`T-DENY-7` (negativa)** — No se puede ocultar actividad producida **dentro** de la propia relación.
 - **`T-DENY-8` (positiva)** — Una denegación efectiva en `T` o creada después fija `frozen_denied_at` y excluye la sesión de la superficie histórica.
 - **`T-DENY-9` (negativa)** — Restaurar después de `T` no limpia `frozen_denied_at` ni amplía detalle, conteos o derivados.
+- **As implemented (STUDIO-47/48, migration `20261107090000_a_coach_reviews_what_a_client_trained.sql`). Deviation.** `session_visibility_denials_all_self` (`for all`, `person_id = access_control.person()`) is built as specified. A second policy is added: `session_visibility_denials_select_screening` (`for select`, `relationship_id = access_control.contract_scope('session_screening')`).
+  - **Why it is needed:** the table forces row-level security, so the session policy's `NOT EXISTS` over denials runs under the coach's policies. Without this second policy it would see no denial and fail open.
+  - **How far it reaches:** it lets that check see the denials of one relationship, and only inside the two closed Studio reads that open the HMAC-signed scope.
+  - **Why the intent still holds:** no function returns a denial row to an organization, and `allfit_api` has no privilege on the table, so no organization reads this table through the API.
+  - **Grants:** `allfit_api` has none, against the `SELECT/INSERT/UPDATE/DELETE` listed above; writes go through `privacy.hide_session` and `privacy.restore_session`.
+  - **Tests:** `T-PRV-HIDE-RLS-01..04`, `T-EXE-AUTHORIZED-RLS-03` and `-RLS-06`. `T-DENY-2` (aggregates) and `T-DENY-6` (planning links) have nothing to test yet.
 
 #### `HISTORICAL_ACCESS_CASE`
 
@@ -949,6 +955,17 @@ Es el dominio donde convergen las tres decisiones difíciles: una fila puede con
 - **`T-EXEC-3` (negativa)** — Una sesión denegada no aparece en detalle, conteos, récords ni derivados de esa relación.
 - **`T-EXEC-4` (negativa)** — Ningún profesional puede escribir, corregir o borrar una ejecución ajena. No existe `manage_execution`.
 - **`T-EXEC-5` (positiva)** — Una sesión espontánea existe sin plan, relación ni organización.
+- **As implemented (STUDIO-47/48, migration `20261107090000_a_coach_reviews_what_a_client_trained.sql`).** A professional's `SELECT` is `executed_sessions_select_screening`. It applies inside the contract scope `session_screening` for a relationship R of the same person, and admits two kinds of session:
+  - one produced inside R, with `can_access(R, 'relationship_training', 'read')`;
+  - an autonomous one, with `can_access(R, 'prior_training_history', 'read')` and no active denial for R.
+
+  Consequences:
+  - **Outside a screening a gym sees no session at all**, so no other definer read can return one without recording it.
+  - A session produced inside another relationship is never visible to R.
+  - The results tables follow through their existing `EXISTS` on the session.
+  - The two closed functions `execution.list_authorized_executions` and `execution.read_authorized_execution` are the projection; no view exists.
+
+  Tests: `T-EXE-AUTHORIZED-RLS-01..11`, and `-API-38` and `-API-40`, which check that each read closes its screening.
 
 #### `SESSION_SEGMENT` · `SESSION_EXERCISE` · `STRENGTH_SET` · `ENDURANCE_LAP` · `INTERVAL_RESULT` · `ROUND_RESULT` · `MOBILITY_RESULT`
 
