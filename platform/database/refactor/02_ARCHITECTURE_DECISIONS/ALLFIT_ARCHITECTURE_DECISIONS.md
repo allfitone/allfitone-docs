@@ -52,6 +52,7 @@
 | ADR-042 | Las fotos de comida viven en Cloudflare R2, en Estados Unidos |
 | ADR-043 | Allfit Pro: se paga con la compra integrada de cada tienda y se resuelve al leer |
 | ADR-044 | La persona trae su historial de otra app, y entra como entrenamiento suyo |
+| ADR-045 | Los modelos de IA se usan por un solo puerto, y cada tarea elige el suyo con su set de prueba |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -5480,3 +5481,119 @@ que quedó sin movimiento.
 11. Otra persona no puede leer, confirmar ni deshacer una importación ajena.
 12. Repetir cualquier comando con la misma clave no crea otro efecto.
 13. Deshacer una importación a medias anula lo que entró y descarta lo que faltaba.
+
+---
+
+## ADR-045 — Los modelos de IA se usan por un solo puerto, y cada tarea elige el suyo con su set de prueba
+
+**Estado:** en revisión<br>
+**Fecha:** 6 de noviembre de 2026<br>
+**Complementa:** ADR-041, cuyo reconocimiento de comida pasa a llamar al modelo por este
+puerto sin cambiar lo que hace.
+
+### Contexto
+
+Allfit One planea una capa de IA para todo el ecosistema: Space, Studio y lo que venga.
+Su nombre comercial todavía no está fijo. Hay dos requisitos:
+- no depender de un solo proveedor de modelos;
+- poder usar Amazon Bedrock, donde Allfit One tiene USD 10 000 en créditos de AWS
+  Activate, obtenidos por NVIDIA Inception.
+
+Hoy un solo paquete llama a un modelo: `packages/food-recognition` (ADR-041), con el AI
+SDK por el AI Gateway de Vercel. Una regla de lint hacía de ese paquete el único que podía
+importar el SDK.
+
+ADR-021 difiere la IA contextual, los agentes y las recomendaciones, y no admite una
+abstracción «solo porque podría reutilizarse». Por eso el puerto nace con un uso actual,
+el reconocimiento de comida, y cubre solo lo que ese uso necesita.
+
+### Decisión
+
+**1. Solo `packages/ai-provider` habla con un modelo.**
+ESLint rechaza en el resto del repositorio:
+- el AI SDK (`ai`, `@ai-sdk/*`);
+- el cliente de Bedrock (`@aws-sdk/client-bedrock*`);
+- los SDK propios de otros proveedores (`@anthropic-ai/*`, `openai`, `@google/genai`).
+
+**2. El puerto habla en términos de Allfit One, no del proveedor.**
+- Pide una respuesta con un esquema a un modelo, por su id exacto. Lleva texto e imágenes
+  JPEG y un plazo que incluye los reintentos.
+- Devuelve la respuesta ya validada contra el esquema y el modelo exacto que respondió.
+- Falla cerrado con tres valores, y los errores del proveedor no lo cruzan:
+  - `unavailable`: el proveedor no respondió a tiempo o no pudo; más tarde puede funcionar;
+  - `invalid-answer`: respondió, pero no con la forma pedida;
+  - `rejected`: no aceptó la petición tal como está (sin acceso, modelo inexistente,
+    esquema no admitido); repetirla falla igual.
+- Herramientas, conversaciones de varios turnos, consumo de tokens y *streaming* no están.
+  Entran con la primera tarea que los use.
+
+**3. Cada tarea es dueña de su modelo.**
+- La tarea define su *prompt*, su esquema, sus validaciones, su set de prueba y su modelo.
+- Cambiar de modelo o de proveedor es configuración, después de pasar el set de prueba
+  de la tarea.
+- No hay respaldo automático entre modelos (ADR-041 §2).
+
+**4. Un proveedor atiende una tarea en producción solo si cumple todo esto:**
+- retención cero, y sin entrenar modelos con los datos;
+- contrato de encargado del tratamiento;
+- procesamiento en Estados Unidos (ADR-042). En Bedrock, eso significa perfiles de
+  inferencia `us.`, nunca `global.`;
+- el texto de consentimiento de la tarea lo nombra, así que cambiar de proveedor es una
+  versión nueva del consentimiento;
+- en Bedrock, el registro de invocaciones del modelo queda apagado en la cuenta.
+
+**5. Adaptadores de hoy:**
+- **AI Gateway de Vercel, con el AI SDK.** Es el de producción. Pide retención cero en
+  cada petición, siempre, y la tarea dice por qué proveedores de inferencia pasa: el
+  reconocimiento, solo por Vertex.
+- **Amazon Bedrock, con la API Converse del SDK de AWS.**
+  - Usa las credenciales de la cadena por defecto: en ECS, el rol de la tarea, sin claves
+    en secretos.
+  - Pide la salida estructurada de Converse.
+  - Usa HTTP/1.1 y no el HTTP/2 que el cliente trae por defecto, porque nada aquí usa los
+    *streams* bidireccionales y Bun falla con ese manejador.
+  - Hoy lo usa solo el set de prueba del reconocimiento, para medir modelos de Bedrock con
+    los créditos. No tiene permisos IAM ni variables en producción.
+- **Memoria**, para las pruebas.
+
+**6. El nombre comercial del asistente nunca es un nombre técnico.**
+- No aparece en código, paquetes, esquemas, tablas, valores, rutas, `operationId`,
+  variables de entorno, eventos de telemetría, recursos de AWS ni códigos de
+  consentimiento.
+- Lo que produce un modelo guarda el modelo exacto (ADR-018), nunca una marca.
+
+**7. Los paquetes no registran nada.** La API registra solo el valor cerrado de la falla.
+
+### Invariantes
+
+1. Ningún código fuera de `packages/ai-provider` importa un SDK de modelos.
+2. Una respuesta que no cumple su esquema no sale del puerto.
+3. Un modelo atiende una tarea solo después de pasar el set de prueba de esa tarea.
+4. Ningún dato sale hacia un proveedor que el consentimiento vigente de la tarea no nombra.
+
+### Lo que esta decisión no hace
+
+- No cambia el reconocimiento de comida en producción. Sigue en Gemini 3.5 Flash-Lite por
+  el AI Gateway y Vertex, con el mismo consentimiento.
+- No crea el dominio ni el esquema `intelligence`, ni un chat, ni el scope `ai_context`
+  (ADR-007), ni ejecuciones de IA guardadas.
+  - La capa de producto pasa por las puertas de ADR-021 con su propio ADR.
+  - Quedan abiertas tres preguntas: si el asistente es un personaje visible en todas
+    partes, si llega al Backoffice y si hay un solo consentimiento o uno por función.
+- No da permisos IAM de Bedrock a la API ni le agrega variables.
+- No resuelve los DPA ni la transferencia internacional bajo la Ley 1581, igual que
+  ADR-041.
+- No deja listo el paso del reconocimiento a Bedrock en producción. Antes harían falta:
+  - pasar el set de prueba;
+  - una versión nueva del consentimiento;
+  - un formato del modelo guardado que acepte los ids de Bedrock, porque
+    `nutrition.meals.recognized_by` exige `proveedor/modelo`;
+  - el permiso IAM.
+
+### Pruebas
+
+- `T-AIP-UNIT-01..07`: el puerto y sus adaptadores, con un Gateway y un Bedrock falsos.
+- `T-REC-UNIT-12..13`: el reconocimiento sobre el puerto.
+- La regla de lint, probada con archivos que la violan y archivos que la cumplen.
+- El set de prueba del reconocimiento, que ahora mide también modelos de Bedrock
+  (`bun run eval bedrock:<id>`).
