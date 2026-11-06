@@ -58,6 +58,9 @@ generado son el inventario exhaustivo.
 | Finalizar ejecución | `POST /space/v1/executions/{executionId}/finalize` | `OP-EXE-006` | `ExecutionFinalize` | `ExecutionFinalized` | `no-store` |
 | Listar resultados autorizados | `GET /studio/v1/organizations/{organizationId}/clients/{personId}/executions` | `OP-EXE-017` | query `limit`, `cursor` | `AuthorizedExecutionPage` | `private, no-store` |
 | Leer resultado autorizado | `GET /studio/v1/organizations/{organizationId}/clients/{personId}/executions/{executionId}` | `OP-EXE-018` | path | `AuthorizedExecution` | `private, no-store` |
+| Leer el progreso autorizado | `GET /studio/v1/organizations/{organizationId}/clients/{personId}/progress` | `OP-EXE-019` | query `timezone`, `period`, `count` | `ClientProgress` | `private, no-store` |
+| Dejar una observación | `POST /studio/v1/organizations/{organizationId}/clients/{personId}/observations` | `OP-EXE-010` | `ProfessionalObservationCreate` | `ProfessionalObservation` | `no-store` |
+| Corregir mi observación | `POST /studio/v1/organizations/{organizationId}/observations/{observationId}/revisions` | `OP-EXE-011` | `ProfessionalObservationRevisionCreate` | `ProfessionalObservation` | `no-store` |
 | Ocultar una sesión a una relación | `PUT /space/v1/executions/{executionId}/visibility` | `OP-PRV-006` | `SessionVisibilityDenialCreate` | `SessionVisibilityDenial` | `no-store` |
 | Volver a compartirla | `DELETE /space/v1/executions/{executionId}/visibility/{relationshipId}` | `OP-PRV-007` | path | `SessionVisibilityDenial` | `no-store` |
 | Listar mis ocultaciones | `GET /space/v1/visibility-denials` | `OP-PRV-017` | query `limit`, `cursor` | `SessionVisibilityDenialPage` | `private, no-store` |
@@ -86,6 +89,13 @@ generado son el inventario exhaustivo.
 - **Studio.** `OP-EXE-018` moves from `bearerAuth` to `cookieAuth`, like every Studio read. `AuthorizedExecution` is reshaped as an `AuthorizedExecutionSummary` (`origin` as `AuthorizedExecutionOrigin`, `planned_session_id`, `applied_scope`) plus the recorded results. Those results reuse the item schemas `ExecutionDetail` already had, now named and shared: `ExecutionDetailSegment`, `ExecutionDetailStrengthSet`, `ExecutionDetailEnduranceLap`, `ExecutionDetailIntervalResult`, `ExecutionDetailRoundResult` and `ExecutionDetailMobilityResult`.
 - **Removed.** `AuthorizedStrengthSet` and `MeasuredValue` are gone, with pain and body weight: the detail no longer carries them at all.
 - **Space.** It adds `SessionVisibilityDenialCreate` (`{relationship_id}`, nothing else), `SessionVisibilityDenial` and `SessionVisibilityDenialPage`. Both commands take `Idempotency-Key` and `Command-Id`.
+
+**Progress and observations (STUDIO-49..51).**
+
+- **Studio.** All three operations are under the tag *Studio Execution* and use `cookieAuth`.
+  - `ClientProgress` carries `period`, `sources` (each grant's code and version), `algorithm`, `periods` (reusing `SpacePeriodMuscle`) and `movements`. A movement's `name` is null when it is one of her own. There is no adherence, programme or body weight.
+  - Both commands take `Idempotency-Key` and `Command-Id`. They declare `403` as `ScopeRequired` and `409` as `ObservationConflict`: `stale-draft` with `current_state`, `service-paused`, `conflict` or `idempotency-in-progress`.
+- **OP-EXE-018.** `AuthorizedExecution` gains a required `observations` array of `ProfessionalObservation` (`category`, `provenance`, `content`, `revision_number`, `author_name`, `authored_by_me`).
 
 **A client's profile, body and health (STUDIO-44..46).**
 

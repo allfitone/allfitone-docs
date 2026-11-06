@@ -2117,6 +2117,22 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Consultas / índices:** `(person_id, executed_session_id)`, `author_assignment_id`.
 - **Retención:** con la sesión / categoría.
 - **Eventos:** `execution.observation_created.v1`, `execution.observation_revised.v1`.
+- **As implemented (STUDIO-50/51, migration `20261111090000_a_coach_reads_progress_and_observes_a_session.sql`).**
+  - **Columns:** `id` (the `Command-Id`), `person_id`, `executed_session_id`, `relationship_id`, `organization_id`, `author_assignment_id`, `author_membership_id`, `data_classification_code` (`training` or `health`), `provenance` (`professional_observation` or `person_declared`), `content`, `revision_number` (from 1), `created_at` and `revised_at`.
+  - **Classification:** the observation's own category, not the session's. Pain noted on a strength session is `health`.
+  - **Keys:** `pk_professional_observations` and `uq_professional_observations_person (id, person_id)`.
+  - **Session FKs:** `fk_professional_observations_session (executed_session_id, person_id)`, and `fk_professional_observations_session_context (executed_session_id, relationship_id) → executed_sessions(id, context_relationship_id)`. The second is backed by the new `uq_executed_sessions_context`, so an observation can only sit on a session its relationship produced.
+  - **Other FKs:** `fk_professional_observations_relationship`; `fk_professional_observations_author`, to the assignment carrier, so the author's assignment, membership, relationship, person and organization agree; and `fk_professional_observations_classification`. Every FK is `RESTRICT`.
+  - **Checks:** `ck_professional_observations_classification`, `_provenance`, `_content` (trimmed, 1 to 2000 characters), and `_revision` (`revised_at` is set exactly when `revision_number > 1`).
+  - **Indexes:** `idx_professional_observations_session (executed_session_id, relationship_id, created_at)`, `_person (person_id, created_at)` and `_author (author_assignment_id)`.
+  - **Trigger:** `trg_professional_observations_before_update_keep` keeps every column except `content`, `revision_number` and `revised_at`, and moves the revision one step at a time.
+  - **Access:** `allfit_api` has no privilege on the table. It writes through `execution.record_observation` and `execution.revise_observation`, and reads through `execution.read_authorized_execution`. RLS: see `V1_RLS_MATRIX.md` § `PROFESSIONAL_OBSERVATION`.
+- **`execution.observation_revisions` (STUDIO-51), which this catalogue did not list before.** The append-only history of an observation's corrections.
+  - **Columns:** `id` (the `Command-Id`), `observation_id`, `person_id`, `revision_from`, `revision_to`, `actor_assignment_id`, `actor_membership_id`, `reason` (1 to 500), `before_content`, `after_content` and `created_at`.
+  - **Constraints:** `fk_observation_revisions_observation (observation_id, person_id)`, `fk_observation_revisions_actor`, `uq_observation_revisions_step (observation_id, revision_to)`, `ck_observation_revisions_step` (`revision_to = revision_from + 1`), `_reason`, and `_content` (the text must change).
+  - **Indexes:** `idx_observation_revisions_person (person_id, created_at)` and `_actor (actor_assignment_id)`.
+  - **Append-only:** `trg_observation_revisions_append_only` refuses `UPDATE`, `DELETE` and `TRUNCATE`.
+  - For observations it takes the place of `execution.revision_events` (§10.12).
 
 ### 10.11 `execution.correction_proposals`
 
@@ -2145,6 +2161,9 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Consultas / índices:** por `executed_session_id`; por target.
 - **Retención:** auditoría con el dato.
 - **Eventos:** ninguno propio.
+- **As implemented: not built.** There is no `execution.revision_events`. Corrections are typed by what they correct instead of using one polymorphic target:
+  - a session's go to `execution.execution_revisions` (`revise_execution`, migration `20261003120000_the_person_corrects_and_annuls_what_is_theirs.sql`);
+  - an observation's go to `execution.observation_revisions` (§10.10, STUDIO-51).
 
 ### 10.13 `execution.result_validation_events`
 

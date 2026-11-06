@@ -857,3 +857,57 @@ Tests:
   opens, and the photo policies.
 - `body-photo-share-concurrency.test.ts` covers two shares at once, a share
   crossing a termination and a share crossing a deletion, in both orders.
+
+## A coach reads progress and observes a session (STUDIO-49..51)
+
+Migration `20261111090000_a_coach_reads_progress_and_observes_a_session.sql`
+lets the coach who attends a person read her progress (`HU-STUDIO-056`) and
+leave and correct observations on her sessions (`HU-STUDIO-057`,
+`HU-STUDIO-058`). It does four things:
+
+- adds `uq_executed_sessions_context (id, context_relationship_id)` on
+  `execution.executed_sessions`, so an observation's FK can require a session
+  its relationship produced;
+- adds `execution.professional_observations` and the append-only
+  `execution.observation_revisions`, with their policies;
+- adds the closed read `execution.read_client_progress` and the commands
+  `execution.record_observation` and `execution.revise_observation`;
+- recreates `execution.read_authorized_execution` so that it carries
+  `observations`.
+
+Both tables start empty, so there is no backfill.
+
+**Locks.** Adding the unique constraint builds an index on
+`execution.executed_sessions` and blocks writes to sessions while it builds. The
+migration's `lock_timeout` and `statement_timeout` bound the build.
+
+**Deploy order.** Merging runs **Deploy AWS**, which rolls out the API with the
+new routes and registers this commit's migrator. Then dispatch **Deploy
+Database AWS**. Until the migration is applied, the three new routes fail and
+`OP-EXE-018` answers without `observations`. No screen calls the new routes yet.
+
+**Publishing the scopes.** The V1 rules in `packages/db/scripts/v1-scope-rules.ts`
+now declare `execution.professional_observations` twice: under
+`relationship_training` (training, `contribute`) and under `health_context`
+(health, `contribute`).
+
+- If production published those scopes before this release, the published
+  versions lack the rule. A new version is needed for the published field set
+  to say so. Writing works either way, because `access_control.can_access` does
+  not read the rules.
+- The consent words of both scopes do not mention observations yet. Decide them
+  before Studio offers `health_context` at `contribute`.
+
+Tests:
+
+- `T-EXE-PROGRESS-01` covers who may read, `scope_required` with its denied
+  event, each training scope alone and together, hiding and restoring a
+  session, a corrected value, and warm-ups, unloaded sets and annulled, open
+  and other gyms' sessions. It also covers Epley, month periods and the exact
+  keys.
+- `T-EXE-OBSERVATION-01` covers both commands (IDEM, scopes, the strict
+  session rule, the capability, a paused service, transcription, stale and
+  invalid corrections, termination) and every policy in both directions. It
+  also covers the observations and their health access record in `OP-EXE-018`.
+- `observation-concurrency.test.ts` covers two corrections over the same
+  revision, and an observation or a correction racing a termination.
