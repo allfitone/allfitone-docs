@@ -3909,6 +3909,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno |
 | **Reglas** | **Un `coach` no accede a esta operación** aunque tenga a esa persona asignada: el estado de pago no es un dato de entrenamiento. `staff` tampoco |
 | **Falla cerrada** | Sin `manage_billing`, misma respuesta que "no existe" |
+| **Implemented (2026-10-12, STUDIO-71)** | `payments.list_organization_subscriptions(actor, organization, status, limit, cursor_status, cursor_started_at, cursor_subscription_id)`, migration `20261012140000_a_subscription_has_a_life.sql`; `GET /studio/v1/organizations/{organizationId}/subscriptions`, `cookieAuth`. Without `manage_billing` (held by `owner` and `admin`, not by `coach` or `staff`) it answers `P0002` → `404`, as if the list did not exist. Statuses `active`, `suspended` and `ended`, with an optional `status` filter; keyset on (`status desc`, `started_at desc`, `id desc`), page cap 101. It returns name, plan, amount, period, status and dates, and no fitness data. Tests: `T-PAY-LIFECYCLE-01` (owner, coach and staff), the Studio payments handler tests |
 
 #### `OP-PAY-008` — Suspender manualmente · `OP-PAY-009` — Reactivar manualmente
 
@@ -3926,6 +3927,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `payments.subscription_suspended.v1` · `payments.subscription_reactivated.v1` |
 | **Reglas** | Suspender **no toca los grants, no desacopla la asignación y no termina la relación**; lo garantiza `IX-40`. El bloqueo hace inefectiva la escritura profesional y proyecta como pausadas las sesiones futuras administradas. Reactivar es sustractivo: quita una causa y recalcula desde el estado vigente; no revive grants revocados, relaciones terminadas, membresías/asignaciones cambiadas ni sesiones canceladas, iniciadas o pasadas. No exige aceptación nueva solo si el grant actual sigue vigente. Otro bloqueo abierto sigue denegando |
 | **Falla cerrada** | Suscripción terminada, bloqueo ausente o de otra fuente, o intento de restaurar/escribir grants, relación, membresía, asignación o sesiones: rechazo y rollback completo |
+| **Implemented (2026-10-12, STUDIO-72)** | `payments.suspend_subscription(actor, organization, subscription, idempotency_key, command_id, request_hash)` and `payments.reactivate_subscription(...)`, same arguments, migration `20261012140000_a_subscription_has_a_life.sql`; `POST …/subscriptions/{subscriptionId}/suspension` and `…/reactivation`, without a body, with the path in the request hash. Suspending writes the status and one open `planning.service_access_blocks` row (`subscription_suspension`, both effects) and nothing else. Reactivating closes only that row and never reopens it. **The effects are enforced since `20261105101100_a_paused_plan_holds_the_gyms_program.sql`:** a block that `blocks_professional_contribution` makes `can_access(…, 'contribute')` refuse, with `AF424` from `planning.require_training_grant` (assigning, moving, adjusting and cancelling), while reading continues; a block that `blocks_future_sessions` holds the sessions of a program the gym assigned, and her own program starts as always. A gym's own suspension keeps holding after the subscription is reactivated. Tests: `T-PAY-LIFECYCLE-01`, `T-PLN-SUSPEND-01`, `T-PLN-SUSPEND-02` |
 
 #### `OP-PAY-010` — Terminar una suscripción desde la organización
 
@@ -3943,6 +3945,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `payments.subscription_ended.v1` |
 | **Reglas** | **Terminar la suscripción no termina la relación de servicio.** Son vínculos distintos: para terminar la relación existe `OP-REL-008`, con sus propios efectos. Ningún proceso automático puede ejecutar esta operación: la tabla exige un actor humano declarado |
 | **Falla cerrada** | Suscripción ya terminada: converge sin efecto |
+| **Implemented (2026-10-12, STUDIO-73)** | `payments.end_subscription(actor, organization, subscription, idempotency_key, command_id, request_hash)`, migration `20261012140000_a_subscription_has_a_life.sql`; `POST …/subscriptions/{subscriptionId}/termination`. It closes the subscription's open block, so nothing is left blocking a bond that no longer exists, and records `ended_by_membership_id`. The relationship is untouched. A check on `payments.plan_subscriptions` allows `ended` only with `ended_by_kind` `person` or `professional`, so no worker or automatic process can end one, and nothing turns a suspension into an ending. Tests: `T-PAY-LIFECYCLE-01` |
 
 #### `OP-PAY-011` — Consultar los planes que ofrece una organización
 
