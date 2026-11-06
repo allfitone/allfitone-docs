@@ -214,6 +214,8 @@ Sujeto implícito: la persona autenticada. Ningún endpoint recibe un `person_id
 | `POST` | `/body-progress` | `OP-IDN-006` | Despoja EXIF en el servidor |
 | `DELETE` | `/body-progress/{id}` | `OP-IDN-007` | Abre un caso de disposición |
 | `POST` | `/health-context` | `OP-IDN-008` | |
+| `PUT` | `/body-photos/{id}/shares` | `OP-IDN-061` | Show one photo to one relationship. Body `{relationship_id}`. Implemented in STUDIO-45 |
+| `DELETE` | `/body-photos/{id}/shares/{relId}` | `OP-IDN-062` | Take it back, also after the relationship ended. Implemented in STUDIO-45 |
 
 ### 4.2 Invitaciones y relaciones
 
@@ -560,9 +562,11 @@ Todas exigen la fórmula completa y escriben `ACCESS_EVENT`.
 
 | Método | Ruta | Operación | Scope · nivel |
 | --- | --- | --- | --- |
-| `GET` | `/organizations/{orgId}/clients/{personId}/profile` | `OP-IDN-018` | `relationship_training` · `read` |
-| `GET` | `.../clients/{personId}/body-progress` | `OP-IDN-019` | `body_progress` · `read` |
-| `GET` | `.../clients/{personId}/health-context` | `OP-IDN-020` | `health_context` · `read` |
+| `GET` | `/organizations/{orgId}/clients/{personId}/profile` | `OP-IDN-018` | `relationship_training` · `read`. Only the coach who attends her; nothing shared is `403 scope-required` (STUDIO-44) |
+| `GET` | `.../clients/{personId}/body-progress` | `OP-IDN-019` | `body_progress` · `read`. Measurements only (STUDIO-45) |
+| `GET` | `.../clients/{personId}/body-photos` | `OP-IDN-059` | `body_progress` · `read`, a version with photos, and only the ones she shows this relationship (STUDIO-45) |
+| `GET` | `.../clients/{personId}/body-photos/{photoId}/content` | `OP-IDN-060` | Same, per photo. The image through the API, never a signed URL; anything else is `404` (STUDIO-45) |
+| `GET` | `.../clients/{personId}/health-context` | `OP-IDN-020` | `health_context` · `read` (STUDIO-46) |
 | `GET` | `.../clients/{personId}/executions` | `OP-EXE-017` | `relationship_training` y/o `prior_training_history` · `read`. Only the coach who attends her; nothing shared is an empty page (STUDIO-47) |
 | `GET` | `.../clients/{personId}/executions/{id}` | `OP-EXE-018` | Igual, evaluado por ejecución. `403 scope-required` only when she shares nothing; otherwise an unseen session is `404` (STUDIO-48) |
 | `GET` | `.../clients/{personId}/progress` | `OP-EXE-019` | El más restrictivo de sus inputs |

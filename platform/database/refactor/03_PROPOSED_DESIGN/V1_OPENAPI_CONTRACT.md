@@ -61,6 +61,13 @@ generado son el inventario exhaustivo.
 | Ocultar una sesión a una relación | `PUT /space/v1/executions/{executionId}/visibility` | `OP-PRV-006` | `SessionVisibilityDenialCreate` | `SessionVisibilityDenial` | `no-store` |
 | Volver a compartirla | `DELETE /space/v1/executions/{executionId}/visibility/{relationshipId}` | `OP-PRV-007` | path | `SessionVisibilityDenial` | `no-store` |
 | Listar mis ocultaciones | `GET /space/v1/visibility-denials` | `OP-PRV-017` | query `limit`, `cursor` | `SessionVisibilityDenialPage` | `private, no-store` |
+| Read a client's training profile | `GET /studio/v1/organizations/{organizationId}/clients/{personId}/profile` | `OP-IDN-018` | path | `ClientTrainingProfile` | `private, no-store` |
+| Read a client's body progress | `GET …/clients/{personId}/body-progress` | `OP-IDN-019` | query `limit`, `cursor` | `ClientBodyProgressPage` | `private, no-store` |
+| List the photos she shows this gym | `GET …/clients/{personId}/body-photos` | `OP-IDN-059` | query `limit`, `cursor` | `ClientBodyPhotoPage` | `private, no-store` |
+| Open one of them | `GET …/clients/{personId}/body-photos/{photoId}/content` | `OP-IDN-060` | path + cookie | `image/jpeg` bytes | `private, no-store` |
+| Read a client's health context | `GET …/clients/{personId}/health-context` | `OP-IDN-020` | query `limit`, `cursor` | `ClientHealthContextPage` | `private, no-store` |
+| Show a body photo to a gym | `PUT /space/v1/body-photos/{photoId}/shares` | `OP-IDN-061` | `BodyPhotoShareCreate` | `BodyPhotoShare` | `no-store` |
+| Stop showing it | `DELETE /space/v1/body-photos/{photoId}/shares/{relationshipId}` | `OP-IDN-062` | path | `BodyPhotoShare` | `no-store` |
 | Listar lo que comparto | `GET /space/v1/consents` | `OP-PRV-013` | sin body | `SpaceConsentList` | `private, no-store` |
 | Revocar consentimiento | `POST /space/v1/consents/{grantId}/revocation` | `OP-PRV-005` | sin body | `ConsentRevocation` | `no-store` |
 | Registrar/listar comidas | `POST/GET /space/v1/nutrition/meals` | `OP-NUT-001/002` | `NutritionMealCreate` / query | `NutritionMeal` / `NutritionMealPage` | `no-store` |
@@ -79,6 +86,12 @@ generado son el inventario exhaustivo.
 - **Studio.** `OP-EXE-018` moves from `bearerAuth` to `cookieAuth`, like every Studio read. `AuthorizedExecution` is reshaped as an `AuthorizedExecutionSummary` (`origin` as `AuthorizedExecutionOrigin`, `planned_session_id`, `applied_scope`) plus the recorded results. Those results reuse the item schemas `ExecutionDetail` already had, now named and shared: `ExecutionDetailSegment`, `ExecutionDetailStrengthSet`, `ExecutionDetailEnduranceLap`, `ExecutionDetailIntervalResult`, `ExecutionDetailRoundResult` and `ExecutionDetailMobilityResult`.
 - **Removed.** `AuthorizedStrengthSet` and `MeasuredValue` are gone, with pain and body weight: the detail no longer carries them at all.
 - **Space.** It adds `SessionVisibilityDenialCreate` (`{relationship_id}`, nothing else), `SessionVisibilityDenial` and `SessionVisibilityDenialPage`. Both commands take `Idempotency-Key` and `Command-Id`.
+
+**A client's profile, body and health (STUDIO-44..46).**
+
+- **Studio.** A new tag, *Studio Client Profile*, groups `OP-IDN-018`, `-019`, `-020`, `-059` and `-060`, all `cookieAuth`. Each read declares `403` as `ScopeRequired` naming `required_scope`, except `OP-IDN-060`, which answers `404` for anything short of a shown photo. Lists carry `applied_scope` and keyset pages (`has_more`, `next_cursor`).
+- **The image.** `OP-IDN-060` answers `image/jpeg` with `x-allfit-no-redirect`. `ClientBodyPhoto` has no `content_path`: Studio builds the documented path from the photo id.
+- **Space.** `BodyPhoto` gains `shared_with` (`BodyPhotoShareSummary[]`). `OP-IDN-061` and `OP-IDN-062` take `Idempotency-Key` and `Command-Id`, and both answer `200` with the share, like `OP-PRV-006` and `-007`, not `204`.
 
 **First program in a client invitation (STUDIO-16).** `ClientInvitationCreate` (`OP-REL-001`) takes an optional `ClientInvitationProgramRequest` `{program_version_id, starts_on, timezone}`, and `ClientInvitation` answers `program_proposal` (`ClientInvitationProgramProposal` or null). `ClientInvitationPresentation` adds `program_proposal` (`ClientInvitationProgramOffer` or null); `ClientInvitationDecisionCreate` adds optional `program_decision` and `timezone`; `ClientInvitationDecisionResult` adds `program_proposal` (`ClientInvitationProgramOutcome` or null: `invitation_intent_id`, `intent_status`, `assignment_id`, `unmaterialized_reason`). Every addition to a response is required and nullable; nothing existing changes. The identity routes keep their legacy error envelope, and a `422` from a program rule carries the field's JSON pointer in `error.detail`.
 
@@ -173,6 +186,8 @@ Studio nunca recibe esa URL. `AuthorizedNutritionMeal.photo` contiene `Authentic
 - no redirige ni expone `media_ref`, query firmada o URL de storage;
 - responde el mismo `404` sin bytes ante inexistencia o cualquier autorización no efectiva;
 - hace que un enlace obtenido antes de una revocación deje de servir contenido en la lectura inmediatamente posterior.
+
+**Body photos follow the same rule (STUDIO-45).** `OP-IDN-060` rechecks the attending coach, an `active` `body_progress` grant, a version that includes the photo and a live share with this relationship on every GET. It records the access, `allowed` or `denied`, before the object store is read, and streams the bytes with `private, no-store`, `inline` and `nosniff`. It is `cookieAuth` with Studio's `Origin`, not bearer: Studio fetches it with credentials and shows a blob.
 
 ## 4. Gate contract-first
 

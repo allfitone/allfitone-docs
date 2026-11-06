@@ -278,6 +278,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** `(person_id, attribute_code, valid_from desc)`; único parcial de miembro vigente para `focus_areas`, descrito arriba.
 - **Retención:** por categoría de disposición; anonimización rompe el enlace a `person_id`.
 - **Eventos:** `identity.profile_claim_declared.v1`, `identity.profile_claim_revised.v1`.
+- **As implemented (STUDIO-44, migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql`).** The professional read is the closed function `identity.read_client_training_profile`, not a view: `identity.v_client_profile` does not exist. It serves the live claims of the attributes classified `training`, each field only when the grant's frozen version names it. The row policy for the definer stays `fitness_profile_claims_all_owner`; the function is the gate (see the RLS matrix).
 
 ### 4.7 `identity.body_progress_records`
 
@@ -296,6 +297,22 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** `(person_id, measured_on desc)`.
 - **Retención:** categoría `body`; borrado propio abre `disposition_case` unitario; imágenes con borrado propagado.
 - **Eventos:** `identity.body_progress_recorded.v1`, cuyo payload lleva sólo `body_progress_record_id`: ni el valor ni la unidad salen al outbox.
+- **As implemented (STUDIO-45).** The professional read is `identity.list_client_body_progress`; `identity.v_client_body_progress` does not exist. Photos are not rows of this table: they live in `identity.body_photos` (TECH-31, no entry here yet) and reach a gym only through `identity.body_photo_shares`.
+
+### 4.7.2 `identity.body_photo_shares`
+
+- **Purpose:** which of her body photos she shows to which relationship (HU-SP-025 criterion 4).
+- **Domain / source of truth:** Identity.
+- **Classification:** `body`.
+- **Columns:** `id uuid` (UUIDv7) · `person_id uuid` · `body_photo_id uuid` · `relationship_id uuid` · `status text` (`shared`, `withdrawn`) · `shared_at timestamptz` · `withdrawn_at timestamptz` (nullable).
+- **FKs and deletion:** `(body_photo_id, person_id) → identity.body_photos(id, person_id) ON DELETE CASCADE`, so deleting the photo takes its shares; `(relationship_id, person_id) → relationships.service_relationships(id, person_id) RESTRICT`. The first needs the new `uq_body_photos_person UNIQUE (id, person_id)` on `identity.body_photos`.
+- **Uniques and checks:** `uq_body_photo_shares_pair (body_photo_id, relationship_id)`: one row per pair, reactivated rather than duplicated; `ck_body_photo_shares_status`; `ck_body_photo_shares_withdrawn`: `withdrawn_at` is set exactly when the share is `withdrawn`.
+- **Actors:** the person, through `identity.share_body_photo` and `identity.withdraw_body_photo_share`; no professional reads a share.
+- **RLS:** forced. `body_photo_shares_all_self` (`is_self`), and `body_photo_shares_select_review` inside the contract scope `body_photo_review` only, so the photo policy can see them. `allfit_api` has no privilege on the table.
+- **Indexes:** `idx_body_photo_shares_relationship (relationship_id, status)`, `idx_body_photo_shares_person (person_id)`.
+- **Retention:** with the photo.
+- **Events:** `identity.body_photo_shared.v1`, `identity.body_photo_share_withdrawn.v1`, each only when the state changes.
+- **As implemented (STUDIO-45, migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql`).**
 
 ### 4.7.1 `identity.body_progress_metrics`
 
@@ -325,6 +342,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Retención:** categoría `health`; disposición por su política.
 - **Eventos:** `identity.health_context_declared.v1`, cuyo payload lleva sólo `health_context_claim_id`: lo declarado nunca sale al outbox.
 - **Implementado (`HU-SP-014`, `HU-SP-028`, `HU-BO-009`):** suma `created_at timestamptz`. `description` no queda vacía y tiene como máximo 500 caracteres (la función la guarda sin espacios alrededor); `body_area` es nula o una de catorce zonas (`neck`, `shoulder`, `upper_back`, `lower_back`, `chest`, `abdomen`, `arm`, `elbow`, `wrist_hand`, `hip`, `thigh`, `knee`, `lower_leg`, `ankle_foot`); `valid_to`, si existe, es posterior a `valid_from`. No hay columna para un diagnóstico, un examen ni un documento. `identity.provenance` se crea aquí con las cinco procedencias del glosario, y Space sólo escribe `person_declared`. `identity.health_context_claim_guard_tg` rechaza cualquier `UPDATE`: una declaración se conserva o se borra, y una posterior dice qué cambió. Índice `(person_id, valid_from desc, id desc)`, que es también el orden del cursor. La tabla tiene RLS forzado y el runtime no tiene privilegios sobre ella: la persona entra sólo por `identity.record_health_context`, `identity.list_health_context` e `identity.delete_health_context`, y soporte sólo por `support.exercise_break_glass`. La lectura profesional por `health_context` llega con `relationships`.
+- **As implemented (STUDIO-46, migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql`).** The professional read is `identity.list_client_health_context`, ordered like her own list; `identity.v_client_health_context` does not exist. The V1 rules add `provenance` to the fields `health_context` shares.
 
 ### 4.9 `identity.professional_profiles`
 
@@ -784,6 +802,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Actores:** lectura autenticada; escritura plataforma.
 - **RLS:** lectura abierta de versiones publicadas.
 - **Implementado:** `privacy.access_level` es un enum (`read`, `contribute`), no texto con `CHECK`. Las reglas se insertan sólo dentro de `privacy.publish_scope_definition`, y `privacy.prevent_published_scope_rule_mutation` las congela con la versión. El duplicado de `(resource, field)` dentro de una misma publicación se rechaza en un trigger `before insert` y no en un `CHECK`: PostgreSQL no admite subconsultas en un `CHECK`, así que la comprobación que compara el arreglo contra su propio conjunto distinto no es expresable ahí.
+- **Applied (STUDIO-44..46, migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql`).** `privacy.scope_allows(scope_definition_id, resource, field)` is the first reader of these rules: a non-excluded rule for the field or for `'*'` shares it, and an exclusion of either wins. It is closed to `allfit_api`. The reads of `OP-IDN-018`, `-019`, `-020`, `-059` and `-060` project each field through it, so a field the frozen version leaves out reads as `null`, and a row whose ordering key is not shared is not listed.
 - **Consultas:** por `scope_definition_id`.
 - **Índices:** único compuesto.
 - **Retención:** con la versión.
