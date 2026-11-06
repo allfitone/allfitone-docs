@@ -187,6 +187,8 @@ Ventajas frente a un uuid libre: cada FK valida contra su tabla real, el borrado
 
 Se aplica igual a `correction_proposals`, `revision_events` y `disposition_items`. Cuando el conjunto de tipos crezca en fases futuras, se añade una columna y se amplía el `CHECK`; nunca se degrada a un uuid genérico.
 
+**As implemented, two exceptions.** `revision_events` was never built: corrections go to typed tables (`execution_revisions`, `observation_revisions`). `execution.correction_proposals` (STUDIO-52, migration `20261112090000_a_coach_proposes_a_correction_and_she_decides.sql`) has a single target type, `target_strength_set_id`, and **no FK** on it. Her own correction deletes and reinserts the session's sets with new ids, so a `RESTRICT` FK would block her correction. The guarantees the FK would give come from two triggers instead: the `IX-20` constraint trigger checks the set, its session and the declared value at insert, and the `target_changed` cancellation on `strength_sets` keeps a pending proposal from naming a set that is gone. A settled proposal may name a set that no longer exists, as history.
+
 ## 11. Índices
 
 - **Toda FK usada en RLS o en un join frecuente lleva índice.** `V1_RLS_PHYSICAL_TRACEABILITY_MATRIX.md` enumera por ruta `PR-*` los índices que las policies exigen; son parte del contrato de autorización, no optativos.

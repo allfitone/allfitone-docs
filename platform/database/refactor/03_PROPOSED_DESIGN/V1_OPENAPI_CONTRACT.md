@@ -61,6 +61,10 @@ generado son el inventario exhaustivo.
 | Leer el progreso autorizado | `GET /studio/v1/organizations/{organizationId}/clients/{personId}/progress` | `OP-EXE-019` | query `timezone`, `period`, `count` | `ClientProgress` | `private, no-store` |
 | Dejar una observación | `POST /studio/v1/organizations/{organizationId}/clients/{personId}/observations` | `OP-EXE-010` | `ProfessionalObservationCreate` | `ProfessionalObservation` | `no-store` |
 | Corregir mi observación | `POST /studio/v1/organizations/{organizationId}/observations/{observationId}/revisions` | `OP-EXE-011` | `ProfessionalObservationRevisionCreate` | `ProfessionalObservation` | `no-store` |
+| Propose a correction | `POST /studio/v1/organizations/{organizationId}/clients/{personId}/correction-proposals` | `OP-EXE-012` | `CorrectionProposalCreate` | `ProposedCorrection` (`201`) | `no-store` |
+| List the corrections I proposed | `GET /studio/v1/organizations/{organizationId}/correction-proposals` | `OP-EXE-020` | query `status`, `limit`, `cursor` | `ProposedCorrectionPage` | `private, no-store` |
+| List the corrections proposed to me | `GET /space/v1/correction-proposals` | `OP-EXE-020` | query `status`, `limit`, `cursor` | `CorrectionProposalPage` | `no-store` |
+| Accept or reject a correction | `POST /space/v1/correction-proposals/{proposalId}/decision` | `OP-EXE-013` | `CorrectionDecisionCreate` | `CorrectionProposal` | `no-store` |
 | Ocultar una sesión a una relación | `PUT /space/v1/executions/{executionId}/visibility` | `OP-PRV-006` | `SessionVisibilityDenialCreate` | `SessionVisibilityDenial` | `no-store` |
 | Volver a compartirla | `DELETE /space/v1/executions/{executionId}/visibility/{relationshipId}` | `OP-PRV-007` | path | `SessionVisibilityDenial` | `no-store` |
 | Listar mis ocultaciones | `GET /space/v1/visibility-denials` | `OP-PRV-017` | query `limit`, `cursor` | `SessionVisibilityDenialPage` | `private, no-store` |
@@ -96,6 +100,21 @@ generado son el inventario exhaustivo.
   - `ClientProgress` carries `period`, `sources` (each grant's code and version), `algorithm`, `periods` (reusing `SpacePeriodMuscle`) and `movements`. A movement's `name` is null when it is one of her own. There is no adherence, programme or body weight.
   - Both commands take `Idempotency-Key` and `Command-Id`. They declare `403` as `ScopeRequired` and `409` as `ObservationConflict`: `stale-draft` with `current_state`, `service-paused`, `conflict` or `idempotency-in-progress`.
 - **OP-EXE-018.** `AuthorizedExecution` gains a required `observations` array of `ProfessionalObservation` (`category`, `provenance`, `content`, `revision_number`, `author_name`, `authored_by_me`).
+
+**Correction proposals (STUDIO-52/53, HU-SP-062/063).**
+
+- **Studio.** Both operations are under the tag *Studio Execution* and use `cookieAuth`.
+  - `CorrectionProposalCreate` is `{execution_id, set_order, field, value, unit, reason}`. `field` is a `CorrectionField` (`achieved_reps`, `load`, `rpe`), and `unit` is a mass unit for a load, absent or null otherwise.
+  - The command takes `Idempotency-Key` and `Command-Id` and answers `201`. It declares `403` as `ScopeRequired`, `404`, `409` as `CorrectionConflict` and `422` as `ValidationFailed`.
+  - `ProposedCorrection` carries `client {person_id, name}`, a nullable `target {execution_id, set_order}`, `field`, `proposed`, `reason`, `status`, `cancel_reason`, `created_at`, `expires_at` and `settled_at`. It never carries her value.
+  - The list declares `403` as `Forbidden` and `422`.
+- **Space.** Both operations are under the tag *Space Execution* and use `bearerAuth`.
+  - `CorrectionProposal` carries `execution_id`, `set_order`, `movement_id`, `movement_name`, `field`, `current` and `proposed` (each a `CorrectionValue {value, unit}`), `reason`, the state and its instants, `proposer_name` and `organization_name`.
+  - `CorrectionDecisionCreate` is `{decision}`, `accept` or `reject`. The decision takes `Idempotency-Key` and `Command-Id` and declares `404` and `409` as `CorrectionConflict`. A bad request is `400`.
+- **Shared.** `CorrectionProposalStatus` (`pending`, `accepted`, `rejected`, `expired`, `cancelled`), where `expired` includes a proposal past its thirty days that no sweep has marked yet. `CorrectionCancelReason` is nullable: `target_changed`, `session_annulled`, `session_hidden` or `relationship_terminated`. The query parameter `CorrectionProposalStatusFilter` filters both lists. The response `CorrectionConflict` is `conflict` (the field already waits on her, she has no address, the proposal is no longer open, its set moved on, or the idempotency identity was reused), `service-paused`, or `idempotency-in-progress` with `Retry-After`.
+- **Error mapping.**
+  - **Studio:** AF430 → `403 scope-required` naming the scope; `42501` → `403`; `P0002` → `404`; AF424 → `409 service-paused`; `23505`, `P0004` and `55000` → `409 conflict`; `40001` → `409 idempotency-in-progress`; `22023` (and `22P02`, `23514`) → `422`. Its `errors[]` carry the database's codes with paths `/execution_id`, `/set_order`, `/field`, `/value`, `/unit` and `/reason`.
+  - **Space:** `42501` → `403`; `P0002` → `404`; `22023` and `23514` → `400`; `23505`, `40001` and `55000` → `409 conflict`.
 
 **A client's profile, body and health (STUDIO-44..46).**
 

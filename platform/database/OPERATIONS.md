@@ -911,3 +911,148 @@ Tests:
   also covers the observations and their health access record in `OP-EXE-018`.
 - `observation-concurrency.test.ts` covers two corrections over the same
   revision, and an observation or a correction racing a termination.
+
+## A coach proposes a correction and she decides (STUDIO-52..53)
+
+Migration `20261112090000_a_coach_proposes_a_correction_and_she_decides.sql`
+lets the coach who attends a person propose a correction to a strength set she
+declared (`HU-STUDIO-059`) and follow what he proposed (`HU-STUDIO-060`). It
+also lets her list what was proposed to her and decide it (`HU-SP-062`,
+`HU-SP-063`). A proposal nobody answers expires after thirty days
+(`OP-SYS-004`). It does five things:
+
+- adds the enum `execution.correction_status` and the table
+  `execution.correction_proposals`, with its policies, an update trigger and the
+  `IX-20` constraint trigger;
+- adds `correction_proposal_id` to `execution.execution_revisions`, unique and
+  with a `RESTRICT` FK to the proposal;
+- adds three triggers that cancel what waits on a session when she rewrites its
+  sets, annuls it or hides it, on `execution.strength_sets`,
+  `execution.executed_sessions` and `privacy.session_visibility_denials`;
+- adds the commands `execution.propose_correction` and
+  `execution.decide_correction_proposal`, the lists
+  `execution.list_proposed_corrections` and
+  `execution.list_my_correction_proposals`, and the sweep
+  `execution.expire_correction_proposals`;
+- recreates `relationships.close_relationship` so that it calls
+  `execution.cancel_relationship_correction_proposals` at the instant it ends a
+  relationship. Her ending it, the gym ending it and the organization closing
+  all go through it.
+
+The table starts empty and the new column is null on every existing revision,
+so there is no backfill.
+
+**Locks.** The new unique constraint builds an index on
+`execution.execution_revisions`. Creating the three triggers blocks writes to
+`execution.strength_sets`, `execution.executed_sessions` and
+`privacy.session_visibility_denials` for an instant. With `lock_timeout = 5s`, a
+busy table makes the migration fail rather than queue; retry it.
+
+**Deploy order.** Merging runs **Deploy AWS**, which rolls out the API and the
+worker and registers this commit's migrator. Then dispatch **Deploy Database
+AWS** right after it finishes. Until the migration is applied:
+
+- the four new routes fail;
+- the worker's minute job fails at `correction_proposal_expiry`. It is the last
+  job of `/cron/outbox`, so the other jobs still run first, but the batch answers
+  `503` and the run is recorded as `correction_proposal_expiry_failed`. The
+  Backoffice diagnosis names the job «Vencimiento de propuestas de corrección».
+
+No screen calls the new routes yet.
+
+**The email.** `execution.correction_proposed.v1` is a delivery event. The worker
+renders it with `renderCorrectionProposedEmail`, in Spanish, inside the
+existing delivery job and under the `STAFF_INVITATION_DELIVERY_ENABLED` switch,
+like the substitution question. While the switch is off, the notices stay in the
+outbox and are delivered once it is turned on.
+
+- The email states the fact, then that nothing changes unless she accepts, then
+  the deadline as a day in Colombia (`America/Bogota`, no hour), and that
+  silence changes nothing.
+- It carries neither value and no link. The event does not carry the values
+  either.
+- A payload the worker cannot read is dead-lettered as
+  `invalid_delivery_projection`. The provider's idempotency key is
+  `correction-proposal/<message id>`, so a redelivery is not a second email.
+
+`execution.correction_decided.v1` and `execution.correction_expired.v1` carry
+ids only. They are domain records, and no worker consumes them.
+
+**The sweep.** `correction_proposal_expiry` runs
+`execution.expire_correction_proposals(200)` as the `worker` actor every minute.
+It expires up to 200 due proposals per run, oldest deadline first, with
+`for update skip locked`, and applies nothing. A decision she is making holds
+the row and is skipped. Two consequences:
+
+- The sweep can run up to a minute late. In that minute, a proposal past its
+  thirty days but not yet swept still holds the unique pending slot of its field,
+  so a new proposal on that field answers `409` until the sweep marks it. Her
+  decision and both lists already read it as expired.
+- A backlog drains at 200 a minute. Expiry is read from the clock, so a late
+  sweep changes no answer, only the stored state.
+
+**What cancels a proposal.** Each cancellation keeps the proposal listed on both
+sides, with its reason: `target_changed` when she corrects the session herself,
+`session_annulled`, `session_hidden` (only that relationship's), and
+`relationship_terminated`. **Revoking a grant without terminating leaves a
+pending proposal pending**: she can still decide it.
+
+**Publishing the scopes.** The V1 rules in `packages/db/scripts/v1-scope-rules.ts`
+now declare `execution.correction_proposals` under `relationship_training`
+(training, `contribute`). If production published that scope before this
+release, the published version lacks the rule, and a new version is needed for
+the published field set to say so. Proposing works either way, because
+`access_control.can_access` does not read the rules. Proposing needs an active
+`relationship_training` grant at `contribute`; without one, every attempt
+answers `403 scope-required`.
+
+Three invariants must hold. These read-only queries must return nothing, or no
+rows that keep growing for the last one:
+
+```sql
+-- Nothing waits on a relationship that has ended.
+select proposal.id
+from execution.correction_proposals as proposal
+join relationships.service_relationships as relationship
+  on relationship.id = proposal.relationship_id
+where proposal.status = 'pending'
+  and relationship.status = 'terminated';
+
+-- Nothing waits on a set that is gone (target_strength_set_id has no FK).
+select proposal.id
+from execution.correction_proposals as proposal
+where proposal.status = 'pending'
+  and not exists (
+    select 1 from execution.strength_sets as sets
+    where sets.id = proposal.target_strength_set_id
+      and sets.executed_session_id = proposal.executed_session_id
+  );
+
+-- The sweep keeps up: nothing stays pending long past its thirty days.
+select proposal.id
+from execution.correction_proposals as proposal
+where proposal.status = 'pending'
+  and proposal.expires_at < clock_timestamp() - interval '5 minutes';
+```
+
+Tests:
+
+- `T-EXE-PROPOSAL-01` (49) covers validation in order, device and observed data,
+  a hidden session, her prior history, a person with no address, the outbox
+  without values, privileges, IDEM, that proposing changes nothing, the thirty
+  days, one pending proposal per field, both lists and every policy in both
+  directions.
+- `T-EXE-PROPOSAL-DECIDE-01` (31) covers accepting in place with the revision,
+  the reason and the proposal, rejecting, a proposal expired by the clock before
+  the sweep, a cancelled one, a set that moved, IDEM, and the worker's policies
+  and the sweep.
+- `T-EXE-PROPOSAL-CANCEL-01` (20) covers each cancellation reason, termination by
+  her, by the gym and by closing the organization, the two contract scopes, and
+  both lists still showing cancelled proposals. `T-ORG-CLOSURE-INT-20` now lists
+  the table as decided for the closure.
+- `correction-proposal-concurrency.test.ts` (6) covers a proposal racing her
+  correction, her correction committing after a proposal, two professionals on
+  the same field, her decision against the sweep, and a decision or a proposal
+  racing a termination.
+- The worker's `correction-proposals.test.ts` (9) and
+  `correction-proposal-expiry.test.ts` (2) cover the email and the job.
