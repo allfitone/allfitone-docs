@@ -276,6 +276,10 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-046` | Declarar las zonas de énfasis | Comando | `A2` |
 | `OP-IDN-047` | Saltarse un paso del onboarding | Comando | `A2` |
 | `OP-IDN-048` | Cerrar sesión Space | Comando idempotente | sesión presente o ausente |
+| `OP-IDN-059` | List the body photos a client shows this gym | Consulta | `A3`, `A7` |
+| `OP-IDN-060` | Open one body photo a client shows this gym | Consulta | `A3`, `A7` |
+| `OP-IDN-061` | Show one of my body photos to one gym | Comando idempotente | `A2` |
+| `OP-IDN-062` | Stop showing a body photo to a gym | Comando idempotente | `A2` |
 
 > **`OP-IDN-045` a `OP-IDN-048` estuvieron asignados dos veces, y ya no.** Space los usa
 > para el sexo biológico, las zonas de énfasis, saltarse un paso y cerrar sesión. Las
@@ -292,6 +296,13 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 > hizo archivo por archivo, no reemplazando la cadena: esos mismos códigos aparecen en
 > migraciones, en el cliente de cierre de sesión y en pantallas de onboarding de Space
 > con el otro significado.
+>
+> **`OP-IDN-056` is assigned twice in the OpenAPI, and still is.** It names
+> `listMySpaceClientInvitations` (TECH-28) and `recordMyBodyPhoto` (TECH-31), whose
+> receipt in `system.idempotency_keys` uses that code. The listing is a query and writes
+> no receipt, so no receipt is ambiguous today, but the body photo operations
+> (`OP-IDN-056` to `OP-IDN-058` in the contract) have no card here yet. `OP-IDN-059` to
+> `OP-IDN-062` were checked free in both the OpenAPI and this matrix.
 
 ---
 
@@ -611,6 +622,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Devuelve cada afirmación con procedencia, actor capturador, método y estado de verificación como **dimensiones separadas**. Dos organizaciones con versiones de scope distintas reciben field-sets distintos de la misma persona. Un campo redactado es indistinguible de uno no capturado |
 | **Falla cerrada** | Sin grant vigente: `403 scope-required` declarando qué scope y nivel faltan, y `ACCESS_EVENT` de intento denegado |
+| **Implemented (STUDIO-44)** | `identity.read_client_training_profile(person, organization, subject)` returning `{outcome}`, migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql`; `cookieAuth`, `private, no-store`, answering `ClientTrainingProfile`. **Who:** the coach who attends her now (`execution.require_attending_coach`): a live membership, her `active` relationship with this organization, and the holder or an accepted cover. Anyone else, admin and owner included, gets `404`, the same as for a person who is not a client. With no active `relationship_training` grant it answers `403 scope-required` naming the scope, after a `denied` access event; otherwise the `allowed` event, with the grant and its version, is written before any data. It returns her live claims (`valid_to is null`) of the attributes classified `training`, each with `provenance` and `valid_from`, and `biological_sex` as `{value, provenance: 'person_declared'}`; nothing classified body or health. Each field is served only if the grant's frozen version names it (`privacy.scope_allows`), otherwise it is `null`. **Not built:** the capturing actor, method and verification status, which have no columns; `biological_sex` has no column for its origin either. Tests: `T-IDN-AUTHORIZED-01`, `T-IDN-AUTHORIZED-API-HTTP-01..14` |
 
 #### `OP-IDN-019` — Consultar el progreso corporal de un cliente
 
@@ -628,6 +640,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Solo mediciones y composición seleccionadas, con unidad canónica y original. Las fotos son **únicamente las elegidas por la persona**, servidas por URL firmada de vigencia corta y no enumerable. EXIF, geolocalización y galería no seleccionada nunca viajan |
 | **Falla cerrada** | Sin grant vigente: `403 scope-required` y `ACCESS_EVENT` denegado. Que la carga de ejercicio sea visible no implica que el peso corporal lo sea |
+| **Implemented (STUDIO-45)** | `identity.list_client_body_progress(person, organization, subject, limit, cursor_measured_on, cursor_id)`, migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql`; `cookieAuth`, `private, no-store`, answering `ClientBodyProgressPage` with `applied_scope`. Same attending coach, same `403 scope-required` and same access record as `OP-IDN-018`, under `body_progress`. Keyset on (`measured_on desc`, `id desc`), page cap 101; the API asks for one row more than it shows. Each field follows the frozen version, and **a version that does not share `measured_on` lists no row**, so neither the cursor nor a page boundary gives the day away. **Photos are not in this list and are not signed URLs:** they are `OP-IDN-059` and `OP-IDN-060`, read through the API. Tests: `T-IDN-AUTHORIZED-01` |
 
 #### `OP-IDN-020` — Consultar el contexto de salud de un cliente
 
@@ -645,6 +658,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Devuelve dolor, limitación y recuperación declarados, minimizados. Historia clínica, diagnósticos, laboratorios, documentos médicos, biometría continua e inferencias médicas **no existen bajo ningún scope V1**. Un dolor registrado dentro de una sesión se sirve por aquí, no por la ejecución: hereda esta clasificación aunque la sesión sea visible |
 | **Falla cerrada** | Sin grant vigente: `403 scope-required` y `ACCESS_EVENT` denegado. No tiene ruta histórica: un grant `frozen` nunca la sirve |
+| **Implemented (STUDIO-46)** | `identity.list_client_health_context(person, organization, subject, limit, cursor_valid_from, cursor_id)`, migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql`; `cookieAuth`, `private, no-store`, answering `ClientHealthContextPage`. Same attending coach, same `403 scope-required` and access record, under `health_context`. Only an `active` grant on an `active` relationship serves it: once the relationship ends and its grants freeze, the read is `404`. Keyset on (`valid_from desc`, `id desc`); the same set as her own list, with `context_type`, `description`, `body_area`, `provenance`, `valid_from` and `valid_to`, each as the frozen version allows; a version that does not share `valid_from` lists no row. **Not built:** pain recorded inside a session is not served here yet; sessions carry no pain since STUDIO-48. Tests: `T-IDN-AUTHORIZED-01` |
 
 #### `OP-IDN-021` — Cambiar mi correo o teléfono de contacto
 
@@ -1209,6 +1223,78 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno en V1 |
 | **Reglas** | **Revocar el `sid` no invalida el token de acceso ya emitido**, que sigue verificando hasta vencer: lo que muere es el refresco, y con él la sesión. Por eso el borrado en el dispositivo es la mitad que no puede fallar. El criterio 2 de `HU-SP-003` obliga a **avisar antes** cuando queda un entrenamiento sin sincronizar, y ese aviso es del cliente: el servidor no sabe qué guarda el teléfono |
 | **Falla cerrada** | Nada. Esta operación no tiene rechazo: cerrar sesión siempre se concede |
+
+#### `OP-IDN-059` — List the body photos a client shows this gym
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /studio/v1/organizations/{organizationId}/clients/{personId}/body-photos` |
+| **Actor** | `A3`, `A7` with effective assignment: the coach who attends her |
+| **Filtros obligatorios** | **FORMULA** + `body_progress` · `read`, and a version that includes `identity.body_photos.taken_on` and `media_ref` |
+| **Transacción** | `identity.list_client_shared_body_photos(...)`, which opens the contract scope `body_photo_review` for this relationship, records the access and restores the previous scope |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Keyset on (`taken_on desc`, `id desc`), page cap 101 |
+| **Offline / concurrencia** | `private, no-store` |
+| **Información sensible** | Body photos. Only the ones she shows **this** relationship; never her gallery, never one shown to another gym, never one she took back |
+| **Evento de dominio** | None |
+| **Reglas** | Answers `ClientBodyPhotoPage`: `id`, `taken_on` and `shared_at`, never the storage key. A version that does not include the image, or that hides the day, lists no photo. HU-STUDIO-052, HU-SP-025 criterion 4 |
+| **Falla cerrada** | No grant: `403 scope-required` and a `denied` access event. Not her coach: `404` |
+| **Implemented (STUDIO-45)** | Migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql`. Tests: `T-IDN-PHOTO-SHARE-01`, `T-IDN-AUTHORIZED-API-HTTP-*` |
+
+#### `OP-IDN-060` — Open one body photo a client shows this gym
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /studio/v1/organizations/{organizationId}/clients/{personId}/body-photos/{photoId}/content` |
+| **Actor** | `A3`, `A7`: the coach who attends her |
+| **Filtros obligatorios** | Same as `OP-IDN-059`, rechecked on every request, plus a live share of this photo with this relationship |
+| **Transacción** | `identity.open_client_shared_body_photo(...)` records the access, `allowed` or `denied`, and hands the storage key to the API only. The API then reads the object and streams it |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | `private, no-store`, `Content-Disposition: inline`, `X-Content-Type-Options: nosniff`. Requires Studio's `Origin`, so a pasted link opens nothing |
+| **Información sensible** | The image. **Never a signed URL** (`x-allfit-media-url-policy.studio_professional`) and never a redirect; the key never leaves the API |
+| **Evento de dominio** | None |
+| **Reglas** | `image/jpeg` bytes. PostgreSQL decides first and the object store is read only after it says yes |
+| **Falla cerrada** | Anything short of a shown photo (no grant, no share, a withdrawn share, a deleted photo, a version without photos) is the same `404`, recorded as `denied`. A store fault is `503` |
+| **Implemented (STUDIO-45)** | Migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql`; `packages/object-store` gains `get(key)`. Tests: `T-IDN-PHOTO-SHARE-01`, `T-IDN-AUTHORIZED-UNIT-10..12`, `-API-HTTP-10/11` |
+
+#### `OP-IDN-061` — Show one of my body photos to one gym
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando idempotente |
+| **Superficie** | `PUT /space/v1/body-photos/{photoId}/shares` with body `{relationship_id}` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | The photo and the relationship are hers (`P0002` → `404`); the relationship is `active` (`55000` → `409`) |
+| **Transacción** | `identity.share_body_photo(person, photo, relationship, idempotency_key, command_id, request_hash)`. Locks the relationship `for share` and the photo `for key share`, so a termination or a deletion in flight is waited for, then refused |
+| **Idempotencia** | `Idempotency-Key` and `Command-Id`; the request hash includes the relationship. A reused key with another body is `409` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Two shares at once leave one share and one event |
+| **Información sensible** | Which gym sees which photo |
+| **Evento de dominio** | `identity.body_photo_shared.v1`, only when the state changes |
+| **Reglas** | One row per photo and relationship in `identity.body_photo_shares`, reactivated rather than duplicated. Does not require Pro: it is a privacy control over photos she already has. Answers `200` with `BodyPhotoShare` |
+| **Falla cerrada** | Another person's photo or relationship: `404`. An ended relationship: `409` |
+| **Implemented (STUDIO-45)** | Migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql`. Tests: `T-IDN-PHOTO-SHARE-01`, `body-photo-share-concurrency.test.ts`, `T-IDN-PHOTOSHARE-01..06`, `-IDEM-01` |
+
+#### `OP-IDN-062` — Stop showing a body photo to a gym
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando idempotente |
+| **Superficie** | `DELETE /space/v1/body-photos/{photoId}/shares/{relationshipId}` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | A share of hers for that photo and relationship (`P0002` → `404`). Works after the relationship ended |
+| **Transacción** | `identity.withdraw_body_photo_share(...)`, same arguments |
+| **Idempotencia** | Same as `OP-IDN-061` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | — |
+| **Información sensible** | — |
+| **Evento de dominio** | `identity.body_photo_share_withdrawn.v1`, only when the share was live |
+| **Reglas** | The share becomes `withdrawn` with `withdrawn_at`; the next Studio read no longer lists or opens it. Answers `200` with `BodyPhotoShare`, like `OP-PRV-007` |
+| **Falla cerrada** | No share: `404` |
+| **Implemented (STUDIO-45)** | Migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql`. `GET /space/v1/body-photos` gains `shared_with: [{relationship_id, organization_name, shared_at}]`, live shares only. Tests: `T-IDN-PHOTO-SHARE-01` |
 
 ### 7.2 Organizaciones
 

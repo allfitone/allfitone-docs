@@ -353,6 +353,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **`T-CLAIM-5` (negativa)** — Un profesional intenta revisar una afirmación con procedencia `person_declared`: denegado. Solo puede proponer.
 - **`T-CLAIM-6` (positiva)** — Varias afirmaciones vigentes del **mismo** atributo multivaluado y la **misma** procedencia coexisten, una por miembro del conjunto. Es lo que distingue un atributo multivaluado de uno singular, y sin esta prueba la diferencia solo vive en el cuerpo de la función.
 - **`T-CLAIM-7` (negativa)** — El mismo miembro dos veces vigente para la misma persona: rechazado por el único parcial, no por el comando.
+- **As implemented (STUDIO-44, migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql`). Deviation.** The professional `SELECT` is not a `can_access` row policy: the table already carries `fitness_profile_claims_all_owner` for the definer role, so the gate is the closed function: the attending coach, an `active` grant from `access_control.grant_of`, the access event before any data, and the frozen version through `privacy.scope_allows`. No policy lets `allfit_api` read another person's rows. `T-CLAIM-1` and `T-CLAIM-2` are `T-IDN-AUTHORIZED-API-01..07` (two versions, two field sets); `T-CLAIM-3` and `-5` have nothing to test, because no professional write exists yet.
 
 #### `BODY_PROGRESS_RECORD`
 
@@ -370,6 +371,12 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **`T-BODY-2` (negativa)** — Con `relationship_training` pero **sin** `body_progress`, el peso corporal permanece oculto aunque la carga de ejercicio de la sesión sí sea visible.
 - **`T-BODY-3` (negativa)** — La proyección no expone EXIF, geolocalización ni ninguna imagen no seleccionada explícitamente.
 - **`T-BODY-4` (positiva)** — Revocar `body_progress` bloquea al profesional **sin** borrar el dato de la persona.
+- **As implemented (STUDIO-45, migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql`). Deviation.** Measurements: the table already carries `body_progress_records_all_owner` for the definer role, so the gate is the closed function: the attending coach, an `active` grant from `access_control.grant_of`, the access event before any data, and the frozen version through `privacy.scope_allows`. No policy lets `allfit_api` read another person's rows.
+  - **Photos are not signed URLs.** A coach reads the photos she shows his relationship through the API (`OP-IDN-060`); the key never leaves the API.
+  - **`identity.body_photos` gains `body_photos_select_review`** (`for select`): a photo is visible inside the contract scope `body_photo_review`, only through a share in status `shared` with that relationship, and only while `can_access(relationship, 'body_progress', 'read')`. Outside that window a photo stays readable by her alone (`body_photos_all_self`).
+  - **`identity.body_photo_shares` gains `body_photo_shares_select_review`**: under forced row-level security the photo policy's `EXISTS` runs with the definer's policies and would see no share without it. It reaches one relationship's shares, inside the scope only, and no function returns a share to a gym.
+  - Only `identity.list_client_shared_body_photos` and `identity.open_client_shared_body_photo` open and restore that scope. `allfit_api` has no privilege on either table.
+  - Tests: `T-IDN-PHOTO-SHARE-RLS-01..12`, `-API-16..19`. `T-BODY-2` is `T-IDN-AUTHORIZED-API-15..18` (independent scopes); `T-BODY-3` holds by construction, since no EXIF or location is stored.
 
 #### `HEALTH_CONTEXT_CLAIM`
 
@@ -385,6 +392,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **Índice para la policy** — sobre `(person_id, valid_from DESC)`.
 - **`T-HEALTH-1` (negativa)** — Un dolor registrado **dentro** de una sesión visible permanece oculto sin `health_context`. La visibilidad de la sesión no arrastra la del dolor.
 - **`T-HEALTH-2` (negativa)** — `health_context` no expone biometría continua, raw de dispositivos ni inferencias médicas: no existen en V1.
+- **As implemented (STUDIO-46, migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql`). Deviation.** the table already carries `health_context_claims_all_owner` for the definer role, so the gate is the closed function: the attending coach, an `active` grant from `access_control.grant_of`, the access event before any data, and the frozen version through `privacy.scope_allows`. No policy lets `allfit_api` read another person's rows. `T-HEALTH-1` holds because sessions carry no pain since STUDIO-48.
 
 #### `PROFESSIONAL_PROFILE`
 

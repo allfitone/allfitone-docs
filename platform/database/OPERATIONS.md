@@ -791,3 +791,69 @@ Tests:
   `IX-36`.
 - `authorized-execution-concurrency.test.ts` covers a start crossing a
   termination, in both orders, and two hides crossing each other.
+
+## A coach reads what a client shares about herself (STUDIO-44..46)
+
+Migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql` lets the coach who attends a person read her training
+profile (`HU-STUDIO-051`), her body progress (`HU-STUDIO-052`) and her health
+context (`HU-STUDIO-053`), and lets her show one body photo to one gym
+(`HU-SP-025` criterion 4). It does five things:
+
+- adds `privacy.scope_allows`, the first reader of `privacy.scope_resource_rules`;
+- adds `identity.body_photo_shares`, `uq_body_photos_person` and the two policies
+  of the photo review;
+- adds the Space commands `share_body_photo` and `withdraw_body_photo_share`, and
+  `shared_with` in `list_my_body_photos`;
+- adds the five closed Studio reads;
+- rewrites the words of `relationship_training` and `body_progress` in
+  `privacy.scope_presentations`.
+
+**Deploy order.** Merging runs **Deploy AWS**, which rolls out the API with the
+new routes and registers this commit's migrator. Then dispatch **Deploy
+Database AWS**, which refuses to run until that migrator is in place. Until the
+migration is applied, the new Studio and Space routes fail and
+`GET /space/v1/body-photos` answers without `shared_with`. No screen calls the
+new routes yet, so nobody reaches them in the meantime.
+
+**Publishing the scopes.** Production cannot show a coach anything until the
+seven scopes are published from `/permissions`, from the rules in
+`packages/db/scripts/v1-scope-rules.ts`:
+
+- `relationship_training` now names the training profile and
+  `biological_sex`;
+- `body_progress` includes `identity.body_photos.taken_on` and `media_ref`;
+- `health_context` adds `provenance`.
+
+`body_progress` includes photos in its **first** version only if it is
+published after this release. The words already promise "solo las fotos que tú
+elijas mostrarnos". If `body_progress` was published earlier from the rules
+without photos, that version stays photo-less for every grant that points at
+it, and photos need a second version.
+
+With no grant, every read records a refused attempt and answers
+`403 scope-required`. The photo image answers `404`.
+
+This read-only query must return nothing:
+
+```sql
+-- No live share points at another person's photo or relationship.
+select share.id
+from identity.body_photo_shares as share
+join identity.body_photos as photo on photo.id = share.body_photo_id
+join relationships.service_relationships as relationship
+  on relationship.id = share.relationship_id
+where photo.person_id <> share.person_id
+   or relationship.person_id <> share.person_id;
+```
+
+The commands enqueue `identity.body_photo_shared.v1` and
+`identity.body_photo_share_withdrawn.v1`. No worker consumes either yet.
+
+Tests:
+
+- `T-IDN-AUTHORIZED-01` covers the three reads, `privacy.scope_allows`, the
+  access record and two versions giving two field sets.
+- `T-IDN-PHOTO-SHARE-01` covers sharing, withdrawing, what Studio lists and
+  opens, and the photo policies.
+- `body-photo-share-concurrency.test.ts` covers two shares at once, a share
+  crossing a termination and a share crossing a deletion, in both orders.
