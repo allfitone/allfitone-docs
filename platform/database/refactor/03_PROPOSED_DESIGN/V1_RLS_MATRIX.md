@@ -1031,6 +1031,17 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 - **`T-OBS-3` (positiva)** — Una transcripción de lo que dijo la persona conserva procedencia `person_declared` y registra al profesional únicamente como **capturador**.
 - **`T-OBS-4` (positiva)** — Declaración, observación profesional e inferencia divergentes sobre el mismo atributo coexisten sin overwrite, y la proyección explica su selección.
 - **`T-OBS-5` (negativa)** — Terminar la relación bloquea nuevas observaciones y correcciones operativas.
+- **As implemented (STUDIO-50/51, migration `20261111090000_a_coach_reads_progress_and_observes_a_session.sql`). Deviation.** Every policy is on `allfit_owner` under `FORCE ROW LEVEL SECURITY`. `allfit_api` has no table privilege, against the `SELECT` and `INSERT` listed above; it goes through closed functions.
+  - `professional_observations_select_self`: the person sees every observation about her.
+  - `professional_observations_select_screening`: a professional sees an observation only inside a `session_screening` of its relationship, only beside a session that screening shows (an `EXISTS`), and only with its category shared at `read`. The category is checked literally: `relationship_training` or `health_context`.
+  - `professional_observations_select_revision`: the one observation a correction names, to its author, inside a signed `observation_revision` scope.
+  - `professional_observations_insert_contribute` and `professional_observations_update_author`: the author is the actor's own membership, and `WITH CHECK` requires the category shared at `contribute`.
+  - **Deviation, author:** «Las propias» is not a standing read. Outside a screening or a correction of his own, the author reaches only what the screening shows, so taking her health back hides his own health notes from him too. A permanent read for the author would outlive her consent.
+  - **Deviation, non-author:** «Las de su organización» narrows to the professionals who attend her, through the screening.
+  - **Deviation, `UPDATE`:** it is not done through `REVISION_EVENT`. `revise_observation` writes the author's update and an `execution.observation_revisions` row together.
+  - **`execution.observation_revisions`:** readable only by the person (`observation_revisions_select_self`). `observation_revisions_insert_author` admits only the observation's author, and no one updates or deletes a row.
+  - **Indexes:** `(executed_session_id, relationship_id, created_at)`, `(person_id, created_at)` and `(author_assignment_id)`.
+  - **Tests:** `T-EXE-OBSERVATION-01` (62) covers `T-OBS-1..5`, `-RLS-01..15` (both directions of every policy, including a health note that stays hidden when only her health is shared, because its session does not show) and `-REV-RLS-01..04`. `observation-concurrency.test.ts` covers the race with a termination.
 
 #### `CORRECTION_PROPOSAL`
 

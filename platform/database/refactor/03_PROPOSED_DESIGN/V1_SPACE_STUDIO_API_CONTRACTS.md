@@ -569,9 +569,9 @@ Todas exigen la fórmula completa y escriben `ACCESS_EVENT`.
 | `GET` | `.../clients/{personId}/health-context` | `OP-IDN-020` | `health_context` · `read` (STUDIO-46) |
 | `GET` | `.../clients/{personId}/executions` | `OP-EXE-017` | `relationship_training` y/o `prior_training_history` · `read`. Only the coach who attends her; nothing shared is an empty page (STUDIO-47) |
 | `GET` | `.../clients/{personId}/executions/{id}` | `OP-EXE-018` | Igual, evaluado por ejecución. `403 scope-required` only when she shares nothing; otherwise an unseen session is `404` (STUDIO-48) |
-| `GET` | `.../clients/{personId}/progress` | `OP-EXE-019` | El más restrictivo de sus inputs |
-| `POST` | `.../clients/{personId}/observations` | `OP-EXE-010` | Scope del contenido · `contribute` |
-| `POST` | `.../observations/{id}/revisions` | `OP-EXE-011` | `contribute` + autoría propia |
+| `GET` | `.../clients/{personId}/progress` | `OP-EXE-019` | El más restrictivo de sus inputs. Query `timezone`, `period` (week or month) and `count` (1 to 12); computed only over the sessions she shares (STUDIO-49) |
+| `POST` | `.../clients/{personId}/observations` | `OP-EXE-010` | Scope del contenido · `contribute`: `relationship_training` for training, `health_context` for pain or a limitation. Only on a session of this relationship (STUDIO-50) |
+| `POST` | `.../observations/{id}/revisions` | `OP-EXE-011` | `contribute` + autoría propia. Made over `expected_revision`, otherwise `409 stale-draft`; a reason is required (STUDIO-51) |
 | `POST` | `.../clients/{personId}/correction-proposals` | `OP-EXE-012` | `contribute` |
 | `GET` | `/organizations/{orgId}/correction-proposals` | `OP-EXE-020` | `contribute` |
 
