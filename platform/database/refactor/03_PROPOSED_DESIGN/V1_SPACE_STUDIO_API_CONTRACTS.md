@@ -280,8 +280,8 @@ Sujeto implícito: la persona autenticada. Ningún endpoint recibe un `person_id
 | `PUT` | `/planned-sessions/{id}/primary-execution` | `OP-EXE-008` | Solo la persona |
 | `GET` | `/executions` · `/executions/{id}` | `OP-EXE-014/015` | |
 | `GET` | `/progress` | `OP-EXE-016` | Derivados con algoritmo y versión |
-| `GET` | `/correction-proposals` | `OP-EXE-020` | |
-| `POST` | `/correction-proposals/{id}/decision` | `OP-EXE-013` | |
+| `GET` | `/correction-proposals` | `OP-EXE-020` | What was proposed to her, in every state, soonest to expire first; query `status`, `limit`, `cursor`. One past its thirty days reads as expired before the sweep (HU-SP-062) |
+| `POST` | `/correction-proposals/{id}/decision` | `OP-EXE-013` | Only her; `{decision: accept \| reject}`. Accepting writes the same set and a revision naming the proposal. Decided, cancelled or past its thirty days is `409` (HU-SP-063) |
 
 ### 4.6 Nutrición
 
@@ -572,8 +572,8 @@ Todas exigen la fórmula completa y escriben `ACCESS_EVENT`.
 | `GET` | `.../clients/{personId}/progress` | `OP-EXE-019` | El más restrictivo de sus inputs. Query `timezone`, `period` (week or month) and `count` (1 to 12); computed only over the sessions she shares (STUDIO-49) |
 | `POST` | `.../clients/{personId}/observations` | `OP-EXE-010` | Scope del contenido · `contribute`: `relationship_training` for training, `health_context` for pain or a limitation. Only on a session of this relationship (STUDIO-50) |
 | `POST` | `.../observations/{id}/revisions` | `OP-EXE-011` | `contribute` + autoría propia. Made over `expected_revision`, otherwise `409 stale-draft`; a reason is required (STUDIO-51) |
-| `POST` | `.../clients/{personId}/correction-proposals` | `OP-EXE-012` | `contribute` |
-| `GET` | `/organizations/{orgId}/correction-proposals` | `OP-EXE-020` | `contribute` |
+| `POST` | `.../clients/{personId}/correction-proposals` | `OP-EXE-012` | `contribute`: `relationship_training`, with the `propose_corrections` capability. One field of one set she declared and he can see, her own history under `prior_training_history` included; one pending proposal per field. It writes no `ACCESS_EVENT` (STUDIO-52) |
+| `GET` | `/organizations/{orgId}/correction-proposals` | `OP-EXE-020` | `contribute`. **As implemented, no scope:** any live member lists only what they proposed there, never her value, and writes no `ACCESS_EVENT`. `target` appears only while the proposer still attends her and she shares her training (STUDIO-53) |
 
 ### 5.8 Planes y pagos
 
@@ -933,7 +933,7 @@ Comandos con varias escrituras que deben ser atómicas. La API los invoca dentro
 | `resolve_detached_assignment(asg_id, choice)` | `OP-PLN-015` | Reutiliza la misma asignación o cancela solo sesiones futuras no iniciadas |
 | `start_attempt(planned_session_id)` | `OP-EXE-001` | `attempt_number` único y monotónico bajo concurrencia |
 | `finalize_execution(execution_id)` | `OP-EXE-006` | Valida contra el contrato congelado, escribe el evento de validación, cierra, resuelve primaria, encola derivados |
-| `apply_correction(proposal_id)` | `OP-EXE-013` | Revisión conservando original, proponente y motivo |
+| `apply_correction(proposal_id)` | `OP-EXE-013` | Revisión conservando original, proponente y motivo. As implemented: `execution.decide_correction_proposal`, which writes an `execution.execution_revisions` row naming the proposal (HU-SP-063) |
 | `open_disposition_case(subject, scope)` | `OP-PRV-008` | Caso + ítems resueltos por política versionada |
 | `execute_disposition_item(item_id)` | `OP-SYS-007` | Acción + propagación + evento, idempotente |
 | `nutrition.record_meal(...)` | `OP-NUT-001` | Comida + ítems + nutrientes + receipt + invalidación de resumen |
@@ -954,10 +954,16 @@ and `nutrition.cancel_proposals_for_organization_closure`, plus two contracts th
 table above does not list: `payments.check_organization_closure` (refuses while a
 client subscription is live) and `identity.revoke_invitations_for_organization_closure`.
 The coordinator's real signature is `close_organization(person_id,
-organization_id, idempotency_key, command_id, request_hash)`. Pending:
-`planning.detach_for_organization_closure` (HU-STUDIO-046) and
-`execution.cancel_proposals_for_organization_closure` (HU-STUDIO-059), each
-added with the slice that first lets its domain hold organization-originated rows.
+organization_id, idempotency_key, command_id, request_hash)`. Neither
+`planning.detach_for_organization_closure` nor
+`execution.cancel_proposals_for_organization_closure` is built, and neither is
+needed: `close_relationship`, which `terminate_for_organization` runs for every
+relationship, detaches program assignments (STUDIO-39/40) and calls
+`execution.cancel_relationship_correction_proposals(relationship_id, effective_at)`,
+which cancels pending correction proposals with `relationship_terminated`
+(STUDIO-52, migration `20261112090000_a_coach_proposes_a_correction_and_she_decides.sql`).
+Like the other contracts, it is `SECURITY DEFINER` and `allfit_api` cannot execute
+it.
 
 `relationships.terminate_relationship` corta inmediatamente las rutas operativas y de escritura; no revoca los grants. ADR-023 publica una superficie histórica separada, ejercida únicamente por el caso exacto y `access_control.can_read_frozen`. `privacy.revoke_grant` acepta `active` o `frozen`; al revocar uno congelado también cierra todos los casos abiertos de la relación antes de confirmar.
 

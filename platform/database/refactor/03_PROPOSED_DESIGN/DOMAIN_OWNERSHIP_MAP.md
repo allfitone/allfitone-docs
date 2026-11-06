@@ -463,6 +463,14 @@ efectivo y command ID comunes. Son contratos públicos de dominio, no permiso
 para DML cross-schema. Si cualquiera falla, PostgreSQL revierte también los
 efectos ya aplicados por los contratos anteriores.
 
+As built, neither `planning.detach_for_organization_closure` nor
+`execution.cancel_proposals_for_organization_closure` exists. `terminate_for_organization`
+runs `relationships.close_relationship` for every relationship, and that detaches program
+assignments (STUDIO-39/40) and, since migration
+`20261112090000_a_coach_proposes_a_correction_and_she_decides.sql` (STUDIO-52), cancels
+pending correction proposals through `execution.cancel_relationship_correction_proposals`.
+`T-ORG-CLOSURE-INT-20` holds the decision for every Execution table.
+
 Cada contrato destino es `SECURITY DEFINER`, pertenece al schema/owner lógico
 de ese dominio, fija `search_path = pg_catalog` y califica objetos. `PUBLIC` y
 `allfit_api` no reciben `EXECUTE`; solo el coordinador `organizations.*`, que
