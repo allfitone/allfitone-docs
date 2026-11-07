@@ -743,7 +743,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Información sensible** | Cookie opaca de 256 bits; solo su SHA-256 se persiste. Access y refresh tokens se cifran con AES-256-GCM y AAD ligada a cuenta, superficie y `sid` |
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Una autenticación válida puede crear `ACCESS_ACCOUNT`, pero nunca `PERSON`. Redirige `303` a Studio sin tokens, códigos ni identificadores en la URL |
-| **Falla cerrada** | Cualquier mismatch de `state`, `sub`, `sid`, issuer o superficie impide crear la sesión |
+| **Falla cerrada** | Cualquier mismatch de `state`, `sub`, `sid`, issuer o superficie impide crear la sesión. An expired or missing `state` cookie (it lasts ten minutes) never uses the code: the callback redirects `303` to the Studio landing with `?access=expired`, which explains it and offers a fresh sign-in |
 
 #### `OP-IDN-027` — Consultar la sesión actual de Studio
 

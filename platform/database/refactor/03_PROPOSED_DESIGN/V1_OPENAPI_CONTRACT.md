@@ -32,7 +32,7 @@ generado son el inventario exhaustivo.
 | Paso | Método y ruta | Operación | Request | Response | Caché |
 | --- | --- | --- | --- | --- | --- |
 | Iniciar autenticación Studio | `GET /studio/v1/auth/start` | `OP-IDN-025` | sin body | `302` hacia WorkOS + cookie temporal de `state` | `no-store` |
-| Completar autenticación Studio | `GET /studio/v1/auth/callback` | `OP-IDN-026` | query `code`, `state` | `303` a Studio + cookie opaca | `no-store` |
+| Completar autenticación Studio | `GET /studio/v1/auth/callback` | `OP-IDN-026` | query `code`, `state` | `303` a Studio + cookie opaca; `303` to the landing with `?access=expired` and no cookie when the `state` expired | `no-store` |
 | Consultar sesión Studio | `GET /studio/v1/session` | `OP-IDN-027` | `cookieAuth` | `StudioSession` | `private, no-store` |
 | Cerrar sesión Studio | `POST /studio/v1/auth/logout` | `OP-IDN-028` | `Origin` exacto + cookie opcional + `reason` (`manual`, `inactivity` o `recovery`) | `303` hacia logout alojado | `no-store` |
 | Resolver invitación de equipo | `POST /studio/v1/invitations/resolve` | `OP-IDN-016` | `TeamInvitationResolveRequest` con token en cuerpo | `TeamInvitationPresentation` sin email | `no-store` |
