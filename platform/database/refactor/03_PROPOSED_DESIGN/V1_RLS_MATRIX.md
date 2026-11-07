@@ -280,7 +280,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **`T-SESSION-4` (concurrencia)** — Solo la versión esperada rota el refresh token; el compare-and-swap perdedor no sobrescribe la versión ganadora.
 - **`T-SESSION-5` (revocación)** — Una sesión revocada deja de cargar inmediatamente.
 - **`T-SESSION-6` (superficie)** — Una sesión Studio conserva AAL1 compatible y nunca carga en Backoffice; una fila Backoffice no puede existir sin AAL2, `password_totp`, evidencia y vencimientos.
-- **`T-SESSION-7` (tiempo)** — Quince minutos sin actividad u ocho horas absolutas cierran la sesión aunque el token WorkOS continúe vigente.
+- **`T-SESSION-7` (time)** — Sixty idle minutes or twelve absolute hours end a Backoffice session even while the WorkOS token is still valid (ADR-046; `T-IDN-BACKOFFICE-SWEEP-01` and `T-SUP-STANDING-01` assert 59 and 61 minutes).
 
 #### `ACCESS_ACCOUNT_MFA_FACTOR` · `BACKOFFICE_AUTHENTICATION_ATTEMPT` · `MFA_FACTOR_RECOVERY_EVENT`
 
@@ -1265,12 +1265,19 @@ Este dominio tiene una particularidad: **el `coach` no aparece en ninguna fila**
 - **`T-BG-6` (positiva)** — Un A12 distinto decide una solicitud estándar; una restringida permanece cerrada hasta dos aprobadores distintos.
 - **`T-BG-7` (negativa)** — `A10` no aprueba, `A12` no ejerce y otro `A10` no usa ni cierra una ventana ajena aunque conozca su ID.
 - **`T-BGG-01..12`** — Quorum, plazos, AAL2, conflictos, categorías prohibidas, auditoría previa, revisión independiente y suspensión por abuso según el contrato de gobernanza.
+- **ADR-046 (pending implementation)** — Decision 2 makes a window self-approved and 60 minutes long for every tier; the reviewer stays independent of the requester and the subject. Decision 4 lets support search by partial name, email or phone and see full name and contact, which `T-BG-5` forbids today. Until they ship, the conditions and tests above describe what runs.
 
 ### 7.12 Rol base y deberes de plataforma
 
 Son controles independientes y acumulativos: el rol base permite iniciar sesión;
 el deber autoriza una operación. Si cualquiera se corrompe o se acepta desde un
 origen no confiable, **todo lo demás deja de valer**.
+
+Since ADR-046 (migration `20261114090000_an_admin_holds_every_duty.sql`) the role brings all
+thirteen duties as rows with `basis = 'admin_role'`, and they last as long as it does. Both
+checks still run in every transaction; for an administrator the role guarantees the duty, so
+the deny case that remains is a Backoffice session without an active role. A duty held
+through the role is never suspended, recertified or revoked on its own.
 
 #### `PLATFORM_ROLE_ASSIGNMENT` · `PLATFORM_DUTY_ASSIGNMENT`
 
@@ -1282,11 +1289,12 @@ origen no confiable, **todo lo demás deja de valer**.
 
 - **Condición RLS** — `access_control.has_platform_role('allfit_admin') AND access_control.has_platform_duty(<operación>) AND access_control.aal()>=2`, todo resuelto **dentro de la transacción** contra las tablas. Nunca desde WorkOS AuthKit, cabecera, payload o caché. El código de operación determina el deber; el caller no lo elige.
 - **Grants mínimos** — tablas base sin DML directo; `allfit_api` sólo `EXECUTE` sobre funciones cerradas. **Sin `DELETE` para ningún rol runtime.**
-- **Índice para la policy** — rol `(person_id,status)` y único parcial vigente; deber unique parcial `(person_id,duty_code)` más `(person_id,status,valid_to)` y `(duty_code,status,valid_to)`.
+- **Índice para la policy** — rol `(person_id,status)` y único parcial vigente; duty partial unique `(person_id,duty_code,basis)` (ADR-046) más `(person_id,status,valid_to)` y `(duty_code,status,valid_to)`.
 - **`T-ROLE-1` (negativa)** — Nadie se asigna su propio rol: lo impide un `CHECK`, no el código.
 - **`T-ROLE-2` (negativa)** — No se puede retirar el último `allfit_admin` activo.
 - **`T-ROLE-3` (negativa)** — Ni `allfit_admin` puede borrar o editar el historial de asignaciones: sin `DELETE` y con las columnas de alta inmutables. Es lo que impide que alguien se dé el rol, lea datos y borre la evidencia.
-- **`T-ROLE-4` (negativa)** — Una persona con rol base pero sin deber vigente no ejecuta ninguna operación.
+- **`T-ROLE-4` (negative, rewritten by ADR-046)** — A Backoffice session without an active `allfit_admin` role holds no duty and runs no operation. A person with the role holds every duty, so the earlier case «role without duty» no longer exists; the pgTAP suites that denied an admin without a given duty now deny a session without an active role (`T-SUP-STANDING-01` and the rewritten `T-SUP-*`, `T-ORG-*`, `T-IDN-*`, `T-PRV-*`, `T-CAT-*` and `T-PAY-PLAN-01`).
+- **`T-ROLE-7` (ADR-046)** — Granting the role brings the thirteen duties; withdrawing it revokes them; a duty held through the role is never suspended, revoked, recertified or rewritten on its own, and never lapses (`T-SUP-STANDING-01`).
 - **`T-ROLE-5` (negativa)** — Si la resolución de rol o deber no puede completarse, la operación falla cerrada.
 - **`T-ROLE-6` (bootstrap/negativa)** — No existe autoaprovisionamiento runtime. Sólo `allfit_migrator`, en ceremonia auditada y una transacción con dos personas/asignaciones cruzadas, puede crear la autoridad inicial.
 - **`T-DUTY-01..08`** — Autoasignación, catálogo/modo, AAL2, vigencia máxima, expiración inmediata, revocación de ventanas, origen no confiable y ausencia de `DELETE` según gobernanza.

@@ -35,7 +35,7 @@
 | ADR-025 | Idempotencia durable independiente del replay HTTP |
 | ADR-026 | Gobernanza cerrada de verificadores y acceso break-glass |
 | ADR-027 | Nutrición personal y guía profesional no clínica en V1 |
-| ADR-028 | Backoffice con rol base, deberes temporales y separación break-glass |
+| ADR-028 | Backoffice con rol base, deberes temporales y separación break-glass (partially superseded by ADR-046) |
 | ADR-029 | Monorepo de implementación con deployables independientes |
 | ADR-030 | Detalle por serie y superseries en la planificación de fuerza |
 | ADR-031 | La portada de una rutina la pone su programa, y sale del catálogo |
@@ -52,6 +52,7 @@
 | ADR-042 | Las fotos de comida viven en Cloudflare R2, en Estados Unidos |
 | ADR-043 | Allfit Pro: se paga con la compra integrada de cada tienda y se resuelve al leer |
 | ADR-044 | La persona trae su historial de otra app, y entra como entrenamiento suyo |
+| ADR-046 | An Allfit admin acts with the full authority of the platform |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -2922,6 +2923,12 @@ Una capacidad no entra parcialmente mediante una columna o permiso aislado. Su p
 **Recertificación:** 26 de julio de 2026<br>
 **Enmendada:** 20 de septiembre de 2026 — «todas las sesiones» se estrecha a los programas que terminan, y sigue sin haber job de calendario (`ADR-032`)
 
+> **Decision 3 is partially superseded by [ADR-046](#adr-046-an-allfit-admin-acts-with-the-full-authority-of-the-platform)**
+> on 7 November 2026, decided and pending implementation: an administrator approves their
+> own break-glass window, and support search shows names and contact. Invariant 8 and
+> scenarios 9, 10, 11 and 15 follow. Only the requester exercises a window, every exercise
+> is visible to the person, and break-glass never writes.
+
 ### Contexto
 
 El mapa de dominios difirió explícitamente a la Fase 3 un conjunto de decisiones operativas: el catálogo exacto de roles organizacionales (§4.14), la autoridad de terminación y la concurrencia de profesionales en una relación (§5.15), el catálogo de `access_level` y el alcance de la auditoría de lectura (§6.18), la autoridad de publicación del catálogo (§7.18), la materialización del calendario (§8.21) y las ventanas de corrección de ejecuciones (§9.22).
@@ -3393,6 +3400,15 @@ Un `PUT` convergente reduce duplicados, pero no evita que un draft antiguo sobre
 **Estado:** aceptada para V1<br>
 **Fecha:** 26 de julio de 2026
 
+> **Partially superseded by [ADR-046](#adr-046-an-allfit-admin-acts-with-the-full-authority-of-the-platform)**
+> on 7 November 2026. For administrators, item 6 (duties last at most 90 days and are
+> recertified) no longer applies; this is built. The break-glass quorum and durations, the
+> approver rules and the pending request (items 8 and 10, the first sentence of item 11,
+> invariants 4 and 5, the approval half of invariant 7, scenarios 5, 7 and 8, and the
+> rejected or expired request of scenario 6) are replaced by self-approved 60-minute windows,
+> decided and pending implementation. Review by someone who did not request the window
+> (item 12) stays.
+
 ### Contexto
 
 ADR-018 separó una afirmación de su verificación y ADR-022 separó soporte solicitante (`A10`) de aprobación/auditoría (`A12`). Faltaba cerrar quién puede verificar, qué evidencia puede usar, cómo se recertifican esos deberes, cuántas aprobaciones exige una lectura excepcional y qué ocurre ante conflicto o abuso.
@@ -3525,6 +3541,16 @@ El dominio se materializa en ocho tablas: `nutrient_definitions`, `meals`, `meal
 **Fecha:** 3 de agosto de 2026<br>
 **Supersede:** la consolidación informal `DT-019` que absorbía `A11/A12` en `A10`<br>
 **Ratifica:** ADR-022 y ADR-026
+
+> **Partially superseded by [ADR-046](#adr-046-an-allfit-admin-acts-with-the-full-authority-of-the-platform)**
+> on 7 November 2026. Superseded: items 2, 5 (for administrators), 6, 7, 9 (its ban on
+> self-approval) and 19 (the session limits); items 1, 8 and 16 in part; invariants 5 and 6
+> and the second half of invariant 3; scenarios 1, 5 and 6, and scenario 7 for approvers.
+> Built: an administrator holds all thirteen duties for as long as the role lasts, and the
+> session lasts 60 idle minutes and 12 hours. Pending implementation: self-approved
+> break-glass, partial person search and the optional case reference, so items 6 to 9 below
+> still describe what runs for them. Items 16 and 23 describe bootstrap and recovery
+> workflows that do not exist; ADR-046 records the real ceremony. The rest stays in force.
 
 ### Contexto
 
@@ -5480,3 +5506,246 @@ que quedó sin movimiento.
 11. Otra persona no puede leer, confirmar ni deshacer una importación ajena.
 12. Repetir cualquier comando con la misma clave no crea otro efecto.
 13. Deshacer una importación a medias anula lo que entró y descarta lo que faltaba.
+
+---
+
+## ADR-046 — An Allfit admin acts with the full authority of the platform
+
+**Status:** accepted for V1. Decisions 1 and 3 are built; decisions 2, 4 and 5 are decided
+and pending implementation.<br>
+**Date:** 7 November 2026<br>
+**Supersedes:** in `ADR-028`, items 2, 5 (for administrators), 6, 7, 9 (only its ban on
+self-approval) and 19 (only the session limits); items 1, 8 and 16 in part; invariants 5 and 6
+and the second half of invariant 3; mandatory scenarios 1, 5 and 6, and scenario 7 for
+approvers. The same rules restated in `ADR-022` decision 3 and `ADR-026` are listed below,
+under *Earlier decisions this changes*.<br>
+**Ratifies:** every other item of `ADR-028`, and the guarantees listed under *What stays*.
+
+### Context
+
+`ADR-028` was written for a team that separates duties: one person asks for support access,
+another approves it and a third audits it. The Allfit One Backoffice is run by two
+administrators. Under `ADR-028`:
+
+- **The base role granted nothing.** Each of the thirteen duties of `ADR-028` item 4 had to
+  be granted by the other administrator, for at most 90 days, and recertified. A lapsed duty
+  turned its screens into `403`. `manage_platform_access`, the duty that grants the rest, was
+  held by both administrators with the same end date: had it lapsed for both, nobody could
+  grant any duty from Backoffice again.
+- **Break-glass could not open.** A restricted window (body, health, nutrition intake) needs
+  two approvers besides the requester, which two administrators never have. A standard window
+  needs the other administrator to approve it. Windows lasted 15 or 30 minutes.
+- **The session ended after 15 idle minutes or 8 hours.**
+- **Person search matched only an exact email, phone or identifier**, always with a case
+  reference, and showed a masked contact and no name.
+
+The controls that protect the person whose data is read do not depend on how many
+administrators there are: the read is logged before content leaves, the person sees it,
+break-glass never writes and some categories are never reachable. The controls that split
+authority among staff do depend on it, and with two administrators they produced dead ends
+instead of protection.
+
+### Decision
+
+**1. `allfit_admin` holds all thirteen duties for as long as the person holds the role.**
+Granting the role brings every duty. An administrator receives no per-duty grant, and their
+duties have no 90-day end and no recertification. Withdrawing the role still revokes every
+duty, closes the person's break-glass windows and ends their sessions.
+
+- The duties stay rows of `support.platform_duty_assignments`, with `basis = 'admin_role'`.
+  Break-glass, invitations, recovery, plans and suspensions record the exact assignment a
+  command acted under, so the role writes thirteen assignments instead of being read as a
+  wildcard.
+- A Backoffice session without an active `allfit_admin` role holds no duty.
+- **Implementation: built** in PR 1 (code branch `feat/backoffice-admin-standing-duties`),
+  migration `20261114090000_an_admin_holds_every_duty.sql`.
+
+**2. Break-glass is self-approved.** An administrator opens a window by requesting it with
+one of the closed purposes; nobody else approves it.
+
+- Every window lasts 60 minutes, whatever its tier, body, health and nutrition included.
+- Every read is still logged before content is returned, and the person still sees it.
+- The other administrator reviews each exercised window afterwards. The reviewer is still
+  never the requester or the subject.
+- **Implementation: pending** (PR 2). Until it ships, the quorum and the durations of
+  `ADR-028` item 7 still run.
+
+**3. A Backoffice session lasts 60 idle minutes and 12 hours.** Password plus TOTP (AAL2)
+still opens it. Withdrawing the role, recovering the factor or resetting the password still
+ends it.
+
+- **Implementation: built** in PR 1. PostgreSQL enforces both limits through
+  `access_control.backoffice_idle_limit()` and `access_control.backoffice_session_lifetime()`.
+  The API keeps matching constants, `BACKOFFICE_IDLE_LIMIT_MS` and
+  `BACKOFFICE_SESSION_LIFETIME_SECONDS`, which only set the cookie's `Max-Age=43200` and the
+  idle deadline it reports.
+
+**4. Person search matches part of a name, an email or a phone.** Administrators see the
+person's full name and contact. Every search is logged, with one access event for each
+person it returns.
+
+- **Implementation: pending** (PR 2). Until it ships, search still matches exactly and masks
+  the contact.
+
+**5. A case reference is optional for support reads**: the person search, the person file,
+payments, billing follow-up and the recovery read. Account-recovery commands still require
+one.
+
+- **Implementation: pending** (PR 2).
+
+### What stays
+
+- Every read of personal data is logged before content is returned. If the log cannot be
+  written, the read does not happen.
+- Password plus TOTP (AAL2) opens every Backoffice session.
+- The platform never acts as the person, and Backoffice never writes through break-glass.
+- Authentication secrets and the forbidden categories — meal photos, documents and private
+  notes — stay unreachable.
+- History is append-only.
+- Nobody grants themselves the base role, and the last active administrator cannot be
+  withdrawn.
+- The break-glass reviewer is independent of the requester and of the subject.
+- Whoever requested or approved a read of a person cannot place a legal hold on that person
+  (`privacy.asked_to_read_this_person`).
+
+### What changes in ADR-028
+
+| `ADR-028` | What it said | What changes | Status |
+| --- | --- | --- | --- |
+| Item 1 | Separation of duties and break-glass are mandatory | Duties are no longer split among administrators. Break-glass stays mandatory for content | Built for duties |
+| Item 2 | `allfit_admin` only lets a person sign in | The role brings every duty (decision 1) | Built |
+| Item 5 | Every duty lasts at most 90 days and is recertified | Not for a duty the role brings. A duty granted on its own (`basis = 'granted'`) keeps every rule of item 5 | Built |
+| Item 6 | Exact search, case reference, masked contact, no name | Decisions 4 and 5 | Pending |
+| Item 7 | One approver and 30 minutes, or two approvers and 15 minutes | Decision 2: self-approved, 60 minutes for every tier | Pending |
+| Item 8 | Forbidden break-glass categories; identity and billing cases use minimized operations | The categories stay forbidden. Search and the person file show the full name and contact (decision 4) | Pending |
+| Item 9 | Nobody self-approves | Decision 2. Exercising someone else's window, reviewing one's own request and writing through break-glass stay forbidden | Pending |
+| Item 16 | The ceremony inserts two roles and their crossed `manage_platform_access` duties | It inserts only the two crossed roles; the roles bring the duties. See also *A stale ceremony* below | Built |
+| Item 19 | Eight hours and fifteen idle minutes | Twelve hours and sixty idle minutes (decision 3). The rest of the item stays | Built |
+| Invariant 3 | Without an independent actor, a sensitive function fails closed | Not for approving break-glass (decision 2). Review still needs an independent reviewer | Pending |
+| Invariant 5 | The ordinary view returns no names or full contacts | Names and contacts, by decision 4. Personal content stays out | Pending |
+| Invariant 6 | A partial approval, a rejection or an expired request never opens a window | The request itself opens the window (decision 2) | Pending |
+| Scenario 1 | An admin without a duty signs in but runs nothing | A Backoffice session without an active admin role holds nothing | Built |
+| Scenario 5 | Search has no name lookup and masks the contact | Decision 4 | Pending |
+| Scenario 6 | One independent approver, or two for a restricted window | Decision 2 | Pending |
+| Scenario 7 | A requester, approver or reviewer with a conflict is refused | Only for requester and reviewer: there is no separate approver | Pending |
+
+Every other item, invariant and scenario of `ADR-028` stays. In particular:
+
+- the closed catalogue of thirteen duties (item 4);
+- the modes `A10`, `A11` and `A12`, still derived from the duty exercised (item 3), although
+  one administrator now acts in all three;
+- the five `support` tables (item 10) and the closed operations (item 11);
+- logging before content (item 12);
+- withdrawing the role revokes the session and every duty (item 13);
+- no runtime owner, superuser or `BYPASSRLS` (item 14);
+- the WorkOS Application, password plus TOTP, the session materialized in PostgreSQL, one
+  TOTP per account and the hosted password reset (items 15, 17, 18 and 20 to 22);
+- invariant 1 as a check: every operation still requires an active role and an active duty
+  in its own transaction, and for an administrator the first brings the second;
+- invariants 2, 4, 7 and 8, and scenarios 2 to 4 and 8 to 11.
+
+### A stale ceremony
+
+**`ADR-028` items 16 and 23 describe workflows that do not exist.** The code repository has
+no `backoffice-bootstrap.yml`, no `backoffice-totp-recovery.yml` and no protected GitHub
+environment for them; its workflows are `ci.yml`, `deploy-aws.yml` and
+`deploy-database-aws.yml`.
+
+- **The real bootstrap** is `infra/docker/migrator.sh bootstrap`, run as a one-off task of
+  the migrator task definition on ECS with `SUBJECT_A`, `SUBJECT_B` and `CEREMONY_REFERENCE`.
+  It connects with the database master credential, finds both people through their WorkOS
+  accounts, which must already have a person (each administrator signed in to Studio once),
+  and calls `support.bootstrap_backoffice_administrators` as `allfit_migrator` in one
+  transaction. Since this decision it no longer takes
+  `DUTY_DAYS`.
+- **TOTP factor recovery** has a function, `identity.recover_backoffice_totp_factor`, but no
+  migrator command or workflow runs it. It requires two administrators other than the
+  subject, both holding `manage_platform_access`, which a team of two administrators cannot
+  provide.
+
+This decision changes neither ceremony beyond `DUTY_DAYS`. The gaps are recorded so that
+nobody follows items 16 and 23 as written.
+
+### Earlier decisions this changes
+
+- **`ADR-026`:** item 6 (duties last at most 90 days and are recertified) no longer applies
+  to administrators, and this is built. Pending with decision 2: the quorum and durations of
+  item 8, the approver rules of item 10, the 30-minute pending request of item 11,
+  invariants 4 and 5, the approval half of invariant 7, the costs that follow from them, and
+  scenarios 5, 7 and 8 and the rejected or expired request of scenario 6. Item 12 stays: a
+  window is reviewed by someone who did not request it.
+- **`ADR-022` decision 3:** the approval by an `A12` other than the requester, and the rule
+  that a single-person shift never self-approves, are replaced by decision 2; support
+  metadata «sin nombres» is replaced by decision 4. Both are pending, and invariant 8 and
+  scenarios 9, 10, 11 and 15 follow them. Only the requester exercises a window, every
+  exercise is visible to the person, and break-glass never writes.
+
+### Invariants
+
+1. A person holds a duty through the role only while the role is active. Withdrawing the
+   role revokes every duty in the same transaction.
+2. A duty held through the role never lapses, and it is never suspended, revoked or
+   recertified on its own. Its `basis` never changes.
+3. A duty granted on its own lasts at most 90 days.
+4. A person holds at most one current assignment of each duty in each basis.
+5. A Backoffice session without an active `allfit_admin` holds no duty and no role.
+6. The role is never self-granted, and the last active administrator is never withdrawn.
+7. Every read of personal data is logged before content is returned.
+
+### Consequences
+
+- `support.platform_duty_assignments` gains `basis` (`granted` or `admin_role`). The window
+  check depends on it, and the current-assignment unique index moves to
+  `(person_id, duty_code, basis)`. A temporary duty granted before this decision lives beside
+  the one the role brings and lapses on its own date; nothing is rewritten and nobody is
+  recorded as having revoked it.
+- A duty the role brings ends on `9999-12-31 00:00:00+00` rather than `infinity`, because the
+  API's driver turns `infinity` into an invalid date and the contract declares a date-time.
+  Clients show it as permanent, not as a date.
+- Granting the role (`OP-SUP-007`) now brings the thirteen duties. Granting an administrator a
+  duty (`OP-SUP-010`) converges on the one the role brought. Suspending, revoking or
+  recertifying it is refused with `409 conflict`. Backoffice no longer offers a duty form,
+  because every duty requires the role, and the role already brings it.
+- Every duty requires `allfit_admin`, which brings all of them. A narrower staff profile
+  would need a new role and a new decision.
+- Once decision 2 is built, one administrator requests, opens and exercises a window alone.
+  The safeguards move after the fact: the person sees every read, and the other administrator
+  reviews it. The approved plan retires the separate approval (`OP-SUP-002`) in that change;
+  past approvals stay as append-only history.
+- A session left open in a browser stays usable for up to an hour of inactivity instead of
+  fifteen minutes.
+
+### Alternatives considered
+
+- **Keep `ADR-028` and renew duties by hand.** This is the stopgap until PR 1 is deployed.
+  It cannot open a restricted window at all, and every lapse is a `403` in front of the next
+  operator.
+- **Read the role as a wildcard, with no duty rows.** Rejected: the commands that record the
+  assignment they acted under would have nothing to point at.
+- **End standing duties at `infinity`.** Rejected for the driver and contract reason above.
+- **Rewrite or revoke the temporary duties already in production.** Rejected: the index
+  gains `basis`, so they coexist and lapse without anyone editing history.
+
+### Mandatory test scenarios
+
+1. The bootstrap ceremony and a role granted in Backoffice each bring exactly the thirteen
+   duties, granted by whoever granted the role, never lapsing (`T-SUP-STANDING-01`,
+   `T-IDN-BACKOFFICE-CEREMONIES-01`).
+2. A Backoffice session without the role holds no duty and no role.
+3. Granting an administrator a duty they hold through the role answers that duty and adds no
+   row.
+4. Suspending, revoking or recertifying a duty held through the role fails, and so does
+   rewriting its `basis`.
+5. A temporary duty from before lives beside the standing one; two temporary ones of the same
+   duty never do; a granted duty still lasts at most 90 days.
+6. A session idle for 59 minutes still carries its role and duties; one idle for 61 minutes
+   does not, and the sweep revokes it, as it revokes one past 12 hours
+   (`T-IDN-BACKOFFICE-SWEEP-01`).
+7. Withdrawing the role revokes the thirteen duties.
+8. *Pending with decision 2:* a request with a closed purpose opens a 60-minute window at
+   once; a request without one, or for a forbidden category, is refused; the requester never
+   reviews the window.
+9. *Pending with decision 4:* a partial name or contact finds the person, and every returned
+   person gets an access event.
+10. *Pending with decision 5:* support reads work without a case reference, and
+    account-recovery commands refuse one that is missing.

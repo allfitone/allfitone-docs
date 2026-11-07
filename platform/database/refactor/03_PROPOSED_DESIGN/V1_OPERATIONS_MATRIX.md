@@ -73,7 +73,7 @@ Un actor no es un rol ni un permiso: es el sujeto autenticado desde el que se ev
 | `A11` Curador/verificador de plataforma | Persona con rol base y deber vigente de curaduría, verificación o gestión comercial; cada deber es independiente | No |
 | `A12` Seguridad/privacidad de plataforma | Persona con rol base y deber vigente para administrar accesos, aprobar o auditar break-glass y gestionar privacidad | No |
 
-`A6` y `A7` fueron incorporados y recertificados en Fase 2 el 26 de julio de 2026. `A10`, `A11` y `A12` son modos de actuación derivados del deber comprobado en la transacción; **nunca** son roles de una organización ni valores aceptados desde el cliente. ADR-028 deja sin efecto la consolidación `DT-019`: el rol base `allfit_admin` permite iniciar sesión, pero no concede una operación sin `support.platform_duty_assignments` vigente y AAL2.
+`A6` y `A7` fueron incorporados y recertificados en Fase 2 el 26 de julio de 2026. `A10`, `A11` y `A12` son modos de actuación derivados del deber comprobado en la transacción; **nunca** son roles de una organización ni valores aceptados desde el cliente. ADR-028 deja sin efecto la consolidación `DT-019`: el rol base `allfit_admin` permite iniciar sesión, pero no concede una operación sin `support.platform_duty_assignments` vigente y AAL2. **Since ADR-046** the role brings all thirteen duties as rows of that table (`basis = 'admin_role'`) for as long as it lasts, so an administrator acts in every mode. A Backoffice session without the role still holds no duty, and every operation still checks its duty and AAL2 in its own transaction.
 
 ### 3.1 Fórmula de acceso profesional
 
@@ -876,7 +876,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Tipo** | Consulta |
 | **Superficie** | `GET /backoffice/v1/session` |
 | **Actor** | Persona activa con rol `allfit_admin` y sesión Backoffice AAL2 |
-| **Filtros obligatorios** | Hash y superficie exactos, `sid` válido, AAL2, `password_totp`, inactividad menor de 15 minutos y absoluto menor de 8 horas |
+| **Filtros obligatorios** | Hash y superficie exactos, `sid` válido, AAL2, `password_totp`, idle for less than 60 minutes and under 12 absolute hours (ADR-046; `access_control.backoffice_idle_limit()` and `access_control.backoffice_session_lifetime()`, migration `20261114090000_an_admin_holds_every_duty.sql`). The answer's `inactivity_expires_at` is the last activity plus 60 minutes |
 | **Transacción** | Revalida persona/rol/evidencia y actualiza actividad mediante función cerrada; verifica/refresca token WorkOS fuera de autoridad de dominio |
 | **Información sensible** | Devuelve sólo nivel, método, nombre propio y vencimientos; sin email, factor, deber, claim, token ni permiso |
 | **Falla cerrada** | Cualquier pérdida de autoridad revoca/cierra la sesión y devuelve `401`; proveedor transitoriamente indisponible devuelve `503` sin ampliar vencimientos |
@@ -4451,6 +4451,12 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | `OP-SUP-010` | Asignar, suspender o revocar un deber | Comando | `A12/manage_platform_access` |
 | `OP-SUP-011` | Consultar asignaciones de deber | Consulta | `A12/manage_platform_access` o `audit_platform_access` |
 
+> **ADR-046.** Built: `allfit_admin` brings every duty (`OP-SUP-007`, `OP-SUP-010`,
+> `OP-SUP-011` below). Decided and pending implementation: self-approved break-glass windows
+> of 60 minutes for every tier (decision 2), person search by partial name, email or phone
+> with full name and contact (decision 4), and an optional case reference for support reads
+> (decision 5). Until they ship, `OP-SUP-001` to `OP-SUP-006` below describe what runs.
+
 ---
 
 #### `OP-SUP-001` — Solicitar ventana break-glass
@@ -4573,10 +4579,11 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Idempotencia** | `Idempotency-Key`. Asignar un rol ya vigente converge |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Un cambio de acceso **nunca** se confirma desde caché |
-| **Información sensible** | Identidad interna del equipo; el rol sólo permite entrar y no concede categorías de datos |
+| **Información sensible** | Identidad interna del equipo. Since ADR-046 the role brings every duty; reading a person's content still needs a break-glass window |
 | **Evento de dominio** | `support.platform_role_granted.v1`, `support.platform_role_revoked.v1` |
-| **Reglas** | No hay autoasignación. El rol **no tiene vencimiento** y nunca puede quedar cero `allfit_admin`; no implica ningún deber. El historial es append-only e inmutable |
+| **Reglas** | No hay autoasignación. El rol **no tiene vencimiento** y nunca puede quedar cero `allfit_admin`. El historial es append-only e inmutable. Since ADR-046 the role brings the thirteen duties (see below) |
 | **Falla cerrada** | Último `allfit_admin`, rol fuera del catálogo o persona inactiva: rechazo |
+| **Implemented (ADR-046)** | Migration `20261114090000_an_admin_holds_every_duty.sql`. **Granting brings the duties:** the `AFTER INSERT` trigger `trg_platform_role_assignments_insert_grant_duties` runs `support.grant_standing_platform_duties()`, which inserts the thirteen duties of `support.standing_platform_duties()` with `basis = 'admin_role'`, `valid_to = 9999-12-31 00:00:00+00`, `reason_code = 'admin_role'` and the role's grantor as `granted_by_person_id`, and queues one `support.platform_duty_granted.v1` per duty. The grantor is never the person, because the role is never self-granted. **Withdrawing** is unchanged: `support.close_revoked_platform_access()` revokes every duty, by whoever withdrew the role, closes the person's break-glass windows and revokes their Backoffice sessions. Tests: `T-SUP-STANDING-01` |
 
 #### `OP-SUP-008` — Consultar quién tiene rol de plataforma
 
@@ -4628,6 +4635,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | `support.platform_duty_granted.v1`, `support.platform_duty_suspended.v1`, `support.platform_duty_revoked.v1` |
 | **Reglas** | Nadie se autoasigna; un deber no implica otro; vencer se evalúa por tiempo aunque el job no haya corrido |
 | **Falla cerrada** | Rol base ausente, catálogo/AAL/vigencia inválidos o autoasignación: rechazo |
+| **Implemented (ADR-046)** | Migration `20261114090000_an_admin_holds_every_duty.sql`. Every duty requires `allfit_admin`, and the role already brings all thirteen, so these commands only matter for a temporary duty granted before ADR-046. **Granting converges:** `support.assign_platform_duty` still validates the role, the catalogue and a window of at most 90 days, then answers the assignment the person already holds (scheduled or active, in any basis, preferring `admin_role`) and adds no row; granting an administrator a duty answers it with `basis: admin_role`. **A duty held through the role follows the role:** `support.suspend_platform_duty`, `support.revoke_platform_duty` and `support.recertify_platform_duty` (`POST .../{id}/recertification`, also `OP-SUP-010`) fail on it with `23514 a duty held through the admin role follows the role`, which the API answers as `409 conflict`; the rule lives in `support.preserve_platform_duty_history`, which also freezes `basis`. **Concurrency:** the current-assignment unique index is `(person_id, duty_code, basis)`, so a temporary duty from before lives beside the standing one and lapses on its own date, and two temporary ones of the same duty never coexist. The Backoffice web no longer offers a grant form. Tests: `T-SUP-STANDING-01`, `T-SUP-RECERT-01` |
 
 #### `OP-SUP-011` — Consultar asignaciones de deber
 
@@ -4645,6 +4653,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Muestra historial, otorgante, vigencia, AAL, recertificación, suspensión y revocación; sin `DELETE` |
 | **Falla cerrada** | Deber del consultante ausente o vencido: rechazo |
+| **Implemented (ADR-046)** | Each `PlatformDutyAssignment` now carries the required `basis` (`granted` or `admin_role`). The Backoffice web shows an `admin_role` duty as «Permanente · rol admin» instead of its far `valid_to`, and «Sigue al rol» instead of the recertify, suspend and revoke actions. A temporary duty from before keeps its dates and actions until it lapses |
 
 ### 7.10 Nutrición
 

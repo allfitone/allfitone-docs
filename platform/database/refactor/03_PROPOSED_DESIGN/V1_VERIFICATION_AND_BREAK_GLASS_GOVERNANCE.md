@@ -114,6 +114,11 @@ Toda solicitud declara exactamente uno:
 
 Una solicitud mixta hereda el nivel más restrictivo. Guidance + intake resulta restringida; cualquier solicitud que incluya `nutrition_media` se rechaza antes de abrir ventana y registra el intento. El servidor calcula `sensitivity_tier`, `required_approvals` y duración máxima; el cliente no los declara.
 
+> **ADR-046 decision 2, decided and pending implementation:** an administrator approves their
+> own window, and every window lasts 60 minutes, whatever its tier. The prohibited categories
+> stay prohibited, and the review stays with someone other than the requester and the
+> subject. Until it ships, the quorum and durations above are what runs.
+
 ### 3.3 Actores
 
 - `A10/request_break_glass`: crea y, una vez aprobado, ejerce/cierra solo su expediente.
@@ -247,6 +252,14 @@ Reglas:
 - el job de recertificación no es la frontera de seguridad: cada operación comprueba `duty_valid_to`;
 - el 100% de ventanas ejercidas se revisa dentro de las 24 horas corridas siguientes al primer ejercicio por un auditor independiente;
 - las ventanas restringidas, denegaciones y alertas siempre entran a la cola prioritaria.
+
+**As built since ADR-046** (migration `20261114090000_an_admin_holds_every_duty.sql`), the
+table and the rules above apply to a duty granted on its own (`basis = 'granted'`). The
+`allfit_admin` role brings all thirteen duties with `basis = 'admin_role'`: they have no
+90-day end and no recertification, are granted by whoever granted the role, follow the role
+and are revoked when it is withdrawn. The «tener uno no implica el otro» rule no longer holds
+for an administrator, and the bootstrap ceremony grants only the two crossed roles, which
+bring `manage_platform_access` with the rest.
 
 ## 6. Abuso e incidentes
 
