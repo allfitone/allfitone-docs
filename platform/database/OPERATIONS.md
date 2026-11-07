@@ -1056,3 +1056,105 @@ Tests:
   racing a termination.
 - The worker's `correction-proposals.test.ts` (9) and
   `correction-proposal-expiry.test.ts` (2) cover the email and the job.
+
+## A gym names its own movements (STUDIO-57..60)
+
+Migration `20261113090000_a_gym_names_its_own_movements.sql` lets a gym create,
+edit, archive and search its own movements from Studio (`HU-STUDIO-064` to
+`HU-STUDIO-067`). It does six things:
+
+- adds the capability `archive_movements` («Archivar movimientos propios») and
+  grants it to owner and admin;
+- adds `revision_number` and `created_by_membership_id` to `catalog.movements`,
+  with `ck_movements_organization_author`, and partial indexes on `movement_id`
+  in `planning.planned_steps`, `execution.session_exercises`,
+  `execution.strength_sets` and `execution.mobility_results`;
+- adds the append-only table `catalog.movement_revisions`, with its policies;
+- adds the trigger `trg_movements_before_update_meaning`, which freezes the
+  discipline and the name of a movement a published version uses;
+- adds two select policies so that a person reads a gym's movement she was
+  planned or trained, and write policies on `movement_aliases`,
+  `movement_equipment` and `movement_variants` for the organization's own
+  movements;
+- adds the commands `catalog.create_organization_movement`,
+  `update_organization_movement` and `archive_organization_movement`, and the
+  reads `catalog.search_organization_movements` and
+  `read_organization_movement`. `allfit_api` can execute these five and none of
+  their helpers.
+
+The new table starts empty, and every existing movement starts at revision 1, so
+there is no backfill.
+
+**Before applying it, check for organization movements.**
+`ck_movements_organization_author` fails the migration if a row with
+`content_scope = 'organization'` already exists without an author. No code path
+could create one before this release, but check production read-only first:
+
+```sql
+select count(*) from catalog.movements where content_scope = 'organization';
+```
+
+`0` is expected. Otherwise, stop and decide each row's author before applying.
+
+**Locks.** Adding the columns and constraints takes an `ACCESS EXCLUSIVE` lock on
+`catalog.movements` while the checks and the FK validate, which is brief on a
+catalogue of a few hundred rows. The four new indexes are built without
+`CONCURRENTLY`, so each blocks writes to its table while it builds, including
+`execution.strength_sets`. With `lock_timeout = 5s`, a busy table makes the
+migration fail rather than queue; retry it. `statement_timeout = 60s` bounds each
+build.
+
+**Deploy order.** Merging runs **Deploy AWS**, which rolls out the API with the
+five new routes and registers this commit's migrator. Then dispatch **Deploy
+Database AWS** right after it finishes. Until the migration is applied, the five
+routes answer `503`. No screen calls them yet (STUDIO-129..132), and nothing that
+exists changes behaviour: published versions and sessions keep resolving their
+movements.
+
+**The freeze.** Once a published version uses an organization movement, its
+discipline is fixed and its name only changes in case and spacing. The trigger
+enforces it on the row, so it also holds for a manual fix in production: an
+`UPDATE` that renames a used movement fails with `55000 movement-in-use`. To
+correct a used movement's name, create a new movement and use it in the next
+version.
+
+**Accepted race.** A version published at the same instant the movement is
+archived stays valid, because publishing checks the movement is published and
+does not lock it until it writes the steps. The version keeps resolving the
+name, so nothing breaks, and nothing watches for it.
+
+What to watch, read-only:
+
+```sql
+-- Each edit or archive leaves exactly one revision, so the counter matches the history.
+select movement.id, movement.revision_number
+from catalog.movements as movement
+where movement.content_scope = 'organization'
+  and movement.revision_number <> 1 + (
+    select count(*) from catalog.movement_revisions as revision
+    where revision.movement_id = movement.id
+  );
+```
+
+It should return no rows.
+
+Tests:
+
+- `T-CAT-MOVEMENT-CREATE-01` (36) covers who creates, every field validated at
+  once, the name per organization, IDEM, the stored row, the event, and that the
+  runtime writes movements only through the command.
+- `T-CAT-MOVEMENT-UPDATE-01` (30) covers the freeze at the command and at the
+  row, case and spacing, other names, equipment and variant, the revision, stale
+  edits, IDEM, archived and foreign movements, and the event.
+- `T-CAT-MOVEMENT-ARCHIVE-01` (16) covers who archives, converging, a draft that
+  no longer publishes, a version that still resolves, and that nothing referenced
+  is deleted.
+- `T-CAT-MOVEMENT-SEARCH-01` (21) covers the global and own library and nobody
+  else's, other names, archived movements, the discipline, pages and cursors,
+  literal matching, and the read.
+- `T-CAT-MOVEMENT-RLS-01` (22) covers the person's two policies, the revisions'
+  policies, and both directions of every new write policy.
+- `organization-movement-concurrency.test.ts` (4) covers a rename racing a
+  publication in both orders, two creates with the same name, and two edits of
+  the same revision.
+- `T-ORG-TEAM-DIRECTORY-01` now counts 23 capabilities and 43 role grants.

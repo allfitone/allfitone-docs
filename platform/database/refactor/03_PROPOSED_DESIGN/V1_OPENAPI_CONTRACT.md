@@ -45,6 +45,11 @@ generado son el inventario exhaustivo.
 | Move a managed session | `PATCH /studio/v1/organizations/{organizationId}/planned-sessions/{plannedSessionId}` | `OP-PLN-012` | `PlannedSessionReschedule` | `RelationshipAssignmentSession` | `no-store` |
 | Adjust a prescription | `POST /studio/v1/organizations/{organizationId}/assignments/{assignmentId}/prescription-revisions` | `OP-PLN-013` | `PrescriptionRevisionCreate` | `PrescriptionRevision` | `no-store` |
 | Cancel a managed assignment | `POST /studio/v1/organizations/{organizationId}/assignments/{assignmentId}/cancellation` | `OP-PLN-014` | command headers + empty object | `AssignmentCancellation` | `no-store` |
+| Search movements, ours included | `GET /studio/v1/organizations/{organizationId}/movements` | `OP-CAT-009` | query `q`, `discipline`, `include_archived`, `limit`, `cursor` | `StudioMovementPage` | `private, no-store` |
+| Create our own movement | `POST /studio/v1/organizations/{organizationId}/movements` | `OP-CAT-001` | `OrganizationMovementCreate` | `OrganizationMovement` (`201`, `Location`) | `private, no-store` |
+| Read a movement | `GET /studio/v1/organizations/{organizationId}/movements/{movementId}` | `OP-CAT-010` | path | `OrganizationMovement` | `private, no-store` |
+| Edit our own movement | `PATCH /studio/v1/organizations/{organizationId}/movements/{movementId}` | `OP-CAT-002` | `OrganizationMovementUpdate` | `OrganizationMovement` | `private, no-store` |
+| Archive our own movement | `POST /studio/v1/organizations/{organizationId}/movements/{movementId}/archival` | `OP-CAT-003` | command headers, no body | `OrganizationMovement` | `private, no-store` |
 | Consultar agenda | `GET /space/v1/agenda` | `OP-PLN-016` | query `from`, `to`, `limit`, `cursor` | `AgendaPage` | `private, max-age=0, must-revalidate` + `ETag` |
 | Iniciar intento | `POST /space/v1/planned-sessions/{plannedSessionId}/attempts` | `OP-EXE-001` | `AttemptCreate` | `Attempt` | `no-store` |
 | Iniciar sesión libre | `POST /space/v1/executions` | `OP-EXE-004` | `FreeSessionCreate` | `FreeSession` | `no-store` |
@@ -115,6 +120,20 @@ generado son el inventario exhaustivo.
 - **Error mapping.**
   - **Studio:** AF430 → `403 scope-required` naming the scope; `42501` → `403`; `P0002` → `404`; AF424 → `409 service-paused`; `23505`, `P0004` and `55000` → `409 conflict`; `40001` → `409 idempotency-in-progress`; `22023` (and `22P02`, `23514`) → `422`. Its `errors[]` carry the database's codes with paths `/execution_id`, `/set_order`, `/field`, `/value`, `/unit` and `/reason`.
   - **Space:** `42501` → `403`; `P0002` → `404`; `22023` and `23514` → `400`; `23505`, `40001` and `55000` → `409 conflict`.
+
+**A gym's own movements (STUDIO-57..60).**
+
+- **Studio.** All five operations are under the new tag *Studio Catalog*, use `cookieAuth`, require the exact Studio `Origin` and answer `private, no-store` (`x-allfit-cache: private-no-store`, response header `PrivateNoStore`). The three commands take `Idempotency-Key` and `Command-Id`. A new path parameter, `MovementId`.
+  - `OrganizationMovementCreate` is `{discipline_code, name, aliases?, equipment?, variant?}`. `variant` is a `MovementVariantInput` `{movement_id, relation, note?}`, and `relation` a `MovementRelation` (`variant`, `regression`, `progression`).
+  - `OrganizationMovementUpdate` is `{expected_revision, discipline_code?, name?, aliases?, equipment?, variant?}` with at least one change (`minProperties: 2`). A list replaces the whole list, and `variant: null` removes the variant.
+  - `OrganizationMovement` carries `id`, `name`, `discipline_code`, `scope` (`MovementScope`: `global` or `organization`), `archived`, `revision`, `aliases`, `equipment`, `muscles`, `variant_of` (a `MovementVariantOf {id, name, relation, note}`, or null), `name_locked` and `demo_url`.
+  - `StudioMovementPage` is `{data, page}`, where each `StudioMovement` carries `id`, `name`, `discipline_code`, `scope`, `archived`, `muscles`, `equipment` and `demo_url`.
+- **Error mapping.**
+  - `P0002` → `404`; `42501` → `403`; `22023`, `22P02` and `23514` → `422`, whose `errors[]` carry paths such as `/name`, `/discipline_code`, `/aliases`, `/equipment`, `/variant`, `/expected_revision` and `/changes`.
+  - `23505` on `uidx_movements_organization_name` → `409 conflict` with `errors[0].code = name-taken` and path `/name`; any other `23505` is a bare `409 conflict`.
+  - `55000` → `409 conflict` with `errors[0].code` `movement-in-use` or `movement-archived`.
+  - `40001 stale-movement` → `409 stale-draft`; any other `40001` → `409 idempotency-in-progress` with `Retry-After: 1`. Anything else → `503`.
+  - Before the database: a wrong `Origin` is `403`; an invalid identifier, filter, cursor or command header `400`; a body that is not JSON `415`, as is any body on the archival; a body outside the closed schema `422`.
 
 **A client's profile, body and health (STUDIO-44..46).**
 

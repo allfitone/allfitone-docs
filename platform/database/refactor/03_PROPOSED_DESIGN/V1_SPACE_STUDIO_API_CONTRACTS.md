@@ -650,10 +650,13 @@ El header `X-Historical-Access-Case` contiene un UUID opaco. El backend lo valid
 | `PATCH` | `/organizations/{orgId}/planned-sessions/{id}` | `OP-PLN-012` |
 | `POST` | `/organizations/{orgId}/assignments/{id}/prescription-revisions` | `OP-PLN-013` |
 | `POST` | `/organizations/{orgId}/assignments/{id}/cancellation` | `OP-PLN-014` |
+| `GET` · `POST` | `/organizations/{orgId}/movements` | `OP-CAT-009` · `OP-CAT-001` |
+| `GET` · `PATCH` | `.../movements/{id}` | `OP-CAT-010` · `OP-CAT-002` |
+| `POST` | `.../movements/{id}/archival` | `OP-CAT-003` |
 
 **As implemented (STUDIO-41..43).** `PATCH …/planned-sessions/{plannedSessionId}` takes `PlannedSessionReschedule` `{scheduled_on, expected_revision}` and returns the session as `RelationshipAssignmentSession`; the optimistic version is `expected_revision` in the body rather than `If-Match`, and a stale one answers `409 stale-draft` with `current_state`. `POST …/prescription-revisions` takes `PrescriptionRevisionCreate` `{planned_step_id, kind, value, unit_code}` and answers `201` with `PrescriptionRevision`. `POST …/cancellation` takes an empty body and answers `200` with `AssignmentCancellation`. All three are commands with `Idempotency-Key`, `cookieAuth`, `no-store`; a missing grant is `403 scope-required` naming `relationship_training:contribute`, and an assignment the organization no longer manages is `409 conflict`. Planning's CORS now allows `PATCH`.
-| `POST` · `PATCH` | `/organizations/{orgId}/movements[/{id}]` | `OP-CAT-001` · `OP-CAT-002` |
-| `POST` | `.../movements/{id}/archival` | `OP-CAT-003` |
+
+**As implemented (STUDIO-57..60).** All five use `cookieAuth`, require the exact Studio `Origin` and answer `private, no-store`. The search and the read need `manage_content`, like creating and editing, so staff get `403`; archiving needs `archive_movements`, which only owner and admin hold. `GET …/movements` takes `q`, `discipline`, `include_archived`, `limit` and `cursor` and answers `StudioMovementPage`: published global movements plus this organization's, each with `scope` and `archived`. `PATCH …/movements/{id}` takes `OrganizationMovementUpdate` `{expected_revision, …}`. The optimistic version travels in the body rather than in `If-Match`, and an old one answers `409 stale-draft`. Once a published version uses the movement, a new discipline, or a name that differs in more than case and spacing, answers `409 conflict` with `errors[0].code = movement-in-use`; `name_locked` says so beforehand. A taken name is `409` with `name-taken`, and an archived movement `409` with `movement-archived`. The archival takes no body and converges. A global movement or another organization's is `404` to every command.
 
 ### 5.7 Plataforma y soporte
 
@@ -697,7 +700,7 @@ Las cinco operaciones Studio exigen además relación/asignación/membresía efe
 | `GET` | `/equipment` | `OP-CAT-011` | Sí |
 | `GET` | `/scope-definitions` | `OP-PRV-012` | Sí, inmutable |
 
-Space precarga disciplinas, tipos de actividad, contratos y el subconjunto global de movimientos: sin ellos no puede validar localmente un borrador antes de sincronizar. Los movimientos **privados** de una organización nunca se sirven desde `/catalog`; se piden a `/studio/v1/organizations/{orgId}/movements`.
+Space precarga disciplinas, tipos de actividad, contratos y el subconjunto global de movimientos: sin ellos no puede validar localmente un borrador antes de sincronizar. Los movimientos **privados** de una organización nunca se sirven desde `/catalog`; se piden a `/studio/v1/organizations/{orgId}/movements`. As implemented (STUDIO-57..60), a person still reads the name of a gym's movement inside what she was planned or trained, through `movements_select_planned` and `movements_select_executed`; the Space search and `/catalog/v1/movements/{id}` stay global.
 
 ## 7. Field-sets y versión de scope por proyección
 

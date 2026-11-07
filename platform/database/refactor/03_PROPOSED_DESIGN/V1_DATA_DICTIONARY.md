@@ -598,6 +598,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** único `code`.
 - **Retención:** permanente.
 - **Eventos:** ninguno.
+- **As implemented.** The table has no `id`: its key is `code`, which `role_capabilities` references. Since migration `20261113090000_a_gym_names_its_own_movements.sql` (STUDIO-57..60) it holds 23 capabilities. The new one, `archive_movements` («Archivar movimientos propios»), lets owner and admin archive the organization's movements; coaches hold `manage_content` but do not retire content (`T-ORG-TEAM-DIRECTORY-01`).
 
 ### 5.7 `organizations.role_capabilities`
 
@@ -613,6 +614,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** único compuesto.
 - **Retención:** permanente.
 - **Eventos:** ninguno.
+- **As implemented.** No `id` either: the key is `(role_code, capability_code)`. With `archive_movements` granted to owner and admin there are 43 grants: 17 for owner, 15 for admin, 8 for coach and 3 for staff (STUDIO-57..60).
 
 ### 5.8 `organizations.membership_roles`
 
@@ -1123,6 +1125,13 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Consultas / índices:** `(content_scope, owner_organization_id, status)`; `(content_scope, discipline_code, status)`; índice sobre `normalized_name`.
 - **Retención:** archivado, no borrado, si está referenciado.
 - **Eventos:** `catalog.private_movement_created.v1`, `catalog.private_movement_updated.v1`, `catalog.private_movement_archived.v1`.
+- **As implemented for an organization's movements (STUDIO-57..60, migration `20261113090000_a_gym_names_its_own_movements.sql`).**
+  - **New columns:** `revision_number integer not null default 1` (`ck_movements_revision`, above 0), which each edit and the archive move up by one; and `created_by_membership_id uuid` (nullable), the membership that created the movement, with `fk_movements_created_by_membership → organizations.organization_memberships(id) ON DELETE RESTRICT`. `ck_movements_organization_author` requires it on every `organization` row; global and personal rows leave it null.
+  - **The meaning freezes once used.** The `BEFORE UPDATE` trigger `trg_movements_before_update_meaning` runs `catalog.keep_organization_movement_meaning` on every `organization` row. It refuses a change of scope, owner or author (`23514`) and bringing an archived movement back (`55000 movement-archived`), and it recomputes `normalized_name` from `name`. Once `catalog.movement_in_use` is true, that is, once a row of `planning.planned_steps` names the movement, it refuses a new discipline or a new `normalized_name` (`55000 movement-in-use`). Case and spacing still change. `OP-CAT-002` records the product decision.
+  - **Indexes:** `idx_movements_created_by_membership`, partial where the author is set. The freeze and the person's policies look movements up from the referencing side, so the migration also adds partial indexes on `movement_id` to `planning.planned_steps`, `execution.session_exercises`, `execution.strength_sets` and `execution.mobility_results`.
+  - **Access:** `allfit_api` has no privilege on the table. It reaches an organization's movements only through `catalog.create_organization_movement`, `update_organization_movement`, `archive_organization_movement`, `search_organization_movements` and `read_organization_movement`. They require a live membership in an active organization and `manage_content`, or `archive_movements` to archive.
+  - **RLS, added:** `movements_select_planned` and `movements_select_executed` let a person read an `organization` movement only when it is in a step of a version planned for her, or in an exercise, a strength set or a mobility result of a session she trained. Nothing else of the gym's library opens to her (`V1_RLS_MATRIX.md` § `MOVEMENT`).
+  - **Events:** each carries `movement_id` and `organization_id`, and the update and the archive add `revision`. Creating writes no revision, and archiving an archived movement writes no event.
 
 ### 8.5 `catalog.movement_aliases`
 
@@ -1137,6 +1146,7 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Consultas / índices:** por `movement_id`.
 - **Retención:** se elimina con el movimiento padre.
 - **Eventos:** ninguno.
+- **As implemented (STUDIO-57..60).** `movement_aliases_all_organization` lets a member with `manage_content` write the other names of the organization's own movements. The commands replace the whole `es` list: at most ten, none blank, longer than 120 characters, repeated once normalized, or equal to the movement's own name. Staff and other organizations are refused (`T-CAT-MOVEMENT-RLS-17..19`).
 
 ### 8.6 `catalog.movement_variants`
 
@@ -1151,6 +1161,7 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Consultas / índices:** por `base_movement_id`.
 - **Retención:** permanece mientras cualquiera de los movimientos esté referenciado; se elimina solo al retirar ambos sin referencias.
 - **Eventos:** ninguno.
+- **As implemented (STUDIO-57..60).** `movement_variants_all_organization` lets a member with `manage_content` link one of the organization's movements to a **published global** base, and to nothing else: a gym's movement is never a variant of another of its own (`T-CAT-MOVEMENT-RLS-22/23`). `relation` is `variant`, `regression` or `progression` (`ck_movement_variants_relation`), and the commands take a note of up to 200 characters. A gym's movement has at most one base; the commands replace it whole, and `variant: null` removes it.
 
 `relation` dice **qué tipo** de relación es; `note` dice **por qué le importa a quien
 lee**, en una frase — «más pectoral superior», «menos técnica». Son cosas distintas y
@@ -1183,6 +1194,7 @@ por eso son dos columnas: un código no se muestra y una frase no se consulta.
 - **Consultas / índices:** por `movement_id`.
 - **Retención:** se elimina con el movimiento padre; una referencia histórica publicada conserva el movimiento y, por tanto, la asociación.
 - **Eventos:** ninguno.
+- **As implemented (STUDIO-57..60).** `movement_equipment_all_organization` lets a member with `manage_content` write the equipment of the organization's own movements, and only **published global** equipment: no command creates organization equipment (`T-CAT-MOVEMENT-RLS-20/21`). The commands take up to sixteen distinct codes and replace the whole list; `requirement` keeps its default, `required`.
 
 ### 8.9 `catalog.units`
 
@@ -1375,6 +1387,20 @@ por la revisión del cambio.
 
 Un movimiento sin fila aquí no es un error: es el estado normal de un catálogo que
 crece, y el producto dibuja la figura del cuerpo en su lugar.
+
+### 8.19 `catalog.movement_revisions`
+
+- **Purpose:** what each edit or archive changed in one of an organization's movements, and who made it (STUDIO-57..60, migration `20261113090000_a_gym_names_its_own_movements.sql`).
+- **Domain / source of truth:** Catalogue. The movement holds its current state; this table holds its history.
+- **Classification:** `operational`. It names a membership, not anybody's personal data.
+- **Columns:** `id` (the `Command-Id`) · `movement_id uuid` · `organization_id uuid` · `revision_from integer` · `revision_to integer` · `actor_membership_id uuid` · `before jsonb` · `after jsonb` · `created_at timestamptz`. `before` and `after` hold the name, discipline, status, other names, equipment and variant.
+- **FKs and deletion:** `movement_id → movements(id)`, `organization_id → organizations.organizations(id)` and `actor_membership_id → organizations.organization_memberships(id)`, all `RESTRICT`.
+- **Uniques and checks:** `uq_movement_revisions_step (movement_id, revision_to)`; `ck_movement_revisions_step` (`revision_from > 0` and `revision_to = revision_from + 1`); `ck_movement_revisions_documents` (both documents are objects).
+- **Actors:** written only by `catalog.update_organization_movement` and `catalog.archive_organization_movement`. Creating a movement writes no revision.
+- **RLS:** `FORCE ROW LEVEL SECURITY`. `movement_revisions_select_member` reads the rows of `access_control.org()`, which already requires a live membership. `movement_revisions_insert_author` inserts only as the acting membership (`app.actor_membership_id` and `access_control.owns_membership`), with `manage_content` or `archive_movements`. There is no update or delete policy, and `trg_movement_revisions_before_change` refuses both (`42501`). `allfit_api` has no privilege on the table, and no read function serves it yet.
+- **Queries / indexes:** `idx_movement_revisions_organization (organization_id, movement_id)` and `idx_movement_revisions_actor (actor_membership_id)`.
+- **Retention:** permanent, like the movement.
+- **Events:** none of its own; see `catalog.private_movement_updated.v1` and `catalog.private_movement_archived.v1`.
 
 ---
 
