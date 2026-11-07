@@ -1021,6 +1021,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Información sensible** | El correo solo viaja enmascarado; el worker lo lee para entregarlo al proveedor. Enlace, token e identificador del reset de WorkOS nunca se guardan ni se devuelven |
 | **Evento de dominio** | `identity.account_recovery_requested.v1` (payload: `request_id`). El worker llama al proveedor, registra `delivered` con el vencimiento del enlace o `failed`; `identity.process_password_reset_succeeded` confirma la solicitud cuando la persona cambia su contraseña |
 | **Reglas** | `HU-BO-010`, criterios 3, 4, 5, 10 y 12. Solo la persona confirma. No hay recuperación por teléfono: V1 no tiene canal SMS |
+| **Implemented (ADR-046 decision 5)** | Migration `20261115100000_an_admin_finds_a_person_by_name.sql`. The prior read `GET /backoffice/v1/people/{personId}/account-recovery` takes `case_reference` as optional: `identity.read_account_recovery` accepts null or empty, and one given in free text is refused with `22023` (`400 invalid-request`). Starting, resending and cancelling still require a case reference, because each opens a case; when the person file was opened without one, the Backoffice web asks for it before enabling those buttons. Tests: `T-IDN-RECOVERY-API-10`, `T-SUP-SEARCH-02` |
 
 #### `OP-IDN-054` — Reenviar una recuperación en curso desde Backoffice
 
@@ -4440,7 +4441,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | ID | Operación | Tipo | Actor |
 | --- | --- | --- | --- |
 | `OP-SUP-001` | Solicitar ventana break-glass | Comando | `A10/request_break_glass` |
-| `OP-SUP-002` | Aprobar o rechazar break-glass | Comando | `A12/approve_break_glass` |
+| `OP-SUP-002` | Aprobar o rechazar break-glass (retired by ADR-046) | Comando | `A12/approve_break_glass` |
 | `OP-SUP-003` | Ejercer lectura break-glass | Consulta auditada | `A10` solicitante exacto |
 | `OP-SUP-004` | Cerrar mi ventana break-glass | Comando | `A10` solicitante exacto |
 | `OP-SUP-005` | Consultar metadatos operativos | Consulta | `A10` |
@@ -4452,10 +4453,14 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | `OP-SUP-011` | Consultar asignaciones de deber | Consulta | `A12/manage_platform_access` o `audit_platform_access` |
 
 > **ADR-046.** Built: `allfit_admin` brings every duty (`OP-SUP-007`, `OP-SUP-010`,
-> `OP-SUP-011` below). Decided and pending implementation: self-approved break-glass windows
-> of 60 minutes for every tier (decision 2), person search by partial name, email or phone
-> with full name and contact (decision 4), and an optional case reference for support reads
-> (decision 5). Until they ship, `OP-SUP-001` to `OP-SUP-006` below describe what runs.
+> `OP-SUP-011` below; migration `20261114090000_an_admin_holds_every_duty.sql`). Also built:
+> self-approved break-glass windows of 60 minutes for every tier (decision 2, migration
+> `20261115090000_an_admin_opens_their_own_break_glass_window.sql`), which retires
+> `OP-SUP-002`; person search by partial name, email or phone with full name and contact
+> (decision 4) and an optional case reference for support reads (decision 5), both in
+> migration `20261115100000_an_admin_finds_a_person_by_name.sql`. The «Implemented
+> (ADR-046)» rows of `OP-SUP-001` to `OP-SUP-006` below say what changed; the rest of each
+> table still holds.
 
 ---
 
@@ -4475,8 +4480,9 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | `support.break_glass_requested.v1` |
 | **Reglas** | El servidor calcula sensibilidad, aprobaciones y duración. Categoría prohibida se rechaza y audita sin abrir alcance aprobable |
 | **Falla cerrada** | Deber/rol/AAL insuficiente, conflicto, categoría o propósito inválidos: rechazo |
+| **Implemented (ADR-046)** | Migration `20261115090000_an_admin_opens_their_own_break_glass_window.sql`. **Asking opens the window:** `support.request_break_glass` derives 0 approvals and 60 minutes for both tiers (`support.break_glass_required_approvals`, `support.break_glass_duration_minutes`) and inserts the request with `status = 'approved'`, `window_starts_at` at the request and `window_ends_at` 60 minutes later. It emits `support.break_glass_requested.v1` and `support.break_glass_window_opened.v1` (`request_id`, `window_starts_at`, `window_ends_at`). `request_expires_at` is still written 30 minutes after the request but no longer gates a new window. **Unchanged:** the closed purpose (`support.break_glass_purpose`), a traceable `case_reference`, the refusal of forbidden categories, the refusal over one's own data (`42501`) and the idempotent replay. `ck_break_glass_requests_derived` accepts 0/60 and the shapes asked for before (standard 1/30, restricted 2/15), and refuses mixes such as 0/15 or 0/90. In the contract, `BreakGlassRequest.required_approvals` has minimum 0 and `requested_duration_minutes` maximum 60. The Backoffice web says «Ventana abierta por 60 minutos. Cada lectura queda registrada y otra persona la revisa después.» Tests: `T-SUP-BG-SELF-01`, `T-SUP-BG-01`, `T-BG-API-01`, `T-BG-API-02` |
 
-#### `OP-SUP-002` — Aprobar o rechazar break-glass
+#### `OP-SUP-002` — Aprobar o rechazar break-glass (retired)
 
 | Campo | Valor |
 | --- | --- |
@@ -4492,6 +4498,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | `support.break_glass_decided.v1`, y `support.break_glass_window_opened.v1` al completar quorum |
 | **Reglas** | Un rechazo es terminal. Estándar exige una aprobación; restringida dos personas distintas |
 | **Falla cerrada** | Solicitante/sujeto/conflicto/deber vencido o solicitud no pendiente: rechazo |
+| **Retired (ADR-046)** | This table is kept as a historical record. Migration `20261115090000_an_admin_opens_their_own_break_glass_window.sql` drops `support.decide_break_glass`; the route `POST /backoffice/v1/break-glass/requests/{requestId}/decisions` answers `404`, and the OpenAPI operation `decideBackofficeBreakGlass` and schema `BreakGlassDecision` are removed. `support.break_glass_approvals` keeps the approvals recorded before, stays append-only, and nothing writes it any more. `support.break_glass_viewer_projection` no longer returns `viewer_can_decide`. A request asked for before and still pending can no longer be approved and expires; the Backoffice web shows it as «Pedida antes del cambio, sin abrir» and no longer has approve or reject controls. `support.break_glass_decided.v1` is no longer emitted. Tests: `T-SUP-BG-SELF-01`, `T-BG-API-20` |
 
 #### `OP-SUP-003` — Ejercer lectura break-glass
 
@@ -4509,6 +4516,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | Ninguno; los registros de acceso son la evidencia |
 | **Reglas** | Sólo lectura. Otro A10, un A12 o el mismo actor con otra solicitud no puede ejercer |
 | **Falla cerrada** | Cualquier falla de autorización o auditoría devuelve cero contenido |
+| **Implemented (ADR-046)** | Unchanged. A window opened since ADR-046 is `approved` from the request with 0 required approvals, so its requester can exercise it at once; every read still writes `support.break_glass_events` and `privacy.access_events` before content |
 
 **Contenido implementado (`HU-BO-009`, mediciones).** Con `body_progress`, una lectura permitida responde `outcome: "allowed"` y `content.body_progress`, con hasta 500 mediciones de la persona del expediente, las más recientes primero, y la misma proyección que ve la persona: `has_media` sin referencia. `body_progress` lee sólo `identity.body_progress_records`; apuntarla a otro `resource_type` se registra y responde `denied` con `resource_out_of_scope`. Las categorías cuyos datos la plataforma todavía no guarda siguen respondiendo `content_unavailable`.
 
@@ -4549,6 +4557,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Es la operación ordinaria. No devuelve nombres ni contactos completos; localizar persona exige identificador o coincidencia exacta, caso trazable y respuesta enmascarada |
 | **Falla cerrada** | — |
+| **Implemented (ADR-046)** | Migration `20261115100000_an_admin_finds_a_person_by_name.sql` replaces the rule above. **Search:** `GET /backoffice/v1/support/people?q=&case_reference=&limit=` accepts only those parameters (the old `identifier`, `email` and `phone` answer `400 invalid-request`); `q` is trimmed and 2 to 100 characters, and `limit` defaults to 25 and is at most 25. `support.search_people(actor, session, case_reference, query, limit)` matches part of the lowered name, email or phone, with `\`, `%` and `_` escaped so a wildcard never lists everybody, or the exact person identifier, in name order. It answers `outcome` (`found` or `not_found`), `items` and `has_more`; each `SupportPersonMatch` carries `person_id`, `display_name`, `contact_email`, `contact_phone` and `account_status`, and no masked contact. **Evidence:** one `support.metadata_queries` row per search (`lookup_kind = 'text'`, sha256 of the lowered term, `result_count`) and one `privacy.access_events` row per person returned (`resource = 'support.person_search'`, purpose `support_diagnosis`, access mode `support_metadata`); a session without the admin role is refused and nothing is recorded. **Person file:** `GET /backoffice/v1/support/people/{personId}` returns `SupportPersonMetadata` with `display_name`, `contact_email` and `contact_phone` added from `support.v_support_metadata`; the older masked fields stay, and it never shows the provider subject or separate given and family names. **Case reference (decision 5):** optional for the search, the person file, `/people/{personId}/payments` and `/support/billing-follow-up`; one given must match `^[A-Z][A-Z0-9_-]{2,63}$`, and free text answers `400 invalid-request`. The Backoffice web has one field «Nombre, correo o teléfono», an optional case and a table with name, email, phone and account state; it says when nobody matched and when more than 25 did. Tests: `T-SUP-SEARCH-02`, `T-SUP-RLS-03`, `T-SUP-API-23` to `28`, `46`, `48`, `49`, `T-SUP-UNIT-01`, `T-SUP-UNIT-02` |
 
 #### `OP-SUP-006` — Revisar un caso break-glass ejercido
 
@@ -4566,6 +4575,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | `support.break_glass_reviewed.v1` o `support.break_glass_incident_opened.v1` |
 | **Reglas** | El 100% de casos ejercidos se revisa; aprobar el caso impide revisarlo como independiente |
 | **Falla cerrada** | Revisor no independiente o deber/AAL inválido: rechazo |
+| **Implemented (ADR-046)** | Unchanged. Nobody approves a window opened since ADR-046, so its reviewer only has to differ from the requester and the subject: the requester cannot review it and the other administrator can. A case approved before still keeps its approvers out of its review. Tests: `T-SUP-BG-SELF-01`, `T-SUP-BGR-01` |
 
 #### `OP-SUP-007` — Asignar o retirar el rol base de plataforma
 

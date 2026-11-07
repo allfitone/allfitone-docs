@@ -623,15 +623,15 @@ Modelar la suplencia como una `relationship_professional_assignment` con tipo y 
 | --- | --- |
 | **1. ¿Qué es?** | El personal de Allfit que diagnostica incidencias. Opera sobre metadatos operativos. Break-glass es la ventana excepcional, aprobada y auditada, que le permite acceder a datos de una persona concreta durante un tiempo acotado. |
 | **2. ¿Qué no es?** | No es un rol organizacional, no es un superusuario, no es un acceso permanente y no habilita escritura sobre datos de una persona. No sustituye al consentimiento: no es un scope. |
-| **3. ¿Quién lo crea?** | `A10` con deber `request_break_glass` crea la solicitud. Uno o dos `A12/approve_break_glass`, según sensibilidad, aportan el quorum; nunca pueden ser solicitante ni ejercer. Otro `A12/audit_break_glass` revisa el caso ejercido. |
+| **3. ¿Quién lo crea?** | `A10` con deber `request_break_glass` crea la solicitud. Since ADR-046 the request itself opens the window: nobody approves it, and `approve_break_glass` only still grants reading the whole tray. Otro `A12/audit_break_glass` revisa el caso ejercido; never the requester or the subject. |
 | **4. ¿Quién es dueño del dato?** | El expediente pertenece a la plataforma. El registro del acceso pertenece también a la persona afectada, que puede verlo. |
-| **5. ¿Puede existir sin Auth?** | No. Exige actor autenticado, propósito declarado y aprobación registrada. |
-| **6. ¿Cuál es su ciclo de vida?** | Solicitada por máximo 30 minutos → aprobaciones parciales o rechazo → vigente máximo 30 minutos estándar/15 restringida → ejercida → cerrada o vencida → revisión independiente. Nunca indefinida ni extensible. |
-| **7. Ejemplos y contraejemplos** | **Ejemplo:** investigar por qué una ejecución quedó inválida, con una ventana máxima de 30 minutos sobre esa persona y esa categoría. **Contraejemplo:** un acceso directo a la base bajo procedimiento manual fuera del modelo, o una ventana de alcance "toda la cuenta". |
+| **5. ¿Puede existir sin Auth?** | No. It requires an authenticated actor, a declared closed purpose and a traceable case; since ADR-046 there is no separate recorded approval. |
+| **6. ¿Cuál es su ciclo de vida?** | Since ADR-046: requested and open at once for 60 minutes, whatever the tier → exercised → closed or expired → independent review. Files asked for before went through partial approvals or a rejection and lasted 30 minutes standard or 15 restricted. Nunca indefinida ni extensible. |
+| **7. Ejemplos y contraejemplos** | **Ejemplo:** investigar por qué una ejecución quedó inválida, con una ventana de 60 minutos (ADR-046) sobre esa persona y esa categoría. **Contraejemplo:** un acceso directo a la base bajo procedimiento manual fuera del modelo, o una ventana de alcance "toda la cuenta". |
 
 ### Implicación para la BD
 
-Modelar por separado rol base y deber en `support.platform_role_assignments` y `support.platform_duty_assignments`, además de solicitud, decisiones por quorum, ventana, ejercicio permitido/denegado y revisión posterior. Cada ejercicio escribe un `access_event` visible para la persona. `A10` solicita y ejerce exclusivamente su ventana; A12 distintos aprueban y revisan, pero no la ejercen. Los deberes duran máximo 90 días y no son roles organizacionales. Constraints y policies impiden autoasignación, conflictos, duplicados y ejercicio por terceros.
+Modelar por separado rol base y deber en `support.platform_role_assignments` y `support.platform_duty_assignments`, además de solicitud, decisiones por quorum, ventana, ejercicio permitido/denegado y revisión posterior. Cada ejercicio escribe un `access_event` visible para la persona. `A10` solicita y ejerce exclusivamente su ventana; A12 distintos aprueban y revisan, pero no la ejercen. Los deberes duran máximo 90 días y no son roles organizacionales. **Since ADR-046** the request opens the window (0 approvals, 60 minutes), `support.decide_break_glass` is dropped and `break_glass_approvals` keeps only the approvals recorded before; review by someone other than the requester and the subject stays. Constraints y policies impiden autoasignación, conflictos, duplicados y ejercicio por terceros.
 
 ---
 
@@ -742,9 +742,9 @@ erDiagram
 | Staff | Rol organizacional administrativo: invita y consulta el directorio; nunca datos fitness. No es cliente ni profesional |
 | Titular | Profesional asignado responsable de una relación; hay exactamente uno efectivo en cada instante |
 | Suplente | Profesional temporal aceptado por la persona; ejerce los grants vigentes sin ampliarlos y caduca por fecha |
-| Soporte solicitante (`A10`) | Personal de plataforma sin acceso ordinario a contenido; diagnostica sobre metadatos, solicita y solo puede ejercer su propia ventana aprobada |
+| Soporte solicitante (`A10`) | Personal de plataforma sin acceso ordinario a contenido; diagnostica sobre metadatos, solicita y solo puede ejercer su propia ventana, which since ADR-046 opens on request |
 | Verificador de credenciales (`A11`) | Actor de plataforma con deber separado y temporal que contrasta una credencial profesional con registro oficial o emisor; no convierte el perfil en verificado |
-| Aprobador de seguridad/privacidad (`A12`) | Actor de plataforma distinto que aprueba/rechaza o revisa break-glass; no ejerce la ventana ni revisa un caso que aprobó |
+| Aprobador de seguridad/privacidad (`A12`) | Actor de plataforma distinto que aprueba/rechaza o revisa break-glass; no ejerce la ventana ni revisa un caso que aprobó. Since ADR-046 nobody approves or rejects a window; `A12` only reviews it afterwards |
 | `allfit_admin` | **Rol base de una persona del equipo de Allfit**, no un rol PostgreSQL. Since ADR-046 it lets the person sign in to Backoffice and brings all thirteen platform duties for as long as the person holds it. Reading a person's content still needs a break-glass window |
 | Roles `allfit_*` de base de datos | `allfit_api`, `allfit_support`, `allfit_curation`, `allfit_worker_*` y los demás son **roles de conexión de PostgreSQL**, no personas. Comparten prefijo con `allfit_admin` por convención histórica, pero viven en capas distintas y no deben confundirse |
 | Admin | Siempre calificar. **`admin` de organización** administra sedes, membresías e invitaciones de un gimnasio y **no ve datos fitness**; **`allfit_admin`** es la habilitación base del equipo de Allfit; since ADR-046 it brings every platform duty, but no content category without break-glass |

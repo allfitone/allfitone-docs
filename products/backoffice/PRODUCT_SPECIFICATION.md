@@ -9,10 +9,9 @@ Este documento define el propósito, los límites y la experiencia operativa de 
 > **[ADR-046](../../platform/database/refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md#adr-046-an-allfit-admin-acts-with-the-full-authority-of-the-platform)
 > partially supersedes ADR-028 (7 November 2026).** Built: `allfit_admin` holds all thirteen
 > duties for as long as the role lasts, and the session lasts 60 idle minutes and 12 hours.
-> Decided and pending implementation: self-approved break-glass windows of 60 minutes for
-> every tier, person search by partial name, email or phone with full name and contact, and
-> an optional case reference for support reads. Sections 4.2 and 5 still describe what runs
-> until those ship.
+> Also built: self-approved break-glass windows of 60 minutes for every tier, person search
+> by partial name, email or phone with full name and contact, and an optional case reference
+> for support reads. Sections 4.2, 5 and 6 say so where they change.
 
 ## 1. Propósito
 
@@ -50,7 +49,7 @@ Every operation requires AAL2 and the duty it names, checked in its own transact
 | --- | --- | --- |
 | `A10` Soporte ordinario | métricas, diagnóstico y metadatos de soporte | no accede a contenido personal |
 | `A11` Curaduría y verificación | credenciales, catálogos, reglas y oferta global | cada deber es independiente |
-| `A12` Seguridad y privacidad | accesos internos, break-glass y solicitudes legales | no aprueba ni audita su propia actuación |
+| `A12` Seguridad y privacidad | accesos internos, break-glass y solicitudes legales | never reviews its own break-glass window; since ADR-046 nobody approves one |
 
 Los modos describen el deber ejercido; no son roles enviados por el cliente, roles organizacionales ni roles PostgreSQL.
 
@@ -65,9 +64,8 @@ Los modos describen el deber ejercido; no son roles enviados por el cliente, rol
 
 ### 4.2 Personas
 
-- Búsqueda exacta por identificador o contacto con referencia de caso.
-- Contacto enmascarado y estado operativo sin exploración por nombre.
-- *Pending implementation (ADR-046 decisions 4 and 5):* search by partial name, email or phone, full name and contact for administrators, every search logged with one access event per person returned, and an optional case reference.
+- Search by part of a name, an email or a phone, or by the person's identifier, in one field, with an optional case reference (ADR-046 decisions 4 and 5).
+- Results and the person file show the full name, contact and operational state. Every search is logged, with one access event per person returned, so each person sees it in her own history (ADR-046).
 - Acciones dedicadas para reenviar verificaciones, recuperaciones o invitaciones.
 - Inicio de correcciones de identidad sin modificar directamente los datos de la persona.
 - Acceso excepcional a categorías aprobables únicamente mediante break-glass.
@@ -120,12 +118,12 @@ Verificar credenciales y curar catálogo son deberes independientes. Ninguno hab
 
 El soporte ordinario no puede leer entrenamiento, cuerpo, salud, nutrición o medios. Cuando una incidencia exige contenido personal, se utiliza una ventana break-glass ligada a un caso, propósito, categoría, sujeto y duración exactos.
 
-- Entrenamiento e historial previo: categoría estándar, un aprobador independiente y máximo 30 minutos.
-- Cuerpo, salud y `nutrition_intake`: categoría restringida, dos aprobadores distintos y máximo 15 minutos.
-- *Pending implementation (ADR-046 decision 2):* every window is self-approved with a closed purpose and lasts 60 minutes, whatever its tier; every read is still logged and visible to the person, and the other administrator reviews it afterwards.
+- Training and prior history: standard category; the window opens on request and lasts 60 minutes (ADR-046).
+- Body, health and `nutrition_intake`: restricted category; the window also opens on request and lasts 60 minutes (ADR-046).
+- Every window needs a closed purpose and a traceable case; every read is still logged and visible to the person, and the other administrator reviews it afterwards. Nobody approves a window (ADR-046).
 - `nutrition_media`, archivos, identidad o contacto completos, secretos, pagos detallados, raw de sensores y notas privadas: categorías no aprobables.
 
-Solicitante, aprobadores y revisor deben ser personas distintas cuando corresponda. Break-glass sólo permite lectura desde proyecciones cerradas; nunca concede escritura, exportación masiva, acceso a storage o uso de una ventana ajena.
+The requester and the reviewer must be different people, and neither can be the subject (ADR-046). Break-glass sólo permite lectura desde proyecciones cerradas; nunca concede escritura, exportación masiva, acceso a storage o uso de una ventana ajena.
 
 Toda lectura sensible permitida o denegada se registra antes de devolver contenido. Si la auditoría falla, la lectura también falla. La persona afectada puede conocer actor, categoría, propósito, momento y resultado, sin exponer el expediente interno ni el contenido consultado.
 
@@ -141,7 +139,7 @@ La experiencia comienza con metadatos operativos y escala sólo mediante una ope
 
 ### Nadie controla todo el flujo sensible
 
-Asignación, solicitud, aprobación, ejercicio y revisión conservan actores independientes. *Pending implementation (ADR-046 decision 2):* an administrator approves and exercises their own window; the review stays with someone other than the requester and the subject.
+Asignación, solicitud, aprobación, ejercicio y revisión conservan actores independientes. **Changed by ADR-046:** an administrator opens and exercises their own window, with no separate approval; the review stays with someone other than the requester and the subject.
 
 ### La evidencia no se borra
 

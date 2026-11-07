@@ -674,6 +674,8 @@ El backend resuelve deber, vigencia y AAL2 desde la autorización interna; el cl
 
 El request break-glass declara propósito cerrado, `case_reference`, sujeto, categorías y duración. `relationship_training`/`prior_training_history`/`nutrition_guidance` son estándar: un A12 y máximo 30 minutos. `body_progress`/`health_context`/`nutrition_intake` son restringidas: dos A12 distintos y máximo 15 minutos. Una solicitud mixta con intake hereda el nivel restringido; `nutrition_media`, identidad, contacto, secretos, pagos, raw, documentos y notas privadas no son aprobables. El ejercicio usa proyecciones cerradas, revalida la categoría en cada lectura y registra `break_glass_event` y `ACCESS_EVENT` antes de devolver contenido. Nunca concede DML, exportación ni acceso a `OP-NUT-013`, storage, `media_ref`, URLs o bytes.
 
+**As built (ADR-046).** Since migration `20261115090000_an_admin_opens_their_own_break_glass_window.sql`, `POST /backoffice/v1/break-glass/requests` opens the window at once for 60 minutes, whatever the tier, with 0 required approvals; nobody approves it, and `A12/audit_break_glass` still reviews it afterwards when it did not request it. `OP-SUP-002` is retired: `POST /backoffice/v1/break-glass/requests/{requestId}/decisions` answers `404` and `decideBackofficeBreakGlass` and `BreakGlassDecision` are gone from the contract. The quorum and durations above describe only files asked for before. Since migration `20261115100000_an_admin_finds_a_person_by_name.sql`, `GET /backoffice/v1/support/people` takes `q`, an optional `case_reference` and `limit`, and the search and the person file answer the full name and contact (`OP-SUP-005`).
+
 ### 5.8 Nutrición
 
 | Método | Ruta | Operación | Scope · nivel |
@@ -720,7 +722,7 @@ Cada proyección de Studio declara qué `SCOPE_DEFINITION` consume y en qué ver
 | `nutrition.v_client_daily_summaries_live` | `nutrition_intake` · `read` | Fecha local y sumas de valores capturados, agregadas después de filtrar | Fotos, notas no autorizadas, `NULL` convertido en cero |
 | `nutrition.v_client_guidance_live` | `nutrition_guidance` · `read` | Versiones, targets, origen, racional, autor mínimo (`kind`, `person_id`) y decisiones | Nombre del autor, membresía/asignación/verificación, ingestas, medios, clínica, activación por profesional |
 | `nutrition.v_client_guidance_frozen` | `nutrition_guidance` frozen + caso/AAL2 | Solo versiones profesionales originadas en la relación, autor mínimo congelado y targets/decisiones `<=T` | Nombre/contexto interno del autor, comidas, fotos, resúmenes, metas personales, otras relaciones y post-corte |
-| `support.v_support_metadata` | Ninguno; rol `allfit_support` | Identificadores, estados, marcas de tiempo, errores, contadores | Todo contenido: nombres, contactos, perfil, ejecuciones, medidas, salud |
+| `support.v_support_metadata` | Ninguno; rol `allfit_support` | Identificadores, estados, marcas de tiempo, errores, contadores; since ADR-046 also `display_name`, `contact_email` and `contact_phone` | Todo contenido: perfil, ejecuciones, medidas, salud (names and contacts are shown since ADR-046) |
 
 Reglas de aplicación:
 
@@ -986,7 +988,7 @@ Los lookups `access_control.grant_of(relationship_id,scope_code)` y `access_cont
 | `planning.v_person_agenda` | Space | Resuelta en la zona horaria de la persona |
 | `privacy.v_person_consents` | Space | Grants, versión, actores que pueden ejercerlos |
 | `privacy.v_my_access_events` | Space | Solo `subject_person_id = access_control.person()`; excluye siempre eventos con sujeto organización |
-| `support.v_support_metadata` | Soporte | Solo metadatos operativos |
+| `support.v_support_metadata` | Soporte | Solo metadatos operativos; since ADR-046 also the person's name and full contact |
 | `nutrition.v_my_meals` | Space | Comidas propias; URL firmada si existe medio |
 | `nutrition.v_my_daily_summaries` | Space | Agregado reproducible por fecha local |
 | `nutrition.v_client_meals_live` | Studio | Intake live; serializa únicamente un enlace autenticado a OP-NUT-013 cuando ambos scopes coinciden |

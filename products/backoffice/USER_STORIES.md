@@ -48,7 +48,7 @@ granted before ADR-046 are of that kind.
 | --- | --- | --- |
 | Soporte ordinario (`A10`) | métricas, diagnóstico y metadatos de soporte | No ve contenido personal, entrenamiento, cuerpo, salud, nutrición ni medios |
 | Curaduría/verificación (`A11`) | catálogo global o verificación de credenciales | Cada deber es independiente; curar no permite verificar |
-| Seguridad/privacidad (`A12`) | administrar accesos, aprobar y auditar break-glass, gestionar solicitudes legales | No solicita ni ejerce una ventana que aprueba o audita |
+| Seguridad/privacidad (`A12`) | administrar accesos, auditar break-glass, gestionar solicitudes legales | Never reviews a window they requested (ADR-046) |
 
 Una persona puede recibir más de un deber, pero la separación se comprueba en
 cada caso: nadie se autoasigna; solicitante, aprobadores y revisor son personas
@@ -57,8 +57,9 @@ de inmediato.
 
 Since ADR-046 an administrator acts in all three modes. Self-approved break-glass,
 partial person search with full name and contact, and an optional case reference
-are decided and pending implementation (ADR-046 decisions 2, 4 and 5); the stories
-below still describe what runs for them.
+are built too (ADR-046 decisions 2, 4 and 5): nobody approves a window any more,
+and the requester and the reviewer are still different people. The stories below
+say so where their criteria changed.
 
 Dos aclaraciones de nombre:
 
@@ -72,9 +73,10 @@ gimnasios y entregarlos, publicar contenido global, verificar títulos
 profesionales, consultar información comercial minimizada y ayudar a iniciar
 flujos de identidad sin modificar los datos directamente.
 
-El contenido de entrenamiento sólo se consulta mediante una ventana
-break-glass estándar aprobada. Cuerpo, salud y registro nutricional requieren
-una ventana restringida y dos aprobadores distintos. Fotos, archivos, identidad
+Training content is read only through a standard break-glass window. Body,
+health and the nutrition log need a restricted window. Since ADR-046 both open on
+request and last 60 minutes, and the other administrator reviews them afterwards.
+Fotos, archivos, identidad
 y contacto completos, secretos de autenticación, pagos detallados, raw de
 sensores y notas privadas no son categorías aprobables por break-glass.
 
@@ -88,7 +90,7 @@ sensores y notas privadas no son categorías aprobables por break-glass.
 | Operar un gimnasio en nombre de su dueño | Se le entrega y él lo administra desde Allfit Studio |
 | Cobrar o mover dinero | Los cobros los reporta la pasarela |
 | Leer contenido sensible por tener `allfit_admin` | El rol base permite entrar; el deber y, cuando aplica, break-glass autorizan cada operación |
-| Aprobar o auditar mi propio acceso excepcional | La separación de deberes es obligatoria y falla cerrada |
+| Review my own exceptional access | Since ADR-046 an administrator opens their own window, but the reviewer is never the requester or the subject |
 | Borrar el registro de accesos, roles o deberes | Nadie puede, para que la evidencia sirva de algo |
 
 Cada lectura permitida o denegada de datos de una persona queda registrada antes
@@ -205,12 +207,10 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 **Criterios**
 
-1. Busco por identificador o por coincidencia exacta de un correo o teléfono que la persona entregó en su caso de soporte; no existe búsqueda exploratoria por nombre.
-2. Los resultados muestran únicamente identificador, contacto parcialmente oculto y estado operativo de la cuenta.
+1. I search in one field, «Nombre, correo o teléfono», by part of a name, an email or a phone, or by the person's identifier, with at least two characters. A `%` or `_` is searched as itself, so a search never lists everybody (ADR-046).
+2. Results show the name, email, phone and account state of up to 25 people in name order; if more match, the screen says there are more (ADR-046).
 3. Si no hay resultados se dice claramente; no aparece una lista vacía sin explicación.
-4. La búsqueda exige `diagnose_support_metadata`, referencia de caso y queda registrada incluso si no encuentra resultados.
-
-*Pending implementation (ADR-046 decisions 4 and 5):* search by part of a name, an email or a phone; administrators see full name and contact; every search is logged with one access event per person returned; the case reference becomes optional.
+4. The search requires `diagnose_support_metadata`, which the admin role brings. A case reference is optional and, when I give one, must be a traceable code. Every search is logged even if it finds nobody, and every person it returns gets an access event she can see (ADR-046).
 
 ### HU-BO-007 — Ver el estado operativo de una persona
 
@@ -222,12 +222,10 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 **Criterios**
 
-1. Veo identificador, estado de cuenta, antigüedad, contactos parcialmente ocultos y estado de verificación, sin valores completos.
+1. I see the identifier, name, full email and phone, account state, age of the account and verification state; never the identity provider's subject (ADR-046).
 2. Veo que existen perfil, relaciones, plan, Pro y permisos, junto con sus estados y fechas; no veo objetivos, contenido, pagos ni destinatarios desde esta ficha.
 3. Para resolver un caso de entrenamiento uso `HU-BO-008`; para cuerpo, salud o nutrición uso `HU-BO-009`. Ninguna pantalla amplía silenciosamente la categoría aprobada.
-4. La ficha exige `diagnose_support_metadata`, referencia de caso y registra la consulta.
-
-*Pending implementation (ADR-046 decisions 4 and 5):* the file shows full name and contact, and the case reference becomes optional.
+4. The file requires `diagnose_support_metadata` and logs the read. A case reference is optional and, when given, must be a traceable code; to start, resend or cancel an account recovery from the file I still give one (ADR-046).
 5. La ficha carga aunque falten datos y representa desconocido como vacío, nunca como cero o falso.
 
 ### HU-BO-008 — Ver el entrenamiento de una persona
@@ -244,10 +242,8 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 2. Puedo abrir una sesión y ver lo que registró: series, cargas, distancias o duración según la modalidad.
 3. Veo su agenda: qué tiene planeado y de qué programa viene.
 4. Veo también lo que ella ocultó a algún gimnasio, indicando para cuál está oculto.
-5. Sólo puedo consultar mediante mi propia ventana break-glass estándar, aprobada para esa persona, caso, propósito y categorías; dura como máximo 30 minutos.
-6. Cada lectura revalida AAL2, deber, quorum, categoría y vigencia, y registra resultado permitido o denegado antes de devolver contenido.
-
-*Pending implementation (ADR-046 decision 2):* I open the window myself with a closed purpose, it lasts 60 minutes, and the other administrator reviews it afterwards.
+5. I can only read through my own standard break-glass window for that person, case, purpose and categories. Asking opens it at once and it lasts 60 minutes; nobody else approves it, and the other administrator reviews it afterwards (ADR-046).
+6. Each read revalidates AAL2, duty, window, category and validity, and logs an allowed or denied result before returning content. Since ADR-046 a new window has no quorum to complete.
 
 ### HU-BO-009 — Ver cuerpo, salud y nutrición
 
@@ -262,11 +258,9 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 1. Veo mediciones corporales, dolores y limitaciones declaradas, y las comidas que registró con sus valores.
 2. **Ninguna foto ni ningún archivo se abre desde el Backoffice.** Ni fotos de progreso corporal, ni fotos de comida, ni documentos. Se guardan y la persona los ve en su aplicación, pero desde aquí no son accesibles.
 3. Donde hay una foto, se indica que existe. Se sabe que está, no se ve.
-4. La consulta requiere una ventana break-glass restringida, dos aprobadores distintos y una duración máxima de 15 minutos.
+4. The read requires a restricted break-glass window. Asking opens it at once and it lasts 60 minutes like any other; nobody else approves it, and the other administrator reviews it afterwards (ADR-046).
 5. Fotos, archivos y `nutrition_media` se rechazan antes de abrir la ventana; conocer que existe un medio no concede URL, referencia de storage ni bytes.
-6. Cada lectura revalida AAL2, deber, quorum, categoría y vigencia, y registra resultado permitido o denegado antes de devolver contenido.
-
-*Pending implementation (ADR-046 decision 2):* the restricted window is self-approved and lasts 60 minutes like any other; photos, files and `nutrition_media` stay closed.
+6. Each read revalidates AAL2, duty, window, category and validity, and logs an allowed or denied result before returning content. Since ADR-046 a new window has no quorum to complete.
 
 ### HU-BO-010 — Ayudar a corregir un dato de identidad
 
@@ -436,7 +430,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 2. Veo cada cobro con su resultado, incluidos los fallidos y el motivo.
 3. Veo si está suspendida y desde cuándo.
 4. **Nunca veo datos de tarjeta**, porque Allfit no los guarda.
-5. La consulta exige `view_billing_metadata`, referencia de caso y una proyección cerrada; pagos no son categoría break-glass.
+5. The read requires `view_billing_metadata` and a closed projection; a case reference is optional and, when given, a traceable code (ADR-046). Payments are not a break-glass category.
 
 ### HU-BO-019 — Ver las suscripciones de un gimnasio
 
@@ -468,7 +462,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 1. Veo las suscripciones a Allfit, activas y suspendidas, y lo que suman.
 2. Distingo quién paga directo de quién tiene Pro por su gimnasio.
 3. Veo los cobros fallidos para poder hacer seguimiento.
-4. La consulta exige `view_platform_metrics`; identificar pagadores individuales requiere además `view_billing_metadata` y finalidad de soporte trazable.
+4. The read requires `view_platform_metrics`; naming individual payers also requires `view_billing_metadata`, and the list of charges to follow up opens without a case reference, which is optional and, when given, a traceable code (ADR-046).
 
 ---
 

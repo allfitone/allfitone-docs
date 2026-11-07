@@ -2924,9 +2924,9 @@ Una capacidad no entra parcialmente mediante una columna o permiso aislado. Su p
 **Enmendada:** 20 de septiembre de 2026 — «todas las sesiones» se estrecha a los programas que terminan, y sigue sin haber job de calendario (`ADR-032`)
 
 > **Decision 3 is partially superseded by [ADR-046](#adr-046-an-allfit-admin-acts-with-the-full-authority-of-the-platform)**
-> on 7 November 2026, decided and pending implementation: an administrator approves their
-> own break-glass window, and support search shows names and contact. Invariant 8 and
-> scenarios 9, 10, 11 and 15 follow. Only the requester exercises a window, every exercise
+> on 7 November 2026, and built (PR 2): an administrator opens their own break-glass window,
+> and support search shows names and contact. Invariant 8 and scenarios 9, 10, 11 and 15
+> follow. Only the requester exercises a window, every exercise
 > is visible to the person, and break-glass never writes.
 
 ### Contexto
@@ -3405,9 +3405,9 @@ Un `PUT` convergente reduce duplicados, pero no evita que un draft antiguo sobre
 > recertified) no longer applies; this is built. The break-glass quorum and durations, the
 > approver rules and the pending request (items 8 and 10, the first sentence of item 11,
 > invariants 4 and 5, the approval half of invariant 7, scenarios 5, 7 and 8, and the
-> rejected or expired request of scenario 6) are replaced by self-approved 60-minute windows,
-> decided and pending implementation. Review by someone who did not request the window
-> (item 12) stays.
+> rejected or expired request of scenario 6) are replaced by self-approved 60-minute windows;
+> this is built too (PR 2). Review by someone who did not request the window (item 12)
+> stays.
 
 ### Contexto
 
@@ -3547,10 +3547,11 @@ El dominio se materializa en ocho tablas: `nutrient_definitions`, `meals`, `meal
 > self-approval) and 19 (the session limits); items 1, 8 and 16 in part; invariants 5 and 6
 > and the second half of invariant 3; scenarios 1, 5 and 6, and scenario 7 for approvers.
 > Built: an administrator holds all thirteen duties for as long as the role lasts, and the
-> session lasts 60 idle minutes and 12 hours. Pending implementation: self-approved
-> break-glass, partial person search and the optional case reference, so items 6 to 9 below
-> still describe what runs for them. Items 16 and 23 describe bootstrap and recovery
-> workflows that do not exist; ADR-046 records the real ceremony. The rest stays in force.
+> session lasts 60 idle minutes and 12 hours (PR 1); self-approved break-glass, partial
+> person search and the optional case reference are built too (PR 2), so items 6, 7 and 9
+> below, and item 8 except its forbidden categories, no longer describe what runs. Items 16
+> and 23 describe bootstrap and recovery workflows that do not exist; ADR-046 records the
+> real ceremony. The rest stays in force.
 
 ### Contexto
 
@@ -5511,8 +5512,9 @@ que quedó sin movimiento.
 
 ## ADR-046 — An Allfit admin acts with the full authority of the platform
 
-**Status:** accepted for V1. Decisions 1 and 3 are built; decisions 2, 4 and 5 are decided
-and pending implementation.<br>
+**Status:** accepted for V1. Decisions 1 and 3 are built (PR 1); decisions 2, 4 and 5 are
+built (PR 2, code branch `feat/backoffice-self-approved-break-glass`), with its code pull
+request and its database deploy pending.<br>
 **Date:** 7 November 2026<br>
 **Supersedes:** in `ADR-028`, items 2, 5 (for administrators), 6, 7, 9 (only its ban on
 self-approval) and 19 (only the session limits); items 1, 8 and 16 in part; invariants 5 and 6
@@ -5567,8 +5569,18 @@ one of the closed purposes; nobody else approves it.
 - Every read is still logged before content is returned, and the person still sees it.
 - The other administrator reviews each exercised window afterwards. The reviewer is still
   never the requester or the subject.
-- **Implementation: pending** (PR 2). Until it ships, the quorum and the durations of
-  `ADR-028` item 7 still run.
+- **Implementation: built** in PR 2 (code branch `feat/backoffice-self-approved-break-glass`),
+  migration `20261115090000_an_admin_opens_their_own_break_glass_window.sql`.
+  `support.break_glass_required_approvals(tier)` returns 0 and
+  `support.break_glass_duration_minutes(tier)` returns 60 for both tiers.
+  `support.request_break_glass` inserts the request already `approved`, with the window
+  starting at the request and ending 60 minutes later, and emits
+  `support.break_glass_requested.v1` and `support.break_glass_window_opened.v1`. The closed
+  purpose, the traceable case reference, the forbidden categories and the refusal over one's
+  own data are unchanged. `support.decide_break_glass` is dropped and `OP-SUP-002` is
+  retired with its route; `support.break_glass_approvals` keeps its rows and nothing writes
+  it. `ck_break_glass_requests_derived` accepts the new shape (0 approvals, 60 minutes) and
+  the two shapes asked for before (standard 1/30, restricted 2/15), so old files stay valid.
 
 **3. A Backoffice session lasts 60 idle minutes and 12 hours.** Password plus TOTP (AAL2)
 still opens it. Withdrawing the role, recovering the factor or resetting the password still
@@ -5584,14 +5596,26 @@ ends it.
 person's full name and contact. Every search is logged, with one access event for each
 person it returns.
 
-- **Implementation: pending** (PR 2). Until it ships, search still matches exactly and masks
-  the contact.
+- **Implementation: built** in PR 2, migration
+  `20261115100000_an_admin_finds_a_person_by_name.sql`. `support.search_people` takes a term
+  of at least two characters and matches part of the lowered name, email or phone, with `\`,
+  `%` and `_` escaped, or the exact person identifier. It answers up to 25 people in name
+  order, each with `display_name`, `contact_email`, `contact_phone` and `account_status`, plus
+  `has_more`. Each search writes one `support.metadata_queries` row (`lookup_kind = 'text'`)
+  and one `privacy.access_events` row per person returned (`resource =
+  'support.person_search'`). The person file adds the name and the full contact. The API is
+  `GET /backoffice/v1/support/people?q=&case_reference=&limit=`.
 
 **5. A case reference is optional for support reads**: the person search, the person file,
 payments, billing follow-up and the recovery read. Account-recovery commands still require
 one.
 
-- **Implementation: pending** (PR 2).
+- **Implementation: built** in PR 2, in the same migration. `support.search_people`,
+  `support.person_metadata`, `support.person_payments`, `support.billing_follow_up` and
+  `identity.read_account_recovery` accept a null or empty case reference; one that is given
+  must still be a traceable code (`^[A-Z][A-Z0-9_-]{2,63}$`), and free text is refused with
+  `22023` (`400 invalid-request` at the API). Starting, resending and cancelling an account
+  recovery still require one, because each opens a case.
 
 ### What stays
 
@@ -5615,19 +5639,19 @@ one.
 | Item 1 | Separation of duties and break-glass are mandatory | Duties are no longer split among administrators. Break-glass stays mandatory for content | Built for duties |
 | Item 2 | `allfit_admin` only lets a person sign in | The role brings every duty (decision 1) | Built |
 | Item 5 | Every duty lasts at most 90 days and is recertified | Not for a duty the role brings. A duty granted on its own (`basis = 'granted'`) keeps every rule of item 5 | Built |
-| Item 6 | Exact search, case reference, masked contact, no name | Decisions 4 and 5 | Pending |
-| Item 7 | One approver and 30 minutes, or two approvers and 15 minutes | Decision 2: self-approved, 60 minutes for every tier | Pending |
-| Item 8 | Forbidden break-glass categories; identity and billing cases use minimized operations | The categories stay forbidden. Search and the person file show the full name and contact (decision 4) | Pending |
-| Item 9 | Nobody self-approves | Decision 2. Exercising someone else's window, reviewing one's own request and writing through break-glass stay forbidden | Pending |
+| Item 6 | Exact search, case reference, masked contact, no name | Decisions 4 and 5 | Built |
+| Item 7 | One approver and 30 minutes, or two approvers and 15 minutes | Decision 2: self-approved, 60 minutes for every tier | Built |
+| Item 8 | Forbidden break-glass categories; identity and billing cases use minimized operations | The categories stay forbidden. Search and the person file show the full name and contact (decision 4) | Built |
+| Item 9 | Nobody self-approves | Decision 2. Exercising someone else's window, reviewing one's own request and writing through break-glass stay forbidden | Built |
 | Item 16 | The ceremony inserts two roles and their crossed `manage_platform_access` duties | It inserts only the two crossed roles; the roles bring the duties. See also *A stale ceremony* below | Built |
 | Item 19 | Eight hours and fifteen idle minutes | Twelve hours and sixty idle minutes (decision 3). The rest of the item stays | Built |
-| Invariant 3 | Without an independent actor, a sensitive function fails closed | Not for approving break-glass (decision 2). Review still needs an independent reviewer | Pending |
-| Invariant 5 | The ordinary view returns no names or full contacts | Names and contacts, by decision 4. Personal content stays out | Pending |
-| Invariant 6 | A partial approval, a rejection or an expired request never opens a window | The request itself opens the window (decision 2) | Pending |
+| Invariant 3 | Without an independent actor, a sensitive function fails closed | Not for approving break-glass (decision 2). Review still needs an independent reviewer | Built |
+| Invariant 5 | The ordinary view returns no names or full contacts | Names and contacts, by decision 4. Personal content stays out | Built |
+| Invariant 6 | A partial approval, a rejection or an expired request never opens a window | The request itself opens the window (decision 2) | Built |
 | Scenario 1 | An admin without a duty signs in but runs nothing | A Backoffice session without an active admin role holds nothing | Built |
-| Scenario 5 | Search has no name lookup and masks the contact | Decision 4 | Pending |
-| Scenario 6 | One independent approver, or two for a restricted window | Decision 2 | Pending |
-| Scenario 7 | A requester, approver or reviewer with a conflict is refused | Only for requester and reviewer: there is no separate approver | Pending |
+| Scenario 5 | Search has no name lookup and masks the contact | Decision 4 | Built |
+| Scenario 6 | One independent approver, or two for a restricted window | Decision 2 | Built |
+| Scenario 7 | A requester, approver or reviewer with a conflict is refused | Only for requester and reviewer: there is no separate approver | Built |
 
 Every other item, invariant and scenario of `ADR-028` stays. In particular:
 
@@ -5669,14 +5693,14 @@ nobody follows items 16 and 23 as written.
 ### Earlier decisions this changes
 
 - **`ADR-026`:** item 6 (duties last at most 90 days and are recertified) no longer applies
-  to administrators, and this is built. Pending with decision 2: the quorum and durations of
-  item 8, the approver rules of item 10, the 30-minute pending request of item 11,
-  invariants 4 and 5, the approval half of invariant 7, the costs that follow from them, and
-  scenarios 5, 7 and 8 and the rejected or expired request of scenario 6. Item 12 stays: a
-  window is reviewed by someone who did not request it.
+  to administrators, and this is built. Replaced by decision 2, also built: the quorum and
+  durations of item 8, the approver rules of item 10, the 30-minute pending request of
+  item 11, invariants 4 and 5, the approval half of invariant 7, the costs that follow from
+  them, and scenarios 5, 7 and 8 and the rejected or expired request of scenario 6. Item 12
+  stays: a window is reviewed by someone who did not request it.
 - **`ADR-022` decision 3:** the approval by an `A12` other than the requester, and the rule
   that a single-person shift never self-approves, are replaced by decision 2; support
-  metadata «sin nombres» is replaced by decision 4. Both are pending, and invariant 8 and
+  metadata «sin nombres» is replaced by decision 4. Both are built, and invariant 8 and
   scenarios 9, 10, 11 and 15 follow them. Only the requester exercises a window, every
   exercise is visible to the person, and break-glass never writes.
 
@@ -5708,10 +5732,21 @@ nobody follows items 16 and 23 as written.
   because every duty requires the role, and the role already brings it.
 - Every duty requires `allfit_admin`, which brings all of them. A narrower staff profile
   would need a new role and a new decision.
-- Once decision 2 is built, one administrator requests, opens and exercises a window alone.
-  The safeguards move after the fact: the person sees every read, and the other administrator
-  reviews it. The approved plan retires the separate approval (`OP-SUP-002`) in that change;
-  past approvals stay as append-only history.
+- One administrator requests, opens and exercises a window alone. The safeguards move after
+  the fact: the person sees every read, and the other administrator reviews it. The separate
+  approval (`OP-SUP-002`) is retired: `support.decide_break_glass` is dropped, and the route
+  `POST /backoffice/v1/break-glass/requests/{requestId}/decisions`, the OpenAPI operation
+  `decideBackofficeBreakGlass` and the schema `BreakGlassDecision` are removed. Past
+  approvals stay as append-only history, and a request asked for before that never opened
+  simply expires.
+- The `approve_break_glass` duty no longer approves anything; it only still grants reading
+  the whole break-glass tray. Whether to retire or rename it is an open owner decision.
+- `request_expires_at` is still written for a new window, 30 minutes after the request, but
+  no longer gates anything.
+- The person search has no trigram index and scans `identity.people`. That is acceptable at
+  the current volume; `pg_trgm` is the option to revisit if it grows.
+- The person file keeps its masked contact fields beside the full ones for the screens that
+  still read them; they can be removed once none does.
 - A session left open in a browser stays usable for up to an hour of inactivity instead of
   fifteen minutes.
 
@@ -5742,10 +5777,11 @@ nobody follows items 16 and 23 as written.
    does not, and the sweep revokes it, as it revokes one past 12 hours
    (`T-IDN-BACKOFFICE-SWEEP-01`).
 7. Withdrawing the role revokes the thirteen duties.
-8. *Pending with decision 2:* a request with a closed purpose opens a 60-minute window at
-   once; a request without one, or for a forbidden category, is refused; the requester never
-   reviews the window.
-9. *Pending with decision 4:* a partial name or contact finds the person, and every returned
-   person gets an access event.
-10. *Pending with decision 5:* support reads work without a case reference, and
-    account-recovery commands refuse one that is missing.
+8. A request with a closed purpose opens a 60-minute window at once; a request without one,
+   for a forbidden category, over one's own data or with a free-text case is refused; the
+   requester never reviews the window, and the other administrator does; files asked for
+   before keep their 1/30 and 2/15 shapes (`T-SUP-BG-SELF-01`).
+9. A partial name or contact finds the person, and every returned person gets an access
+   event; a wildcard never lists everybody (`T-SUP-SEARCH-02`, `T-SUP-RLS-03`).
+10. Support reads work without a case reference, and starting an account recovery still
+    refuses one that is missing (`T-SUP-SEARCH-02`, `T-IDN-RECOVERY-API-10`).
