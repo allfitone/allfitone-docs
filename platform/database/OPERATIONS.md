@@ -1276,3 +1276,139 @@ Tests:
   nothing.
 - The API tests assert the session cookie's `Max-Age=43200` and an idle deadline 60
   minutes after the last activity.
+
+## An Allfit One admin opens their own window and finds a person by name (ADR-046)
+
+Two migrations build ADR-046 decisions 2, 4 and 5 (code branch
+`feat/backoffice-self-approved-break-glass`; its pull request and the database deploy are
+pending).
+
+`20261115090000_an_admin_opens_their_own_break_glass_window.sql` (decision 2):
+
+- replaces `support.break_glass_required_approvals(tier)`, which now returns 0, and
+  `support.break_glass_duration_minutes(tier)`, which returns 60, for both tiers;
+- replaces `ck_break_glass_requests_derived`: a row has the new shape (0 approvals, 60
+  minutes) or one of the two shapes asked for before ADR-046 (standard 1/30, restricted
+  2/15); a mix such as 0/15 or 0/90 is refused;
+- drops `support.decide_break_glass`. `OP-SUP-002` is retired: the route
+  `POST /backoffice/v1/break-glass/requests/{requestId}/decisions` answers `404`, and the
+  OpenAPI operation `decideBackofficeBreakGlass` and schema `BreakGlassDecision` are gone;
+- replaces `support.break_glass_viewer_projection` without `viewer_can_decide`; it keeps
+  `viewer_is_requester` and `viewer_can_exercise`;
+- replaces `support.request_break_glass`, which inserts the request with
+  `status = 'approved'`, `window_starts_at` at the request and `window_ends_at` 60 minutes
+  later, and emits `support.break_glass_requested.v1` and
+  `support.break_glass_window_opened.v1` (`request_id`, `window_starts_at`,
+  `window_ends_at`). It still writes `request_expires_at` 30 minutes after the request. The
+  closed purpose, the traceable case reference, the refusal of forbidden categories and of a
+  window over one's own data, exercising, closing and the review are unchanged.
+
+`20261115100000_an_admin_finds_a_person_by_name.sql` (decisions 4 and 5):
+
+- on `support.metadata_queries`, drops `not null` from `case_reference`, whose check now
+  accepts null or a traceable code, and adds `text` to `ck_metadata_queries_lookup_kind`;
+- drops `support.search_people(uuid, uuid, text, text, text)`, which took a lookup kind,
+  and creates `support.search_people(p_actor_person_id uuid, p_actor_session_id uuid,
+  p_case_reference text, p_query text, p_limit integer) returns jsonb`, executable only by
+  `allfit_api`. The term is `lower(btrim(query))`, at least two characters; the limit is 1 to
+  25 (`22023` otherwise). It matches part of `lower(display_name)`, `lower(contact_email)`
+  or `contact_phone`, with `\`, `%` and `_` escaped, or the exact person identifier, orders
+  by `lower(display_name)` then id, and answers
+  `{ matches: [{ person_id, display_name, contact_email, contact_phone, account_status }],
+  has_more }`. Each search writes one `support.metadata_queries` row (`lookup_kind =
+  'text'`, `lookup_hash` the sha256 of the lowered term, `result_count`) and one
+  `privacy.access_events` row per person returned (`resource = 'support.person_search'`,
+  purpose `support_diagnosis`, access mode `support_metadata`). A Backoffice session without
+  the admin role gets `42501` and nothing is recorded;
+- replaces `support.v_support_metadata`, appending `display_name`, `contact_email` and
+  `contact_phone`, so `support.person_metadata` returns them; the masked fields stay;
+- replaces `support.person_metadata`, `support.person_payments`,
+  `support.billing_follow_up` and `identity.read_account_recovery` from their latest
+  definitions, changing only the case reference: null or empty is accepted, and one given
+  in free text is refused with `22023 a case reference is a traceable code, never free
+  text`. Starting, resending and cancelling an account recovery still require one.
+
+**What production already holds stays.** Every break-glass file asked for before keeps its
+quorum and length, and the new check accepts both old shapes, so it validates without a
+pre-deploy query. Its approvals stay in `support.break_glass_approvals`, which is
+append-only and which nothing writes any more. A request still pending when the migration
+runs can no longer be approved: it expires 30 minutes after it was asked, and the
+Backoffice shows it as «Pedida antes del cambio, sin abrir». Recorded searches keep their
+lookup kind and case reference.
+
+**Locks.** Replacing the check on `support.break_glass_requests`, and the checks and the
+`not null` on `support.metadata_queries`, takes an `ACCESS EXCLUSIVE` lock on each table
+while the new checks validate. Both tables are small, so it is brief. With
+`lock_timeout = 5s`, a busy table makes the migration fail rather than queue; retry it.
+
+**Deploy order.** The same as in
+[the section above](#an-allfit-admin-holds-every-duty-adr-046): merging runs
+**Deploy AWS**, then dispatch **Deploy Database AWS** right after it finishes. Until the
+migration is applied:
+
+- every person search fails with `503 upstream-unavailable`, because the API calls a
+  `support.search_people` signature that does not exist yet;
+- the person file, payments, the billing follow-up and the recovery read answer
+  `400 invalid-request` without a case reference, because the old functions still require
+  one, so the billing follow-up screen, which now loads without a case, fails. With a case
+  they work, but the person file arrives without `display_name`, `contact_email` and
+  `contact_phone`;
+- no new break-glass window opens: the database still creates the request as `requested`
+  with its old quorum, and the API no longer offers a way to approve it. The Backoffice
+  shows it as «Pedida antes del cambio, sin abrir» and it expires after 30 minutes. A window
+  already open keeps working.
+
+What to watch, read-only:
+
+```sql
+-- Both should be true once the migration is applied.
+select
+  to_regprocedure(
+    'support.decide_break_glass(uuid, uuid, uuid, text, text, uuid, uuid, bytea)'
+  ) is null as approval_retired,
+  to_regprocedure(
+    'support.search_people(uuid, uuid, text, text, integer)'
+  ) is not null as search_by_term;
+
+-- Files asked for since the deploy show 0 approvals and 60 minutes.
+select sensitivity_tier, required_approvals, requested_duration_minutes, status, count(*)
+from support.break_glass_requests
+where requested_at >= now() - interval '1 day'
+group by sensitivity_tier, required_approvals, requested_duration_minutes, status
+order by sensitivity_tier;
+```
+
+**Local tooling.** `packages/db/scripts/approve-local-break-glass.ts` is deleted, and
+`packages/db/scripts/bootstrap-local-operator.ts` no longer makes a third local
+administrator to reach a quorum: the local operator opens their own window.
+
+**Open follow-ups.**
+
+- The `approve_break_glass` duty no longer approves anything; it only still grants reading
+  the whole break-glass tray. Whether to retire or rename it is an owner decision.
+- The search has no trigram index and scans `identity.people`. That is acceptable at the
+  current volume; revisit with `pg_trgm` if it grows.
+- `request_expires_at` is still written for new windows but no longer gates anything.
+- The masked fields of the person file can be removed once no screen reads them.
+
+Tests:
+
+- `T-SUP-BG-SELF-01` (25) covers windows that open at once with 0 approvals and 60 minutes,
+  one `support.break_glass_window_opened.v1` each, a replay that converges, the refusals
+  (forbidden category, own data, missing or invalid purpose, free-text case, a session
+  without the role), that `support.decide_break_glass` no longer exists and the tray offers
+  no decision, that the requester cannot review while the other administrator can, and that
+  1/30 and 2/15 rows stay valid while mixed shapes are refused.
+- `T-SUP-BG-01`, `T-SUP-BGR-01`, `T-PRV-AUD-01`, `T-SUP-BG-03`, `T-SUP-BG-TRAIN-01`,
+  `T-SUP-RECERT-01`, `T-IDN-BODY-01`, `T-IDN-HEALTH-01` and `T-NUT-DISP-01` are rewritten
+  for windows that open on request; `T-SUP-BGR-01` keeps a case approved before ADR-046 to
+  assert that its approver cannot review it. `T-SUP-BG-02` asserts that a holder of
+  `approve_break_glass` reads the whole tray.
+- `T-SUP-SEARCH-02` (27) covers partial name, email and phone, the identifier, `_` and `%`
+  as characters, the page and `has_more`, the evidence per search and per person returned,
+  searches and reads without a case, a free-text case refused, and starting a recovery
+  still needing one. `T-SUP-RLS-03` (35) is rewritten for the search and the person file;
+  `T-SUP-PAY-01`, `T-SUP-BILLING-01` and `T-IDN-RECOVERY-01` now refuse a free-text case
+  instead of a missing one.
+- API: `T-BG-API-01`, `02`, `08`, `09` and `20`; `T-SUP-API-23` to `28`, `46`, `48` and `49`;
+  `T-SUP-UNIT-01` and `02`; `T-IDN-RECOVERY-API-10` reads a recovery without a case.

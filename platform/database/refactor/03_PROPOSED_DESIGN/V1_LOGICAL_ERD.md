@@ -419,8 +419,8 @@ erDiagram
 | `invitation_rate_windows` | `(scope,scope_hash)` | ventanas durables por actor, organización y destinatario hasheado; nunca email/IP en claro |
 | `platform_role_assignments` | `id` | rol base de entrada; brings all thirteen duties since ADR-046; sin autoasignación ni último admin revocado |
 | `platform_duty_assignments` | `id` | persona/deber/vigencia/AAL; máximo 90 días for a granted duty, while one the role brings lasts as long as the role (`basis`, ADR-046); historial sin `DELETE`; autoridad transaccional |
-| `break_glass_requests` | `id` | `A10`, sujeto, categorías, propósito/caso, tier, quorum y duración inmutables; pendiente 30 min, ventana 30/15 min |
-| `break_glass_approvals` | `id` | `UNIQUE (request_id,approver_person_id)`; un rechazo cierra y el quorum abre; conflictos por trigger |
+| `break_glass_requests` | `id` | `A10`, sujeto, categorías, propósito/caso, tier, quorum y duración inmutables; since ADR-046 the request opens a 60-minute window at once with 0 approvals, while files asked for before keep pendiente 30 min, ventana 30/15 min |
+| `break_glass_approvals` | `id` | `UNIQUE (request_id,approver_person_id)`; un rechazo cierra y el quorum abre; conflictos por trigger. Since ADR-046 a historical, append-only record that nothing writes (`support.decide_break_glass` dropped) |
 | `break_glass_events` | `id` | FK compuesta fija solicitud/A10/sujeto; categoría y resultado allowed/denied; visible y reflejado en `access_events` (`IX-27`) |
 
 ## 13. Referencias entre dominios

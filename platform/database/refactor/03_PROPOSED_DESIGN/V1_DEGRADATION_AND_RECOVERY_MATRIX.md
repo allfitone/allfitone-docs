@@ -321,7 +321,7 @@ Alimentan la suite de la Fase 6. Los diez primeros son los escenarios exigidos p
 | `D-22` | Lectura histórica con caso expirado, cerrado o actor distinto | Falla cerrada, no confirma existencia y registra `ACCESS_EVENT` denegado |
 | `D-23` | Restauración anterior al cierre de un caso o revocación `frozen` | Se reaplican cierre y revocación antes de abrir tráfico; ni caché ni read model recuperan la lectura |
 | `D-24` | A10 intenta aprobar; A12 ejercer; actor escribir, pedir categoría prohibida o usar ventana ajena | Falla cerrada; cierra ventanas, suspende deber y abre incidente cuando ADR-026 lo clasifica crítico |
-| `D-25` | No existe quorum o revisor A12 independiente | La solicitud/capacidad permanece cerrada; nunca se reduce quorum ni se habilita autoaprobación |
+| `D-25` | No existe quorum o revisor A12 independiente | La solicitud/capacidad permanece cerrada; nunca se reduce quorum ni se habilita autoaprobación. **Superseded by ADR-046 for the quorum:** a window is self-approved with 0 approvals, so no quorum can be missing. Without an independent reviewer the window still opens, and its review stays owed until someone other than the requester and the subject records it |
 | `D-26` | Restauración anterior al cierre/expiración break-glass | Se reaplica el cierre antes de abrir tráfico; solo el `A10` solicitante podría ejercer una ventana todavía vigente |
 | `D-27` | Escritura viola `IX-01..45` o un guardián diferido falla al `COMMIT` | Se revierte comando, outbox y auditoría; no se degrada a validación de API |
 | `D-28` | Base restaurada sin una clave, FK o trigger de la matriz de integridad | El verificador de catálogo bloquea apertura de tráfico hasta que `IX-01..45` estén completos |

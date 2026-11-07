@@ -114,10 +114,19 @@ Toda solicitud declara exactamente uno:
 
 Una solicitud mixta hereda el nivel más restrictivo. Guidance + intake resulta restringida; cualquier solicitud que incluya `nutrition_media` se rechaza antes de abrir ventana y registra el intento. El servidor calcula `sensitivity_tier`, `required_approvals` y duración máxima; el cliente no los declara.
 
-> **ADR-046 decision 2, decided and pending implementation:** an administrator approves their
-> own window, and every window lasts 60 minutes, whatever its tier. The prohibited categories
-> stay prohibited, and the review stays with someone other than the requester and the
-> subject. Until it ships, the quorum and durations above are what runs.
+> **As built (ADR-046 decision 2, migration
+> `20261115090000_an_admin_opens_their_own_break_glass_window.sql`):** an administrator
+> opens their own window by requesting it, and every window lasts 60 minutes, whatever its
+> tier. `support.break_glass_required_approvals(tier)` returns 0 and
+> `support.break_glass_duration_minutes(tier)` returns 60 for both tiers; the server still
+> derives the tier, the approvals and the duration, and the client still declares none of
+> them. The approvals and durations of the table above (1/30 and 2/15) now describe only the
+> files asked for before, which keep them: `ck_break_glass_requests_derived` accepts those
+> two shapes and the new one (0/60), and refuses mixes such as 0/15 or 0/90. The closed
+> purpose and the traceable `case_reference` are still required, the prohibited categories
+> are still refused before a window exists, a window is never opened over one's own data,
+> and the review stays with someone other than the requester and the subject. Tests:
+> `T-SUP-BG-SELF-01`.
 
 ### 3.3 Actores
 
@@ -126,6 +135,15 @@ Una solicitud mixta hereda el nivel más restrictivo. Guidance + intake resulta 
 - `A12/audit_break_glass`: revisa posteriormente; para el mismo caso no puede ser solicitante ni aprobador.
 
 Todos exigen AAL2 y deber vigente. La falta de personas independientes hace que la capacidad falle cerrada.
+
+**As built since ADR-046:** `A10/request_break_glass` opens the window by requesting it and
+then exercises and closes it. Nobody approves or rejects a window any more:
+`support.decide_break_glass` is dropped and `OP-SUP-002` is retired. The
+`approve_break_glass` duty only still grants reading the whole break-glass tray; whether to
+retire or rename it is an open owner decision. `A12/audit_break_glass` still reviews
+afterwards and is never the requester, the subject or anyone who approved the case before
+ADR-046. Only the review still needs an independent person, so the conflict rules of §3.4
+for an approver apply only to the approvals recorded before.
 
 ### 3.4 Conflictos
 
@@ -190,6 +208,17 @@ UNIQUE (request_id, approver_person_id)
 ```
 
 No usa `UNIQUE (request_id)`. Un rechazo es terminal. Una aprobación parcial no concede acceso.
+
+**As built since ADR-046:** a new request skips `requested`. `support.request_break_glass`
+inserts it with `status = 'approved'`, `window_starts_at` at the request and
+`window_ends_at` 60 minutes later, and emits `support.break_glass_requested.v1` and
+`support.break_glass_window_opened.v1` in the same transaction. It still writes
+`request_expires_at` 30 minutes after the request, which no longer gates anything for a new
+window. From `approved` the machine above is unchanged: closing by the requester or a
+suspension leads to `closed`, and reaching `window_ends_at` to `expired`, with no extension.
+The `requested` and `rejected` branches and §4.3 now describe only files asked for before: a
+request still pending can no longer be approved and expires 30 minutes after it was asked.
+`break_glass_approvals` keeps its historical rows, stays append-only and nothing writes it.
 
 ### 4.4 Ejercicio
 
@@ -259,7 +288,10 @@ table and the rules above apply to a duty granted on its own (`basis = 'granted'
 90-day end and no recertification, are granted by whoever granted the role, follow the role
 and are revoked when it is withdrawn. The «tener uno no implica el otro» rule no longer holds
 for an administrator, and the bootstrap ceremony grants only the two crossed roles, which
-bring `manage_platform_access` with the rest.
+bring `manage_platform_access` with the rest. Since ADR-046 decision 2
+(migration `20261115090000_an_admin_opens_their_own_break_glass_window.sql`),
+`approve_break_glass` approves nothing; the review of every exercised window by someone
+other than the requester and the subject is unchanged.
 
 ## 6. Abuso e incidentes
 
@@ -330,6 +362,16 @@ Ventana vencida, categoría fuera del alcance aprobado o quorum incompleto produ
 | `T-BGG-10` | Todo caso ejercido recibe revisión independiente dentro de las 24 horas corridas siguientes al primer ejercicio. |
 | `T-BGG-11` | Intento de escritura, `nutrition_media`, OP-NUT-013/storage u otra categoría prohibida cierra ventanas, suspende deber y abre incidente. |
 | `T-BGG-12` | La persona ve actor, propósito, instante, categoría nutricional y resultado de cada ejercicio que la afecta. |
+
+**As built since ADR-046.** Decision 2 replaces the quorum and duration cases: `T-BGG-01`
+to `T-BGG-04`, and the «A10 no aprueba» half of `T-BGG-07`, now hold only for files asked for
+before. `T-SUP-BG-SELF-01` asserts that a request opens a 60-minute window at once with 0
+approvals whatever its tier, that forbidden categories, one's own data, a missing or invalid
+purpose and a free-text case are still refused, that `support.decide_break_glass` no longer
+exists, that the requester cannot review while the other administrator can, and that the
+1/30 and 2/15 rows from before stay valid. Decision 4 replaces the name and contact half of
+`T-DUTY-07`: the person search and the person file now show the full name and contact
+(`T-SUP-SEARCH-02`, `T-SUP-RLS-03`), while personal content stays out.
 
 ## 8. Resultado
 
