@@ -259,6 +259,15 @@ administradores distintos del sujeto. No se recupera el secreto anterior: se
 revoca factor, intentos y sesiones, se conserva evidencia y el próximo login
 enrola otro TOTP.
 
+**Correction (ADR-046, *A stale ceremony*).** Neither workflow nor their protected
+environments exist; the code repository's workflows are `ci.yml`, `deploy-aws.yml`
+and `deploy-database-aws.yml`. The bootstrap of step 5 is the `bootstrap` command of
+the migrator task (`infra/docker/migrator.sh`), described in
+[Backoffice Authentication Operations](../../products/backoffice/AUTHENTICATION_OPERATIONS.md).
+No migrator command runs `identity.recover_backoffice_totp_factor`, and it needs two
+administrators other than the subject, which a team of two administrators cannot
+provide.
+
 ## Studio team-invitation rollout
 
 `OP-ORG-005` crea la invitación, su intención de membresía y el evento
@@ -1158,3 +1167,112 @@ Tests:
   publication in both orders, two creates with the same name, and two edits of
   the same revision.
 - `T-ORG-TEAM-DIRECTORY-01` now counts 23 capabilities and 43 role grants.
+
+## An Allfit admin holds every duty (ADR-046)
+
+Migration `20261114090000_an_admin_holds_every_duty.sql` makes the `allfit_admin`
+role bring all thirteen Backoffice duties for as long as it lasts, and lengthens the
+Backoffice session to 60 idle minutes and 12 hours (ADR-046 decisions 1 and 3). It
+does six things:
+
+- adds `basis` (`granted` by default, or `admin_role`) to
+  `support.platform_duty_assignments`, with `ck_platform_duty_assignments_basis`, and
+  replaces `ck_platform_duty_assignments_window` with a check by basis: a `granted`
+  duty lasts at most 90 days; an `admin_role` one ends at `9999-12-31 00:00:00+00`
+  with `reason_code = 'admin_role'`;
+- rebuilds `uidx_platform_duty_assignments_current` on
+  `(person_id, duty_code, basis)`;
+- adds `support.standing_platform_duties()` and the `AFTER INSERT` trigger
+  `trg_platform_role_assignments_insert_grant_duties`, whose function
+  `support.grant_standing_platform_duties()` inserts the thirteen duties for every
+  new active role, granted by whoever granted the role;
+- backfills the same thirteen duties for every active administrator;
+- replaces `support.preserve_platform_duty_history`, which now freezes `basis` and
+  refuses to suspend, expire, recertify or, while the role is active, revoke an
+  `admin_role` duty; `support.assign_platform_duty`, which converges on a duty held
+  in any basis; `support.platform_duty_assignment_projection`, which returns
+  `basis`; and `support.bootstrap_backoffice_administrators`, which keeps its seven
+  arguments but inserts only the two crossed roles and ignores `p_valid_to`;
+- adds `access_control.backoffice_idle_limit()` (60 minutes) and
+  `access_control.backoffice_session_lifetime()` (12 hours), and rewrites
+  `access_control.has_platform_duty`, `access_control.has_platform_role`,
+  `access_control.holds_backoffice_duty`, `identity.expire_backoffice_sessions`,
+  `identity.complete_backoffice_authentication` and
+  `identity.load_backoffice_access_session` from their latest definitions, changing
+  only the limit.
+
+**What production already holds stays.** The temporary duties the administrators
+hold today, `manage_platform_access` included, live beside the standing ones and
+lapse on their own date. Nothing is rewritten and nobody is recorded as having
+revoked them. The old window check already bounded every existing row to 90 days,
+so the new check validates without a pre-deploy query. The backfill gives every
+active administrator the thirteen standing duties whether or not their temporary
+ones have lapsed, so applying the migration also restores access lost to a lapse.
+The backfill queues no `support.platform_duty_granted.v1`; every role granted
+afterwards queues one per duty.
+
+**Locks.** Adding the column and the checks takes an `ACCESS EXCLUSIVE` lock on
+`support.platform_duty_assignments` while the window check validates, and the
+unique index is rebuilt without `CONCURRENTLY`. The table only holds the
+administrators' duties, so both are brief. Creating the trigger locks
+`support.platform_role_assignments` for an instant. With `lock_timeout = 5s`, a busy
+table makes the migration fail rather than queue; retry it.
+
+**Deploy order.** Merging runs **Deploy AWS**, which rolls out the API and the
+Backoffice web and registers this commit's migrator. Then dispatch **Deploy Database
+AWS** right after it finishes. Until the migration is applied:
+
+- PostgreSQL still ends a session after 15 idle minutes or 8 hours. The cookie
+  already lasts 12 hours and `GET /backoffice/v1/session` already reports an idle
+  deadline 60 minutes after the last activity, so the countdown is wrong, but the
+  session still ends when the database says so;
+- the duty inventory carries no `basis`, so the Backoffice shows every duty with its
+  dates and actions, and it no longer offers a grant form. A temporary duty that
+  lapses in that gap can only be granted again through the API, by someone who
+  still holds `manage_platform_access`. Applying the migration restores every
+  active administrator's duties anyway.
+
+**The bootstrap ceremony** no longer takes `DUTY_DAYS`. `infra/docker/migrator.sh
+bootstrap` passes `null` for the validity argument, which the function ignores, and
+a `DUTY_DAYS` left in the task's environment neither bounds nor blocks it.
+
+What to watch, read-only:
+
+```sql
+-- Every active administrator holds the thirteen duties through the role.
+select role_assignment.person_id, count(duty.id) as standing
+from support.platform_role_assignments as role_assignment
+left join support.platform_duty_assignments as duty
+  on duty.person_id = role_assignment.person_id
+ and duty.basis = 'admin_role'
+ and duty.status = 'active'
+where role_assignment.platform_role = 'allfit_admin'
+  and role_assignment.status = 'active'
+group by role_assignment.person_id
+having count(duty.id) <> 13;
+```
+
+It should return no rows.
+
+Tests:
+
+- `T-SUP-STANDING-01` (30) covers the thirteen duties from the ceremony and from a
+  role granted in Backoffice, their grantor and mode, a session without the role,
+  converging grants, the refusal to suspend, revoke, recertify or rewrite a standing
+  duty, the window by basis, a temporary duty beside a standing one, 59 and 61 idle
+  minutes in the duty and role checks, the policy helper and the session load, and
+  withdrawing the role.
+- `T-IDN-BACKOFFICE-SWEEP-01` (10) asserts 61 idle minutes against 59, and 12 hours,
+  for the worker's sweep.
+- `T-IDN-BACKOFFICE-CEREMONIES-01` (17) asserts that the crossed roles bring 26
+  crossed standing duties whatever `p_valid_to` says, and refuses one person in
+  both seats.
+- `T-SUP-RECERT-01` (13) recertifies and lapses `granted` duties, as production
+  still holds them.
+- The pgTAP suites that denied an admin without a given duty now deny a Backoffice
+  session without an active role; the allow case is unchanged.
+- `migrator-bootstrap.test.ts` checks that the command needs only `SUBJECT_A`,
+  `SUBJECT_B` and `CEREMONY_REFERENCE`, and that a leftover `DUTY_DAYS` changes
+  nothing.
+- The API tests assert the session cookie's `Max-Age=43200` and an idle deadline 60
+  minutes after the last activity.

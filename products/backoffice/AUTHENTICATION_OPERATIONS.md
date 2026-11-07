@@ -72,7 +72,7 @@ Con el gate apagado, sesión, logout, verificación de intentos ya abiertos, res
 - `POST /backoffice/v1/auth/logout` acepta `manual`, `inactivity` o `recovery`, no redirige y siempre responde `204`.
 - `POST /backoffice/v1/auth/password-resets` siempre responde `202`; la API descarta URL y token devueltos por WorkOS.
 
-Todas las rutas requieren `Origin` exacto, responden `Cache-Control: no-store` y `Referrer-Policy: no-referrer`, y nunca registran email, contraseña, TOTP, QR, clave manual, factor/challenge ID o tokens. La sesión `allfit_backoffice_session` usa path `/backoffice/v1`, inactividad máxima de quince minutos y vigencia absoluta de ocho horas.
+Todas las rutas requieren `Origin` exacto, responden `Cache-Control: no-store` y `Referrer-Policy: no-referrer`, y nunca registran email, contraseña, TOTP, QR, clave manual, factor/challenge ID o tokens. The `allfit_backoffice_session` cookie uses path `/backoffice/v1` and `Max-Age=43200`. The session ends after 60 minutes without activity or 12 hours in all (ADR-046); PostgreSQL enforces both through `access_control.backoffice_idle_limit()` and `access_control.backoffice_session_lifetime()`, and `GET /backoffice/v1/session` reports `inactivity_expires_at` as the last activity plus 60 minutes.
 
 ## Límites en Vercel
 
@@ -86,17 +86,32 @@ El rechazo es `429 rate-limited` con `Retry-After`. Las métricas son contadores
 
 ## Bootstrap protegido
 
-1. Aplicar las migraciones con el workflow protegido normal.
-2. Crear el environment de GitHub `backoffice-bootstrap-production` con `prevent self-review`, reviewers autorizados y `SUPABASE_ADMIN_DATABASE_URL` sólo en ese environment.
-3. Ejecutar `backoffice-bootstrap.yml` desde `main` con dos personas activas, sus dos subjects WorkOS, issuer exacto, vencimiento del deber menor o igual a 90 días y una referencia de ceremonia sin PII.
-4. Verificar que las cuentas quedaron vinculadas, existen dos `allfit_admin` cruzados y cada persona recibió `manage_platform_access` otorgado por la otra.
-5. Retirar o rotar la credencial administrativa al terminar. El workflow no sustituye el alta de una persona ni crea cuentas WorkOS.
+The `backoffice-bootstrap.yml` workflow and the `backoffice-bootstrap-production`
+environment this section used to describe do not exist (ADR-046, *A stale ceremony*). The
+ceremony is the `bootstrap` command of the migrator task, `infra/docker/migrator.sh`:
 
-El iniciador y el aprobador independiente del environment constituyen las dos personas operativas; `prevent self-review` es obligatorio. No existe endpoint, seed ni función concedida a runtime para repetir el bootstrap.
+1. Apply the migrations as usual (**Deploy Database AWS**).
+2. Each of the two people signs in to Studio once, so their WorkOS account already has a
+   person; the command looks both people up through those accounts.
+3. Run the migrator task on ECS with the command `bootstrap` and three environment
+   overrides: `SUBJECT_A` and `SUBJECT_B`, the two WorkOS user ids, and
+   `CEREMONY_REFERENCE`, the approving ticket without personal data. The header of
+   `infra/docker/migrator.sh` gives the `aws ecs run-task` call. Since ADR-046 there is no
+   `DUTY_DAYS`; a value left over from an old runbook is ignored.
+4. The command resolves both people, switches to `allfit_migrator` and calls
+   `support.bootstrap_backoffice_administrators` in one transaction. It links the accounts
+   and grants each person `allfit_admin`, granted by the other; each role brings the
+   thirteen duties, granted by the other person and with no end of their own.
+5. Check that both accounts are linked, that two crossed `allfit_admin` roles exist and that
+   each person holds thirteen duties with `basis = 'admin_role'`.
+
+The task connects with the database master credential. No endpoint, seed or function
+granted to the runtime can repeat the bootstrap. The command does not create people or
+WorkOS accounts.
 
 ## Recuperación de un autenticador perdido
 
-Usar `backoffice-totp-recovery.yml` desde `main` y el environment protegido `backoffice-totp-recovery-production`. Deben intervenir dos administradores distintos del sujeto, ambos con `manage_platform_access` vigente. La función bloquea el factor, sesiones, intentos y roles relevantes; registra evidencia inmutable y emite limpieza al worker. El próximo password correcto inicia un enrolamiento nuevo.
+**Not runnable as written (see ADR-046, *A stale ceremony*):** the `backoffice-totp-recovery.yml` workflow and its environment do not exist, and no migrator command runs the recovery. The function `identity.recover_backoffice_totp_factor` exists and requires two administrators other than the subject, both holding `manage_platform_access`; with two administrators in all, it cannot run for either of them. The rest of this section describes what the function does. La función bloquea el factor, sesiones, intentos y roles relevantes; registra evidencia inmutable y emite limpieza al worker. El próximo password correcto inicia un enrolamiento nuevo.
 
 El proceso nunca muestra ni recupera la clave TOTP anterior. Cambiar la contraseña no elimina por sí solo el factor activo; un `password_reset.succeeded` sí revoca sesiones Studio/Backoffice e intentos pendientes.
 
@@ -117,7 +132,7 @@ Validar el cron con `Authorization: Bearer {CRON_SECRET}`: sin bearer debe respo
 2. Confirmar que password desconocido, password erróneo, persona inactiva y rol ausente devuelven el mismo `401`.
 3. En Preview, activar el gate y enrolar un QR real. Verificar un TOTP real y comprobar que sólo entonces aparece una sesión AAL2.
 4. Repetir el login con el factor existente, probar cuatro códigos incorrectos y confirmar que el quinto termina el intento.
-5. Confirmar inactividad de 15 minutos, absoluto de 8 horas, logout repetido y revocación del rol durante un login.
+5. Confirm 60 idle minutes, 12 absolute hours (ADR-046), repeated logout and role withdrawal during a login.
 6. Solicitar reset de una dirección conocida y una desconocida; ambas peticiones responden `202`. Completar el correo alojado en `*.authkit.app` y comprobar revocación de sesiones sin pérdida del TOTP.
 7. Probar recuperación protegida de un factor y el enrolamiento posterior.
 8. Activar Producción sin frontend y ejecutar el mismo smoke test mediante el contrato HTTP.

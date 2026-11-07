@@ -37,11 +37,12 @@ técnico.
 
 ## 2. Quién usa el Backoffice
 
-`allfit_admin` es la habilitación base para que una persona del equipo de Allfit
-pueda iniciar sesión. **No concede por sí sola acceso a datos ni capacidad para
-ejecutar acciones.** Cada operación exige un deber de plataforma vigente,
-otorgado por otra persona, con vigencia máxima de 90 días y el nivel de
-autenticación requerido.
+`allfit_admin` lets a person on the Allfit One team sign in to the Backoffice and,
+since ADR-046, brings all thirteen platform duties for as long as the person holds
+it. Every operation still checks, in its own transaction, the duty it names and the
+required authentication level. Without the role, a Backoffice session can do
+nothing. A duty granted on its own lasts at most 90 days; only temporary duties
+granted before ADR-046 are of that kind.
 
 | Modo de actuación | Deberes principales | Límite |
 | --- | --- | --- |
@@ -53,6 +54,11 @@ Una persona puede recibir más de un deber, pero la separación se comprueba en
 cada caso: nadie se autoasigna; solicitante, aprobadores y revisor son personas
 distintas cuando el flujo lo exige; un deber vencido o revocado corta el acceso
 de inmediato.
+
+Since ADR-046 an administrator acts in all three modes. Self-approved break-glass,
+partial person search with full name and contact, and an optional case reference
+are decided and pending implementation (ADR-046 decisions 2, 4 and 5); the stories
+below still describe what runs for them.
 
 Dos aclaraciones de nombre:
 
@@ -108,8 +114,8 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 2. El correo debe estar verificado y debo ser una persona activa con rol base `allfit_admin` vigente; si falta cualquiera de estas condiciones **no entro**, aunque la cuenta exista.
 3. Correo, contraseña, cuenta, persona o rol inválidos producen la misma respuesta. Un código incorrecto no revela más información y el intento termina al quinto fallo.
 4. La sesión sólo nace después de que WorkOS confirme el challenge TOTP y PostgreSQL materialice AAL2 para ese `sid`. No se infiere AAL2 de claims, grupos, `auth_time`, rol o Application.
-5. La sesión del Backoffice es independiente de la de Allfit Studio: entrar a uno no me mete al otro. Caduca a las ocho horas como máximo y a los quince minutos de inactividad.
-6. Entrar no habilita ninguna operación: cada pantalla y acción comprueba dentro de su transacción un deber vigente y `required_aal=2`.
+5. La sesión del Backoffice es independiente de la de Allfit Studio: entrar a uno no me mete al otro. It expires after 12 hours at most and after 60 minutes of inactivity (ADR-046).
+6. Each screen and action checks, inside its transaction, a duty in force and `required_aal=2`. Since ADR-046 the role brings every duty, so an administrator who signs in holds them all.
 7. Esta evidencia V1 combina contraseña y TOTP. No es resistente al phishing y no se presenta como equivalencia integral a una oferta AAL2 moderna con WebAuthn/passkeys.
 8. El navegador reanuda un challenge o enrolamiento pendiente después de recargar, pero nunca persiste correo, contraseña, código, QR, clave TOTP ni identidad del proveedor.
 9. Mientras se comprueba la sesión o hay una respuesta indeterminada, el contenido autenticado permanece desmontado. Una respuesta perdida tras verificar TOTP se resuelve comprobando la sesión antes de repetir el mismo comando idempotente.
@@ -126,7 +132,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 1. Al cerrar sesión se revoca primero la sesión opaca local, se elimina su cookie host-only y se solicita la revocación del `sid` exacto en WorkOS.
 2. Repetir el cierre, cerrar una sesión ya ausente o usar `manual`, `inactivity` o `recovery` produce el mismo resultado seguro y no redirige a Hosted AuthKit.
-3. La sesión caduca sola tras quince minutos de inactividad o al cumplir ocho horas, y el worker reintenta cualquier revocación externa parcial.
+3. The session expires on its own after 60 minutes of inactivity or 12 hours (ADR-046), and the worker retries any partial external revocation.
 4. Retirar el rol base, recuperar el factor o cambiar la contraseña corta también las sesiones Backoffice y los intentos pendientes.
 5. El navegador desmonta inmediatamente el contenido autenticado, sincroniza el cierre entre pestañas y revalida al recuperar visibilidad o restaurar el historial. Si no puede confirmar el cierre, muestra una recuperación segura sin datos del operador.
 
@@ -204,6 +210,8 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 3. Si no hay resultados se dice claramente; no aparece una lista vacía sin explicación.
 4. La búsqueda exige `diagnose_support_metadata`, referencia de caso y queda registrada incluso si no encuentra resultados.
 
+*Pending implementation (ADR-046 decisions 4 and 5):* search by part of a name, an email or a phone; administrators see full name and contact; every search is logged with one access event per person returned; the case reference becomes optional.
+
 ### HU-BO-007 — Ver el estado operativo de una persona
 
 **Como** integrante del equipo
@@ -218,6 +226,8 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 2. Veo que existen perfil, relaciones, plan, Pro y permisos, junto con sus estados y fechas; no veo objetivos, contenido, pagos ni destinatarios desde esta ficha.
 3. Para resolver un caso de entrenamiento uso `HU-BO-008`; para cuerpo, salud o nutrición uso `HU-BO-009`. Ninguna pantalla amplía silenciosamente la categoría aprobada.
 4. La ficha exige `diagnose_support_metadata`, referencia de caso y registra la consulta.
+
+*Pending implementation (ADR-046 decisions 4 and 5):* the file shows full name and contact, and the case reference becomes optional.
 5. La ficha carga aunque falten datos y representa desconocido como vacío, nunca como cero o falso.
 
 ### HU-BO-008 — Ver el entrenamiento de una persona
@@ -237,6 +247,8 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 5. Sólo puedo consultar mediante mi propia ventana break-glass estándar, aprobada para esa persona, caso, propósito y categorías; dura como máximo 30 minutos.
 6. Cada lectura revalida AAL2, deber, quorum, categoría y vigencia, y registra resultado permitido o denegado antes de devolver contenido.
 
+*Pending implementation (ADR-046 decision 2):* I open the window myself with a closed purpose, it lasts 60 minutes, and the other administrator reviews it afterwards.
+
 ### HU-BO-009 — Ver cuerpo, salud y nutrición
 
 **Como** integrante del equipo
@@ -253,6 +265,8 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 4. La consulta requiere una ventana break-glass restringida, dos aprobadores distintos y una duración máxima de 15 minutos.
 5. Fotos, archivos y `nutrition_media` se rechazan antes de abrir la ventana; conocer que existe un medio no concede URL, referencia de storage ni bytes.
 6. Cada lectura revalida AAL2, deber, quorum, categoría y vigencia, y registra resultado permitido o denegado antes de devolver contenido.
+
+*Pending implementation (ADR-046 decision 2):* the restricted window is self-approved and lasts 60 minutes like any other; photos, files and `nutrition_media` stay closed.
 
 ### HU-BO-010 — Ayudar a corregir un dato de identidad
 
@@ -616,10 +630,10 @@ nadie verifica, esa función no se puede usar.
 
 **Criterios**
 
-1. El rol `allfit_admin` permite iniciar sesión, pero no concede ninguna operación sin deber vigente.
+1. The `allfit_admin` role lets a person sign in and brings all thirteen duties for as long as it lasts (ADR-046). Withdrawing it revokes them.
 2. **No puedo asignarme ni el rol ni un deber a mí mismo.** Administrar acceso exige `manage_platform_access` y AAL2.
 3. **Nunca puede quedar el Backoffice sin ningún administrador base activo.**
-4. Cada deber tiene catálogo cerrado, vigencia máxima de 90 días, AAL requerido y recertificación independiente.
+4. Every duty belongs to a closed catalogue and requires AAL2. A duty held through the role has no end of its own and is never suspended, revoked or recertified on its own; it follows the role. A temporary duty granted before ADR-046 keeps its 90-day end and its recertification until it lapses.
 5. Quitar el rol revoca la sesión; suspender, revocar o vencer un deber corta inmediatamente sus operaciones y cierra ventanas break-glass del solicitante afectado.
 6. El historial de roles y deberes se conserva; retirar no borra ni reescribe.
 
@@ -634,7 +648,7 @@ nadie verifica, esa función no se puede usar.
 **Criterios**
 
 1. Veo quién tiene rol base hoy y quién lo tuvo antes.
-2. Veo sus deberes vigentes, suspendidos, vencidos o revocados, con vigencia, AAL, otorgante y última recertificación.
+2. Veo sus deberes vigentes, suspendidos, vencidos o revocados, con vigencia, AAL, otorgante y última recertificación. A duty held through the role reads as permanent and follows the role (ADR-046).
 3. La consulta exige `manage_platform_access` o `audit_platform_access`; ninguna organización ni persona externa puede verla.
 
 ### HU-BO-030 — Ver el registro de accesos

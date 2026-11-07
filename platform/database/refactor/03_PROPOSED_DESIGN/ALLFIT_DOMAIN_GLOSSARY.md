@@ -745,9 +745,9 @@ erDiagram
 | Soporte solicitante (`A10`) | Personal de plataforma sin acceso ordinario a contenido; diagnostica sobre metadatos, solicita y solo puede ejercer su propia ventana aprobada |
 | Verificador de credenciales (`A11`) | Actor de plataforma con deber separado y temporal que contrasta una credencial profesional con registro oficial o emisor; no convierte el perfil en verificado |
 | Aprobador de seguridad/privacidad (`A12`) | Actor de plataforma distinto que aprueba/rechaza o revisa break-glass; no ejerce la ventana ni revisa un caso que aprobó |
-| `allfit_admin` | **Rol base de una persona del equipo de Allfit**, no un rol PostgreSQL. Sólo permite iniciar sesión en Backoffice; no concede lecturas ni acciones sin un deber temporal vigente |
+| `allfit_admin` | **Rol base de una persona del equipo de Allfit**, no un rol PostgreSQL. Since ADR-046 it lets the person sign in to Backoffice and brings all thirteen platform duties for as long as the person holds it. Reading a person's content still needs a break-glass window |
 | Roles `allfit_*` de base de datos | `allfit_api`, `allfit_support`, `allfit_curation`, `allfit_worker_*` y los demás son **roles de conexión de PostgreSQL**, no personas. Comparten prefijo con `allfit_admin` por convención histórica, pero viven en capas distintas y no deben confundirse |
-| Admin | Siempre calificar. **`admin` de organización** administra sedes, membresías e invitaciones de un gimnasio y **no ve datos fitness**; **`allfit_admin`** es la habilitación base del equipo de Allfit y tampoco concede categorías por sí sola |
+| Admin | Siempre calificar. **`admin` de organización** administra sedes, membresías e invitaciones de un gimnasio y **no ve datos fitness**; **`allfit_admin`** es la habilitación base del equipo de Allfit; since ADR-046 it brings every platform duty, but no content category without break-glass |
 | Comida registrada | Ingesta manual personal; no recomendación, diagnóstico ni catálogo de alimentos |
 | Guía nutricional | Objetivos versionados propuestos por profesional verificado y activados solo por decisión personal |
 | Foto nutricional | Único medio opcional de una comida; requiere `nutrition_media` además de `nutrition_intake` |

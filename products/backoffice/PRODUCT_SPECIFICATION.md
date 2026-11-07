@@ -6,6 +6,14 @@
 
 Este documento define el propósito, los límites y la experiencia operativa de Allfit Backoffice. Las [historias de usuario](USER_STORIES.md) detallan el comportamiento verificable y [ADR-028](../../platform/database/refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md) es la fuente normativa para autorización, separación de deberes y break-glass.
 
+> **[ADR-046](../../platform/database/refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md#adr-046-an-allfit-admin-acts-with-the-full-authority-of-the-platform)
+> partially supersedes ADR-028 (7 November 2026).** Built: `allfit_admin` holds all thirteen
+> duties for as long as the role lasts, and the session lasts 60 idle minutes and 12 hours.
+> Decided and pending implementation: self-approved break-glass windows of 60 minutes for
+> every tier, person search by partial name, email or phone with full name and contact, and
+> an optional case reference for support reads. Sections 4.2 and 5 still describe what runs
+> until those ship.
+
 ## 1. Propósito
 
 Allfit Backoffice es el producto interno desde el cual el equipo autorizado de Allfit puede observar, asistir y gobernar el ecosistema sin apropiarse de la operación de las personas, profesionales u organizaciones.
@@ -14,7 +22,7 @@ Su promesa es:
 
 > **Resolver operaciones de plataforma con el mínimo acceso necesario, evidencia completa y separación de responsabilidades.**
 
-No es un panel con acceso irrestricto a la base de datos ni una versión privilegiada de Studio o Space. Cada capacidad corresponde a un deber explícito, temporal y auditable.
+No es un panel con acceso irrestricto a la base de datos ni una versión privilegiada de Studio o Space. Each capability corresponds to an explicit, auditable duty; since ADR-046 an administrator holds all of them through the role.
 
 ## 2. Lugar dentro del ecosistema
 
@@ -30,13 +38,13 @@ Backoffice no crea otra copia de personas, organizaciones, pagos o contenido. Co
 
 ## 3. Quién puede utilizarlo
 
-`allfit_admin` es únicamente la habilitación base para iniciar sesión mediante la WorkOS Application exclusiva de Backoffice. No concede lectura ni escritura.
+`allfit_admin` lets a person sign in through the Backoffice's own WorkOS Application and, since ADR-046, brings all thirteen platform duties for as long as the person holds it. Without it, a Backoffice session can do nothing.
 
-El login V1 no usa Hosted AuthKit: la API autentica correo y contraseña con la Application de Backoffice, exige email verificado y completa un challenge TOTP mediante la API MFA componible de WorkOS. PostgreSQL crea una sesión host-only sólo después de materializar esa prueba como `assurance_level=2` y `authentication_method=password_totp` para el `sid` exacto. La sesión dura ocho horas como máximo y quince minutos sin actividad. Roles, permisos, organizaciones, `authenticationMethod` y `auth_time` del proveedor no autorizan nada.
+El login V1 no usa Hosted AuthKit: la API autentica correo y contraseña con la Application de Backoffice, exige email verificado y completa un challenge TOTP mediante la API MFA componible de WorkOS. PostgreSQL crea una sesión host-only sólo después de materializar esa prueba como `assurance_level=2` y `authentication_method=password_totp` para el `sid` exacto. The session lasts at most 12 hours and 60 minutes without activity (ADR-046). Roles, permisos, organizaciones, `authenticationMethod` y `auth_time` del proveedor no autorizan nada.
 
 La combinación contraseña + TOTP constituye la evidencia AAL2 interna de V1, pero no es resistente al phishing. Allfit no declarará equivalencia integral con una oferta AAL2 moderna hasta incorporar WebAuthn/passkeys. La recuperación de contraseña sí usa la página alojada y el correo predeterminado de WorkOS en `*.authkit.app`; `auth.allfit.one` queda diferido como configuración y branding, no como dependencia contractual.
 
-Cada operación exige AAL2 y un deber temporal vigente, otorgado por otra persona durante un máximo de 90 días:
+Every operation requires AAL2 and the duty it names, checked in its own transaction. An administrator holds every duty through the role, with no end of its own and no recertification; a duty granted on its own (only temporary duties from before ADR-046) lasts at most 90 days:
 
 | Modo | Responsabilidad | Límite principal |
 | --- | --- | --- |
@@ -59,6 +67,7 @@ Los modos describen el deber ejercido; no son roles enviados por el cliente, rol
 
 - Búsqueda exacta por identificador o contacto con referencia de caso.
 - Contacto enmascarado y estado operativo sin exploración por nombre.
+- *Pending implementation (ADR-046 decisions 4 and 5):* search by partial name, email or phone, full name and contact for administrators, every search logged with one access event per person returned, and an optional case reference.
 - Acciones dedicadas para reenviar verificaciones, recuperaciones o invitaciones.
 - Inicio de correcciones de identidad sin modificar directamente los datos de la persona.
 - Acceso excepcional a categorías aprobables únicamente mediante break-glass.
@@ -94,7 +103,7 @@ Verificar credenciales y curar catálogo son deberes independientes. Ninguno hab
 
 ### 4.6 Equipo interno y auditoría
 
-- Otorgar o revocar el rol base y los deberes de plataforma sin autoasignación.
+- Grant or withdraw the base role without self-granting it. Since ADR-046 the role brings every duty and withdrawing it revokes them; a duty held through the role is not suspended, revoked or recertified on its own.
 - Consultar quién tiene acceso, quién lo otorgó, su vigencia y su estado.
 - Auditar accesos permitidos y denegados.
 - Diagnosticar problemas sin ampliar el contenido visible.
@@ -113,6 +122,7 @@ El soporte ordinario no puede leer entrenamiento, cuerpo, salud, nutrición o me
 
 - Entrenamiento e historial previo: categoría estándar, un aprobador independiente y máximo 30 minutos.
 - Cuerpo, salud y `nutrition_intake`: categoría restringida, dos aprobadores distintos y máximo 15 minutos.
+- *Pending implementation (ADR-046 decision 2):* every window is self-approved with a closed purpose and lasts 60 minutes, whatever its tier; every read is still logged and visible to the person, and the other administrator reviews it afterwards.
 - `nutrition_media`, archivos, identidad o contacto completos, secretos, pagos detallados, raw de sensores y notas privadas: categorías no aprobables.
 
 Solicitante, aprobadores y revisor deben ser personas distintas cuando corresponda. Break-glass sólo permite lectura desde proyecciones cerradas; nunca concede escritura, exportación masiva, acceso a storage o uso de una ventana ajena.
@@ -123,7 +133,7 @@ Toda lectura sensible permitida o denegada se registra antes de devolver conteni
 
 ### El rol base no implica privilegio
 
-Entrar al producto y estar autorizado para una operación son decisiones separadas.
+Entrar al producto y estar autorizado para una operación son decisiones separadas. **Superseded by ADR-046:** the base role brings every duty, so for an administrator they are the same decision. Each operation still checks its duty in its own transaction.
 
 ### El soporte utiliza la mínima información
 
@@ -131,7 +141,7 @@ La experiencia comienza con metadatos operativos y escala sólo mediante una ope
 
 ### Nadie controla todo el flujo sensible
 
-Asignación, solicitud, aprobación, ejercicio y revisión conservan actores independientes.
+Asignación, solicitud, aprobación, ejercicio y revisión conservan actores independientes. *Pending implementation (ADR-046 decision 2):* an administrator approves and exercises their own window; the review stays with someone other than the requester and the subject.
 
 ### La evidencia no se borra
 
@@ -178,3 +188,5 @@ Se observan además:
 ## Definición final
 
 > **Allfit Backoffice es el producto interno de Allfit One para observar, asistir y gobernar la plataforma mediante deberes temporales, operaciones minimizadas, separación de responsabilidades y evidencia auditable, sin suplantar a las personas ni a las organizaciones.**
+
+Since ADR-046 the duties of an administrator are not temporary and are not split among administrators; the auditable evidence and the refusal to act as people or organizations stay.
