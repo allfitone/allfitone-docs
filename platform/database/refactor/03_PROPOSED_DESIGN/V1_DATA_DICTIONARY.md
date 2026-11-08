@@ -1332,6 +1332,7 @@ por eso son dos columnas: un código no se muestra y una frase no se consulta.
 - **Consultas / índices:** `(status, display_order, code)`.
 - **Retención:** permanente; deprecar evita nuevas declaraciones y conserva referencias existentes.
 - **Eventos:** ninguno.
+- **As built (STUDIO-61..65):** migration `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql` adds `nutrition_professional` («Profesional en nutrición», `published`, display order 40), the credential `OP-NUT-012` requires. A credential of that type is in force when it is `active`, not past `expires_on`, and its latest verification is `verified` inside `valid_from <= now < valid_to` (`identity.effective_credential_verification`).
 
 ### 8.15 `catalog.muscles`
 
@@ -2393,6 +2394,19 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Índices:** únicos anteriores + `(person_id,status)` + `(goal_set_id,created_at DESC,id DESC)` + `(origin_relationship_id,created_at DESC,id DESC)`.
 - **Retención:** mientras cuenta activa o hasta borrado; frozen consulta el mismo dato, sin snapshot.
 - **Eventos:** `nutrition.goal_version_proposed.v1`, `nutrition.goal_version_activated.v1`, `nutrition.goal_proposals_cancelled.v1`.
+- **As built (STUDIO-61..65):** migration `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql`.
+  - **Professional rows:** a professional version stores the `credential_verification_id` it was proposed under, and `goal_versions_insert_proposal` admits it only with that verification in force for its author (`IX-31`).
+  - **Statuses:** a newer proposal of the same relationship moves the waiting one to `superseded`. Ending the relationship moves it to `cancelled`, with `cancelled_at`.
+  - **Studio reads** go through policies under contract scopes, not through views:
+    - `nutrition_review` admits this relationship's versions and her active one;
+    - `nutrition_goal_proposal` admits the rows the command writes;
+    - `relationship_detachment` admits the cancellation;
+    - `frozen_history` admits what a case reads.
+  - **Events:** `nutrition.goal_proposals_cancelled.v1` is not written.
+  - **Scope rules:** `nutrition_guidance` v2 (`packages/db/scripts/v1-scope-rules.ts`) offers `goal_sets`, `goal_versions` and `goal_targets` up to `contribute`. It keeps `goal_decisions` and these fields historical:
+    - on versions: `version_number`, `origin`, `status`, `rationale`, `author_person_id`, `origin_relationship_id`, `created_at`, `activated_at` and `cancelled_at`;
+    - on targets: every target field.
+  - **Publishing v2:** a curator publishes it from Backoffice; v1 grants stay read-only.
 
 ### 10A.7 `nutrition.goal_targets`
 

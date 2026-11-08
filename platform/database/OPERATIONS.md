@@ -1583,7 +1583,8 @@ where access_mode = 'frozen'
   immutability trigger refuses deletes until a disposition path exists.
 - No test covers a case refused because the person closed her account, though the predicate
   checks it.
-- Frozen nutrition guidance (`OP-NUT-011` with a case) is not built.
+- Frozen nutrition guidance (`OP-NUT-011` with a case) is built since STUDIO-61..65; see
+  *A coach reads and guides what a client eats* below.
 
 Tests:
 
@@ -1615,3 +1616,157 @@ Tests:
 - API: `studio-historical-access.test.ts` (18) covers the seven routes, the headers, the
   error mapping and the cache headers. The Studio identity tests and the WorkOS adapter
   test cover `auth_time`, `reauthenticate=true` and `recent_authentication_expires_at`.
+
+## A coach reads and guides what a client eats (STUDIO-61..65)
+
+`20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql` lets the coach who attends
+a person read the nutrition she shares and propose her goals (HU-STUDIO-068..072,
+`OP-NUT-009..013`; pull request allfitone#203, whose merge and database deploy are
+pending). The decisions, and how they differ from the ADR, are in
+[ALLFIT_ARCHITECTURE_DECISIONS.md](refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md),
+ADR-027, section *As implemented (STUDIO-61..65)*.
+
+It does five things:
+
+- **The credential.**
+  - It inserts the credential type `nutrition_professional` into
+    `catalog.professional_credential_types`.
+  - It adds `identity.effective_credential_verification(person, type)` and
+    `identity.credential_verification_is_effective(verification, person, type)`. Neither is
+    executable by `allfit_api`.
+- **Policies on the nutrition tables.** All are `to allfit_owner`, under contract scopes
+  that only the new functions open:
+  - `*_select_review` on meals, items, nutrient values, goal versions, targets and decisions;
+  - `*_proposal` on goal sets, versions and targets;
+  - `goal_versions_select/update_detachment`;
+  - `goal_*_select_frozen` on versions, targets and decisions.
+- **The reads and the command,** executable by `allfit_api`:
+  - `nutrition.list_client_meals`;
+  - `nutrition.read_client_daily_summaries`;
+  - `nutrition.open_client_meal_photo`;
+  - `nutrition.list_client_goal_versions`;
+  - `nutrition.propose_goal_version`;
+  - `nutrition.list_frozen_goal_versions`.
+- **Cancelling at the end.** It creates `nutrition.cancel_relationship_goal_proposals` and
+  recreates `relationships.close_relationship` with the body of `20261112090000` plus that
+  call. Her ending it, the gym ending it and the organization closing all go through it.
+- **Helpers.** Non-inlined SQL helpers for the policies:
+  - `nutrition.scoped_relationship` and `scoped_subject`;
+  - `goal_version_visible`, `goal_version_from` and `proposal_in_progress`;
+  - `reads_frozen_goal_version` and `reads_frozen_goal_decision`.
+
+  JSON projections: `client_meal_json`, `client_targets_json`, `client_goal_version_json` and
+  `field_shared`.
+
+**What it does not add.** It adds no table, column, index or trigger, and needs no
+backfill. Creating the policies takes a brief exclusive lock on each nutrition table. With
+`lock_timeout = 5s`, a busy table makes the migration fail rather than queue; retry it.
+
+**Deploy order.** Merging runs **Deploy AWS**. Then dispatch **Deploy Database AWS**.
+Until the migration is applied, the six new routes answer `503`. Nothing that exists
+changes behaviour, since no existing signature changes.
+
+**After the deploy: publish `nutrition_guidance` v2.** Until it is published, no grant
+can reach `contribute` and no frozen case keeps guidance, so proposing answers
+`403 scope-required` and the frozen read answers the same.
+
+1. A curator with `curate_global_catalog` opens Backoffice `/permissions` and publishes a
+   new version of `nutrition_guidance`. The rules come from
+   `packages/db/scripts/v1-scope-rules.ts`:
+   - **Up to `contribute`:** `nutrition.goal_sets`, `nutrition.goal_versions` and
+     `nutrition.goal_targets`, field `*`.
+   - **Read and historical:** `nutrition.goal_decisions`, field `*`.
+   - **Historical fields on `nutrition.goal_versions`:** `version_number`, `origin`,
+     `status`, `rationale`, `author_person_id`, `origin_relationship_id`, `created_at`,
+     `activated_at` and `cancelled_at`.
+   - **Historical fields on `nutrition.goal_targets`:** `nutrient_definition_id`, `mode`,
+     `minimum_value`, `maximum_value`, `exact_value` and `unit_code`.
+   - **Excluded:** `nutrition.meals` and `nutrition.meal_items`.
+
+   Locally, `publish-local-scopes.ts` publishes it on its own, because it now publishes a
+   new version whenever a scope's rules changed.
+2. Grants already given stay at their version (ADR-007). A v1 grant still reads goals, but
+   never proposes and keeps nothing for a case.
+3. **Known limit:** Studio-web invites at `read` only
+   (`apps/studio-web/src/lib/client-invitations.ts`), and nothing raises an existing grant.
+   Proposing works only once an invitation asks `nutrition_guidance` at `contribute`, which
+   is front work (STUDIO-136).
+4. Staff verify each coach's `nutrition_professional` credential in Backoffice
+   (`verify_professional_credentials`), as for any other type. Only the `coach` role holds
+   `guide_nutrition`.
+
+**The event.** `nutrition.goal_version_proposed.v1` carries the version, the person, the
+relationship and the organization, never targets or rationale. It is a domain record:
+no worker consumes it, and she is not told by email yet.
+
+**Checks after the deploy.** All are read only and return identifiers, never content.
+
+```sql
+-- v2 is published once the curator has acted.
+select version_number, status, published_at
+from privacy.scope_definitions
+where scope_code = 'nutrition_guidance'
+order by version_number;
+
+-- Must be empty: a professional version without the verification it was proposed under.
+select id
+from nutrition.goal_versions
+where origin = 'professional'
+  and credential_verification_id is null;
+
+-- Must be empty: a proposal still waiting on a relationship that has ended.
+select version.id
+from nutrition.goal_versions as version
+join relationships.service_relationships as relationship
+  on relationship.id = version.origin_relationship_id
+where version.status = 'proposed'
+  and relationship.status = 'terminated';
+```
+
+**Open follow-ups.**
+
+- No Studio screen calls the new routes yet (STUDIO-133..137).
+- Invitations ask for `read` only, as above.
+- She is not notified of a proposal; the event has no consumer.
+- Inside `nutrition.list_frozen_goal_versions`, the cut repeats what the frozen policy
+  already applies. Removing it changes nothing a test can see. The policy is the guard,
+  and the mutation tests prove it.
+
+Tests:
+
+- `T-NUT-STUDIO-01` (46) covers `OP-NUT-009`, `-010`, `-011` live and `-013`:
+  - holder and cover read; no attendance means not found; owner and admin read nothing
+    by role;
+  - fields the version hides;
+  - the photo, only with both grants and a version that keeps where it is;
+  - totals only from shared rows;
+  - the access record before any row;
+  - revocation on the next request;
+  - live goals with her active goal masked;
+  - the review policies read directly.
+- `T-NUT-STUDIO-02` (30) covers `OP-NUT-012`:
+  - who may propose, and each state of the credential;
+  - a `read` grant and a paused service;
+  - validation and idempotency;
+  - superseding;
+  - cancelling at the end;
+  - the event without content;
+  - the insert policy against a direct write.
+- `T-NUT-HIST-01` (17) covers `OP-NUT-011` frozen:
+  - only this relationship's proposals by the cut, and each `status_at_cut`;
+  - a decision after the cut is not told;
+  - a v1 grant answers `scope-required`;
+  - a stale sign-in, expired and foreign cases;
+  - the access record in `frozen` mode;
+  - the frozen policies read directly.
+- `T-IDN-PROFESSIONAL-PROFILE-01` now expects four credential types.
+- `goal-proposal-concurrency.test.ts` (10) races a proposal against another proposal, her
+  decision, her own goal, a revocation and the end of the relationship. One case holds the
+  goal set and checks that a proposal waits on it before numbering.
+- API:
+  - `nutrition/handlers/studio.test.ts` covers the five routes against the contract, the
+    origin and cookie, ranges, the uniform photo `404`, proposal validation, the request
+    hash and every error mapping;
+  - the application and infrastructure tests for Studio nutrition;
+  - `studio-historical-access.test.ts` and `privacy/infrastructure/historical-access.test.ts`
+    cover the frozen route and its binding.

@@ -88,10 +88,10 @@ generado son el inventario exhaustivo.
 | Metas personales | `GET /space/v1/nutrition/goals` | `OP-NUT-006` | sin body | `NutritionGoals` | `private, no-store` |
 | Publicar meta personal | `POST /space/v1/nutrition/goals/versions` | `OP-NUT-007` | `SelfNutritionGoalVersionCreate` | `NutritionGoalVersion` | `no-store` |
 | Decidir propuesta | `POST /space/v1/nutrition/goal-versions/{id}/decision` | `OP-NUT-008` | `NutritionGoalDecisionCreate` | `NutritionGoalDecision` | `no-store` |
-| Leer comidas Studio | `GET /studio/v1/organizations/{organizationId}/clients/{personId}/nutrition/meals` | `OP-NUT-009` | rango/cursor | `AuthorizedNutritionMealPage` | `private, no-store` |
-| Obtener foto Studio | `GET .../nutrition/meals/{mealId}/photo` | `OP-NUT-013` | path + bearer | bytes JPEG/PNG/WebP | `private, no-store` |
-| Leer resúmenes Studio | `GET .../nutrition/daily-summaries` | `OP-NUT-010` | rango | `NutritionDailySummaryPage` | `private, no-store` |
-| Leer/proponer guía Studio | `GET/POST .../nutrition/goals/versions` | `OP-NUT-011/012` | query / `ProfessionalNutritionGoalVersionCreate` | `NutritionGoalVersionPage` / `NutritionGoalVersion` | `private, no-store` / `no-store` |
+| Leer comidas Studio | `GET /studio/v1/organizations/{organizationId}/clients/{personId}/nutrition/meals` | `OP-NUT-009` | rango/cursor | `AuthorizedNutritionMealPage` | `private, no-store` As built (STUDIO-61): `listAuthorizedClientNutritionMeals`, `cookieAuth`, `200 ClientNutritionMealPage` (`applied_scope`, `photo_scope`, `data`, `page`), 400/401/403/404/422/503. |
+| Obtener foto Studio | `GET .../nutrition/meals/{mealId}/photo` | `OP-NUT-013` | path + bearer | bytes JPEG/PNG/WebP | `private, no-store` As built (STUDIO-65): `getAuthorizedClientNutritionMealPhoto`, `cookieAuth`, `image/jpeg` only, 401/404/503. |
+| Leer resúmenes Studio | `GET .../nutrition/daily-summaries` | `OP-NUT-010` | rango | `NutritionDailySummaryPage` | `private, no-store` As built (STUDIO-62): `listAuthorizedClientNutritionDailySummaries`, `200 ClientNutritionDailySummaryPage`. |
+| Leer/proponer guía Studio | `GET/POST .../nutrition/goals/versions` | `OP-NUT-011/012` | query / `ProfessionalNutritionGoalVersionCreate` | `NutritionGoalVersionPage` / `NutritionGoalVersion` | `private, no-store` / `no-store` As built (STUDIO-63/64): `listAuthorizedClientNutritionGoalVersions` (`200 ClientNutritionGoalHistory`) and `proposeClientNutritionGoalVersion` (`201 ClientNutritionGoalVersion`; 403 `NutritionProposalForbidden`, 409 `NutritionProposalConflict`, 415, 422, 503). The frozen read is `listFrozenNutritionGoalVersions` (`200 FrozenNutritionGoalVersionPage`). |
 | Open a historical access case | `POST /studio/v1/organizations/{organizationId}/historical-access-cases` | `OP-PRV-018` | `HistoricalAccessCaseCreate` + command headers | `201 HistoricalAccessCase` | `no-store` |
 | List historical access cases | `GET /studio/v1/organizations/{organizationId}/historical-access-cases` | `OP-PRV-025` | query `relationship_id`, `limit`, `cursor` | `HistoricalAccessCasePage` | `private, no-store` |
 | Close a historical access case | `POST …/historical-access-cases/{caseId}/closure` | `OP-PRV-019` | command headers, no body | `HistoricalAccessCase` | `no-store` |
@@ -185,6 +185,7 @@ generado son el inventario exhaustivo.
   - **From a read's outcome:** a case that cannot be exercised, or a session that is not visible, is `404`. A missing frozen category is `403 scope-required`, naming `relationship_training` or `body_progress`.
   - **Before the database:** a wrong `Origin` is `403`. An invalid identifier, cursor or command header is `400`. A body that is not JSON is `415`, and a body outside the closed schema is `422`.
 - **Not changed.** `OP-NUT-011` already declared an optional `X-Historical-Access-Case` (parameter `HistoricalAccessCase`) for frozen nutrition guidance. Neither that Studio route nor frozen nutrition is built in the API yet.
+- **Changed by STUDIO-61..65.** The optional header and its `HistoricalAccessCase` parameter component are gone from `OP-NUT-011`. Frozen nutrition guidance is a route of its own, `GET /studio/v1/organizations/{organizationId}/historical-relationships/{relationshipId}/nutrition/goal-versions` (`listFrozenNutritionGoalVersions`). It requires `X-Historical-Access-Case`, like the other frozen reads. `credential-required` (403) joins the error catalog.
 
 La lectura Studio posterior a la revocación reutiliza las operaciones GET correspondientes y, salvo la excepción de medios, responde `403 scope-required`; la revocación no crea operaciones adicionales. `OP-NUT-013` es la excepción cerrada: ante recurso inexistente o cualquier autorización no efectiva responde siempre el mismo `404` sin bytes para no revelar la existencia de la foto.
 
@@ -279,6 +280,8 @@ Studio nunca recibe esa URL. `AuthorizedNutritionMeal.photo` contiene `Authentic
 - responde el mismo `404` sin bytes ante inexistencia o cualquier autorización no efectiva;
 - hace que un enlace obtenido antes de una revocación deje de servir contenido en la lectura inmediatamente posterior.
 
+**As built (STUDIO-61..65), deviation.** `AuthorizedNutritionMeal`, `AuthenticatedMediaLink` and `NutritionGoalVersionPage` were removed from the contract. A Studio meal is `ClientNutritionMeal`, whose `has_photo` is said only when she also shares `nutrition_media`, and the client calls `OP-NUT-013` by its path. The rest of the list above holds, except that Studio authenticates with the session cookie (`cookieAuth`), not a bearer, and the photo is `image/jpeg` only.
+
 **Body photos follow the same rule (STUDIO-45).** `OP-IDN-060` rechecks the attending coach, an `active` `body_progress` grant, a version that includes the photo and a live share with this relationship on every GET. It records the access, `allowed` or `denied`, before the object store is read, and streams the bytes with `private, no-store`, `inline` and `nosniff`. It is `cookieAuth` with Studio's `Origin`, not bearer: Studio fetches it with credentials and shows a blob.
 
 ## 4. Gate contract-first
@@ -346,7 +349,7 @@ El YAML inicial reúne Space y Studio para validar el flujo de extremo a extremo
 | `T-NUT-API-10` | GET Studio aplica scopes live; header histórico selecciona exclusivamente la proyección frozen. |
 | `T-NUT-API-11` | Frozen nunca serializa comidas, fotos, resúmenes, metas self, otra relación o post-corte. |
 | `T-NUT-API-12` | La URL firmada Space usa HTTPS/GET y expira en máximo 300 s; Studio solo serializa un enlace API autenticado y todas las respuestas sensibles son `no-store`. |
-| `T-NUT-API-13` | `OP-NUT-013` transmite un medio saneado sin redirect; el mismo enlace responde `404` sin bytes inmediatamente después de revocar intake o media y ante cualquier contexto profesional inválido. |
+| `T-NUT-API-13` | `OP-NUT-013` transmite un medio saneado sin redirect; el mismo enlace responde `404` sin bytes inmediatamente después de revocar intake o media y ante cualquier contexto profesional inválido. As built: `T-NUT-RLS-16` in `T-NUT-STUDIO-01`, and the uniform-404 cases of `nutrition/handlers/studio.test.ts`. |
 | `T-NUT-API-14` | Toda `NutritionGoalVersion` incluye `author.kind` igual a `origin` y `author.person_id` UUID; self usa la persona del goal set y professional conserva el snapshot del autor también en live/frozen, sin nombres ni IDs internos de contexto. |
 
 `T-NUT-API-01/02` son verificaciones globales de las trece operaciones y todos sus DTOs; no se repiten como trazas individuales salvo cuando una fila dependa de una regla más específica.

@@ -703,6 +703,14 @@ El request break-glass declara propósito cerrado, `case_reference`, sujeto, cat
 
 Las cinco operaciones Studio exigen además relación/asignación/membresía efectivas y organización coincidente. Ninguna permite escribir comidas, decidir propuestas o devolver `media_ref`. OP-NUT-013 registra un `ACCESS_EVENT`, transmite el objeto saneado desde el backend, nunca redirige a storage y devuelve el mismo `404` sin bytes ante inexistencia o autorización no efectiva.
 
+**As implemented (STUDIO-61..65), migration `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql`.**
+
+- **Who reads:** the four reads need the attending assignment and the grant, with no capability and no credential (the owner's decision of 8 November 2026).
+- **Who proposes:** `POST` alone needs `guide_nutrition`, a `nutrition_professional` credential in force (`403 credential-required`) and `nutrition_guidance` at `contribute`.
+- **Frozen guidance** is not a projection of this route. It is `GET /studio/v1/organizations/{organizationId}/historical-relationships/{relationshipId}/nutrition/goal-versions`, with a case and a recent sign-in.
+- **Live history:** the live goal history masks her active goal when another relationship set it.
+- **The photo** is `image/jpeg` only.
+
 ## 6. Contrato de Catálogo
 
 | Método | Ruta | Operación | Cacheable |
@@ -737,7 +745,7 @@ Cada proyección de Studio declara qué `SCOPE_DEFINITION` consume y en qué ver
 | `identity.v_client_health_context` | `health_context` · `read` | Dolor, limitación y recuperación declarados, minimizados | Historia clínica, diagnósticos, laboratorios, documentos médicos, biometría continua, inferencias médicas |
 | `execution.v_client_executions` | `relationship_training` para lo producido en la relación; `prior_training_history` para lo autónomo o previo | Envelope, segmentos, resultados tipados de la familia, contrato y versión congelados, nivel alcanzado | Campos de otras categorías dentro de la misma fila; sesiones con denegación aplicable; muestras de sensor |
 | `execution.v_client_progress` | El más restrictivo de los inputs del derivado | Métrica, periodo, valor, algoritmo, versión, vigencia | Todo derivado cuyos inputs no sean íntegramente accesibles |
-| `nutrition.v_client_meals_live` | `nutrition_intake` · `read`; foto requiere también `nutrition_media` · `read` | Comida, ítems, cantidades, seis nutrientes; enlace autenticado a OP-NUT-013 solo con intersección | `media_ref`, URL de storage, EXIF, galería, guía, clínica e inferencias |
+| `nutrition.v_client_meals_live` | `nutrition_intake` · `read`; foto requiere también `nutrition_media` · `read` | Comida, ítems, cantidades, seis nutrientes; enlace autenticado a OP-NUT-013 solo con intersección | `media_ref`, URL de storage, EXIF, galería, guía, clínica e inferencias As built (STUDIO-61): no view. `nutrition.list_client_meals` reads through review policies under the contract scope `nutrition_review`. |
 | `nutrition.v_client_daily_summaries_live` | `nutrition_intake` · `read` | Fecha local y sumas de valores capturados, agregadas después de filtrar | Fotos, notas no autorizadas, `NULL` convertido en cero |
 | `nutrition.v_client_guidance_live` | `nutrition_guidance` · `read` | Versiones, targets, origen, racional, autor mínimo (`kind`, `person_id`) y decisiones | Nombre del autor, membresía/asignación/verificación, ingestas, medios, clínica, activación por profesional |
 | `nutrition.v_client_guidance_frozen` | `nutrition_guidance` frozen + caso/AAL2 | Solo versiones profesionales originadas en la relación, autor mínimo congelado y targets/decisiones `<=T` | Nombre/contexto interno del autor, comidas, fotos, resúmenes, metas personales, otras relaciones y post-corte |
@@ -969,8 +977,8 @@ Comandos con varias escrituras que deben ser atómicas. La API los invoca dentro
 | `nutrition.delete_meal(meal_id)` | `OP-NUT-004` | Disposición unitaria de estructura, proyecciones y medio |
 | `nutrition.publish_self_goal_version(...)` | `OP-NUT-007` | Versión/targets inmutables y única activa |
 | `nutrition.decide_goal_version(version_id, decision)` | `OP-NUT-008` | Una decisión; aceptación supersede/activa atómicamente |
-| `nutrition.propose_goal_version(person_id,...)` | `OP-NUT-012` | Comprueba contexto profesional/credencial/grant y supersede pendiente de la relación |
-| Proxy autenticado de foto nutricional | `OP-NUT-013` | Reevalúa contexto profesional y ambos scopes, registra acceso y transmite el objeto saneado sin redirect |
+| `nutrition.propose_goal_version(person_id,...)` | `OP-NUT-012` | Comprueba contexto profesional/credencial/grant y supersede pendiente de la relación As built (STUDIO-64): `nutrition.propose_goal_version(person, organization, subject, rationale, targets, idempotency_key, command_id, request_hash)`; credential `nutrition_professional`, `AF431` when missing. |
+| Proxy autenticado de foto nutricional | `OP-NUT-013` | Reevalúa contexto profesional y ambos scopes, registra acceso y transmite el objeto saneado sin redirect As built (STUDIO-65): `nutrition.open_client_meal_photo` plus the API stream. |
 
 Las funciones que actúan como entrada cerrada sobre tablas sin DML directo —`activate_person`, las funciones `identity.*staff_invitation`, todas las entradas `organizations.*` anteriores, `privacy.revoke_grant`, `relationships.terminate_relationship` y `privacy.log_access_event`— son `SECURITY DEFINER`, fijan `search_path = pg_catalog`, califican cada objeto y toman el actor del contexto transaccional cuando corresponde. `EXECUTE` está revocado a `PUBLIC`; `allfit_api` recibe solo las entradas HTTP de Organizaciones que consume y ningún DML directo sobre agregados o eventos protegidos.
 
@@ -1014,7 +1022,7 @@ Los lookups `access_control.grant_of(relationship_id,scope_code)` y `access_cont
 | `support.v_support_metadata` | Soporte | Solo metadatos operativos; since ADR-046 also the person's name and full contact |
 | `nutrition.v_my_meals` | Space | Comidas propias; URL firmada si existe medio |
 | `nutrition.v_my_daily_summaries` | Space | Agregado reproducible por fecha local |
-| `nutrition.v_client_meals_live` | Studio | Intake live; serializa únicamente un enlace autenticado a OP-NUT-013 cuando ambos scopes coinciden |
+| `nutrition.v_client_meals_live` | Studio | Intake live; serializa únicamente un enlace autenticado a OP-NUT-013 cuando ambos scopes coinciden As built: not a view; see `nutrition.list_client_meals`. A meal carries `has_photo`, not a link. |
 | `nutrition.v_client_daily_summaries_live` | Studio | Filtra antes de agregar |
 | `nutrition.v_client_guidance_live` | Studio | Guía live autorizada |
 | `nutrition.v_client_guidance_frozen` | Studio histórico | Solo guía profesional de la relación con `goal_versions.created_at<=T` |
