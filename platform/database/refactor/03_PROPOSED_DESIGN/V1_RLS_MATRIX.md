@@ -194,9 +194,9 @@ El caso no reemplaza ninguna condición y `manage_historical_access` no aparece 
 - **Recent sign-in, purpose and request id:** a sign-in less than ten minutes old replaces `aal2`, and `privacy.open_frozen_read` checks it together with the request id and the purpose, before the predicate and outside it.
 - **No purpose match:** a case does not match a purpose at read time; its purpose is recorded, not compared.
 - **Fields:** they are filtered by `privacy.scope_reads_frozen(definition, resource, field)` in the closed function.
-- **Denials:** `frozen_session_denied` is written inline in the session policy: a denial for the relationship that is `active`, or that has `frozen_denied_at`.
+- **Denials:** `frozen_session_denied` is part of `access_control.reads_frozen_session`, the function the session policy calls: a denial for the relationship that is `active`, or that has `frozen_denied_at`.
 - **Retention:** not checked, because no frozen data has a retention end yet.
-- **Physical form:** the formula is the policy `executed_sessions_select_frozen`, with `execution_revisions_select_frozen` and `session_visibility_denials_select_frozen` so the cut and the denials can be evaluated under forced row security. Body measurements have no frozen policy: `identity.list_frozen_body_progress` reads them through the existing owner policy and applies the cut and the fields itself.
+- **Physical form:** the formula is the policy `executed_sessions_select_frozen`, with `execution_revisions_select_frozen` and `session_visibility_denials_select_frozen` so the cut and the denials can be evaluated under forced row security. Each policy checks that the contract scope `frozen_history` is open and then calls a function (`access_control.reads_frozen_session`, `frozen_case_covers_person`, `frozen_case_covers_relationship`). The functions are SQL with `set search_path`, which PostgreSQL never inlines, so the cases, revisions and denials stay out of every other plan that reads sessions, such as `movements_select_executed`. Body measurements have no frozen policy: `identity.list_frozen_body_progress` reads them through the existing owner policy and applies the cut and the fields itself.
 
 ### 5.3 Antipatrón prohibido en los predicados
 

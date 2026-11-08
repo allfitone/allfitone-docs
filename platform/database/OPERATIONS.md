@@ -1458,7 +1458,17 @@ It does five things:
     `privacy.scope_reads_frozen`.
   - **Three `for select` policies.** `executed_sessions_select_frozen`,
     `execution_revisions_select_frozen` and `session_visibility_denials_select_frozen`, all
-    under the contract scope `frozen_history`.
+    under the contract scope `frozen_history`. Each asks first whether that scope is open,
+    once per statement, and only then calls `access_control.reads_frozen_session`,
+    `access_control.frozen_case_covers_person` or
+    `access_control.frozen_case_covers_relationship`.
+  - **Why functions, not inline subqueries.** PostgreSQL expands a policy's subqueries,
+    with the policies of every table they name, into each plan that reads the table, and
+    every catalogue read of a gym's movement reads executed sessions through
+    `movements_select_executed`. With the subqueries inline, the movement commands became
+    four times slower and `organization-movement-concurrency.test.ts` timed out. A SQL
+    function with `set search_path` is never inlined (the shape of
+    `access_control.reads_under_break_glass`), so it is planned only when a case is read.
   - **Four reads,** executable by `allfit_api`: `privacy.read_historical_relationship`,
     `execution.list_frozen_executions`, `execution.read_frozen_execution` and
     `identity.list_frozen_body_progress`. Each records `privacy.access_events` in `frozen`
