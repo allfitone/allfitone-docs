@@ -837,6 +837,7 @@ La persona necesita continuidad de su historial y la organización necesita pres
 - Un grant `frozen` no habilita operación, escritura, contribuciones, correcciones, observaciones, asignaciones, recordatorios ni datos creados después de `T`.
 - La organización conserva únicamente lectura histórica sobre el conjunto que estaba autorizado por el grant, su versión de scope, su nivel y las restricciones aplicables, siempre acotada a filas con instante de negocio `<= T`.
 - La lectura histórica usa la superficie y el predicado separados definidos por ADR-023: caso acotado, actor humano, propósito cerrado, MFA y auditoría por lectura.
+  - **As implemented (STUDIO-54/55/56):** the stronger authentication is a Studio sign-in less than ten minutes old, not MFA, by the owner's decision of 8 November 2026. ADR-023, section *As implemented (STUDIO-54/55/56)*, records it.
 - Un grant `revoked` no habilita lectura en vivo ni histórica. La terminación no cambia por sí sola un grant a `revoked`.
 - La persona conserva en su Fitness ID el perfil, las versiones asignadas, sesiones planificadas, ejecuciones, resultados y registros compartidos que le correspondan.
 - La organización conserva sus activos propios —programas maestros, metodología, oferta y configuración—, la ventana histórica congelada y los registros bilaterales necesarios según finalidad y plazo.
@@ -3100,6 +3101,16 @@ El 26 de julio de 2026 se recorrieron de nuevo el mapa de ownership, el ERD conc
 **Estado:** aceptada para V1<br>
 **Fecha:** 23 de julio de 2026
 
+> **As implemented (STUDIO-54/55/56), with deviations.** Migration
+> `20261116090000_a_case_opens_the_frozen_history.sql` builds this decision (code branch
+> `feat/historical-access-case`; its pull request and database deploy are pending). Five
+> things differ from the text below: the stronger authentication of item 3 is a sign-in less
+> than ten minutes old, not MFA (the owner's decision of 8 November 2026); a case authorizes
+> only the opener or the professional who held the relationship at the cut, never another
+> admin; in V1 a case reads only executed sessions and structured body measurements; expiry
+> is derived, with no worker; and the case has no `capability_code` column. The section
+> *As implemented (STUDIO-54/55/56)* at the end of this ADR records each decision and why.
+
 ### Contexto
 
 ADR-005 conserva para la organización una ventana histórica sobre grants `frozen`, pero la fórmula profesional normal exige relación y asignación vigentes. Reutilizar esa fórmula haría imposible la lectura histórica; omitirla permitiría que cualquier miembro administrativo navegara el Fitness ID de antiguos clientes.
@@ -3265,6 +3276,59 @@ Un derivado sobrevive únicamente si estaba materializado en `T`, su regla está
 12. `health_context`, fotos, EXIF, perfil actual y datos posteriores a `T` nunca aparecen.
 13. Un derivado con un input denegado o no histórico queda excluido.
 14. Cerrar la cuenta anonimiza también lo que antes devolvía la superficie histórica.
+
+### As implemented (STUDIO-54/55/56)
+
+Migration `20261116090000_a_case_opens_the_frozen_history.sql` builds this decision for `HU-STUDIO-061`, `HU-STUDIO-062` and `HU-STUDIO-063` (code branch `feat/historical-access-case`; its pull request and database deploy are pending). The Studio API serves it under the OpenAPI tag *Studio Historical Access*, and no Studio screen calls it yet. Each item says where the build departs from the decision above, who decided and why.
+
+1. **The stronger authentication is a recent sign-in, not AAL2/MFA.** This departs from item 3, from the first line of the predicate in item 4 and from scenario 7. The owner decided it on 8 November 2026, because Studio has no MFA.
+   - WorkOS access tokens carry `auth_time`, the instant the person last actively authenticated; a refresh never advances it. It travels as `VerifiedToken.authenticatedAt` in `packages/auth-provider`. That is a bounded exception to «from the token use only `sub` and `sid`», documented in the monorepo's `AGENTS.md` §6: it is authentication, never authorization.
+   - Every Studio sign-in stores it in the new column `identity.access_sessions.authenticated_at`, which `ck_access_sessions_authenticated` admits only on the `studio` surface. `identity.create_access_session` gained a seventh parameter, `p_authenticated_at timestamptz default null`, and refuses an instant more than one minute in the future (`22023`). `identity.rotate_access_session` never touches the column.
+   - `identity.recent_authentication_window()` returns ten minutes and is the only place the window is written. `identity.load_access_session` returns `recent_authentication_expires_at` (`authenticated_at` plus the window), and `GET /studio/v1/session` exposes it, null when the token did not say.
+   - `identity.require_recent_studio_authentication(session_id)` raises `AF401` unless that live Studio session belongs to the actor and authenticated within the window. The API maps it to `403 reauthentication-required`; the client then signs in again through `GET /studio/v1/auth/start?reauthenticate=true`, which asks WorkOS for `max_age=0`.
+   - It is required to **open** a case (`OP-PRV-018`) and to **read** through one (`OP-PRV-020`). It is not required to close or list cases (`OP-PRV-019`, `OP-PRV-025`): ending access is never harder than granting it.
+2. **What a case reads narrows item 8.** Only what the frozen scope version marks `historical_readable` and does not exclude. With the V1 rules in `packages/db/scripts/v1-scope-rules.ts` that is:
+   - executed sessions, list and detail, with their recorded results: those of this relationship under `relationship_training`, and those she trained on her own under `prior_training_history`. The detail carries no coach observations and no planned session;
+   - structured body measurements under `body_progress`, field by field as the version's historical rules allow. A field they do not keep reads as null.
+
+   Programs and coach observations are shared at `contribute`, which carries no history, so item 8's «programas entregados» and «notas bilaterales» are not readable in V1. Derived progress, photos, health context and the profile have no historical read either.
+3. **Whom a case may authorize narrows item 1.** Either the opener herself, while she holds a current `owner` or `admin` role, or the professional who held the relationship at the cut (the `holder` assignment with `valid_to = cut_at`), while his membership keeps a current `owner`, `admin` or `coach` role. Never staff, never another admin, never a coach with no part in the relationship. Item 1 also allowed «otro `owner`/`admin`»; `HU-STUDIO-061` criterion 5 («yo mismo, o el antiguo profesional responsable») is narrower, and the build follows the story. The opener needs `manage_historical_access`, which owner and admin hold since migration `20260812130000_studio_team_directory_and_role_catalog.sql`.
+4. **Expiry is derived.** No worker sweeps cases, and there is no `privacy.historical_access_case_expired.v1`. An open case past `expires_at` reads as `expired` and cannot be exercised. It is closed as `expired`, with `closed_at = expires_at`, when an equivalent case is opened or when someone closes it; any closing writes `closed_at = least(now, expires_at)`.
+5. **There is no `capability_code` column.** Item 1 ties the case to the protected capability `read_frozen_relationship_history`. A column with an FK to `organizations.organization_capabilities` would need that capability in the catalogue, where Studio's role catalogue would show it although no role may hold it. The value is fixed, so the table does not store it.
+6. **Listing cases is a new operation, `OP-PRV-025`.** `GET /studio/v1/organizations/{organizationId}/historical-access-cases`: a member with `manage_historical_access` sees every case of the organization, and any other member sees only the cases that authorize him. Newest first, keyset on `opened_at` to the millisecond, then `id`, both descending.
+7. **The cut is strict (items 4 and 6).** The case stores the person and the cut (`cut_at`), checked against the relationship's `ended_at` when it opens, so no read needs the ended relationship.
+   - A session counts only if `ended_at <= cut_at` and no `execution.execution_revisions` row for it was created after the cut.
+   - An autonomous session is read under `prior_training_history` and is left out if it was hidden from that relationship then or since: a denial that is `active`, or has `frozen_denied_at`. One hidden and restored before the cut is readable.
+   - A body record counts only if `created_at <= cut_at`, whatever `measured_on` it claims.
+8. **A case closes on its own (item 7).** Revoking a frozen grant closes every open case of the relationship with `grant_revoked` (trigger `trg_data_grants_after_update_historical_cases`). A membership leaving `active`, or a role ending, closes the cases whose authorized membership no longer qualifies with `membership_ineligible` (triggers `trg_organization_memberships_after_update_historical_cases` and `trg_membership_roles_after_update_historical_cases`). Reads re-check eligibility on their own, so they fail closed even where no trigger closed the case. A case also stops reading once she closes her account.
+9. **The table as built (`IX-09`, `IX-10`).**
+   - `privacy.historical_access_cases` stores `person_id` and `cut_at` besides the columns item 1 lists, plus `closed_reason` (`closed_by_manager`, `expired`, `grant_revoked`, `membership_ineligible`) and `closed_by_membership_id`. Its status enum has only `open` and `closed`.
+   - `IX-09` is composite FKs: `(relationship_id, person_id, organization_id)` to the relationship, and `(membership_id, organization_id)` for the authorized, opening and closing memberships.
+   - `IX-10` is the constraint trigger `trg_historical_access_cases_after_insert_eligible` (`privacy.enforce_historical_case_eligibility_ct`) at insert, plus the closing triggers of item 8. There are no deferrable constraint triggers on membership, role and assignment.
+   - `trg_historical_access_cases_before_update_keep` lets an open case become closed, once, with its closing fields and nothing else. No case is deleted or truncated.
+   - `uidx_historical_access_cases_open` keeps one open case per relationship, authorized membership and purpose.
+10. **Concurrency.** Opening locks the terminated relationship and its frozen grants `FOR SHARE`. A revocation racing it either waits and then closes the new case, or commits first, and the opening finds nothing frozen (`P0004`, answered `409`).
+11. **Audit (item 5).** Every frozen read writes `privacy.access_events` with `access_mode = 'frozen'` and `historical_access_case_id`: once per frozen category it used (`allowed`), or once `denied`. `app.purpose` is `frozen_history_review`, and the case's own purpose is reached through its id. A case the caller cannot use answers like one that does not exist (`404`), and the attempt is recorded as `denied` against the person whenever the case or the relationship belongs to the organization. The read opens the contract scope `frozen_history` with the case id, which the new policies read, rather than an `app.historical_access_case_id` setting.
+12. **Events.** `privacy.historical_access_case_opened.v1` carries `case_id`, `organization_id`, `relationship_id`, `authorized_membership_id`, `opened_by_membership_id`, `purpose`, `opened_at` and `expires_at`. `privacy.historical_access_case_closed.v1` carries `case_id`, `organization_id`, `relationship_id`, `authorized_membership_id`, `purpose`, `closed_reason` and `closed_at`. Neither carries the justification or the case reference, and no worker consumes them yet.
+
+**The predicate as built (item 4).** `access_control.can_read_frozen(case_id, scope_code, resource)` takes the case instead of `(relationship_id, scope_code, resource, field, occurred_at)`. It holds when `access_control.historical_case_exercisable(case_id)` holds and `privacy.frozen_category` finds a `frozen` grant of the case's relationship whose version keeps the resource readable. The case is exercisable when it names the membership the request acts as, in the organization it acts in, is open and inside its hours, its membership still qualifies, and her account is not closed. The field comes from `privacy.scope_reads_frozen`, and the instant from the cut of item 7. There is no retention condition of its own: the read works on the canonical rows, so what disposition deleted or anonymized is not there to read. `allfit_api` cannot execute the predicate.
+
+**Invariants and scenarios.** Invariants 1 to 10 hold as built. The mandatory scenarios are covered by `T-PRV-HIST-01` (58 assertions), `T-PRV-HIST-02` (40), `historical-access-case-concurrency.test.ts` (2) and the API's `studio-historical-access.test.ts` (18):
+
+1. `T-PRV-HIST-RLS-11` and `-API-27`.
+2. `T-PRV-HIST-RLS-17`, `-API-19` and `-API-25`.
+3. `T-PRV-HIST-RLS-11`.
+4. `T-PRV-HIST-RLS-12/13` and `-API-01..16`.
+5. `T-PRV-HIST-VAL-08`, `-VAL-10`, `-AUTH-05` and `-LIST-04`.
+6. `T-PRV-HIST-RLS-16`, `-API-22..26` and `-CLOSE-02`.
+7. A recent sign-in instead of MFA: `T-PRV-HIST-AUTH-01..03` to open and `-AUTH-11/12` to read.
+8. No write or export route exists; `T-PRV-HIST-INT-12` shows the runtime role cannot call the predicate.
+9. `T-PRV-HIST-API-05`, `-API-12`, `-API-16`, `-API-20`, `-API-23` and `-INT-11`. The record is written by `privacy.log_access_event` in the read's own transaction.
+10. `T-PRV-HIST-RLS-12` and `-API-11`.
+11. `T-PRV-HIST-AUTO-04..06`, `-API-28` and the concurrency test.
+12. `T-PRV-HIST-API-02`, `-API-04`, `-API-10`, `-API-13..15`, `-API-17` and `-INT-13`.
+13. Nothing to test: no derived value is readable through a case.
+14. `access_control.historical_case_exercisable` refuses a person whose account is closed. No test covers it yet, and the anonymization itself is ADR-005's.
 
 ---
 

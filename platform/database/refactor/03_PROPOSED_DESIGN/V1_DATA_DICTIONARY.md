@@ -105,6 +105,11 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Panel de negocio (`HU-BO-004`):** es la única actividad que la plataforma registra. `support.read_business_panel` cuenta personas distintas con una sesión `studio` activa en los últimos siete días, y la etiqueta como profesionales trabajando en Studio. Space no persiste sesiones aquí, así que «personas activas esta semana» no tiene señal y se devuelve `not_modelled` con razón `space_sessions_not_recorded`, nunca cero ni el conteo de Studio en su lugar.
 - **Retención:** hasta revocación y purga operativa; cambiar `SESSION_ENCRYPTION_KEY` invalida los ciphertext existentes y fuerza reautenticación.
 - **Eventos:** ninguno de dominio.
+- **As implemented, `authenticated_at` (STUDIO-54..56, migration `20261116090000_a_case_opens_the_frozen_history.sql`).** A new nullable column, `authenticated_at timestamptz`: when the person last actively authenticated, from the verified token's `auth_time` (`VerifiedToken.authenticatedAt`). It is authentication, never authorization, and the only claim besides `sub` and `sid` that the platform keeps (monorepo `AGENTS.md` §6).
+  - **Check:** `ck_access_sessions_authenticated` admits it only on the `studio` surface; Backoffice rows keep it null. Studio stays AAL1: a recent sign-in is not a second factor.
+  - **Writes:** `identity.create_access_session` gained a seventh parameter, `p_authenticated_at timestamptz default null`, and refuses an instant more than one minute in the future (`22023`). Replacing the session of the same `sid` overwrites it. `identity.rotate_access_session` does not touch it, so a refresh never advances it. A six-argument call, the API before this release, still works and stores null.
+  - **Reads:** `identity.recent_authentication_window()` returns ten minutes and is the only place the window is written. `identity.load_access_session` adds `recent_authentication_expires_at` (`authenticated_at` plus the window, null when it is null). `identity.require_recent_studio_authentication(session_id)` raises `AF401` unless that session is a live Studio session of the actor whose sign-in is within the window. Neither of these two helpers is executable by `allfit_api`; the historical access case functions call the second (`§7.8`).
+  - **Backfill:** none. Every session created before the migration has no instant, so its holder signs in again before opening or reading a case.
 
 ### 4.2.2 `identity.password_reset_receipts`
 
@@ -805,6 +810,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **RLS:** lectura abierta de versiones publicadas.
 - **Implementado:** `privacy.access_level` es un enum (`read`, `contribute`), no texto con `CHECK`. Las reglas se insertan sólo dentro de `privacy.publish_scope_definition`, y `privacy.prevent_published_scope_rule_mutation` las congela con la versión. El duplicado de `(resource, field)` dentro de una misma publicación se rechaza en un trigger `before insert` y no en un `CHECK`: PostgreSQL no admite subconsultas en un `CHECK`, así que la comprobación que compara el arreglo contra su propio conjunto distinto no es expresable ahí.
 - **Applied (STUDIO-44..46, migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql`).** `privacy.scope_allows(scope_definition_id, resource, field)` is the first reader of these rules: a non-excluded rule for the field or for `'*'` shares it, and an exclusion of either wins. It is closed to `allfit_api`. The reads of `OP-IDN-018`, `-019`, `-020`, `-059` and `-060` project each field through it, so a field the frozen version leaves out reads as `null`, and a row whose ordering key is not shared is not listed.
+- **Applied, `historical_readable` (STUDIO-54..56, migration `20261116090000_a_case_opens_the_frozen_history.sql`).** The first readers of the column. `privacy.frozen_category(case_id, scope_code, resource)` finds the `frozen` grant of the case's relationship whose version has a non-excluded historical rule for the resource and no exclusion of all of it (`field = '*'`). `privacy.scope_reads_frozen(scope_definition_id, resource, field)` is `privacy.scope_allows` plus a non-excluded historical rule for the field or `'*'`. With the V1 rules (`packages/db/scripts/v1-scope-rules.ts`, since 5 November 2026) only executed sessions and their results, under `relationship_training` and `prior_training_history` at `read`, and the six structured fields of `identity.body_progress_records` under `body_progress` are historical. A version published from earlier rules may have no historical rule, and then a case reads nothing under it.
 - **Consultas:** por `scope_definition_id`.
 - **Índices:** único compuesto.
 - **Retención:** con la versión.
@@ -863,6 +869,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** único parcial `(relationship_id, scope_code) WHERE status IN ('active','frozen')`; `(person_id, status)`; `(organization_id, status)`; parcial `(relationship_id, scope_code, frozen_at) WHERE status='frozen'`.
 - **Retención:** conserva; congelar y revocar cierran sin borrar.
 - **Eventos:** `privacy.grant_created.v1`, `privacy.grant_frozen.v1`, `privacy.grant_revoked.v1`, `privacy.grant_review_due.v1`.
+- **As implemented, revoking a frozen grant closes cases (STUDIO-54..56, migration `20261116090000_a_case_opens_the_frozen_history.sql`).** The trigger `trg_data_grants_after_update_historical_cases` (`after update of status`, only when a `frozen` grant becomes `revoked`) runs `privacy.close_cases_of_revoked_grant_tg`. It closes every open case of the relationship with `grant_revoked`, or `expired` if its hours had run out, inside the contract scope `historical_case_settlement`. The frozen reads take their grant from `privacy.frozen_category`, not from `access_control.frozen_grant_of`.
 
 ### 7.7 `privacy.session_visibility_denials`
 
@@ -892,6 +899,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
   - `IX-36` is `trg_session_visibility_denials_after_insert_own_relationship`, a deferrable constraint trigger that also refuses a session it cannot see.
 
   `allfit_api` has no privilege on the table; it writes through `privacy.hide_session` and `privacy.restore_session`. **RLS deviation:** see `V1_RLS_MATRIX.md` § `SESSION_VISIBILITY_DENIAL`.
+- **As implemented, a frozen reader (STUDIO-55, migration `20261116090000_a_case_opens_the_frozen_history.sql`).** «Ninguna organización la lee» no longer holds literally. `session_visibility_denials_select_frozen` lets the denials of the case's relationship be seen inside the contract scope `frozen_history`, while that case is exercisable. It exists only so the frozen session policy can leave out a session hidden from that relationship, then or since (`status = 'active'` or `frozen_denied_at` set). No read returns a denial, and none says that one exists.
 
 ### 7.8 `privacy.historical_access_cases`
 
@@ -907,6 +915,43 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** compuestos anteriores + parcial de casos abiertos.
 - **Retención:** 24 meses después de cerrar/expirar, alineada con `access_events`; una política posterior puede exigir más por disputa u obligación.
 - **Eventos:** `privacy.historical_access_case_opened.v1`, `privacy.historical_access_case_closed.v1`, `privacy.historical_access_case_expired.v1`.
+- **As implemented (STUDIO-54..56, migration `20261116090000_a_case_opens_the_frozen_history.sql`).** ADR-023, section *As implemented*, records the decisions; this block records the objects.
+  - **Columns:** `id uuid` (UUIDv7) · `organization_id` · `relationship_id` · `person_id` · `cut_at timestamptz` · `authorized_membership_id` · `opened_by_membership_id` · `purpose privacy.historical_access_purpose` · `case_reference text` · `justification text` · `status privacy.historical_case_status` (default `open`) · `opened_at` (default `clock_timestamp()`) · `expires_at` · `closed_at` (nullable) · `closed_reason text` (nullable) · `closed_by_membership_id` (nullable).
+  - **Deviations from the columns above:**
+    - `person_id` and `cut_at` are new. The trigger checks them against the relationship when the case opens, so no read through the case needs the ended relationship.
+    - `closed_reason` and `closed_by_membership_id` are new and record how the case ended.
+    - There is no `capability_code`: the capability that opens a case, `manage_historical_access`, is checked in the function and the policies, and the case authorizes reading by itself.
+  - **Enums:** `privacy.historical_access_purpose` is `service_dispute`, `legal_or_regulatory_obligation`, `customer_support_request`, `security_investigation` and `authorized_quality_review`. `privacy.historical_case_status` is only `open` and `closed`. `expired` is derived: an open case past `expires_at` reads as `expired` in `privacy.historical_case_document` and exercises nothing.
+  - **Keys (`IX-09`, composite):**
+    - `pk_historical_access_cases`;
+    - `fk_historical_access_cases_relationship`: `(relationship_id, person_id, organization_id) → relationships.service_relationships`;
+    - `fk_historical_access_cases_authorized`, `fk_historical_access_cases_opened_by` and `fk_historical_access_cases_closed_by`: `(membership_id, organization_id) → organizations.organization_memberships`.
+
+    All four foreign keys are `ON DELETE RESTRICT`.
+  - **Checks:**
+    - `ck_historical_access_cases_window`: `expires_at > opened_at` and `expires_at <= opened_at + 24 hours`;
+    - `ck_historical_access_cases_cut`: `cut_at <= opened_at`;
+    - `ck_historical_access_cases_reference`: trimmed, 1 to 120 characters;
+    - `ck_historical_access_cases_justification`: trimmed, 1 to 2000 characters;
+    - `ck_historical_access_cases_closed`: `closed_at` is set exactly when the case is `closed`, and `closed_reason` exactly when `closed_at` is;
+    - `ck_historical_access_cases_closed_reason`: `closed_by_manager`, `expired`, `grant_revoked` or `membership_ineligible`;
+    - `ck_historical_access_cases_closed_by`: a closer is named exactly when the reason is `closed_by_manager`;
+    - `ck_historical_access_cases_closed_after`: `closed_at >= opened_at`.
+  - **`IX-10`, deviation:**
+    - The eligibility check is `trg_historical_access_cases_after_insert_eligible`, a constraint trigger `after insert`, **not deferrable**, running `privacy.enforce_historical_case_eligibility_ct`. It checks four things: the relationship is `terminated` and its `ended_at` is `cut_at`; the opener holds a current `owner` or `admin` role; the authorized membership qualifies (`privacy.historical_case_member_qualifies`: an active membership in an active organization with a current `owner`, `admin` or `coach` role); and, when the authorized member is not the opener, he held the relationship at the cut (a `holder` assignment with `valid_to = cut_at`). A third admin, staff, or a coach who never held it is refused.
+    - Membership and role changes do not wait for a deferred check: three triggers close the open cases the same transaction makes ineligible. They are `trg_organization_memberships_after_update_historical_cases` (the membership stops being `active`), `trg_membership_roles_after_update_historical_cases` (a role's `valid_to` is set) and `trg_data_grants_after_update_historical_cases` (a frozen grant is revoked). Each closes with `membership_ineligible` or `grant_revoked`, or `expired` if the case had run out.
+  - **Immutable:** `trg_historical_access_cases_before_update_keep` and `trg_historical_access_cases_before_truncate_keep` (`privacy.keep_historical_access_case_tg`) allow one change only, `open → closed`, touching only `status`, `closed_at`, `closed_reason` and `closed_by_membership_id`. Delete and truncate are refused (`23514`).
+  - **Indexes:**
+    - `uidx_historical_access_cases_open` on `(relationship_id, authorized_membership_id, purpose)` where `status = 'open'`;
+    - `idx_historical_access_cases_organization_opened` on `(organization_id, opened_at desc, id desc)`, for the list;
+    - `idx_historical_access_cases_relationship` on `(relationship_id, person_id, organization_id)`;
+    - `idx_historical_access_cases_authorized` and `idx_historical_access_cases_opened_by` on `(membership_id, organization_id)`;
+    - `idx_historical_access_cases_closed_by`, partial where a closer is named.
+
+    There is no index on `case_reference`, because no operation searches by it.
+  - **Access:** RLS is enabled and forced, and `allfit_api` has no privilege on the table. It opens, closes and lists through `privacy.open_historical_access_case`, `privacy.close_historical_access_case` and `privacy.list_historical_access_cases`, and reads through the four frozen read functions (`OP-PRV-020`). The policies are in `V1_RLS_MATRIX.md` § `HISTORICAL_ACCESS_CASE`. Opening and reading require a Studio sign-in less than ten minutes old (`identity.require_recent_studio_authentication`, §4.2.1) instead of MFA; closing and listing do not.
+  - **Events:** `privacy.historical_access_case_opened.v1` and `privacy.historical_access_case_closed.v1`, with identifiers, purpose and instants and never the justification or the reference. There is no `privacy.historical_access_case_expired.v1`, because no worker watches the clock. No worker consumes either event yet.
+  - **Retention, not implemented:** the 24 months above are not enforced. No job purges cases, and the immutability trigger refuses deletes until a disposition path is built.
 
 ### 7.9 `privacy.access_events`
 
@@ -924,6 +969,12 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
   - La proyección lleva el registro del acceso y nada de lo leído. `T-PRV-AUD-01` lo asegura contra el tipo de resultado declarado, así que una columna de contenido añadida después rompe la prueba en vez de filtrarse.
   - Las lecturas de la cola de verificación (`HU-BO-021`) escriben aquí con `purpose = 'professional_credential_verification'` y `access_mode = 'support_metadata'`: quien verifica lee bajo un deber de plataforma, no bajo un permiso de la persona. La primera versión (`20260913120000`) escribía `live` y afirmaba que el enum no tenía un valor de plataforma, cuando `support_metadata` existía desde `20260910130000`; `20260913140000` lo corrige. Registrada como `live`, la lectura le habría dicho a un auditor que la persona consintió.
   - **The person search writes here too (ADR-046 decision 4, migration `20261115100000_an_admin_finds_a_person_by_name.sql`).** `support.search_people` writes one row per person it returns, with `resource = 'support.person_search'`, `purpose = 'support_diagnosis'` and `access_mode = 'support_metadata'`, before the answer travels, so each person sees the search in her own history. The person file keeps writing one row with `resource = 'support.v_support_metadata'`. Tests: `T-SUP-SEARCH-02`.
+  - **The first `frozen` rows (STUDIO-55, migration `20261116090000_a_case_opens_the_frozen_history.sql`).** Every read through a historical access case writes here before answering, with `access_mode = 'frozen'`, `purpose = 'frozen_history_review'`, the authorized membership as actor, the relationship and `historical_access_case_id`. The rows are:
+    - one `allowed` row per frozen category used, with its grant, `scope_code` and `scope_version`: `relationship_training` or `prior_training_history` on `execution.executed_sessions`, and `body_progress` on `identity.body_progress_records`;
+    - one `allowed` row with no grant or scope for the relationship header (`relationships.service_relationships`);
+    - one `denied` row when no category stayed readable, when a session is not visible, or when the case cannot be exercised. The last is written against the person whenever the case or the relationship belongs to the organization, so she sees the attempt.
+
+    The table itself enforces no frozen-specific rule: `privacy.log_access_event` is the only way in, and only the frozen read functions call it with `frozen`. Tests: `T-PRV-HIST-API-05`, `-API-12`, `-API-16`, `-API-20`, `-API-23` and `-INT-11` (no frozen read is recorded without its case).
 - **Pendiente:** `support.list_break_glass_audit_events` **no existe todavía**. `support.exercise_break_glass` inserta aquí directamente, en la misma transacción que su propia evidencia, y desde `20260910170000` una FK exige que la fila exista — sin ella la evidencia del operador podía apuntar a una auditoría que nunca se escribió, y la persona no habría visto nunca el intento registrado en su contra. La revisión específica de `A12/audit_break_glass` sobre un expediente sigue pendiente, junto con la revisión posterior de `12.3`; la consulta general del registro ya existe y se describe arriba.
 - **RLS:** en la tabla base, `SELECT` solo cuando `subject_person_id = access_control.person()`; `privacy.v_my_access_events` nunca incluye sujetos organización. `INSERT` directo revocado. Ninguna organización, `A10` o `A12` recibe `SELECT` directo.
 - **Consultas:** `(subject_person_id, occurred_at desc)` para la persona; `(subject_organization_id, occurred_at desc)` solo para investigación restringida de plataforma.

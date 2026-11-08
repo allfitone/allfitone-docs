@@ -1412,3 +1412,206 @@ Tests:
   instead of a missing one.
 - API: `T-BG-API-01`, `02`, `08`, `09` and `20`; `T-SUP-API-23` to `28`, `46`, `48` and `49`;
   `T-SUP-UNIT-01` and `02`; `T-IDN-RECOVERY-API-10` reads a recovery without a case.
+
+## A case opens the frozen history (STUDIO-54..56)
+
+`20261116090000_a_case_opens_the_frozen_history.sql` builds the historical access case of
+ADR-023 (HU-STUDIO-061, 062 and 063; code branch `feat/historical-access-case`, whose pull
+request and database deploy are pending). The decisions, and how they differ from the
+ADR, are in
+[ALLFIT_ARCHITECTURE_DECISIONS.md](refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md),
+ADR-023, section *As implemented (STUDIO-54/55/56)*.
+
+It does five things:
+
+- **A recent sign-in.**
+  - **The column.** It adds `identity.access_sessions.authenticated_at`, nullable and
+    allowed only on the `studio` surface (`ck_access_sessions_authenticated`), and
+    `identity.recent_authentication_window()`, ten minutes.
+  - **The session functions.** It replaces `identity.create_access_session` with a
+    seven-argument version whose last argument, `p_authenticated_at`, defaults to null;
+    the six-argument version is dropped. It also replaces `identity.load_access_session`,
+    which adds `recent_authentication_expires_at`.
+  - **The check.** It creates `identity.require_recent_studio_authentication(session_id)`,
+    which raises `AF401`.
+- **The case table.** It creates the enums `privacy.historical_access_purpose` and
+  `privacy.historical_case_status`, and the table `privacy.historical_access_cases`, with:
+  - forced row security and no privilege for `allfit_api`;
+  - the eligibility constraint trigger, which is not deferrable;
+  - the immutability triggers;
+  - six policies;
+  - one partial unique index, for one open case per relationship, membership and purpose.
+- **Open, close, list.** It creates `privacy.open_historical_access_case`,
+  `privacy.close_historical_access_case` and `privacy.list_historical_access_cases`,
+  executable by `allfit_api`.
+- **Closing on its own.** It adds three triggers that close open cases in the transaction
+  that makes them ineligible:
+  - `trg_data_grants_after_update_historical_cases` on `privacy.data_grants`, when a frozen
+    grant is revoked;
+  - `trg_organization_memberships_after_update_historical_cases` on
+    `organizations.organization_memberships`, when a membership stops being active;
+  - `trg_membership_roles_after_update_historical_cases` on
+    `organizations.membership_roles`, when a role ends.
+- **Reading through a case.**
+  - **The predicate.** `access_control.historical_case_exercisable`,
+    `privacy.frozen_category`, `access_control.can_read_frozen` and
+    `privacy.scope_reads_frozen`.
+  - **Three `for select` policies.** `executed_sessions_select_frozen`,
+    `execution_revisions_select_frozen` and `session_visibility_denials_select_frozen`, all
+    under the contract scope `frozen_history`. Each asks first whether that scope is open,
+    once per statement, and only then calls `access_control.reads_frozen_session`,
+    `access_control.frozen_case_covers_person` or
+    `access_control.frozen_case_covers_relationship`.
+  - **Why functions, not inline subqueries.** PostgreSQL expands a policy's subqueries,
+    with the policies of every table they name, into each plan that reads the table, and
+    every catalogue read of a gym's movement reads executed sessions through
+    `movements_select_executed`. With the subqueries inline, the movement commands became
+    four times slower and `organization-movement-concurrency.test.ts` timed out. A SQL
+    function with `set search_path` is never inlined (the shape of
+    `access_control.reads_under_break_glass`), so it is planned only when a case is read.
+  - **Four reads,** executable by `allfit_api`: `privacy.read_historical_relationship`,
+    `execution.list_frozen_executions`, `execution.read_frozen_execution` and
+    `identity.list_frozen_body_progress`. Each records `privacy.access_events` in `frozen`
+    mode before answering.
+
+**No backfill.** Every session created before the migration keeps `authenticated_at`
+null, so nobody holds a recent sign-in when it lands. A member who opens or reads a case
+gets `403 reauthentication-required` and signs in again through
+`GET /studio/v1/auth/start?reauthenticate=true`, which sends WorkOS `max_age=0`. Nothing
+else in Studio asks for it, so no other screen notices.
+
+**Locks.** With `lock_timeout = 5s` and `statement_timeout = 60s`, a busy table makes the
+migration fail rather than queue; retry it.
+
+- **`identity.access_sessions`:** adding the column and its check takes an
+  `ACCESS EXCLUSIVE` lock while the check validates. The column is null on every row, so
+  this is a short scan.
+- **`execution.executed_sessions`, `execution.execution_revisions` and
+  `privacy.session_visibility_denials`:** `CREATE POLICY` takes an `ACCESS EXCLUSIVE` lock
+  on each for an instant, with no scan.
+- **`privacy.data_grants`, `organizations.organization_memberships` and
+  `organizations.membership_roles`:** `CREATE TRIGGER` takes a `SHARE ROW EXCLUSIVE` lock
+  on each, which blocks writes but not reads, for an instant.
+
+**Deploy order.** Merging runs **Deploy AWS**; dispatch **Deploy Database AWS** right after
+it finishes, as in [the section above](#an-allfit-admin-holds-every-duty-adr-046).
+
+- **Studio sign-in breaks until the migration is applied.** The new API calls
+  `identity.create_access_session` with seven arguments, which do not exist yet, so every
+  callback answers `503 upstream-unavailable` and nobody can sign in to Studio.
+- **Existing sessions keep working.** `loadSession` reads `select *` and treats a missing
+  `recent_authentication_expires_at` as null.
+- **The seven historical routes answer `503`,** because their functions do not exist yet.
+- **The other order is safe.** The old API's six-argument call resolves to the new function
+  through the default, so applying the migration before the API ships breaks nothing. Keep
+  the gap short either way.
+
+**What a case can read depends on what was published.** A case reads only the scope
+versions whose rules mark a resource `historical_readable` and do not exclude it. The V1
+rules in `packages/db/scripts/v1-scope-rules.ts` mark executed sessions (`relationship_training`
+and `prior_training_history`, at `read`) and the six structured fields of body measurements
+(`body_progress`) since 5 November 2026 (commit `9dcd837`, HU-BO-024). A version published
+from earlier rules may mark nothing, and a case over a relationship frozen on it reads
+nothing: the reads answer an empty list or `403 scope-required`, never an error.
+
+**Events.** `privacy.historical_access_case_opened.v1` and
+`privacy.historical_access_case_closed.v1` go to the outbox with identifiers, purpose and
+instants, never the justification or the reference. No worker consumes them yet. There is
+no `expired` event: a case past its hours reads as `expired` and opens nothing, and it is
+stored as closed only when someone closes it or opens an equivalent case, or when one of
+the three triggers closes it.
+
+**A gap the triggers leave.** No trigger watches `organizations.organizations`. A case
+whose organization is suspended stays `open`, but cannot be exercised, because the read
+checks that the organization is active.
+
+What to watch, read-only:
+
+```sql
+-- Published versions and how many historical rules each has. A version with 0 lets a
+-- case read nothing under it.
+select definition.scope_code, definition.version_number,
+       count(*) filter (where rule.historical_readable and not rule.is_excluded)
+         as historical_rules
+from privacy.scope_definitions as definition
+left join privacy.scope_resource_rules as rule on rule.scope_definition_id = definition.id
+where definition.status = 'published'
+group by definition.scope_code, definition.version_number
+order by definition.scope_code, definition.version_number;
+
+-- Frozen grants whose version keeps nothing readable afterwards.
+select shared.scope_code, definition.version_number, count(*) as frozen_grants
+from privacy.data_grants as shared
+join privacy.scope_definitions as definition on definition.id = shared.scope_definition_id
+where shared.status = 'frozen'
+  and not exists (
+    select 1 from privacy.scope_resource_rules as rule
+    where rule.scope_definition_id = shared.scope_definition_id
+      and rule.historical_readable and not rule.is_excluded
+  )
+group by shared.scope_code, definition.version_number;
+
+-- Must be empty: an open case after a frozen grant of its relationship was revoked.
+select hcase.id
+from privacy.historical_access_cases as hcase
+join privacy.data_grants as shared on shared.relationship_id = hcase.relationship_id
+where hcase.status = 'open'
+  and shared.status = 'revoked'
+  and shared.revoked_at >= hcase.opened_at;
+
+-- Must be empty: an open case whose authorized membership is no longer active.
+select hcase.id
+from privacy.historical_access_cases as hcase
+join organizations.organization_memberships as membership
+  on membership.id = hcase.authorized_membership_id
+where hcase.status = 'open'
+  and membership.status <> 'active';
+
+-- Must be 0: a frozen read recorded without its case (the last day only, so the
+-- partition key prunes).
+select count(*)
+from privacy.access_events
+where access_mode = 'frozen'
+  and historical_access_case_id is null
+  and occurred_at >= now() - interval '1 day';
+```
+
+**Open follow-ups.**
+
+- No Studio screen opens, lists, closes or reads a case yet; the routes are backend only.
+- The 24 months of case retention in the data dictionary are not enforced, and the
+  immutability trigger refuses deletes until a disposition path exists.
+- No test covers a case refused because the person closed her account, though the predicate
+  checks it.
+- Frozen nutrition guidance (`OP-NUT-011` with a case) is not built.
+
+Tests:
+
+- `T-PRV-HIST-01` (58) covers `OP-PRV-018`, `-019` and `-025`, under these groups:
+  - the table under forced row security;
+  - the recent sign-in: Studio only, never in the future, the ten-minute window;
+  - who may open a case, and whom it may name;
+  - the validation;
+  - opening, replaying and the one open case;
+  - the events, with no justification or reference;
+  - listing per role;
+  - immutability;
+  - closing and converging;
+  - derived expiry;
+  - closing on its own: role ended, membership left, frozen grant revoked;
+  - a category that did not freeze.
+- `T-PRV-HIST-02` (40) covers `OP-PRV-020`:
+  - the three policies, and that nothing is visible without a case;
+  - a stale sign-in;
+  - each read, with the cut, the hidden, corrected and annulled sessions, the measurements
+    recorded before the cut and the fields the version kept;
+  - the access record per category, and each refusal recorded;
+  - expired, closed and foreign cases;
+  - the revocation that closes the case;
+  - that `allfit_api` cannot call the predicate;
+  - that no case reads her health.
+- `historical-access-case-concurrency.test.ts` (2) races a revocation against an opening
+  in both orders.
+- API: `studio-historical-access.test.ts` (18) covers the seven routes, the headers, the
+  error mapping and the cache headers. The Studio identity tests and the WorkOS adapter
+  test cover `auth_time`, `reauthenticate=true` and `recent_authentication_expires_at`.

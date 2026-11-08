@@ -94,6 +94,13 @@ COMMIT;
 | `app.platform_role` | Rol de plataforma vigente, resuelto en la transacción contra `support.platform_role_assignments` | Actores de plataforma; **nunca** aceptado desde el cliente, ni desde un grupo de autenticación, ni desde caché |
 | `app.historical_access_case_id` | Caso histórico abierto y verificado | Solo lectura `frozen` |
 
+**As implemented (STUDIO-54..56, migration `20261116090000_a_case_opens_the_frozen_history.sql`). Deviation.** Neither of the last two rows exists as a setting:
+
+- **`app.authn_assurance`:** Studio stays AAL1, and no `aal2` is ever set. The stronger authentication the frozen read asks for is a recent sign-in. `identity.require_recent_studio_authentication(session_id)` checks that the Studio session of the request, which the API passes as an argument and the function matches to `access_control.person()`, has an `authenticated_at` less than ten minutes old (`AF401` otherwise). It is the owner's decision of 8 November 2026 (ADR-023, *As implemented*).
+- **`app.historical_access_case_id`:** the case travels as the HMAC-signed contract scope `frozen_history`, opened by `privacy.open_frozen_read` with `access_control.open_contract_scope('frozen_history', case_id)` only after the case is found exercisable, and read by the frozen policies through `access_control.contract_scope('frozen_history')`. A value the client sets cannot forge it.
+- **`app.purpose`:** it is `frozen_history_review` for every frozen read.
+- **New scopes:** two more contract scopes, `historical_case_settlement` (a relationship) and `historical_case_membership` (a membership), let the closing triggers see and close the cases they make ineligible.
+
 **Reglas de contexto:**
 
 1. Un contexto ausente **no** significa acceso amplio: significa `anonymous`, y `anonymous` no lee ninguna tabla de dominio.
@@ -168,6 +175,28 @@ access_control.actor_kind() = 'professional'
 ```
 
 El caso no reemplaza ninguna condición y `manage_historical_access` no aparece en la lectura: sirve para abrir/cerrar casos, no para ejercerlos. La asignación profesional efectiva tampoco aparece; el antiguo titular necesita un caso igual que cualquier otro actor elegible.
+
+**As implemented (STUDIO-55, migration `20261116090000_a_case_opens_the_frozen_history.sql`).** The formula is split in three functions, none executable by `allfit_api` (`T-PRV-HIST-INT-12`):
+
+- `access_control.historical_case_exercisable(case_id)` holds when all of these do:
+  - the actor kind is `person`, since Studio runs on the person actor;
+  - the case belongs to `access_control.org()`;
+  - it names the membership the request acts as (`app.actor_membership_id`), and the actor owns that membership;
+  - it is `open` and `expires_at > clock_timestamp()`;
+  - the person's account is not `closed`;
+  - the authorized membership still qualifies: an active membership in an active organization, with a current `owner` or `admin` role if she opened the case for herself, or `owner`, `admin` or `coach` if she is the former holder.
+- `privacy.frozen_category(case_id, scope_code, resource)` returns the `frozen` grant of the case's relationship for that scope when its version has a non-excluded `historical_readable` rule for the resource and does not exclude all of it.
+- `access_control.can_read_frozen(case_id, scope_code, resource)` is the conjunction of the two.
+
+**Deviations from the formula above:**
+
+- **The cut:** it is the case's `cut_at`, which the eligibility trigger checked against the relationship's `ended_at` when the case opened, and not `grant.frozen_at` per row. A session counts if `ended_at <= cut_at` and no `execution.execution_revisions` row was created after the cut. A measurement counts if `created_at <= cut_at`.
+- **Recent sign-in, purpose and request id:** a sign-in less than ten minutes old replaces `aal2`, and `privacy.open_frozen_read` checks it together with the request id and the purpose, before the predicate and outside it.
+- **No purpose match:** a case does not match a purpose at read time; its purpose is recorded, not compared.
+- **Fields:** they are filtered by `privacy.scope_reads_frozen(definition, resource, field)` in the closed function.
+- **Denials:** `frozen_session_denied` is part of `access_control.reads_frozen_session`, the function the session policy calls: a denial for the relationship that is `active`, or that has `frozen_denied_at`.
+- **Retention:** not checked, because no frozen data has a retention end yet.
+- **Physical form:** the formula is the policy `executed_sessions_select_frozen`, with `execution_revisions_select_frozen` and `session_visibility_denials_select_frozen` so the cut and the denials can be evaluated under forced row security. Each policy checks that the contract scope `frozen_history` is open and then calls a function (`access_control.reads_frozen_session`, `frozen_case_covers_person`, `frozen_case_covers_relationship`). The functions are SQL with `set search_path`, which PostgreSQL never inlines, so the cases, revisions and denials stay out of every other plan that reads sessions, such as `movements_select_executed`. Body measurements have no frozen policy: `identity.list_frozen_body_progress` reads them through the existing owner policy and applies the cut and the fields itself.
 
 ### 5.3 Antipatrón prohibido en los predicados
 
@@ -563,6 +592,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **`T-REL-4` (negativa)** — Una persona no puede tener dos relaciones activas con la **misma** organización: lo impide un índice único parcial.
 - **`T-REL-5` (positiva)** — Terminar la relación **congela** los grants (`frozen`, con `frozen_at`), desacopla las asignaciones y pausa las sesiones futuras en **una** transacción, con un único instante efectivo.
 - **`T-REL-8` (positiva)** — Con caso exacto y `access_control.can_read_frozen`, la superficie histórica devuelve el conjunto autorizado **hasta la fecha de corte** y **ninguna** fila posterior. Se prueba creando una ejecución después del corte y verificando que no aparece ni en detalle ni en conteos.
+  - **As implemented (STUDIO-55):** `T-PRV-HIST-RLS-12`, `-API-02`, `-API-11` and `-API-13`. The historical surface returns no counts.
 - **`T-REL-9` (negativa)** — Un grant `frozen` **no** habilita ninguna escritura: ni observaciones, ni propuestas de corrección, ni asignaciones.
 - **`T-REL-6` (negativa)** — Los datos creados después de la terminación no son visibles para la organización anterior.
 - **`T-REL-7` (negativa)** — Una relación nueva con la misma organización no hereda gestión, grants, notas privadas ni acceso a la asignación desacoplada.
@@ -666,6 +696,7 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 - **`T-GRANT-5` (negativa)** — Membresía o rol `admin` sin asignación ni capacidad **no** permiten ejercer el grant.
 - **`T-GRANT-6` (positiva)** — Revocar corta el acceso en la misma transacción: una lectura inmediatamente posterior devuelve vacío, sin ventana de caché.
 - **`T-GRANT-9` (positiva)** — Revocar un grant `frozen` lo cambia a `revoked`, cierra todos los casos abiertos de su relación e impide la siguiente lectura de ese scope.
+  - **As implemented (STUDIO-54..56):** `trg_data_grants_after_update_historical_cases` closes them in the same transaction. Tests: `T-PRV-HIST-AUTO-04..06`, `T-PRV-HIST-API-28` and `historical-access-case-concurrency.test.ts` (a revocation racing an opening).
 - **`T-GRANT-7` (negativa)** — Un grant `read` no habilita ninguna escritura; un `contribute` conserva procedencia y no sobrescribe.
 - **`T-GRANT-8` (negativa)** — Cambiar organización, parte responsable, finalidad o scope exige nueva aceptación: el grant anterior no se reutiliza.
 
@@ -695,6 +726,7 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
   - **Why the intent still holds:** no function returns a denial row to an organization, and `allfit_api` has no privilege on the table, so no organization reads this table through the API.
   - **Grants:** `allfit_api` has none, against the `SELECT/INSERT/UPDATE/DELETE` listed above; writes go through `privacy.hide_session` and `privacy.restore_session`.
   - **Tests:** `T-PRV-HIDE-RLS-01..04`, `T-EXE-AUTHORIZED-RLS-03` and `-RLS-06`. `T-DENY-2` (aggregates) and `T-DENY-6` (planning links) have nothing to test yet.
+- **As implemented (STUDIO-55, migration `20261116090000_a_case_opens_the_frozen_history.sql`). Deviation.** A third policy, `session_visibility_denials_select_frozen` (`for select`), lets the denials of the case's relationship be seen inside the contract scope `frozen_history` while that case is exercisable. It exists for the same reason as the screening policy: the frozen session policy must see them to exclude a session. No read returns a denial. `T-DENY-8` and `T-DENY-9` are `T-PRV-HIST-RLS-12`, `-RLS-14` and `-API-11`: a denial `active` at the cut, or restored after it with `frozen_denied_at` kept, hides the session from the case. A denial restored before the cut does not.
 
 #### `HISTORICAL_ACCESS_CASE`
 
@@ -716,6 +748,26 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 - **`T-HIST-5` (positiva)** — El antiguo titular con membresía activa y caso exacto lee solo el field-set histórico hasta `T`.
 - **`T-HIST-6` (negativa)** — `health_context`, fotos, EXIF, perfil actual y filas posteriores a `T` permanecen ausentes.
 - **`T-HIST-7` (negativa)** — Ninguna policy histórica concede `INSERT`, `UPDATE`, `DELETE` o exportación masiva.
+- **As implemented (STUDIO-54..56, migration `20261116090000_a_case_opens_the_frozen_history.sql`). Deviation.** RLS is enabled and forced, and every policy is `to allfit_owner`. `allfit_api` has **no** privilege on the table, against the `SELECT`, `INSERT` and `UPDATE(status, closed_at)` listed above. It reaches the cases only through `privacy.open_historical_access_case`, `privacy.close_historical_access_case`, `privacy.list_historical_access_cases` and the frozen reads (`T-PRV-HIST-RLS-01/02`).
+  - **The policies:**
+    - `historical_access_cases_select_manager`: the case belongs to `access_control.org()` and the actor has `manage_historical_access` there;
+    - `historical_access_cases_select_authorized`: the actor owns `authorized_membership_id`, so the member a case names finds it, open or closed;
+    - `historical_access_cases_select_settlement` and `historical_access_cases_update_settlement`: the case's relationship is the contract scope `historical_case_settlement`, or its authorized membership is `historical_case_membership`. Only the closing triggers open those scopes, whoever caused the change: the person revoking, or an admin changing a membership or a role;
+    - `historical_access_cases_insert_manager`: `manage_historical_access` in `access_control.org()`, and the actor owns `opened_by_membership_id`;
+    - `historical_access_cases_update_manager`: `manage_historical_access` in `access_control.org()`.
+
+    There is no delete policy, and the immutability trigger refuses delete and truncate for the owner too.
+  - **Exercise is not a row policy on the case:** it is `access_control.historical_case_exercisable`, evaluated by the frozen policies on the data (§5.2). The case itself is visible to its authorized member through `historical_access_cases_select_authorized`.
+  - **Context:** organization and membership from the route, a recent sign-in instead of `aal2`, `app.purpose = 'frozen_history_review'`, `app.request_id`, and the case in the contract scope `frozen_history` (§4).
+  - **Indexes:** they are in `V1_DATA_DICTIONARY.md` §7.8. The policies use `idx_historical_access_cases_organization_opened` and `idx_historical_access_cases_authorized`, and the open case is found by `uidx_historical_access_cases_open`.
+  - **Tests:**
+    - `T-HIST-1` is `T-PRV-HIST-RLS-11`, `-API-19` and `-API-27`;
+    - `T-HIST-2` is `T-PRV-HIST-RLS-17`, `-API-25` and `-API-26`. The purpose is not compared at read time;
+    - `T-HIST-3` is `T-PRV-HIST-VAL-07..10`, `-AUTO-01..03` and `-AUTH-04/05`;
+    - `T-HIST-4` is `T-PRV-HIST-RLS-16`, `-API-22..24`, `-INT-04`, `-VAL-02` and `-AUTH-01/02`, `-AUTH-11`, with a recent sign-in in place of `aal2`;
+    - `T-HIST-5` is `T-PRV-HIST-API-01..18` and `-API-21`;
+    - `T-HIST-6` is `T-PRV-HIST-INT-13` and `-API-17`. Photos and the profile have no historical rule, so they are never read, and no test asks for them;
+    - `T-HIST-7`: every frozen policy is `for select`, and no function writes domain data, though no assertion names this.
 
 #### `ACCESS_EVENT`
 
@@ -734,6 +786,7 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 - **`T-ACCESS-3` (positiva)** — Si el evento no puede escribirse, la lectura falla. Se prueba forzando el fallo de la inserción.
 - **`T-ACCESS-4` (positiva)** — Los accesos de un suplente y los de break-glass aparecen distinguidos y son visibles para la persona.
 - **`T-ACCESS-5` (positiva)** — Toda lectura `frozen`, permitida o denegada, registra caso, modo, recurso, propósito, `request_id` y resultado; la persona puede verla.
+  - **As implemented (STUDIO-55):** `T-PRV-HIST-API-05`, `-API-12`, `-API-16`, `-API-20`, `-API-23` and `-INT-11`. The rows are described in `V1_DATA_DICTIONARY.md` §7.9.
 - **`T-ACCESS-6` (negativa)** — `A10` y `A12` no pueden hacer `SELECT` directo sobre `privacy.access_events`.
 - **`T-ACCESS-7` (positiva)** — `A12/audit_break_glass` obtiene solo metadatos `access_mode='break_glass'`; `A10` ve únicamente sus eventos de soporte y la persona ve los eventos cuyo sujeto es ella.
 - **`T-ACCESS-8` (organización)** — `OP-ORG-013` registra sujeto organización, modo `organization_operational`, recurso cerrado, actor/persona/membresía/request/purpose de contexto y todos los campos de relación/grant/caso/scope nulos antes de devolver contenido.
@@ -1336,6 +1389,8 @@ Un índice que solo existe para consultas de negocio no basta: la condición RLS
 | `NUTRITION_GOAL_SET` | único `(person_id)` | Una línea longitudinal |
 | `NUTRITION_GOAL_VERSION` | `(goal_set_id,created_at DESC,id DESC)` + `(origin_relationship_id,created_at DESC,id DESC)` + únicos parciales activo/pendiente | Estado, orden estable y concurrencia |
 | `NUTRITION_GOAL_TARGET` | único `(goal_version_id,nutrient_definition_id)` | Proyección de targets |
+
+**As implemented, `HISTORICAL_ACCESS_CASE` (STUDIO-54..56).** The two composite indexes in the row above were not built. The predicate finds the case by its primary key, from the contract scope, so it needs neither. The indexes built are listed in `V1_DATA_DICTIONARY.md` §7.8: `uidx_historical_access_cases_open` (the one open case per relationship, membership and purpose), `idx_historical_access_cases_organization_opened` (the list), and one per foreign key.
 
 ## 9. Catálogo de pruebas
 

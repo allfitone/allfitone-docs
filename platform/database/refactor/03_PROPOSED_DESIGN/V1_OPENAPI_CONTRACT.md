@@ -92,6 +92,13 @@ generado son el inventario exhaustivo.
 | Obtener foto Studio | `GET .../nutrition/meals/{mealId}/photo` | `OP-NUT-013` | path + bearer | bytes JPEG/PNG/WebP | `private, no-store` |
 | Leer resúmenes Studio | `GET .../nutrition/daily-summaries` | `OP-NUT-010` | rango | `NutritionDailySummaryPage` | `private, no-store` |
 | Leer/proponer guía Studio | `GET/POST .../nutrition/goals/versions` | `OP-NUT-011/012` | query / `ProfessionalNutritionGoalVersionCreate` | `NutritionGoalVersionPage` / `NutritionGoalVersion` | `private, no-store` / `no-store` |
+| Open a historical access case | `POST /studio/v1/organizations/{organizationId}/historical-access-cases` | `OP-PRV-018` | `HistoricalAccessCaseCreate` + command headers | `201 HistoricalAccessCase` | `no-store` |
+| List historical access cases | `GET /studio/v1/organizations/{organizationId}/historical-access-cases` | `OP-PRV-025` | query `relationship_id`, `limit`, `cursor` | `HistoricalAccessCasePage` | `private, no-store` |
+| Close a historical access case | `POST …/historical-access-cases/{caseId}/closure` | `OP-PRV-019` | command headers, no body | `HistoricalAccessCase` | `no-store` |
+| Read an ended relationship through a case | `GET /studio/v1/organizations/{organizationId}/historical-relationships/{relationshipId}` | `OP-PRV-020` | header `X-Historical-Access-Case` | `HistoricalRelationship` | `private, no-store` |
+| List its frozen sessions | `GET …/historical-relationships/{relationshipId}/executions` | `OP-PRV-020` | header `X-Historical-Access-Case`; query `limit`, `cursor` | `FrozenExecutionPage` | `private, no-store` |
+| Read one frozen session | `GET …/historical-relationships/{relationshipId}/executions/{executionId}` | `OP-PRV-020` | header `X-Historical-Access-Case` | `FrozenExecution` | `private, no-store` |
+| List its frozen body measurements | `GET …/historical-relationships/{relationshipId}/body-progress` | `OP-PRV-020` | header `X-Historical-Access-Case`; query `limit`, `cursor` | `FrozenBodyProgressPage` | `private, no-store` |
 
 **Authorized executions and session visibility (STUDIO-47/48).**
 
@@ -142,6 +149,42 @@ generado son el inventario exhaustivo.
 - **Space.** `BodyPhoto` gains `shared_with` (`BodyPhotoShareSummary[]`). `OP-IDN-061` and `OP-IDN-062` take `Idempotency-Key` and `Command-Id`, and both answer `200` with the share, like `OP-PRV-006` and `-007`, not `204`.
 
 **First program in a client invitation (STUDIO-16).** `ClientInvitationCreate` (`OP-REL-001`) takes an optional `ClientInvitationProgramRequest` `{program_version_id, starts_on, timezone}`, and `ClientInvitation` answers `program_proposal` (`ClientInvitationProgramProposal` or null). `ClientInvitationPresentation` adds `program_proposal` (`ClientInvitationProgramOffer` or null); `ClientInvitationDecisionCreate` adds optional `program_decision` and `timezone`; `ClientInvitationDecisionResult` adds `program_proposal` (`ClientInvitationProgramOutcome` or null: `invitation_intent_id`, `intent_status`, `assignment_id`, `unmaterialized_reason`). Every addition to a response is required and nullable; nothing existing changes. The identity routes keep their legacy error envelope, and a `422` from a program rule carries the field's JSON pointer in `error.detail`.
+
+**The historical access case (STUDIO-54..56, HU-STUDIO-061..063).** Code branch `feat/historical-access-case`; its pull request and database deploy are pending.
+
+- **Studio.** The seven operations above are under the new tag *Studio Historical Access* and use `cookieAuth` with the exact Studio `Origin`.
+  - **Commands.** Opening and closing take `Idempotency-Key` (UUIDv4) and `Command-Id` (UUIDv7), and a retry answers with `Idempotent-Replay`.
+  - **Reads.** The four reads require the header `X-Historical-Access-Case` (parameter `HistoricalAccessCaseHeader`); the closure takes the path parameter `HistoricalAccessCaseId`. Lists are keyset pages (`Page`: `has_more`, `next_cursor`), `limit` 1 to 100, default 25.
+- **Schemas.**
+  - `HistoricalAccessCaseCreate` is `{relationship_id, authorized_membership_id, purpose, case_reference, justification, duration_hours}`, closed. `purpose` is a `HistoricalAccessPurpose` (`service_dispute`, `legal_or_regulatory_obligation`, `customer_support_request`, `security_investigation`, `authorized_quality_review`). `case_reference` is 1 to 120 characters, `justification` 1 to 2000, and `duration_hours` 1 to 24.
+  - `HistoricalAccessCase` carries:
+    - `id`, `organization_id`, `relationship_id` and `cut_at`;
+    - `person` (`HistoricalCasePerson`), and `authorized` and `opened_by` (`HistoricalCaseMember`: `membership_id` and names);
+    - `purpose`, `case_reference` and `justification`;
+    - `status`: `open`, `closed`, or `expired` for an open case past its hours;
+    - `opened_at`, `expires_at` and `closed_at`;
+    - `closed_reason` (`closed_by_manager`, `expired`, `grant_revoked`, `membership_ineligible`, or null) and `closed_by` (a member or null).
+  - `HistoricalRelationship` is `{relationship {id, person, ended_at}, case, scopes[{code, version, frozen_at}]}`: only the frozen categories that stayed readable.
+  - `FrozenExecutionSummary` is the session header with `origin` (`AuthorizedExecutionOrigin`) and `applied_scope`. `FrozenExecution` adds the shared result items (`ExecutionDetailSegment`, `-StrengthSet`, `-EnduranceLap`, `-IntervalResult`, `-RoundResult`, `-MobilityResult`). It has no observations, no planned session, no status or validation and no capture source.
+  - `FrozenBodyProgressPage` is `{applied_scope, data, page}` with the existing `ClientBodyProgressRecord`.
+- **Responses.**
+  - `HistoricalAccessForbidden` is `403` with `forbidden` or `reauthentication-required`, on opening and on the relationship and session-list reads.
+  - `HistoricalReadForbidden` is `403` with `reauthentication-required` or `scope-required`, on the session detail and body progress.
+  - `reauthentication-required` is a new error code: «A recent sign-in is required». The client then goes to `GET /studio/v1/auth/start?reauthenticate=true`.
+  - Every error answers `no-store` with `Vary: Origin`.
+- **Identity.** `GET /studio/v1/auth/start` gains the query parameter `reauthenticate` (`OP-IDN-025`), and `StudioSession` gains the required, nullable `recent_authentication_expires_at` (`OP-IDN-027`); see §3.1.1.
+- **Error mapping.**
+  - **From the database:**
+    - `AF401` → `403 reauthentication-required`;
+    - `42501` → `403 forbidden`;
+    - `P0002` → `404`;
+    - `23505` and `P0004` → `409 conflict`;
+    - `22023`, `22P02`, `23514` and `23503` → `422 validation-failed`;
+    - `40001` → `409 idempotency-in-progress` with `Retry-After: 1`;
+    - anything else → `503`.
+  - **From a read's outcome:** a case that cannot be exercised, or a session that is not visible, is `404`. A missing frozen category is `403 scope-required`, naming `relationship_training` or `body_progress`.
+  - **Before the database:** a wrong `Origin` is `403`. An invalid identifier, cursor or command header is `400`. A body that is not JSON is `415`, and a body outside the closed schema is `422`.
+- **Not changed.** `OP-NUT-011` already declared an optional `X-Historical-Access-Case` (parameter `HistoricalAccessCase`) for frozen nutrition guidance. Neither that Studio route nor frozen nutrition is built in the API yet.
 
 La lectura Studio posterior a la revocación reutiliza las operaciones GET correspondientes y, salvo la excepción de medios, responde `403 scope-required`; la revocación no crea operaciones adicionales. `OP-NUT-013` es la excepción cerrada: ante recurso inexistente o cualquier autorización no efectiva responde siempre el mismo `404` sin bytes para no revelar la existencia de la foto.
 
@@ -194,6 +237,7 @@ Las operaciones técnicas `OP-IDN-025`, `OP-IDN-026` y `OP-IDN-028` no crean una
   por la interfaz. El email verificado se cifra dentro de la sesión para decidir
   invitaciones y nunca se serializa en esta respuesta.
 - `registration-incomplete` y `account-closed` forman parte del catálogo cerrado de errores. Una persona cerrada causa revocación local.
+- **As implemented, a recent sign-in (STUDIO-54..56).** The callback stores the verified token's `auth_time` with the session (`identity.access_sessions.authenticated_at`), and `StudioSession.recent_authentication_expires_at` says until when that sign-in counts as recent: ten minutes, or null when the provider did not say. `GET /studio/v1/auth/start?reauthenticate=true` sends WorkOS `max_age=0` and forces a fresh sign-in. Only the historical access case needs it, to open and to read; PostgreSQL checks it on every such call.
 - El refresh ocurre fuera de la transacción PostgreSQL; el token rotado se persiste por compare-and-swap. Un fallo transitorio no destruye una sesión todavía vigente.
 - Logout exige `Origin` exacto, revoca localmente, borra la cookie y usa la URL alojada de WorkOS por `sid` con retorno a Studio. Es idempotente si la cookie falta o la sesión ya fue revocada. Un registro local de cierre nunca reactiva una cookie válida: `401` permite volver al acceso y `200`, `503` o un fallo de red mantienen el workspace desmontado hasta completar el cierre con `reason=recovery`.
 
