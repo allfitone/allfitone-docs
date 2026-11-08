@@ -84,6 +84,7 @@ Las rutas personales `GET /studio/v1/me`, `GET /studio/v1/me/memberships` y `GET
 - Los claims `org_id`, `role` y `permissions` que WorkOS pueda transportar se ignoran para autorización de negocio. Organizaciones, roles, relaciones, consentimientos y deberes de plataforma viven en PostgreSQL (ADR-002 y ADR-028).
 - Space usa Authorization Code con PKCE como cliente público y nunca contiene una API key o client secret de WorkOS.
 - `auth_time` permite comprobar frescura de reautenticación, pero no basta para establecer AAL2. Sin evidencia verificable de MFA/step-up, cualquier operación AAL2 falla cerrada.
+  - **As implemented (STUDIO-54..56, migration `20261116090000_a_case_opens_the_frozen_history.sql`):** the historical access case is the first operation that uses `auth_time`. By the owner's decision of 8 November 2026 it asks for that freshness, not AAL2: a Studio sign-in less than ten minutes old, stored as `identity.access_sessions.authenticated_at` and renewed through `GET /studio/v1/auth/start?reauthenticate=true` (WorkOS `max_age=0`). Studio stays AAL1, and the AAL2 rule above still holds for every operation that asks for AAL2.
 
 ### 3.2 Formato
 
@@ -551,8 +552,11 @@ expiración.
 | `GET` | `/organizations/{orgId}/grants` | `OP-PRV-014` | Ninguno — estado del consentimiento |
 | `POST` | `/organizations/{orgId}/historical-access-cases` | `OP-PRV-018` | `manage_historical_access`; no concede lectura |
 | `POST` | `/organizations/{orgId}/historical-access-cases/{caseId}/closure` | `OP-PRV-019` | `manage_historical_access`; no concede lectura |
+| `GET` | `/organizations/{orgId}/historical-access-cases` | `OP-PRV-025` | None; a manager sees every case of the organization, and any other member only the cases that name them. Grants no read |
 
 Que ninguna de estas operaciones exija scope es deliberado: **gestionar la relación no es acceder a los datos.** Un `admin` administra clientes sin ver un solo registro fitness.
+
+**Historical access cases (STUDIO-54/56, migration `20261116090000_a_case_opens_the_frozen_history.sql`).** The three case routes are built as listed, under `/studio/v1`, with `cookieAuth`. Opening also requires a Studio sign-in less than ten minutes old (`403 reauthentication-required`); closing and listing do not. A case authorizes the opener or the professional who held the relationship at the cut, never another admin. Every answer is a `HistoricalAccessCase`, or a `HistoricalAccessCasePage` for the list, whose `status` reads `expired` once the case's hours run out. `V1_OPERATIONS_MATRIX.md` (`OP-PRV-018`, `-019`, `-025`) and `V1_OPENAPI_CONTRACT.md` §2 have the details.
 
 **Termination requests (STUDIO-26).** A request answers as `RelationshipTerminationRequest {request_id, relationship_id, status, reason, resolution, requested_by, resolved_by, created_at, resolved_at}`, with `status` one of `pending`, `withdrawn`, `rejected`, `resolved`, `superseded`. `OP-REL-009` answers `201`; `OP-REL-017` and `OP-REL-018` answer `200`. `OP-REL-011` carries the latest request as `termination_request`, or null: only the coach who asked and an owner or administrator ever receive one. Errors: `403` for an actor who could end the relationship herself, who is not the holder, or who may not withdraw or refuse; `404` for a relationship or request the actor cannot see; `409` for a second pending request or a request already settled; `422` for a blank reason or resolution.
 
@@ -631,6 +635,17 @@ El header `X-Historical-Access-Case` contiene un UUID opaco. El backend lo valid
 ```
 
 `data` se construye desde proyecciones históricas por recurso. La ausencia de una fila o campo no distingue entre no capturado, denegado, no histórico, revocado o inexistente.
+
+**As implemented (STUDIO-55, migration `20261116090000_a_case_opens_the_frozen_history.sql`). Deviation.** The four routes exist under `/studio/v1`, with `cookieAuth`, `private, no-store`, and the header `X-Historical-Access-Case` required on each.
+
+- **Requirements.** A Studio sign-in less than ten minutes old replaces «MFA/AAL2» (`403 reauthentication-required`). The case is checked against the organization, the relationship, the membership the request acts as, its state and its hours, but not against a purpose: the request carries none. A case that cannot be exercised answers `404`, like one that does not exist, and the attempt is recorded against the person.
+- **No shared envelope.** The JSON above is not built. Each route has its own shape:
+  - `HistoricalRelationship` gives the relationship, the case (with its purpose) and the frozen categories that stayed readable, with `frozen_at`;
+  - `FrozenExecutionPage` and `FrozenExecution` give each session's `applied_scope`;
+  - `FrozenBodyProgressPage` gives one `applied_scope` for the page.
+- **«No distingue» holds for rows, not for categories.** A session that is not visible is `404`, whatever the reason. But when no category stayed readable, the session detail and body progress answer `403 scope-required` naming it, as the live reads do. The session list answers an empty page instead.
+- **The cut.** Sessions count when completed, not annulled, `ended_at <= cut_at`, with no correction after the cut and not hidden from the relationship then or since. Measurements count when `created_at <= cut_at`. No count or total is returned.
+- **Readable afterwards.** Only executed sessions and structured body measurements carry historical rules in V1. The detail has no observations, planned session or capture source.
 
 ### 5.6 Contenido y asignación
 
@@ -936,7 +951,11 @@ Comandos con varias escrituras que deben ser atómicas. La API los invoca dentro
 | `relationships.terminate_relationship(rel_id)` | `OP-REL-007/008` | **La más crítica:** toma el actor del contexto y usa un instante `T` único; **congela** grants (`frozen`, `frozen_at = T`), cierra asignaciones y suplencias, cierra periodos de gestión, desacopla asignaciones, pausa sesiones futuras, cancela correcciones y propuestas nutricionales de esa relación, invalida read models |
 | `open_historical_access_case(rel_id, membership_id, purpose, reference, expires_at)` | `OP-PRV-018` | Valida relación terminada, actor elegible, capacidad de gestión, MFA y ventana `<=24h`; crea un caso exacto |
 | `close_historical_access_case(case_id)` | `OP-PRV-019` | Cierra el caso e invalida cualquier contexto asociado |
-| `privacy.revoke_grant(grant_id)` | `OP-PRV-005` | Acepta `active` o `frozen`, fija `revoked_at`, cierra casos históricos abiertos e invalida proyecciones y cachés antes de confirmar. Implementada como `privacy.revoke_my_grant` (migración `20261022120000`): todavía no hay casos históricos ni proyecciones que tocar |
+| As built (STUDIO-54..56, migration `20261116090000_a_case_opens_the_frozen_history.sql`): `privacy.open_historical_access_case(person, session, organization, relationship, authorized_membership, purpose, case_reference, justification, duration_hours, idempotency_key, command_id, request_hash)` | `OP-PRV-018` | A recent sign-in on that session instead of MFA; `manage_historical_access`; purpose from the enum; 1 to 24 hours; a terminated relationship that still holds a frozen grant, locked `for share`; the opener or the holder at the cut (`IX-10`); one open case per relationship, membership and purpose. It closes an equivalent expired case first, enqueues `privacy.historical_access_case_opened.v1`, and returns `(document, replayed)` |
+| As built: `privacy.close_historical_access_case(person, organization, case, idempotency_key, command_id, request_hash)` | `OP-PRV-019` | `manage_historical_access`, no recent sign-in; converges on a closed case; `closed_by_manager`, or `expired` when past its hours; enqueues `privacy.historical_access_case_closed.v1`. There is no context to invalidate: every read checks the case again |
+| As built: `privacy.list_historical_access_cases(person, organization, relationship, limit, cursor_opened_at, cursor_id)` | `OP-PRV-025` | The policies decide which cases; keyset on `opened_at` and `id`, newest first |
+| As built: `privacy.read_historical_relationship`, `execution.list_frozen_executions`, `execution.read_frozen_execution` and `identity.list_frozen_body_progress`, each with `(person, session, organization, relationship, case, …)` | `OP-PRV-020` | `privacy.open_frozen_read` checks the recent sign-in, the request id and the membership, sets `app.purpose = 'frozen_history_review'`, checks the case and opens the contract scope `frozen_history`. Each read records `privacy.access_events` in `frozen` mode before answering |
+| `privacy.revoke_grant(grant_id)` | `OP-PRV-005` | Acepta `active` o `frozen`, fija `revoked_at`, cierra casos históricos abiertos e invalida proyecciones y cachés antes de confirmar. Implementada como `privacy.revoke_my_grant` (migración `20261022120000`): todavía no hay casos históricos ni proyecciones que tocar. As implemented (STUDIO-54..56): the historical cases now exist, and the trigger `trg_data_grants_after_update_historical_cases` closes the open ones of the relationship when a frozen grant is revoked, in the same transaction |
 | `privacy.log_access_event(subject_person_id, subject_organization_id, relationship_id, data_grant_id, historical_access_case_id, scope_code, scope_version, access_mode, resource, result)` | `OP-PRV-015`, `OP-ORG-013` y toda lectura amparada | Exige exactamente un sujeto; la rama organización valida membership activo/tenant, modo/recurso cerrados y contexto personal nulo; toma actor, membresía, propósito, request y tiempo del contexto y falla la lectura si no puede registrar |
 | `create_assignment(rel_id, program_version_id, starts_on, tz)` | `OP-PLN-010` | Asignación + periodo de gestión + materialización de sesiones: **completa** si la versión tiene fecha de fin, **la semana de la asignación** si no la tiene. En ningún caso queda pendiente de un job de calendario |
 | `resolve_detached_assignment(asg_id, choice)` | `OP-PLN-015` | Reutiliza la misma asignación o cancela solo sesiones futuras no iniciadas |
@@ -984,7 +1003,7 @@ Los lookups `access_control.grant_of(relationship_id,scope_code)` y `access_cont
 | --- | --- | --- |
 | `identity.v_client_identity` | Studio · directorio | Sin datos fitness |
 | `identity.v_client_profile` | Studio | Field-set de la versión congelada |
-| `privacy.v_frozen_relationship_history` | Studio histórico | Solo campos `historical_readable`, filas `<= frozen_at`, denegaciones monotónicas y caso exacto |
+| `privacy.v_frozen_relationship_history` | Studio histórico | Solo campos `historical_readable`, filas `<= frozen_at`, denegaciones monotónicas y caso exacto. As built (STUDIO-55): not built; the four `OP-PRV-020` functions in §9 take its place, with frozen policies on `execution.executed_sessions`, `execution.execution_revisions` and `privacy.session_visibility_denials` |
 | `identity.v_client_body_progress` | Studio | URLs firmadas por petición |
 | `identity.v_client_health_context` | Studio | Minimizada |
 | `execution.v_client_executions` | Studio | Denegaciones **antes** de proyectar y contar |
