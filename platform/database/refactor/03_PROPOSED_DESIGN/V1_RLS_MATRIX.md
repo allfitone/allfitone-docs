@@ -1193,6 +1193,13 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 - **Condición RLS base** — `access_control.is_self(person_id)`. Las tablas hijas heredan mediante FK/`EXISTS` al `meal` propio.
 - **Condición Studio** — sin `SELECT` a tablas base; `nutrition.v_client_meals_live` exige `access_control.can_guide_nutrition(person_id,'read')` y `nutrition_intake/read`.
 - **Medios** — Space puede recibir una URL firmada para una comida propia. Studio solo recibe un enlace a `OP-NUT-013`, que reevalúa `access_control.can_guide_nutrition`, `nutrition_intake/read` y `nutrition_media/read` en cada GET, registra `ACCESS_EVENT`, transmite el objeto saneado y nunca redirige a storage; media aislada no produce una fila ni bytes. Break-glass jamás habilita `nutrition_media`, `OP-NUT-013`, storage, `media_ref`, URLs o bytes.
+- **As implemented (STUDIO-61, -62, -65)** — Migration `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql`.
+  - **Deviation:** reading needs no `can_guide_nutrition`, capability or credential, only the attending assignment and the grant (ADR-027, *As implemented*). There is no `nutrition.v_client_meals_live`.
+  - **Policies:** `meals_select_review`, `meal_items_select_review` and `meal_nutrient_values_select_review` (`for select to allfit_owner`) admit rows when both hold:
+    - `person_id` is the subject of the relationship in the contract scope `nutrition_review`;
+    - `access_control.can_access(relationship, 'nutrition_intake', 'read')` is true.
+  - **The contract scope** is opened only by the definers `nutrition.list_client_meals`, `read_client_daily_summaries` and `open_client_meal_photo`, after `identity.open_client_category` has recorded the read.
+  - **The photo:** `has_photo` needs a `nutrition_media` grant whose version shares `media_ref`, and the photo route needs the same. Both answer as if there were no photo otherwise.
 - **Grants mínimos** — `allfit_api` ejecuta funciones y vistas cerradas; `UPDATE/DELETE` directos revocados.
 - **Índices** — meals `(person_id,occurred_at DESC,id DESC)`; hijos `(meal_id,position)`; valores único `(meal_item_id,nutrient_definition_id)`.
 
@@ -1208,6 +1215,20 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 - **Condición RLS base** — persona mediante `goal_sets.person_id`; hijos heredan por FK.
 - **Propuesta profesional** — `access_control.can_guide_nutrition(person_id,'contribute')`, relación/asignación/contexto coincidentes y credencial vigente.
 - **Frozen** — solo `nutrition.v_client_guidance_frozen`, `access_control.can_read_frozen(...,'nutrition_guidance',...)`, origen profesional de la relación y `goal_versions.created_at<=T`.
+- **As implemented (STUDIO-63, -64)** — Migration `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql`.
+  - **Live review** (contract scope `nutrition_review`):
+    - `goal_versions_select_review` admits this relationship's versions and her `active` one, with `nutrition_guidance/read`;
+    - `goal_targets_select_review` follows a visible version;
+    - `goal_decisions_select_review` admits decisions only on this relationship's versions.
+  - **Proposing** (contract scope `nutrition_goal_proposal`, always with the literal `contribute`):
+    - `goal_sets_select/insert/update_proposal`;
+    - `goal_versions_select_proposal`, which exists only to number the new version;
+    - `goal_versions_update_proposal`, `proposed` → `superseded`, this relationship only;
+    - `goal_versions_insert_proposal`: author is the actor through his own membership, plus `identity.credential_verification_is_effective(…, 'nutrition_professional')`;
+    - `goal_targets_select/insert_proposal`.
+  - **Ending** (contract scope `relationship_detachment`): `goal_versions_select/update_detachment`, `proposed` → `cancelled`.
+  - **Frozen:** `goal_versions_select_frozen`, `goal_targets_select_frozen` and `goal_decisions_select_frozen`. Each guards on `(select access_control.contract_scope('frozen_history')) is not null`, then calls `nutrition.reads_frozen_goal_version(relationship, created_at)` or `reads_frozen_goal_decision(version, decided_at)`. These cut at the case's `cut_at` and need the frozen version's historical rule.
+  - **No views:** there is no `nutrition.v_client_guidance_live` or `_frozen`.
 - **Grants mínimos** — contenido de versiones/targets inmutable; estados/decisiones solo por funciones cerradas.
 - **Índices** — goal set único `(person_id)`; versiones `(goal_set_id,created_at DESC,id DESC)` y `(origin_relationship_id,created_at DESC,id DESC)`, activo único y pendiente único por relación; targets `(goal_version_id,nutrient_definition_id)`; decisión única `(goal_version_id)`.
 
@@ -1241,6 +1262,25 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 - **`T-NUT-RLS-26` (positiva y negativa)** — La persona lee y da su propio consentimiento de reconocimiento; otra persona no lo lee, no lo da en su nombre y la tabla no le muestra filas ajenas (`OP-NUT-017`).
 - **`T-NUT-RLS-27` (negativa)** — El rol de runtime no escribe en el catálogo de alimentos: solo cambia por curaduría (`ADR-041`).
 - **`T-NUT-RLS-28` (negativa)** — El rol de runtime no escribe productos de Open Food Facts: solo cambian por curaduría (`ADR-041`).
+- **`T-NUT-RLS-29` (positiva y negativa)** — As implemented (STUDIO-63): the live goal history shows her active goal's targets, but says who set it only when this relationship proposed it.
+- **`T-NUT-RLS-30` (negativa)** — As implemented (STUDIO-63): without `nutrition_guidance` the live goal history answers `scope-required` and reads no row.
+- **As implemented (STUDIO-61..65), mapping.** Reading needs no capability or credential, so `T-NUT-RLS-07/08` no longer describe the build. What each id asserts:
+  - **In `T-NUT-STUDIO-01` (46):**
+    - `-04`: holder and cover read;
+    - `-06`: reads are recorded first;
+    - `-07`: a coach who does not attend her finds no client;
+    - `-08`: owner and admin read nothing by role;
+    - `-09`: hidden fields, and no photo without media;
+    - `-10`: `meals_select_review` read directly, and media alone shares no meal;
+    - `-11` to `-13`: the photo;
+    - `-14`: totals only from shared rows;
+    - `-15/16`: revocation, read directly too;
+    - `-20`: live goals, with `goal_versions_select_review` and `goal_decisions_select_review` read directly;
+    - `-29/30`: the active goal and the missing grant.
+  - **In `T-NUT-STUDIO-02` (30):**
+    - `-18`: who may propose: the attending coach with `guide_nutrition` and a credential in force;
+    - `-19`: `read` never proposes, a lapsed verification never proposes, and the insert policy refuses a direct insert.
+  - **In `T-NUT-HIST-01` (17):** `-23/24` (the frozen cut), with `T-NUT-HIST-RLS-01..03` reading the frozen policies directly.
 
 ### 7.11 Pagos y planes
 

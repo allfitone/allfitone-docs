@@ -3545,6 +3545,21 @@ Dejar esas decisiones a un claim, role o permission de WorkOS, un procedimiento 
 **Estado:** aceptada para V1<br>
 **Fecha:** 28 de julio de 2026
 
+> **As implemented (STUDIO-61..65), with deviations.** Migration
+> `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql` builds the professional
+> half of this decision (pull request allfitone#203; its merge and database deploy are
+> pending). Six things differ from the text below:
+>
+> - reading nutrition needs no capability and no credential; only proposing does (the
+>   owner's decision of 8 November 2026);
+> - the credential is a new catalogue type, `nutrition_professional`;
+> - Studio's goal history masks her active goal when another relationship proposed it;
+> - the frozen read asks for a sign-in less than ten minutes old, not AAL2;
+> - a meal tells Studio only whether it has a photo, never a link;
+> - `IX-31` is enforced by a policy and function checks, not a deferrable constraint trigger.
+>
+> The section *As implemented (STUDIO-61..65)* at the end of this ADR records each decision and why.
+
 ### Contexto
 
 La baseline aprobada difería nutrición para evitar esconder ingestas, macros o planes dentro de `health_context`. Antes de comenzar la Fase 5, producto decidió incorporar una rebanada nutricional completa, manteniendo el sistema greenfield y sin reutilizar datos, identificadores, contratos o migraciones de Factory Fitness.
@@ -3596,6 +3611,94 @@ El dominio se materializa en ocho tablas: `nutrient_definitions`, `meals`, `meal
 8. Revocar `nutrition_intake` o `nutrition_media` hace que el mismo enlace Studio previamente entregado responda `404` sin bytes en la lectura inmediatamente posterior; revocar cualquier scope invalida además su superficie y todos sus derivados.
 9. Tras terminar la relación, un caso histórico válido solo ve guía emitida hasta `T`.
 10. El esquema se reconstruye sin ningún artefacto, dato o dependencia de Factory Fitness.
+
+### As implemented (STUDIO-61..65)
+
+Migration `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql` builds `OP-NUT-009..013` for `HU-STUDIO-068..072` (pull request allfitone#203; its merge and database deploy are pending).
+
+- **Routes:** the Studio API serves them under `/studio/v1/organizations/{organizationId}/clients/{personId}/nutrition`, plus one frozen read under `historical-relationships`.
+- **Screens:** no Studio screen calls them yet.
+
+Each item says where the build departs from the decision above, who decided and why.
+
+1. **Reading needs no capability and no credential.** This departs from item 6, and from scenario 3 for reads. The owner decided it on 8 November 2026: following what she eats is like following what she trains or her body, which need the assignment and her grant and nothing else.
+   - **What a read checks:**
+     - the organization of the route and an active relationship;
+     - the coach's live membership and effective assignment: `holder`, or a cover she accepted;
+     - her grant: `nutrition_intake` for meals and daily summaries, `nutrition_media` as well for the photo, `nutrition_guidance` for goals.
+   - **Proposing** still needs everything item 6 lists:
+     - `guide_nutrition`, which only the `coach` role holds;
+     - a verified `nutrition_professional` credential in force;
+     - `nutrition_guidance` at `contribute`.
+   - **Scenario 2 holds:** admin, owner and staff get nothing by membership, and neither does a coach who does not attend her.
+2. **The credential is a new type in the catalogue.** `catalog.professional_credential_types` gains `nutrition_professional` («Profesional en nutrición», `published`, display order 40). Studio declares it and Backoffice verifies it like any other type, with no screen changes.
+   - **When it counts as in force:** `identity.effective_credential_verification(person, type)` returns a verification only when all three hold, the same rule the professional profile already shows:
+     - the credential is `active`;
+     - its `expires_on` is null or not yet past;
+     - its **latest** verification, by `decided_at` then `id`, is `verified` with `valid_from <= now < valid_to`.
+   - **Without it,** proposing raises `AF431`. The API answers `403 credential-required`, so the coach learns why.
+   - **The version records it:** it stores the `credential_verification_id` it was proposed under (invariant 4).
+3. **`IX-31` is enforced by the row's policy and by the command, not by a deferrable constraint trigger.**
+   - **The policy:** `goal_versions_insert_proposal` admits a professional version only when all of these hold:
+     - its author is the actor, writing through his own membership;
+     - `access_control.can_access(origin_relationship_id, 'nutrition_guidance', 'contribute')` is true;
+     - `identity.credential_verification_is_effective` accepts the cited verification for that author and type.
+   - **The command:** `nutrition.propose_goal_version` checks the same things first, then reads the assignment and the grant again under the locks.
+   - **Later changes:** losing the credential, the assignment or the grant after a proposal cancels nothing, and she can still decide it. Only ending the relationship cancels (item 9).
+4. **Studio's goal history (`OP-NUT-011` live)** shows the proposals this relationship made, in every status, newest first, each with her decision when there is one. The owner chose this over showing only our proposals, or everything.
+   - **Her active goal** comes alongside, with its targets only. When another relationship, or she herself, set it, it carries no id (`goal_version_id` is null), says `from_this_relationship: false`, and has no author, rationale or origin.
+   - **Never shown:**
+     - a version number, which would count her own goals;
+     - a decision on a goal this relationship did not propose: a decision on her active goal would say it came from a professional.
+   - **The author** is reduced to `author.kind` and `author.person_id` (invariant 4).
+5. **Each relationship has one proposal waiting at most (`IX-33`).**
+   - **A new proposal** replaces the one this relationship still has waiting, which becomes `superseded`. The existing partial index `uidx_goal_versions_pending (goal_set_id, origin_relationship_id) where status = 'proposed'` backs this.
+   - **Ending the relationship** cancels what it has waiting, at the same instant `T`. This is item 9, not built until now.
+     - `relationships.close_relationship` calls `nutrition.cancel_relationship_goal_proposals`, which writes `cancelled_at = greatest(T, created_at)`.
+     - Her ending it, the gym ending it and the organization closing all come through there.
+   - **Revoking the grant** cancels nothing.
+6. **The frozen read (item 9, scenario 9)** follows ADR-023 as built (STUDIO-54..56).
+   - **Authentication:** a Studio sign-in less than ten minutes old, not AAL2. Each read also needs a case, the purpose `frozen_history_review`, and an access record in `frozen` mode.
+   - **The route:** `GET /studio/v1/organizations/{organizationId}/historical-relationships/{relationshipId}/nutrition/goal-versions`, with the case in `X-Historical-Access-Case`. The live `/clients` route no longer accepts that header.
+   - **What it shows:**
+     - only professional versions of this relationship with `created_at <= cut_at`, each with its `status_at_cut`;
+     - her decision only if she took it by the cut;
+     - only the fields the frozen version keeps `historical_readable`.
+   - **A v1 grant** on `nutrition_guidance` kept nothing historical, so its case answers `scope-required`.
+7. **The photo (item 11, scenarios 5 and 8).** A meal carries no link object, contrary to scenario 5.
+   - **What the meal says:** only `has_photo`, and only when she also shares `nutrition_media`, together with the version that said so (`photo_scope`). Studio then asks for the photo at `…/meals/{mealId}/photo`.
+   - **The photo route** re-checks both grants on every request and records each view, allowed or denied, under `nutrition_media`.
+     - It streams the sanitized object as `image/jpeg` only, because the sanitizer always writes JPEG, and never redirects.
+     - Any failure answers the same `404` with no bytes, a refused grant included.
+   - **Revoking** either category makes the very next request answer `404` (scenario 8).
+8. **Daily summaries are computed at read time (item 11).** A range covers one to thirty-one days. For each day the summary gives:
+   - `meal_count`, which is null when her version does not share `local_date`;
+   - `nutrient_totals`, which is null when her version does not share nutrient values.
+
+   They add up only the rows the policy admits. There is no streak and no count of hidden days.
+9. **No plan window.** Studio reads do not apply the history window of her Space plan: that window is a commercial benefit of hers, not a privacy limit.
+10. **No menu or clinical indication, by structure only (item 4).** Targets are typed rows per nutrient, and the DTO is closed. The rationale is free text, 1 to 2000 characters, and nothing checks its content by machine.
+11. **`nutrition_guidance` v2 is a precondition.**
+    - **The two versions:** v1 is read-only. v2 offers goal sets, versions and targets up to `contribute`, and keeps her decisions and the fields of a proposal historical.
+    - **Publishing:** a curator publishes v2 from Backoffice `/permissions` after the deploy. Existing grants stay at their version (ADR-007).
+    - **Invitations:** Studio-web still invites at `read`, so proposing works only once an invitation asks for `contribute`. That is front work (STUDIO-136).
+12. **Every read is recorded first, in its own transaction.**
+    - `identity.open_client_category(…, 'studio_nutrition_review')` writes the access event, allowed or denied, before any row is read.
+    - Rows then come only through policies under the contract scope `nutrition_review`, which only these functions open.
+    - When the meal list reveals `has_photo`, it writes a second event under `nutrition_media`.
+
+**Tests by scenario:**
+
+| Scenario | Tests |
+| --- | --- |
+| 2 | `T-NUT-RLS-06/07` |
+| 3 (for proposing) | `T-NUT-RLS-18/19` and the credential cases of `T-NUT-STUDIO-02` |
+| 4 | `T-NUT-RLS-09`, `-11`, `-12` |
+| 5 | `T-NUT-RLS-13` |
+| 6 | `T-NUT-RLS-19` |
+| 7 | `goal-proposal-concurrency.test.ts` and the existing decision tests |
+| 8 | `T-NUT-RLS-15/16` |
+| 9 | `T-NUT-HIST-01` |
 
 ---
 
