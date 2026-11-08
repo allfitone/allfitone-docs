@@ -696,6 +696,8 @@ Las cinco operaciones Studio exigen además relación/asignación/membresía efe
 | `GET` | `/studio/v1/professional-specialties` | `OP-CAT-013` | Sí, con `ETag` |
 | `GET` | `/studio/v1/professional-credential-types` | `OP-CAT-014` | Sí, con `ETag` |
 | `GET` | `/activity-types` | `OP-CAT-008` | Sí |
+| `GET` | `/studio/v1/catalog/disciplines` | `OP-CAT-007` | No: `private, no-store` |
+| `GET` | `/studio/v1/catalog/activity-types` | `OP-CAT-008` | No: `private, no-store` |
 | `GET` | `/activity-types/{id}/result-contracts` | `OP-CAT-012` | Sí |
 | `GET` | `/movements?discipline=&q=` | `OP-CAT-009` | Solo el subconjunto global |
 | `GET` | `/movements/{id}` | `OP-CAT-010` | Sí |
@@ -703,6 +705,8 @@ Las cinco operaciones Studio exigen además relación/asignación/membresía efe
 | `GET` | `/scope-definitions` | `OP-PRV-012` | Sí, inmutable |
 
 Space precarga disciplinas, tipos de actividad, contratos y el subconjunto global de movimientos: sin ellos no puede validar localmente un borrador antes de sincronizar. Los movimientos **privados** de una organización nunca se sirven desde `/catalog`; se piden a `/studio/v1/organizations/{orgId}/movements`. As implemented (STUDIO-57..60), a person still reads the name of a gym's movement inside what she was planned or trained, through `movements_select_planned` and `movements_select_executed`; the Space search and `/catalog/v1/movements/{id}` stay global.
+
+As implemented (STUDIO-164), Studio reads the global disciplines and activity types under `/studio/v1/catalog`, where its session cookie travels, to pick the discipline a session template names and the activity type of its draft. Both answer an empty list until Backoffice publishes the first entries, and never a gym's own activity types.
 
 ## 7. Field-sets y versión de scope por proyección
 

@@ -2552,16 +2552,16 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /backoffice/v1/catalog/disciplines` · `GET /backoffice/v1/catalog/activity-types` (Backoffice). Space los leerá en `GET /catalog/v1/disciplines` · `GET /catalog/v1/activity-types` con su token; todavía no están servidas |
+| **Superficie** | `GET /backoffice/v1/catalog/disciplines` · `GET /backoffice/v1/catalog/activity-types` (Backoffice). Space los leerá en `GET /catalog/v1/disciplines` · `GET /catalog/v1/activity-types` con su token; todavía no están servidas. As implemented (STUDIO-164), Studio reads both at `GET /studio/v1/catalog/disciplines` · `GET /studio/v1/catalog/activity-types` with its session cookie: a session template names a discipline and its draft an activity type, so a member picks them from these lists instead of typing a code. Result contracts (`OP-CAT-012`) stay off Studio, because nothing a gym authors reads them |
 | **Actor** | Cualquier cuenta autenticada |
 | **Filtros obligatorios** | Solo contenido global publicado y no archivado |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | Sin paginación en V1: el catálogo global es pequeño y cerrado. Orden por código estable |
-| **Offline / concurrencia** | Cacheable con validación; Space lo precarga para poder registrar sin conexión |
+| **Offline / concurrencia** | Cacheable con validación; Space lo precarga para poder registrar sin conexión. The web surfaces answer uncached and never `304` (Backoffice `no-store`, Studio `private, no-store`): a `304` reached their browsers without `Access-Control-Allow-Origin` |
 | **Información sensible** | Ninguna |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | El código es estable y no se reutiliza. Un tipo de actividad determina qué contratos y estructuras son compatibles |
+| **Reglas** | El código es estable y no se reutiliza. Un tipo de actividad determina qué contratos y estructuras son compatibles. Any active person may read it on every surface: the catalogue is global published content and carries no organisation to check a Studio capability against. An empty list is a real answer, not a fault: no discipline exists until Backoffice publishes one, and until then no session template can be created |
 | **Falla cerrada** | — |
 
 #### `OP-CAT-009` — Buscar movimientos
