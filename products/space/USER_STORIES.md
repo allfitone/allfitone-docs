@@ -1822,11 +1822,10 @@ bloque 4 ya introduce.
 
 ## E-SP-13 · Mi plan con el gimnasio
 
-> **Diferida de V1** (1 de octubre de 2026). En la primera versión la aplicación
-> **no procesa pagos de gimnasios**. Allfit crea cada gimnasio, el gimnasio le paga
-> a Allfit por fuera de la aplicación, y quien entra invitado por un gimnasio activo
-> recibe Pro (`E-SP-15`). Estas historias se conservan para cuando se abra esa
-> puerta; su prioridad pasa a `después`.
+> **Reabierta para V1** el 9 de noviembre de 2026 (`ADR-048`), junto con `E-SP-14`. Un plan
+> presencial se paga aquí, en la página de Mercado Pago. Uno remoto se paga por fuera de la
+> aplicación, con el link que manda el gimnasio, y la aplicación lo muestra cuando está activo.
+> Pro sigue llegando por un gimnasio activo (`E-SP-15`).
 
 Lo que la persona le paga a un gimnasio es un **plan comercial**, nunca una
 "membresía": esa palabra significa trabajar en la organización.
@@ -1841,13 +1840,14 @@ ninguno.
 **quiero** ver los planes que ofrece y su precio
 **para** elegir cuál me sirve.
 
-`E-SP-13` · después
+`E-SP-13` · imprescindible
 
 **Criterios**
 
 1. Solo veo planes de gimnasios con los que **ya tengo relación**. Esto no es un buscador de gimnasios: descubrir gimnasios no existe todavía.
 2. Veo el precio, la moneda y si el cobro es mensual o anual.
 3. No veo planes retirados ni borradores.
+4. Solo veo planes **presenciales**. Un plan remoto no se ofrece en la aplicación.
 
 ### HU-SP-080 — Suscribirme a un plan
 
@@ -1855,16 +1855,19 @@ ninguno.
 **quiero** suscribirme a uno de sus planes
 **para** empezar a usar su servicio.
 
-`E-SP-13` · después
+`E-SP-13` · imprescindible
 
 **Criterios**
 
 1. El precio que veo al suscribirme **queda congelado**. Si el gimnasio sube el precio después, a mí no me sube: eso exige un plan nuevo.
-2. Mis datos de tarjeta van **directo a la pasarela del gimnasio**. Allfit nunca los ve ni los guarda.
+2. Pago en la página de Mercado Pago, que se abre desde la aplicación. Mis datos de tarjeta van **directo a la cuenta del gimnasio**, y Allfit One nunca los ve ni los guarda.
 3. **Suscribirme no comparte ninguno de mis datos.** El permiso sigue siendo una decisión aparte.
 4. Suscribirme tampoco crea la relación con el gimnasio: eso ya existía antes.
 5. Solo puedo tener un plan vivo a la vez con el mismo gimnasio.
 6. Si el gimnasio no tiene su medio de cobro configurado, se me dice claramente en lugar de dejarme a medias.
+7. Mercado Pago me pide el correo de mi cuenta de Allfit One, y la aplicación me dice cuál es antes de abrirlo.
+8. Mi plan queda **pendiente** hasta que Mercado Pago confirme el pago. Si vuelvo a intentarlo, retomo el mismo pago en lugar de crear otro.
+9. Un plan remoto no se compra en la aplicación. Lo pago con el link que me manda mi gimnasio, que abre una página de Allfit One en el navegador.
 
 ### HU-SP-081 — Ver mi plan y mis pagos
 
@@ -1872,13 +1875,14 @@ ninguno.
 **quiero** ver en qué estado está mi plan y qué he pagado
 **para** saber si estoy al día.
 
-`E-SP-13` · después
+`E-SP-13` · imprescindible
 
 **Criterios**
 
 1. Veo si estoy activa o suspendida, qué plan tengo, cuánto pago y cuándo es el próximo cobro.
 2. Veo cada cobro con su resultado, incluidos los que fallaron.
 3. Nunca veo un dato de tarjeta, porque Allfit no lo tiene.
+4. Un plan remoto lo veo igual, pero sin botón de pago ni link.
 
 ### HU-SP-082 — Cancelar mi plan
 
@@ -1886,21 +1890,22 @@ ninguno.
 **quiero** cancelar mi plan cuando quiera
 **para** dejar de pagar.
 
-`E-SP-13` · después
+`E-SP-13` · imprescindible
 
 **Criterios**
 
 1. Cancelar el pago **no termina mi relación** con el gimnasio ni revoca ningún permiso. Si además quiero cortar el acceso a mis datos, eso lo decido por separado.
 2. Mi Fitness ID y todo mi historial quedan intactos.
 3. Nadie del gimnasio puede cancelar por mí ni yo por nadie.
+4. Cancelar desde la aplicación también cancela el cobro en Mercado Pago. Si Mercado Pago no lo confirma, no se cancela nada y se me dice.
+5. Si cancelo desde mi cuenta de Mercado Pago, la aplicación lo muestra como cancelado en Mercado Pago, con los efectos de un plan suspendido, y puedo terminarlo desde aquí.
 
 ---
 
 ## E-SP-14 · Qué pasa si no pago
 
-> **Diferida de V1** junto con `E-SP-13`: sin pagos a gimnasios no hay cobro que
-> pueda fallar. En V1 lo equivalente es que termine la relación con el gimnasio, y
-> eso lo describe `HU-SP-088`.
+> **Reabierta para V1** junto con `E-SP-13` (`ADR-048`). Un cobro fallido suspende el plan solo
+> cuando Mercado Pago deja de reintentarlo.
 
 ### HU-SP-083 — Entender qué pierdo si mi pago falla
 
@@ -1908,11 +1913,11 @@ ninguno.
 **quiero** saber exactamente qué se me suspende y qué conservo
 **para** no asustarme y poder arreglarlo.
 
-`E-SP-14` · después
+`E-SP-14` · importante
 
 **Criterios**
 
-1. Si un cobro falla, mi plan queda **suspendido**, y se me avisa con claridad.
+1. Si un cobro falla, Mercado Pago lo reintenta durante unos días y mi plan sigue activo. Si todos los reintentos fallan, queda **suspendido**, y se me avisa con claridad.
 2. **Nada se termina solo, nunca.** Mi relación con el gimnasio sigue viva y mis permisos siguen intactos.
 3. **Conservo todo lo mío:** mi historial completo, mi entrenamiento por mi cuenta y mi registro de comidas siguen funcionando igual.
 4. Lo único que se pausa son las **sesiones futuras** del programa que me asignó ese gimnasio. Lo que ya entrené no se toca.
@@ -1921,6 +1926,7 @@ ninguno.
 7. Al pagar se quita **solo el bloqueo de esa suscripción** y se vuelve a calcular qué puedo usar con el estado actual; no se restaura una copia anterior.
 8. No tengo que volver a dar un permiso que siga vigente, pero un permiso revocado, una relación terminada, una asignación cambiada o una sesión cancelada, iniciada o pasada **no revive** por pagar.
 9. Si queda otro bloqueo activo, lo afectado sigue pausado. Solo vuelven las sesiones futuras, no iniciadas y no canceladas que todavía correspondan a una relación y asignación vigentes.
+10. Para un plan presencial puedo cambiar mi tarjeta desde la aplicación. Para uno remoto, mi gimnasio me manda el link otra vez.
 
 ---
 
@@ -2206,17 +2212,17 @@ presenta con la tarjeta de Hoy, que es además lo que va a ver cada mañana si a
 | `E-SP-10` Nutrición | `HU-SP-067` – `HU-SP-074`, `HU-SP-113`, `HU-SP-114` | 0 de 10 |
 | `E-SP-11` Sincronización con apps de salud | `HU-SP-075` | 0 de 1 |
 | `E-SP-12` Contacto y notificaciones | `HU-SP-076` – `HU-SP-078` | 0 de 3 |
-| `E-SP-13` Mi plan con el gimnasio · diferida | `HU-SP-079` – `HU-SP-082` | 0 de 4 |
-| `E-SP-14` Qué pasa si no pago · diferida | `HU-SP-083` | 0 de 1 |
+| `E-SP-13` Mi plan con el gimnasio | `HU-SP-079` – `HU-SP-082` | 4 de 4 |
+| `E-SP-14` Qué pasa si no pago | `HU-SP-083` | 0 de 1 |
 | `E-SP-15` Allfit Pro | `HU-SP-084` – `HU-SP-088` | 5 de 5 |
 | `E-SP-16` Hoy y navegación | `HU-SP-089` – `HU-SP-094`, `HU-SP-100` | 4 de 7 |
-| **Total** | **99 historias** | **49 imprescindibles** |
+| **Total** | **99 historias** | **53 imprescindibles** |
 
 El camino mínimo para lanzar es: crear cuenta y entrar, activar el Fitness ID,
 ver qué toca hoy, entrenar y registrarlo aunque no haya señal, ver el historial,
 aceptar la invitación de un gimnasio, decidir qué se comparte y poder cortarlo,
-y tener Pro, por el gimnasio o pagándoselo a Allfit. En V1 no hay pagos a
-gimnasios dentro de la aplicación.
+y tener Pro, por el gimnasio o pagándoselo a Allfit. Los planes presenciales
+de un gimnasio se pagan dentro de la aplicación, con Mercado Pago (`ADR-048`).
 
 **Nutrición no está entre lo imprescindible** aunque ya tenga todo el modelo
 listo: es la rebanada más independiente y puede entrar justo después del
