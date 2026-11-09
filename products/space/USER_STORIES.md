@@ -231,6 +231,7 @@ movilidad no se organizan en series y repeticiones.
 2. Veo todas las disciplinas que Allfit va a cubrir, no solo las que ya están listas, y en cada una reconozco lo que practico por lo que la disciplina contiene.
 3. **Solo puedo elegir una que esté disponible.** Las demás se ven y se leen, y dicen sin rodeos que todavía no se pueden elegir.
 4. Puedo cambiarla cuando quiera desde mi perfil.
+5. **Mientras haya una sola disponible, no se me pregunta**: entreno esa, y la aplicación no me pide elegir entre una opción.
 
 **Por qué una y no varias.** `HU-SP-012` preguntaba «una o varias disciplinas» junto
 con la experiencia. Con varias no habría **de cuál** puede depender el objetivo, que es
@@ -245,6 +246,17 @@ criterio 3 es lo que impide que eso se convierta en una promesa falsa: no se dej
 elegir, y **no se ofrece ningún aviso**, porque no se registra el interés de nadie. El
 catálogo de atributos guarda las seis desde el principio; lo que el contrato ofrece es
 una, igual que hace con `improve_performance` en `HU-SP-010`.
+
+**Fuerza por defecto.** Decidido el 9 de noviembre de 2026: con una sola disciplina
+disponible, la pantalla preguntaba algo que tenía una única respuesta posible. **El
+onboarding deja de mostrarla y todo el mundo entrena fuerza**, y el perfil tampoco la
+muestra. Rige el criterio 5; los criterios 1 a 4 vuelven cuando haya una segunda
+disciplina disponible, y con ellos la pantalla.
+
+**No se escribe ninguna afirmación en su lugar.** Una disciplina que la aplicación
+declarara por su cuenta se leería «declarada por ti» para una respuesta que la persona
+nunca dio, y la procedencia es parte de la promesa del Fitness ID. Sin afirmación, la
+disciplina efectiva es fuerza; quien ya la declaró conserva su afirmación intacta.
 
 ### HU-SP-010 — Decirle a Allfit qué quiero lograr
 
@@ -273,6 +285,10 @@ cinco tiene ese problema.
 disponible en el lanzamiento inicial— la lista pierde **correr una carrera**: es el
 único de los cinco que el entrenamiento de fuerza no persigue, y ofrecerlo sería
 prometer un plan que esa disciplina no va a escribir. Quedan cuatro.
+
+Desde el 9 de noviembre de 2026 la disciplina ya no se pregunta (`HU-SP-101`, criterio
+5), y el criterio 2 se resuelve con **fuerza**: sin disciplina declarada, la lista es la
+de fuerza, nunca la completa. Correr una carrera sigue fuera.
 
 El mapa vive en el cliente y no en PostgreSQL, a propósito. No es un invariante ni una
 frontera de seguridad —nada se rompe si conviven fuerza y correr una carrera— y es una
