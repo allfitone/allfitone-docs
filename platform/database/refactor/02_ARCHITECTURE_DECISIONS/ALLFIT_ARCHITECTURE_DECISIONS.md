@@ -6529,6 +6529,21 @@ Two facts of the infrastructure bound the design:
 - The ECS services have an execution role, which reads the secret, and no task role: no container
   calls AWS with an identity of its own today.
 
+Production, checked read-only on 9 November 2026:
+
+- **No email leaves it.** `STAFF_INVITATION_DELIVERY_ENABLED`, `CLIENT_INVITATION_DELIVERY_ENABLED`
+  and `ACCOUNT_RECOVERY_DELIVERY_ENABLED` are `false`, and so are both `*_ISSUANCE_ENABLED`
+  switches. Nothing depends on Resend yet.
+- `RESEND_API_KEY` is set, and the sender is `Allfit One <invites@allfit.one>`. Resend has
+  `allfit.one` verified since 11 August 2026, in its `sa-east-1` region, and its log lists no
+  email.
+- **Resend itself sends through Amazon SES** in São Paulo: the MX of `send.allfit.one`, its
+  bounce domain, is `feedback-smtp.sa-east-1.amazonses.com`. DKIM is `resend._domainkey`.
+- `allfit.one` already publishes DMARC (`p=quarantine`, relaxed DKIM and SPF alignment). Its
+  inboxes are in Google Workspace.
+- The SES account in `us-east-1` is in the sandbox (200 emails a day, one a second) and has no
+  identity.
+
 ### Decision
 
 The owner decided on 9 November 2026 that Allfit One sends its email through Amazon SES, in
@@ -6544,8 +6559,10 @@ The design choices that follow from it:
    identity and only from the configured sender (`ses:FromAddress`). `RESEND_FROM_EMAIL` becomes
    `EMAIL_FROM` with the same value, and `RESEND_API_KEY` leaves the secret with Resend.
 3. **The domain is verified with Easy DKIM**, with a custom MAIL FROM subdomain so that SPF aligns
-   with `allfit.one`, and a DMARC record. Terraform creates the identity and outputs the records,
-   which are added by hand in GoDaddy, like the certificate's.
+   with `allfit.one`. The subdomain is not `send`, which Resend holds while both exist; `mail` is
+   free. The DMARC record `allfit.one` already publishes stays, and DKIM on `allfit.one` aligns
+   with it. Terraform creates the identity and outputs the records, which are added by hand in
+   GoDaddy, like the certificate's.
 4. **Production access is requested first.** A new SES account sends only to verified addresses,
    200 a day. AWS reviews the request and may ask how bounces and complaints are handled; decision
    5 is the answer.
@@ -6564,8 +6581,10 @@ The design choices that follow from it:
    are not.
 8. **The switch.** While both adapters exist, `EMAIL_PROVIDER` (`resend` or `ses`) chooses one, and
    an unknown value stops the worker at start. Production moves to `ses` once access is granted and
-   an email sent from production reaches a team address. The Resend adapter, its secret and its
-   account go once SES has carried production email for two weeks without incident.
+   an email sent from production reaches a team address; since production sends nothing today, it
+   can move before any delivery switch is turned on. The Resend adapter, its secret, its account
+   and its DNS records (`resend._domainkey` and the MX and SPF of `send.allfit.one`) go once SES
+   has carried production email for two weeks without incident.
 9. **The waitlist emails are built on SES**, and they are the first templates in two languages
    (`TECH-293`).
 
@@ -6599,7 +6618,8 @@ The design choices that follow from it:
 
 - **Keep Resend.** Its idempotency key prevents duplicates, and its dashboard is better. Rejected
   by the owner to keep the infrastructure with one provider, with no key to store, at a price that
-  fits the waitlist's volume.
+  fits the waitlist's volume. Resend already sends through SES, so dropping it removes a layer
+  rather than changing the service that delivers the email.
 - **The SES SMTP interface.** Rejected: it needs SMTP credentials, which is the kind of key this
   decision removes.
 - **A consumer for the bounce and complaint events.** Deferred: the suppression list already stops
