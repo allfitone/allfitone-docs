@@ -3874,7 +3874,6 @@ Reglas que gobiernan todo el dominio:
 > that builds it. Until then, where a leaf disagrees, `ADR-048` holds:
 >
 > - the gateway is Mercado Pago only, connected through OAuth (`OP-PAY-001`);
-> - a remote plan is never offered in Space (`OP-PAY-011`);
 > - a subscription starts `pending`, and the answer carries Mercado Pago's page (`OP-PAY-012`);
 > - ending it from Space or Studio cancels the agreement in Mercado Pago first (`OP-PAY-010`,
 >   `OP-PAY-015`);
@@ -3885,9 +3884,9 @@ Reglas que gobiernan todo el dominio:
 | --- | --- | --- | --- |
 | `OP-PAY-001` | Conectar la pasarela de la organización | Comando | `A5` |
 | `OP-PAY-002` | Crear un plan | Comando | `A4`, `A5` |
-| `OP-PAY-003` | Editar el borrador de un plan | Comando | `A4`, `A5` |
+| `OP-PAY-003` | Renombrar un plan | Comando | `A4`, `A5` |
 | `OP-PAY-004` | Publicar una versión de plan | Comando | `A4`, `A5` |
-| `OP-PAY-005` | Deprecar una versión de plan | Comando | `A4`, `A5` |
+| `OP-PAY-005` | Retirar una versión de plan | Comando | `A4`, `A5` |
 | `OP-PAY-006` | Listar los planes de la organización | Consulta | `A3`–`A6` |
 | `OP-PAY-007` | Consultar las suscripciones de la organización | Consulta | `A4`, `A5` |
 | `OP-PAY-008` | Suspender manualmente una suscripción | Comando | `A4`, `A5` |
@@ -3930,56 +3929,59 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | La cuenta es **de la organización**: la plata va de la persona al gimnasio sin tocar a Allfit. Allfit no queda como intermediario financiero. Un secreto en claro nunca entra a la base de datos |
 | **Falla cerrada** | Sin `manage_billing`, proveedor desconocido o conexión activa existente: rechazo |
 
-#### `OP-PAY-002` — Crear un plan · `OP-PAY-003` — Editar su borrador
+#### `OP-PAY-002` — Crear un plan · `OP-PAY-003` — Renombrarlo
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/organizations/{orgId}/plans` · `PUT .../plans/{id}/draft` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/plans` · `PATCH .../plans/{planId}` |
 | **Actor** | `A4`, `A5` con `manage_billing` |
-| **Filtros obligatorios** | Membresía vigente con capacidad; nombre único dentro de la organización |
-| **Transacción** | Crear `organization_plans` con identidad estable, o reemplazar el contenido del borrador |
-| **Idempotencia** | `Idempotency-Key`. `PUT` sin cambios no genera revisión |
+| **Filtros obligatorios** | Membresía vigente con capacidad; nombre recortado de 1 a 80 caracteres, único en la organización sin distinguir mayúsculas; para renombrar, el plan es de `{orgId}` |
+| **Transacción** | Crear `organization_plans` como `draft`, o cambiarle el nombre, esté en venta o no |
+| **Idempotencia** | `Idempotency-Key`. Renombrar al nombre que ya tiene converge sin cambios |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada; versión optimista |
+| **Offline / concurrencia** | Falla cerrada. Renombrar toma el plan con lock. **Sin versión optimista:** el nombre es el único campo, así que gana la última escritura y no hay otro dato que se pueda perder |
 | **Información sensible** | Ninguna categoría personal |
-| **Evento de dominio** | `payments.plan_created.v1` |
-| **Reglas** | El plan tiene identidad antes de tener precio: el precio vive en la versión. Un borrador **nunca** es suscribible |
-| **Falla cerrada** | Nombre repetido en la organización: rechazo |
+| **Evento de dominio** | Ninguno: nada lo consume, y el recibo de idempotencia registra quién lo hizo |
+| **Reglas** | El plan tiene identidad antes de tener precio: el precio vive en la versión. Un borrador **nunca** es suscribible. Un plan publicado también se renombra, y sus suscritos ven el nombre nuevo (decisión del dueño, 9 de noviembre de 2026) |
+| **Falla cerrada** | Nombre repetido: `409`. Plan de otra organización: `404`. Sin `manage_billing`: `403`, porque los planes no son secretos para el equipo |
+| **Implemented (2026-11-09, TECH-48)** | `payments.create_organization_plan(actor, organization, name, key, command, hash)` and `payments.rename_organization_plan(actor, organization, plan, name, key, command, hash)`, migration `20261120090000_a_gym_sells_its_plans.sql`; `POST /studio/v1/organizations/{organizationId}/plans` (`201`) and `PATCH …/plans/{planId}` (`200`), `cookieAuth`, body exactly `{name}`. Both answer the plan as the team sees it (`StudioOrganizationPlan`). `manage_billing` is held by `owner` and `admin`; a `coach` or `staff` gets `42501` → `403`. The check on the plan's organization is the function's own: somebody who administers two gyms still cannot rename one through the other's path. Tests: `T-PAY-GYM-PLAN-01`, `T-PAY-API-02` |
 
 #### `OP-PAY-004` — Publicar una versión de plan
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/organizations/{orgId}/plans/{id}/versions` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/plans/{planId}/versions` |
 | **Actor** | `A4`, `A5` con `manage_billing` |
-| **Filtros obligatorios** | Borrador completo: monto positivo, moneda ISO 4217 y periodo `month` o `year` |
-| **Transacción** | Crear `plan_versions` inmutable con numeración monotónica |
-| **Idempotencia** | `Idempotency-Key`. Publicar dos veces el mismo contenido devuelve la primera versión |
+| **Filtros obligatorios** | Monto en **pesos enteros** (`amount_minor` positivo, múltiplo de 100, hasta 100.000.000.000); moneda `COP`; periodo `month` o `year`; modalidad `in_person` o `remote` |
+| **Transacción** | Bajo lock del plan: retirar la versión en venta, crear la nueva con `max(version_number) + 1` y pasar el plan de `draft` a `published`, todo en la misma transacción |
+| **Idempotencia** | `Idempotency-Key`. Publicar exactamente el precio que ya está en venta converge con `200` y no crea versión. Un replay responde lo mismo que la primera llamada |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada; numeración serializada |
+| **Offline / concurrencia** | Falla cerrada; numeración serializada por el lock del plan. Retirar la versión anterior toma su lock advisory exclusivo (ver `OP-PAY-012`) |
 | **Información sensible** | Ninguna categoría personal |
-| **Evento de dominio** | `payments.plan_version_published.v1` |
-| **Reglas** | Una versión publicada **no se edita jamás**. Subir el precio exige publicar otra versión, y **las suscripciones vigentes conservan la versión que congelaron**: a nadie se le sube el precio por debajo |
-| **Falla cerrada** | Monto no positivo, moneda inválida o periodo fuera de `month`/`year`: rechazo |
+| **Evento de dominio** | Ninguno: nada lo consume todavía |
+| **Reglas** | Una versión publicada **no se edita jamás**. **Un plan tiene un solo precio en venta**: la versión nueva reemplaza a la anterior para las suscripciones nuevas, y **las suscripciones vigentes conservan la versión que congelaron**. Mensual y anual son planes distintos. `in_person` se ofrece y se paga en Space; `remote` se paga solo con el link que manda la organización (`ADR-048`, `HU-STUDIO-088`) |
+| **Falla cerrada** | Monto con centavos o no positivo, otra moneda, otro periodo u otra modalidad: `422`. Plan de otra organización: `404` |
+| **Implemented (2026-11-09, TECH-130)** | `payments.publish_plan_version(actor, organization, plan, amount_minor, currency_code, billing_period, delivery_mode, key, command, hash)`, migration `20261120090000_a_gym_sells_its_plans.sql`, which also adds `plan_versions.delivery_mode`, freezes it in `plan_version_guard_tg` and creates `uidx_plan_versions_live`. `POST …/plans/{planId}/versions` answers `201` with a new version and `200` when it converges; a replay repeats the first status, read from the receipt's `outcome_code`. **Only `COP`:** Mercado Pago Colombia charges in pesos; the contract keeps `currency_code` so another currency needs no new field. Tests: `T-PAY-GYM-PLAN-02`, `T-PAY-API-02` |
 
-#### `OP-PAY-005` — Deprecar una versión de plan
+#### `OP-PAY-005` — Retirar una versión de plan
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/organizations/{orgId}/plans/{id}/versions/{v}/deprecation` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/plans/{planId}/versions/{planVersionId}/deprecation` |
 | **Actor** | `A4`, `A5` con `manage_billing` |
-| **Filtros obligatorios** | Versión publicada de la organización |
-| **Transacción** | Marcar la versión como deprecada |
-| **Idempotencia** | `Idempotency-Key`; converge |
+| **Filtros obligatorios** | La versión es de ese plan y de `{orgId}` |
+| **Transacción** | Bajo lock del plan y lock advisory exclusivo de la versión: marcarla `deprecated`. Si era la que estaba en venta, el plan queda fuera de venta hasta que se publique otra |
+| **Idempotencia** | `Idempotency-Key`; converge, también si una versión más nueva ya la había reemplazado |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
+| **Offline / concurrencia** | Falla cerrada. Nombra la versión y no el plan: si alguien publicó otro precio un momento antes, retirar el viejo no toca el nuevo |
 | **Información sensible** | Ninguna categoría personal |
-| **Evento de dominio** | `payments.plan_version_deprecated.v1` |
-| **Reglas** | Deprecar impide **suscripciones nuevas**. **No** cancela, no suspende y no cambia de versión a nadie que ya esté suscrito |
-| **Falla cerrada** | — |
+| **Evento de dominio** | Ninguno: nada lo consume todavía |
+| **Reglas** | Retirar impide **suscripciones nuevas**. **No** cancela, no suspende y no cambia de versión a nadie que ya esté suscrito |
+| **Falla cerrada** | Versión de otro plan o de otra organización: `404` |
+| **Implemented (2026-11-09, TECH-71)** | `payments.deprecate_plan_version(actor, organization, plan, plan_version, key, command, hash)`, migration `20261120090000_a_gym_sells_its_plans.sql`; `POST …/versions/{planVersionId}/deprecation`, without a body, `200`. It writes only the version's `status` and `deprecated_at`. Tests: `T-PAY-GYM-PLAN-02` (the subscription to the retired version is untouched), `T-PAY-API-02` |
 
 #### `OP-PAY-006` — Listar los planes de la organización
 
@@ -3987,16 +3989,17 @@ Reglas que gobiernan todo el dominio:
 | --- | --- |
 | **Tipo** | Consulta |
 | **Superficie** | `GET /studio/v1/organizations/{orgId}/plans` |
-| **Actor** | `A3`–`A6` con membresía vigente |
+| **Actor** | `A3`–`A6` con membresía vigente, `coach` y `staff` incluidos |
 | **Filtros obligatorios** | Planes de `{orgId}` |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
-| **Paginación y orden** | Cursor. Orden: estado y nombre |
-| **Offline / concurrencia** | Cacheable para presentación |
-| **Información sensible** | Ninguna categoría personal |
+| **Paginación y orden** | Cursor. Orden: publicados primero, luego borradores; dentro, por nombre sin distinguir mayúsculas y por id |
+| **Offline / concurrencia** | `private, no-store` |
+| **Información sensible** | Ninguna categoría personal: un precio no es dato de nadie |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Distingue borradores de versiones publicadas. Una organización nunca ve los planes de otra |
-| **Falla cerrada** | — |
+| **Reglas** | Distingue borradores de planes publicados, y dice si cada uno está en venta. Trae el precio en venta y todas las versiones. Una organización nunca ve los planes de otra. Una persona cliente ve la oferta de Space (`OP-PAY-011`), nunca los borradores |
+| **Falla cerrada** | Sin membresía vigente: `403` |
+| **Implemented (2026-11-09, TECH-133)** | `payments.list_organization_plans_for_team(actor, organization, limit, cursor_status, cursor_name, cursor_plan_id)`, migration `20261120090000_a_gym_sells_its_plans.sql`; `GET …/plans`, `cookieAuth`, `limit` 1–100 (default 50). Keyset on (published first, `lower(name)`, `id`), page cap 101, cursor all or nothing. Each row is `payments.organization_plan_projection`: name, status, `on_sale`, the version on sale or `null`, and every version newest first. Tests: `T-PAY-GYM-PLAN-01`, `T-PAY-API-02` |
 
 #### `OP-PAY-007` — Consultar las suscripciones de la organización
 
@@ -4059,7 +4062,7 @@ Reglas que gobiernan todo el dominio:
 | **Tipo** | Consulta |
 | **Superficie** | `GET /space/v1/organizations/{orgId}/plans` |
 | **Actor** | `A2` con relación vigente en esa organización |
-| **Filtros obligatorios** | Solo versiones **publicadas y no deprecadas**; la persona tiene relación con `{orgId}` |
+| **Filtros obligatorios** | Solo versiones **publicadas y no deprecadas**, y solo **presenciales** (`delivery_mode = 'in_person'`, `ADR-048`); la persona tiene relación con `{orgId}` |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | Cursor. Orden: monto ascendente |
@@ -4068,6 +4071,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno |
 | **Reglas** | No es un catálogo público ni un marketplace: solo lo ve quien ya tiene relación con esa organización. Descubrir gimnasios sigue diferido |
 | **Falla cerrada** | Sin relación con `{orgId}`, misma respuesta que "no existe" |
+| **Changed (2026-11-09, TECH-130)** | Migration `20261120100000_space_offers_only_in_person_plans.sql` recreates `payments.list_organization_plans` with the same signature and one more filter: `delivery_mode = 'in_person'`. A remote plan is paid through the organization's link and never appears in Space. Tests: `T-PAY-GYM-PLAN-02` |
 
 #### `OP-PAY-012` — Suscribirme a un plan
 
@@ -4085,6 +4089,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `payments.subscription_started.v1` |
 | **Reglas** | Los datos de tarjeta se entregan **directamente a la pasarela de la organización**; Allfit nunca los ve ni los almacena. Suscribirse **no concede ningún acceso a datos**: los scopes solo se deciden al aceptar una relación nueva. Suscribirse tampoco crea la relación de servicio |
 | **Falla cerrada** | Sin pasarela activa en la organización: rechazo explícito, porque no habría a dónde cobrar |
+| **Changed (2026-11-09, TECH-130)** | Migration `20261120100000_space_offers_only_in_person_plans.sql` recreates `payments.subscribe_to_plan` with the same signature. A remote version answers the same `P0002` as one not on offer. It first takes `pg_advisory_xact_lock_shared` on the version, and publishing or retiring takes the exclusive one, so no subscription is created on a version whose retirement has committed. **Not `FOR SHARE`:** under forced RLS a locking read also applies the `UPDATE` policy, which a client does not pass. Checked by hand with two sessions: with the lock, the subscription waits and then gets `P0002`; without it, it lands on the retired version. `pending` and the checkout are still `ADR-048` work |
 
 #### `OP-PAY-013` — Consultar mi suscripción · `OP-PAY-014` — Mi historial de pagos
 
