@@ -6486,8 +6486,8 @@ The plans (`HU-STUDIO-074..077`) depend on none of them.
 
 ## ADR-049 — Allfit One sends its email through Amazon SES
 
-**Status:** accepted for V1. The SES account is set up and out of the sandbox; the code is not
-built.<br>
+**Status:** accepted for V1. The SES account is set up, out of the sandbox and managed by
+Terraform; the code is not built.<br>
 **Date:** 9 November 2026<br>
 **Replaces:** Resend as the email provider. No earlier ADR chose it; it is named in
 `CURRENT_ARCHITECTURE_DIAGRAM.md`, `V1_DEGRADATION_AND_RECOVERY_MATRIX.md` and the deployment
@@ -6562,15 +6562,24 @@ The design choices that follow from it:
 3. **The domain is verified with Easy DKIM**, with a custom MAIL FROM subdomain so that SPF aligns
    with `allfit.one`. The subdomain is not `send`, which Resend holds while both exist; `mail` is
    free. The DMARC record `allfit.one` already publishes stays, and DKIM on `allfit.one` aligns
-   with it. Terraform creates the identity and outputs the records, which are added by hand in
-   GoDaddy, like the certificate's.
+   with it. Terraform manages the identity (`infra/modules/email`) and outputs the records, which
+   are kept by hand in GoDaddy, like the certificate's. The identity was created in the SES console
+   and imported, so its DKIM tokens never change, and Terraform refuses to destroy it.
 4. **Production access is requested first.** A new SES account sends only to verified addresses,
    200 a day. AWS granted it on 9 November 2026, minutes after the request (case
    `179426258400350`): 50,000 emails a day, 14 a second, in `us-east-1`.
 5. **Bounces and complaints.** The account-level suppression list is on for both, so SES itself
-   stops sending to an address that bounced or complained. A configuration set publishes the
-   sending events, and CloudWatch alarms fire on the bounce and complaint rates well before the
-   levels at which AWS reviews the account. No code consumes the events in V1.
+   stops sending to an address that bounced or complained. Every email goes through the
+   configuration set `allfitone`, the identity's default, which suppresses the same two reasons
+   and keeps reputation metrics.
+   - **Two CloudWatch alarms watch the account's reputation**, which SES publishes on its own:
+     the bounce rate above 2% and the complaint rate above 0.05%, against the 5% and 0.1% at which
+     AWS reviews the account. Terraform refuses a threshold at or above AWS's. They notify the SNS
+     topic `allfitone-email-alerts`, subscribed by the people who receive the budget alerts; each
+     address confirms its subscription once, or the alarm reaches nobody.
+   - **No event destination in V1.** No code consumes the sending events, and one message can be
+     followed without them: Virtual Deliverability Manager keeps each message's send, delivery,
+     bounce and complaint events, found by its SES message id (`GetMessageInsights`).
    - **Open and click tracking is off.** It would route every link, the private tokens of the
      waitlist included, through an Amazon tracking domain, and the privacy policy does not cover
      measuring who opens an email. What the launch needs (who joined, who confirmed, who came
@@ -6611,8 +6620,14 @@ The design choices that follow from it:
 
 - An email can arrive twice (decision 6).
 - Virtual Deliverability Manager shows delivery, bounces and complaints, but without open and
-  click tracking it cannot say whether anybody read an email. To follow one email, support reads
-  the worker's log and the sending events.
+  click tracking it cannot say whether anybody read an email. To follow one email, support takes
+  its SES message id from the worker's log and looks it up in Virtual Deliverability Manager.
+- **Outlook does not trust the domain yet.** On 9 November 2026 a test message reached the Gmail
+  inbox and went to Junk at Outlook.com, with SPF, DKIM, DMARC and Microsoft's composite
+  authentication passing in both (spam score SCL 5, not classed as bulk). That is the verdict for a
+  domain with no sending history at Microsoft, on a message that read like a test. No setting
+  changes it: reputation there grows with real emails that people asked for, such as the waitlist
+  confirmation.
 - Allfit One sends from SES's shared addresses, so its reputation depends on its own bounce and
   complaint rates. A dedicated address is not needed at this volume.
 
@@ -6636,7 +6651,7 @@ The design choices that follow from it:
 
 ### Consequences
 
-- **Done on 9 November 2026, by hand in the SES console** (`TECH-318`):
+- **Done on 9 November 2026, first by hand in the SES console** (`TECH-318`):
   - the Essentials plan;
   - the `allfit.one` identity with Easy DKIM (RSA 2048) and the MAIL FROM `mail.allfit.one`, which
     falls back to the default when its MX fails;
@@ -6646,13 +6661,18 @@ The design choices that follow from it:
     default;
   - production access.
 
-  Terraform imports all of it rather than creating it again.
+- **Then in Terraform, the same day** (`TECH-318`, allfitone#208, applied to production):
+  - the identity and its MAIL FROM, imported unchanged;
+  - the configuration set `allfitone`, now the default of both identities;
+    `my-first-configuration-set` was deleted once nothing used it;
+  - the account suppression list and Virtual Deliverability Manager settings;
+  - the two alarms and their SNS topic;
+  - an inbox check from SES: Gmail delivered to the inbox with SPF, DKIM and DMARC passing.
 - **What remains:**
-  1. the infrastructure (`TECH-318`): importing the above into Terraform, publishing the sending
-     events, and the CloudWatch alarms;
-  2. the code (`TECH-319`): the adapter, the task role, `EMAIL_PROVIDER`, `EMAIL_FROM` and the
-     documents named above;
-  3. the waitlist emails (`TECH-292`, `TECH-293`, `TECH-294`), on SES.
+  1. the code (`TECH-319`): the adapter, the task role, `EMAIL_PROVIDER`, `EMAIL_FROM` and the
+     documents named above, then an Outlook inbox check with a real template, to an address that
+     has not marked the sender as safe;
+  2. the waitlist emails (`TECH-292`, `TECH-293`, `TECH-294`), on SES.
 
 ### Mandatory test scenarios
 
