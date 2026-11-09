@@ -200,6 +200,7 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 | `HU-STUDIO-085` | `HU-STUDIO-014` |
 | `HU-STUDIO-086` | `HU-STUDIO-001`, `HU-STUDIO-085` |
 | `HU-STUDIO-087` | `HU-STUDIO-023` |
+| `HU-STUDIO-088` | `HU-STUDIO-073`, `HU-STUDIO-075` |
 
 ---
 
@@ -1461,10 +1462,10 @@ falla antes de persistir nada.
 
 ## E-STUDIO-13 · Planes y cobro
 
-> **Diferida de V1** (1 de octubre de 2026). En la primera versión los gimnasios
-> **no le cobran a sus clientes a través de Allfit**: el gimnasio le paga a Allfit por
-> fuera de la plataforma, y cada persona que invita entra con Allfit Pro. Estas
-> historias se conservan para cuando se abra esa puerta; su prioridad pasa a `después`.
+> **Reabierta para V1** el 9 de noviembre de 2026 (`ADR-048`), después de haberse diferido el
+> 1 de octubre. Cada gimnasio conecta su propia cuenta de Mercado Pago y les cobra directo a sus
+> clientes; Allfit One no cobra comisión. Un plan presencial se paga dentro de Space, y uno
+> remoto, con un link que manda el gimnasio (`HU-STUDIO-088`).
 
 **La plata nunca pasa por Allfit.** Cada organización conecta su propia cuenta de
 pasarela y cobra directo. Allfit refleja el estado y suspende o reactiva.
@@ -1475,10 +1476,10 @@ estado de pago de una persona no es un dato de entrenamiento.
 ### HU-STUDIO-073 — Conectar nuestra cuenta de cobro
 
 **Como** propietario de la organización
-**quiero** conectar nuestra cuenta de Mercado Pago o Wompi
+**quiero** conectar nuestra cuenta de Mercado Pago
 **para** poder cobrarles a nuestros clientes.
 
-`E-STUDIO-13` · después
+`E-STUDIO-13` · imprescindible
 
 **Criterios**
 
@@ -1486,6 +1487,9 @@ estado de pago de una persona no es un dato de entrenamiento.
 2. La cuenta es **nuestra**: el dinero va del cliente a nosotros sin pasar por Allfit.
 3. Allfit guarda una referencia a nuestras credenciales, **nunca las credenciales mismas**.
 4. Solo puede haber una cuenta de cobro activa a la vez.
+5. La conectamos autorizando a Allfit One desde Mercado Pago. **Nunca pegamos claves** en Studio.
+6. Si quitamos el acceso desde Mercado Pago, Studio nos lo dice, y nadie puede suscribirse hasta que la conectemos otra vez.
+7. Por ahora solo Mercado Pago. Wompi llega cuando pueda cobrar cada periodo por sí solo.
 
 ### HU-STUDIO-074 — Crear un plan
 
@@ -1493,7 +1497,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 **quiero** crear un plan comercial
 **para** ofrecérselo a nuestros clientes.
 
-`E-STUDIO-13` · después
+`E-STUDIO-13` · imprescindible
 
 **Criterios**
 
@@ -1507,13 +1511,14 @@ estado de pago de una persona no es un dato de entrenamiento.
 **quiero** publicar el plan con su precio
 **para** que la gente pueda suscribirse.
 
-`E-STUDIO-13` · después
+`E-STUDIO-13` · imprescindible
 
 **Criterios**
 
-1. Defino monto, moneda y si el cobro es **mensual o anual**. No hay otras opciones.
+1. Defino monto, moneda, si el cobro es **mensual o anual** y si el plan es **presencial o remoto**. No hay otras opciones.
 2. Una versión publicada **no se edita nunca**. Cambiar el precio exige publicar otra.
 3. **A quien ya está suscrito no se le sube el precio**: conserva la versión que aceptó.
+4. Un plan presencial se paga dentro de Space. Uno remoto se paga solo con el link que le mandamos a cada persona (`HU-STUDIO-088`).
 
 ### HU-STUDIO-076 — Retirar una versión de plan
 
@@ -1534,7 +1539,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 **quiero** ver los planes que ofrecemos
 **para** saber qué estamos vendiendo.
 
-`E-STUDIO-13` · después
+`E-STUDIO-13` · imprescindible
 
 **Criterios**
 
@@ -1547,13 +1552,14 @@ estado de pago de una persona no es un dato de entrenamiento.
 **quiero** ver el estado de pago de nuestros clientes
 **para** administrar el negocio.
 
-`E-STUDIO-13` · después
+`E-STUDIO-13` · imprescindible
 
 **Criterios**
 
 1. Veo quién está activo, quién suspendido y quién terminó.
 2. **Un coach no accede a esta pantalla**, aunque tenga a esa persona asignada. Un staff tampoco.
 3. Aquí no hay **ningún** dato de entrenamiento, cuerpo, salud ni nutrición.
+4. Veo quién todavía no ha hecho su primer pago y, de cada suspendido, por qué: fallaron los cobros, se canceló en Mercado Pago o lo suspendimos nosotros.
 
 ### HU-STUDIO-079 — Suspender o reactivar a mano
 
@@ -1561,7 +1567,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 **quiero** suspender o reactivar una suscripción manualmente
 **para** manejar casos que el cobro automático no cubre.
 
-`E-STUDIO-13` · después
+`E-STUDIO-13` · importante
 
 **Criterios**
 
@@ -1573,6 +1579,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 6. No se pide una autorización nueva únicamente cuando el permiso actual sigue vigente. Si existe otro bloqueo —por ejemplo, la organización continúa suspendida—, la escritura y las sesiones afectadas siguen pausadas.
 7. Solo vuelven a estar disponibles las sesiones futuras, no iniciadas y no canceladas que todavía pertenezcan a una relación y asignación vigentes.
 8. Si la operación intentara tocar permisos, relaciones, membresías, asignaciones o el estado intrínseco de una sesión, se revierte entera.
+9. Una suscripción cuyo cobro se canceló en Mercado Pago no se puede reactivar, porque nada la cobraría. La persona se suscribe de nuevo.
 
 ### HU-STUDIO-080 — Terminar una suscripción
 
@@ -1580,13 +1587,31 @@ estado de pago de una persona no es un dato de entrenamiento.
 **quiero** terminar la suscripción de alguien
 **para** cerrar el vínculo comercial.
 
-`E-STUDIO-13` · después
+`E-STUDIO-13` · importante
 
 **Criterios**
 
 1. **Terminar el plan no termina la relación** con la persona. Son dos cosas distintas: para terminar la relación existe otra acción, con sus propios efectos.
 2. **Ningún proceso automático puede terminar una suscripción.** Siempre queda registrado qué persona lo decidió.
 3. Una suspensión puede durar indefinidamente sin convertirse nunca en terminación por sí sola.
+4. Terminarla también cancela el cobro en Mercado Pago, y solo termina cuando Mercado Pago lo confirma.
+
+### HU-STUDIO-088 — Mandar el link de pago de un plan remoto
+
+**Como** admin u owner
+**quiero** generar el link de pago de un plan remoto para un cliente
+**para** cobrarle por WhatsApp o por correo un programa que sigue a distancia.
+
+`E-STUDIO-13` · importante
+
+**Criterios**
+
+1. Solo se genera para una versión publicada de un plan **remoto** y para una persona con la que tenemos una relación vigente.
+2. El link abre una página de Allfit One, no la de Mercado Pago. La persona entra con su cuenta, ve el plan y el precio, y decide pagar. **Generar el link no la suscribe a nada.**
+3. El link sirve solo para esa persona: otra cuenta que lo abra no puede pagar con él.
+4. El pago va directo a nuestra cuenta de Mercado Pago, igual que el de un plan presencial.
+5. En Space la persona ve su plan remoto activo, pero **no hay botón de pago ni link** para planes remotos.
+6. Un coach o un staff no puede generarlo.
 
 ---
 
@@ -1711,12 +1736,12 @@ estado de pago de una persona no es un dato de entrenamiento.
 | `E-STUDIO-10` Historial de una relación terminada | `HU-STUDIO-061` – `HU-STUDIO-063` | 0 de 3 |
 | `E-STUDIO-11` Catálogo privado de movimientos | `HU-STUDIO-064` – `HU-STUDIO-067` | 0 de 4 |
 | `E-STUDIO-12` Nutrición | `HU-STUDIO-068` – `HU-STUDIO-072` | 0 de 5 |
-| `E-STUDIO-13` Planes y cobro · diferida | `HU-STUDIO-073` – `HU-STUDIO-080` | 0 de 8 |
+| `E-STUDIO-13` Planes y cobro | `HU-STUDIO-073` – `HU-STUDIO-080`, `HU-STUDIO-088` | 5 de 9 |
 | `E-STUDIO-14` Resumen del día | `HU-STUDIO-081` – `HU-STUDIO-084` | 3 de 4 |
-| **Total** | **87 historias** | **40 imprescindibles** |
+| **Total** | **88 historias** | **45 imprescindibles** |
 
 El camino mínimo para lanzar es: entrar, crear el gimnasio con su equipo,
 invitar a una persona dentro del cupo, armar un programa y asignárselo, y ver
-lo que ejecutó. En V1 no se cobra a las personas desde Studio. En una sola confirmación, la persona acepta la relación y
+lo que ejecutó. Desde el 9 de noviembre de 2026 el gimnasio también les cobra a sus clientes, con su propia cuenta de Mercado Pago (`ADR-048`). En una sola confirmación, la persona acepta la relación y
 decide cada scope de forma independiente; el coach trabaja desde el primer día
 únicamente con los grants que la persona concedió.
