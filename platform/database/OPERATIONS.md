@@ -1004,7 +1004,10 @@ the row and is skipped. Two consequences:
 sides, with its reason: `target_changed` when she corrects the session herself,
 `session_annulled`, `session_hidden` (only that relationship's), and
 `relationship_terminated`. **Revoking a grant without terminating leaves a
-pending proposal pending**: she can still decide it.
+pending proposal pending**: she can still decide it. Since STUDIO-77 (migration
+`20261118100000_a_coach_opens_the_card_of_a_client.sql`) Studio reads both
+`session_annulled` and `session_hidden` as `session_unavailable`; the stored reason and
+what she sees in Space are unchanged.
 
 **Publishing the scopes.** The V1 rules in `packages/db/scripts/v1-scope-rules.ts`
 now declare `execution.correction_proposals` under `relationship_training`
@@ -1770,3 +1773,165 @@ Tests:
   - the application and infrastructure tests for Studio nutrition;
   - `studio-historical-access.test.ts` and `privacy/infrastructure/historical-access.test.ts`
     cover the frozen route and its binding.
+
+## The client card, today, search and her access log (STUDIO-74..77)
+
+Four migrations build `HU-STUDIO-081..084` and `OP-PRV-015` (code branch
+`feat/studio-client-card-and-today`; its pull request, merge and database deploy are
+pending). The decisions, and how they differ from earlier documents, are in
+[ALLFIT_ARCHITECTURE_DECISIONS.md](refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md),
+ADR-047.
+
+- **`20261118090000_a_member_finds_a_client_by_name.sql` (`OP-REL-010`, STUDIO-75).**
+  - It creates `relationships.fold_name(text)`, immutable, which no runtime role executes.
+  - It creates the eight-argument `relationships.list_organization_clients(…, p_query)`,
+    `security definer`, executable by `allfit_api`.
+  - It replaces the seven-argument signature with a `security invoker` wrapper that calls
+    the new one with a null search. Both stay executable by `allfit_api`.
+- **`20261118100000_a_coach_opens_the_card_of_a_client.sql` (`OP-REL-019`, STUDIO-76/77).**
+  - It creates the policy `service_relationships_select_former_attendance` on
+    `relationships.service_relationships`, `for select to allfit_owner`, admitting the one
+    row named by the open contract scope `former_attendance`.
+  - It creates the helpers `relationships.client_card_grants` and
+    `relationships.former_attendance`, which no runtime role executes, and the entry point
+    `relationships.read_client_card`, `security definer`, executable by `allfit_api`.
+  - It recreates `execution.proposal_for_proposer` with one change: `session_hidden` and
+    `session_annulled` read as `session_unavailable`.
+- **`20261118110000_a_person_reads_who_read_her_data.sql` (`OP-PRV-015`, STUDIO-76).** It
+  creates `privacy.list_my_access_events`, `security definer`, executable by `allfit_api`.
+  It adds no view, no policy, no grant on `privacy.access_events` and no index.
+- **`20261118120000_a_studio_member_sees_what_needs_attention_today.sql` (`OP-REL-020`,
+  STUDIO-74).** It creates the helpers `relationships.today_invitations` and
+  `relationships.today_training(organization, now)`, which no runtime role executes, and
+  the entry point `relationships.read_studio_today`, `security definer`, executable by
+  `allfit_api`.
+
+**What they do not add.** No table, column, index or trigger, and no backfill. The only
+policy is the `former_attendance` one. `CREATE POLICY` takes an `ACCESS EXCLUSIVE` lock on
+`relationships.service_relationships` for an instant, with no scan. With
+`lock_timeout = 5s`, a busy table makes the migration fail rather than queue; retry it.
+
+**The contract scope `former_attendance`.** The policy compares the row's id with
+`(select access_control.contract_scope('former_attendance'))`, read once per statement.
+Only `relationships.former_attendance` opens it, for the one relationship the caller's
+current membership last attended, reads `status` and `ended_at`, and closes it before it
+returns. `read_client_card` calls it only when the caller does not attend the person. A
+coach never reads anything else of that row, and nobody else reaches it.
+
+**Deploy order.** Merging runs **Deploy AWS**, which rolls out the API first. Then dispatch
+**Deploy Database AWS**, as in [the section above](#an-allfit-admin-holds-every-duty-adr-046).
+Until the migrations are applied:
+
+- **The plain directory keeps working.** Without `q`, the API calls the seven-argument
+  `list_organization_clients`, which already exists.
+- **Search, the card, today and the access log answer `503`.** Their functions do not exist
+  yet (`42883`), and the API maps any other database failure to `upstream-unavailable`.
+- **Studio's correction list still says `session_hidden` or `session_annulled`**, values the
+  new contract no longer lists. No Studio screen reads `cancel_reason` yet.
+- **The other order is safe.** The old API calls only the seven-argument directory, which
+  the migration keeps; its correction list would say `session_unavailable`, which no screen
+  reads yet. Keep the gap short either way.
+
+**What today writes.** Every opening by a member with `observe_training` writes one row in
+`privacy.access_events` per client evaluated: `resource = 'relationships.studio_today'`,
+`purpose = 'studio_attention_today'`, `access_mode = 'live'`, `result = 'allowed'`, under
+her `relationship_training` grant, with the request id the API generates. A client with no
+active `relationship_training` grant is neither evaluated nor recorded. Each such row is
+listed in her access log, so a coach who opens today often fills his clients' logs.
+
+**Checks after the deploy.** All are read only and return catalogue facts or counts, never
+content.
+
+```sql
+-- Owner, security and who may call each function. Expected: every row owned by
+-- allfit_owner; security definer for the eight-argument directory, read_client_card,
+-- read_studio_today and list_my_access_events; allfit_api executes those four and the
+-- seven-argument directory, and none of the five helpers.
+select procedure.oid::regprocedure as function,
+       pg_get_userbyid(procedure.proowner) as owner,
+       procedure.prosecdef as security_definer,
+       has_function_privilege('allfit_api', procedure.oid, 'execute') as api_executes
+from pg_proc as procedure
+join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+where namespace.nspname || '.' || procedure.proname in (
+  'relationships.list_organization_clients', 'relationships.read_client_card',
+  'relationships.read_studio_today', 'privacy.list_my_access_events',
+  'relationships.fold_name', 'relationships.client_card_grants',
+  'relationships.former_attendance', 'relationships.today_invitations',
+  'relationships.today_training')
+order by 1;
+
+-- Expected: one row, roles {allfit_owner}, command SELECT.
+select policyname, roles, cmd
+from pg_policies
+where schemaname = 'relationships'
+  and tablename = 'service_relationships'
+  and policyname = 'service_relationships_select_former_attendance';
+
+-- Expected: false. Her log is read only through privacy.list_my_access_events.
+select has_table_privilege('allfit_api', 'privacy.access_events', 'select') as api_selects;
+
+-- How many rows today wrote, per day (the last week only, so the partition key prunes).
+select date_trunc('day', occurred_at) as day, count(*) as rows_written
+from privacy.access_events
+where resource = 'relationships.studio_today'
+  and occurred_at >= now() - interval '7 days'
+group by 1
+order by 1;
+```
+
+**Open follow-ups.**
+
+- No screen calls the new routes yet: the Studio screens are STUDIO-146..149, and the Space
+  screen for the access log is front work too.
+- A later migration drops the seven-argument `list_organization_clients` once no deployed
+  API calls it.
+- A coach who comes back under a different membership gets no reason: only the current
+  membership is looked at.
+- Name folding covers Latin accents only.
+- `training` counts the planned sessions that exist. A week of a program without an end
+  that she never opened may hold none (ADR-032 plants it on her read).
+
+Tests:
+
+- `T-REL-DIRECTORY-03` (19) covers `q`: accents and case, spaces, `%` and `_` as
+  characters, no invitations, keyset through the matches, an owner searching `terminated`,
+  a coach finding only his clients, the length limits and `invited`, no access event, both
+  signatures equal without a search, and the folding helper closed to the runtime.
+- `T-REL-CARD-01` (19) covers the live card: the sections and their order, version and
+  level, meal photos only with the meals, withdrawn and shared again, refused nowhere, an
+  accepted cover with its `ends_on`, owner, admin and staff not found, a non-member
+  refused, no access event, and which functions the runtime may call.
+- `T-REL-CARD-02` (18) covers the former card: each reason and its instant, a cover ended
+  early or by its date, held and then covered, thirty days, a refused or unanswered cover,
+  no name, her return changing nothing, another coach and the owner told nothing, no
+  access event, the policy for `allfit_owner` only and its scope read once per statement.
+- `T-PRV-ACCESSLOG-01` (21) covers `OP-PRV-015`: order and ties, a coach's read with the
+  person, the organization and holder or cover, denied and frozen reads, break-glass and
+  support by name, her own and others' reads and the horizon excluded, the scope filter,
+  keyset inside a tie, nobody reading another log, the limits, the cursor and scope
+  validation, nothing written by reading, the table closed to `allfit_api`, and the
+  subject index on every partition.
+- `T-REL-TODAY-01` (24) covers the notices per role, the counts and the five items, a
+  coach's own invitations, unassigned and termination requests, team invitations and the
+  team, new relationships, `empty`, refusals, and no access event for the counts.
+- `T-REL-TODAY-02` (15) covers `training`: the closed week, cancelled, paused and annulled
+  sessions, 48 hours, the screening scope closed afterwards, one access event per client
+  evaluated with its grant and none without one, a lapsed cover, the request id, the week
+  in her timezone, and that the runtime cannot call the helper.
+- `T-EXE-PROPOSAL-CANCEL-01` now has 22: `-CANCEL-LIST-03/04` show Studio's
+  `session_unavailable` and her real reason.
+- `T-ORG-CLOSE-01` counts twenty relationship functions the runtime reaches, the directory
+  under two signatures.
+- API:
+  - `relationships/handlers/client-card.test.ts`: `T-REL-CARD-API-01..05` and
+    `T-REL-TODAY-API-01..03` (the contract, the links, the error mapping, origin, session
+    and identifiers);
+  - `relationships/handlers/studio.test.ts`: the search, its validation and its cursors;
+  - `relationships/infrastructure/card-and-today.test.ts` and `directory.test.ts`: the
+    bindings, the request id, and the seven-argument call without a search;
+  - `privacy/handlers/space.test.ts` (`T-PRV-API-SPACE-19..22`) and
+    `privacy/infrastructure/my-access-log.test.ts`: the route, the cursor bound to the
+    scope, and the binding;
+  - `execution/handlers/studio.test.ts` (`T-EXE-PROPOSAL-API-09`): the contract refuses
+    `session_hidden` and `session_annulled` for Studio.

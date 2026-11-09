@@ -244,7 +244,7 @@ Sujeto implícito: la persona autenticada. Ningún endpoint recibe un `person_id
 | `GET` | `/visibility-denials` | `OP-PRV-017` | Her active denials, newest first, with the gym and the session. Implemented in STUDIO-47/48 |
 | `PUT` | `/executions/{id}/visibility` | `OP-PRV-006` | Ocultar por relación. Body `{relationship_id}`; never from the relationship the session was produced in. Implemented in STUDIO-47/48 |
 | `DELETE` | `/executions/{id}/visibility/{relId}` | `OP-PRV-007` | Shares it again from now on; never reopens a frozen window. Implemented in STUDIO-47/48 |
-| `GET` | `/access-events` | `OP-PRV-015` | Quién leyó qué y cuándo |
+| `GET` | `/access-events` | `OP-PRV-015` | Quién leyó qué y cuándo. Implemented in STUDIO-76: every read of her data by somebody else, allowed or denied, for 24 months, newest first, with the reader's name, organization and whether they were her holder or a cover; `allfit_team` for the Allfit One team's reads. Query `limit`, `cursor`, `scope_code`; `private, no-store`. Through `privacy.list_my_access_events`, never a view (ADR-047) |
 | `POST` | `/erasure-requests` | `OP-PRV-008` | |
 | `GET` | `/erasure-requests/{id}` | `OP-PRV-016` | Resolución por categoría |
 
@@ -538,7 +538,9 @@ expiración.
 
 | Método | Ruta | Operación | Scope exigido |
 | --- | --- | --- | --- |
-| `GET` | `/organizations/{orgId}/clients` | `OP-REL-010` | **Ninguno** — directorio sin datos fitness |
+| `GET` | `/organizations/{orgId}/clients` | `OP-REL-010` | **Ninguno** — directorio sin datos fitness. Since STUDIO-75, `q` finds by name (2 to 80 characters, without accents or case), never invitations and never beyond what the caller already lists |
+| `GET` | `/organizations/{orgId}/clients/{personId}` | `OP-REL-019` | None: the card says which categories she shares, never their content, and writes no `ACCESS_EVENT`. Only whoever attends her; a former attendant reads why for thirty days (STUDIO-76/77, ADR-047) |
+| `GET` | `/organizations/{orgId}/today` | `OP-REL-020` | None to open; each notice needs its capability, and `training` reads under her `relationship_training` grant, one `ACCESS_EVENT` per client evaluated (STUDIO-74) |
 | `POST` | `/organizations/{orgId}/client-invitations` | `OP-REL-001` | Ninguno — ofrecer no es conceder. An optional `program` needs `assign_programs` and a request for `relationship_training` at `contribute` (STUDIO-16) |
 | `GET` | `/organizations/{orgId}/relationships/{id}` | `OP-REL-011` | Ninguno — estado, no contenido |
 | `GET` | `/organizations/{orgId}/relationships/{id}/events` | `OP-REL-014` | Ninguno |
@@ -577,7 +579,7 @@ Todas exigen la fórmula completa y escriben `ACCESS_EVENT`.
 | `POST` | `.../clients/{personId}/observations` | `OP-EXE-010` | Scope del contenido · `contribute`: `relationship_training` for training, `health_context` for pain or a limitation. Only on a session of this relationship (STUDIO-50) |
 | `POST` | `.../observations/{id}/revisions` | `OP-EXE-011` | `contribute` + autoría propia. Made over `expected_revision`, otherwise `409 stale-draft`; a reason is required (STUDIO-51) |
 | `POST` | `.../clients/{personId}/correction-proposals` | `OP-EXE-012` | `contribute`: `relationship_training`, with the `propose_corrections` capability. One field of one set she declared and he can see, her own history under `prior_training_history` included; one pending proposal per field. It writes no `ACCESS_EVENT` (STUDIO-52) |
-| `GET` | `/organizations/{orgId}/correction-proposals` | `OP-EXE-020` | `contribute`. **As implemented, no scope:** any live member lists only what they proposed there, never her value, and writes no `ACCESS_EVENT`. `target` appears only while the proposer still attends her and she shares her training (STUDIO-53) |
+| `GET` | `/organizations/{orgId}/correction-proposals` | `OP-EXE-020` | `contribute`. **As implemented, no scope:** any live member lists only what they proposed there, never her value, and writes no `ACCESS_EVENT`. `target` appears only while the proposer still attends her and she shares her training (STUDIO-53). A session she hid or annulled reads as `session_unavailable` (STUDIO-77) |
 
 ### 5.8 Planes y pagos
 
@@ -965,6 +967,9 @@ Comandos con varias escrituras que deben ser atómicas. La API los invoca dentro
 | As built: `privacy.read_historical_relationship`, `execution.list_frozen_executions`, `execution.read_frozen_execution` and `identity.list_frozen_body_progress`, each with `(person, session, organization, relationship, case, …)` | `OP-PRV-020` | `privacy.open_frozen_read` checks the recent sign-in, the request id and the membership, sets `app.purpose = 'frozen_history_review'`, checks the case and opens the contract scope `frozen_history`. Each read records `privacy.access_events` in `frozen` mode before answering |
 | `privacy.revoke_grant(grant_id)` | `OP-PRV-005` | Acepta `active` o `frozen`, fija `revoked_at`, cierra casos históricos abiertos e invalida proyecciones y cachés antes de confirmar. Implementada como `privacy.revoke_my_grant` (migración `20261022120000`): todavía no hay casos históricos ni proyecciones que tocar. As implemented (STUDIO-54..56): the historical cases now exist, and the trigger `trg_data_grants_after_update_historical_cases` closes the open ones of the relationship when a frozen grant is revoked, in the same transaction |
 | `privacy.log_access_event(subject_person_id, subject_organization_id, relationship_id, data_grant_id, historical_access_case_id, scope_code, scope_version, access_mode, resource, result)` | `OP-PRV-015`, `OP-ORG-013` y toda lectura amparada | Exige exactamente un sujeto; la rama organización valida membership activo/tenant, modo/recurso cerrados y contexto personal nulo; toma actor, membresía, propósito, request y tiempo del contexto y falla la lectura si no puede registrar |
+| As built: `privacy.list_my_access_events(person, scope_code, limit, before_occurred_at, before_id)` | `OP-PRV-015` | Her events read by somebody else, allowed or denied, for 24 months, with the reader's name, organization and attendance; keyset on `occurred_at` and `id`, newest first; writes nothing (STUDIO-76) |
+| As built: `relationships.read_client_card(person, organization, subject)` | `OP-REL-019` | The card of a client the caller attends, or the reason a former attendant stopped seeing her for thirty days through `relationships.former_attendance` and the contract scope `former_attendance`; writes nothing (STUDIO-76/77) |
+| As built: `relationships.read_studio_today(person, organization)` | `OP-REL-020` | The notices the caller's capabilities resolve; for `training`, one `privacy.log_access_event` per client evaluated, in the same transaction as the read (STUDIO-74) |
 | `create_assignment(rel_id, program_version_id, starts_on, tz)` | `OP-PLN-010` | Asignación + periodo de gestión + materialización de sesiones: **completa** si la versión tiene fecha de fin, **la semana de la asignación** si no la tiene. En ningún caso queda pendiente de un job de calendario |
 | `resolve_detached_assignment(asg_id, choice)` | `OP-PLN-015` | Reutiliza la misma asignación o cancela solo sesiones futuras no iniciadas |
 | `start_attempt(planned_session_id)` | `OP-EXE-001` | `attempt_number` único y monotónico bajo concurrencia |
@@ -1018,7 +1023,7 @@ Los lookups `access_control.grant_of(relationship_id,scope_code)` y `access_cont
 | `execution.v_client_progress` | Studio | Herencia de clasificación |
 | `planning.v_person_agenda` | Space | Resuelta en la zona horaria de la persona |
 | `privacy.v_person_consents` | Space | Grants, versión, actores que pueden ejercerlos |
-| `privacy.v_my_access_events` | Space | Solo `subject_person_id = access_control.person()`; excluye siempre eventos con sujeto organización |
+| `privacy.v_my_access_events` | Space | Solo `subject_person_id = access_control.person()`; excluye siempre eventos con sujeto organización. As built (STUDIO-76): not a view; see `privacy.list_my_access_events` in §9, so `allfit_api` never reads `privacy.access_events` (ADR-047) |
 | `support.v_support_metadata` | Soporte | Solo metadatos operativos; since ADR-046 also the person's name and full contact |
 | `nutrition.v_my_meals` | Space | Comidas propias; URL firmada si existe medio |
 | `nutrition.v_my_daily_summaries` | Space | Agregado reproducible por fecha local |
