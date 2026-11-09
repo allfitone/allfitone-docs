@@ -6487,11 +6487,10 @@ The plans (`HU-STUDIO-074..077`) depend on none of them.
 ## ADR-049 — Allfit One sends its email through Amazon SES
 
 **Status:** accepted for V1. The SES account is set up, out of the sandbox and managed by
-Terraform; the code is not built.<br>
+Terraform; the code is built (allfitone#210) and production has not switched yet.<br>
 **Date:** 9 November 2026<br>
 **Replaces:** Resend as the email provider. No earlier ADR chose it; it is named in
-`CURRENT_ARCHITECTURE_DIAGRAM.md`, `V1_DEGRADATION_AND_RECOVERY_MATRIX.md` and the deployment
-steps of `OPERATIONS.md`.
+`V1_DEGRADATION_AND_RECOVERY_MATRIX.md` and the deployment steps of `OPERATIONS.md`.
 
 ### Context
 
@@ -6557,8 +6556,11 @@ The design choices that follow from it:
    `@aws-sdk/client-sesv2`. The templates, the outbox, the queue, the processors and their tests do
    not change.
 2. **No key.** The worker gets an ECS task role allowed `ses:SendEmail` only on the `allfit.one`
-   identity and only from the configured sender (`ses:FromAddress`). `RESEND_FROM_EMAIL` becomes
-   `EMAIL_FROM` with the same value, and `RESEND_API_KEY` leaves the secret with Resend.
+   identity and its configuration set, and only from the configured sender (`ses:FromAddress`).
+   No other container gets a role. `RESEND_FROM_EMAIL` becomes `EMAIL_FROM` with the same value.
+   `EMAIL_FROM` and `EMAIL_PROVIDER` are plain environment of the worker, set in Terraform beside
+   the role, so the address the role allows and the address the worker sends from are written in
+   one place (`infra/production/main.tf`). `RESEND_API_KEY` leaves the secret with Resend.
 3. **The domain is verified with Easy DKIM**, with a custom MAIL FROM subdomain so that SPF aligns
    with `allfit.one`. The subdomain is not `send`, which Resend holds while both exist; `mail` is
    free. The DMARC record `allfit.one` already publishes stays, and DKIM on `allfit.one` aligns
@@ -6599,7 +6601,8 @@ The design choices that follow from it:
    `MailFromDomainNotVerifiedException`, `AccountSuspendedException` and `SendingPausedException`
    are not.
 8. **The switch.** While both adapters exist, `EMAIL_PROVIDER` (`resend` or `ses`) chooses one, and
-   an unknown value stops the worker at start. Production moves to `ses` once access is granted and
+   an unknown value stops the worker at start. Unset keeps Resend, so a task definition from before
+   the switch still starts after the code deploys. Production moves to `ses` once access is granted and
    an email sent from production reaches a team address; since production sends nothing today, it
    can move before any delivery switch is turned on. The Resend adapter, its secret, its account
    and its DNS records (`resend._domainkey` and the MX and SPF of `send.allfit.one`) go once SES
@@ -6609,9 +6612,11 @@ The design choices that follow from it:
 
 ### Earlier decisions this changes
 
-- `CURRENT_ARCHITECTURE_DIAGRAM.md` and `V1_DEGRADATION_AND_RECOVERY_MATRIX.md` name Resend as the
-  email provider, and `OPERATIONS.md` lists its key among the deployment steps. They change in the
-  pull request that builds the switch.
+- `V1_DEGRADATION_AND_RECOVERY_MATRIX.md` named Resend as the email provider, `OPERATIONS.md`
+  listed it among the deployment steps of the staff invitations, and HU-BO-003 said the Backoffice
+  password reset does not use it. All three now name SES. `CURRENT_ARCHITECTURE_DIAGRAM.md` also
+  names Resend, but it describes Factory Fitness, the earlier system, as historical evidence, so it
+  stays as it is.
 - The privacy policy on www.allfit.one names no email provider, only cloud providers that may host
   data outside Colombia, so it does not change. SES runs in the same region as the database: no new
   country receives the addresses.
@@ -6668,11 +6673,17 @@ The design choices that follow from it:
   - the account suppression list and Virtual Deliverability Manager settings;
   - the two alarms and their SNS topic;
   - an inbox check from SES: Gmail delivered to the inbox with SPF, DKIM and DMARC passing.
+- **The code** (`TECH-319`, allfitone#210): the SES adapter behind `EmailSender`, at its own entry
+  point so the API never loads the AWS SDK; `EMAIL_PROVIDER` and `EMAIL_FROM`; the worker's task
+  role; and a lint rule that keeps `@aws-sdk/client-sesv2` inside `packages/notifications`. The
+  compiled adapter sent the real team-invitation template through SES before the pull request
+  opened. Every mandatory scenario below has a test.
 - **What remains:**
-  1. the code (`TECH-319`): the adapter, the task role, `EMAIL_PROVIDER`, `EMAIL_FROM` and the
-     documents named above, then an Outlook inbox check with a real template, to an address that
-     has not marked the sender as safe;
-  2. the waitlist emails (`TECH-292`, `TECH-293`, `TECH-294`), on SES.
+  1. switching production (`TECH-319`): apply the worker's role and task definition, deploy, send
+     one email from production through the role, and repeat the Outlook inbox check with a real
+     template, to an address that has not marked the sender as safe;
+  2. the waitlist emails (`TECH-292`, `TECH-293`, `TECH-294`), on SES;
+  3. after two weeks of production email on SES, removing Resend (decision 8).
 
 ### Mandatory test scenarios
 

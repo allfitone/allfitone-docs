@@ -148,7 +148,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 **Criterios**
 
-1. Pido el restablecimiento con mi correo y WorkOS envía un enlace temporal desde su dominio alojado `*.authkit.app`; Backoffice no usa Resend para este flujo.
+1. Pido el restablecimiento con mi correo y WorkOS envía un enlace temporal desde su dominio alojado `*.authkit.app`; Backoffice no usa el correo propio de Allfit One (Amazon SES) para este flujo.
 2. El mensaje y la respuesta `202` son los mismos exista o no la cuenta y aunque el proveedor tarde o falle.
 3. Al cambiar la contraseña se cierran mis sesiones Studio y Backoffice y se invalidan intentos Backoffice pendientes, sin eliminar mi factor TOTP activo.
 4. `auth.allfit.one` está diferido. Incorporarlo después cambia configuración y branding de páginas alojadas, no contratos ni sesiones locales.
