@@ -3870,6 +3870,17 @@ Reglas que gobiernan todo el dominio:
 - Suscripción y relación de servicio son **vínculos distintos** con ciclos independientes.
 - Un `coach` **no** lee el estado de pago de su cliente. Un `staff` tampoco.
 
+> **Changed by `ADR-048` (9 November 2026).** Each leaf below is rewritten by the pull request
+> that builds it. Until then, where a leaf disagrees, `ADR-048` holds:
+>
+> - the gateway is Mercado Pago only, connected through OAuth (`OP-PAY-001`);
+> - a remote plan is never offered in Space (`OP-PAY-011`);
+> - a subscription starts `pending`, and the answer carries Mercado Pago's page (`OP-PAY-012`);
+> - ending it from Space or Studio cancels the agreement in Mercado Pago first (`OP-PAY-010`,
+>   `OP-PAY-015`);
+> - a failed charge suspends only once Mercado Pago stops retrying it, and a cancellation made in
+>   Mercado Pago suspends with `gateway_cancelled` (`OP-PAY-016`).
+
 | ID | Operación | Tipo | Actor |
 | --- | --- | --- | --- |
 | `OP-PAY-001` | Conectar la pasarela de la organización | Comando | `A5` |
