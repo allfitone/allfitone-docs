@@ -1865,6 +1865,10 @@ ninguno.
 3. No veo planes retirados ni borradores.
 4. Solo veo planes **presenciales**. Un plan remoto no se ofrece en la aplicación.
 
+> **Criterion 4 implemented (TECH-130, backend).** Migration `20261120100000_space_offers_only_in_person_plans.sql` filters
+> `GET /space/v1/organizations/{organizationId}/plans` and `POST /space/v1/subscriptions` to
+> `delivery_mode = 'in_person'`. A remote version is refused like one not on offer.
+
 ### HU-SP-080 — Suscribirme a un plan
 
 **Como** persona que quiere entrenar en un gimnasio

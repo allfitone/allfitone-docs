@@ -1959,3 +1959,87 @@ Tests:
 - `T-REL-DIRECTORY-01/02` call it.
 - `T-ORG-CLOSE-01` counts nineteen relationship functions.
 - `directory.test.ts` binds a null search in the last position.
+
+## A gym sells its plans (HU-STUDIO-074..077)
+
+Two migrations build `HU-STUDIO-074..077` (`OP-PAY-002..006`; Jira TECH-48, TECH-130, TECH-71
+and TECH-133; pull request allfitone#207). What each operation does is in
+[the operations matrix](refactor/03_PROPOSED_DESIGN/V1_OPERATIONS_MATRIX.md), and why plans
+are delivered in person or remotely is in ADR-048.
+
+- **`20261120090000_a_gym_sells_its_plans.sql`.**
+  - It adds `payments.plan_versions.delivery_mode text not null default 'in_person'`, with
+    `ck_plan_versions_delivery_mode`. A constant default adds the column without rewriting
+    the table, and every existing version reads `in_person`, which is what Space has always
+    offered.
+  - It recreates `payments.plan_version_guard_tg` so `delivery_mode` is frozen with the
+    rest of a published version.
+  - It creates `uidx_plan_versions_live`, unique on `(plan_id) where status = 'published'`:
+    one price on sale per plan.
+  - It creates the helpers `payments.organization_plan_projection` and
+    `payments.require_plan_manager`, which no runtime role executes, and five entry points,
+    `security definer` and executable by `allfit_api`: `create_organization_plan`,
+    `rename_organization_plan`, `publish_plan_version`, `deprecate_plan_version` and
+    `list_organization_plans_for_team`.
+- **`20261120100000_space_offers_only_in_person_plans.sql`.** It recreates
+  `payments.list_organization_plans` and `payments.subscribe_to_plan` with the same
+  signatures and grants. Both keep only `in_person` versions. `subscribe_to_plan` first takes
+  `pg_advisory_xact_lock_shared` on the version; publishing and retiring take the exclusive
+  lock, so no subscription is created on a version whose retirement has committed.
+
+**What they do not add.** No table, policy, table grant or backfill. Adding the column and
+the constraint takes an `ACCESS EXCLUSIVE` lock on `payments.plan_versions` for an instant,
+and building the index blocks writes to it while it reads a small table. With
+`lock_timeout = 5s`, a busy table makes the migration fail rather than queue; retry it.
+
+**Before the deploy: one price on sale per plan.** The index cannot be built if a plan
+already has two published versions. Nothing in production has published one yet, because
+Studio had no route for it. The master user does not bypass RLS, so a `select` on
+`payments.plan_versions` returns nothing whatever the table holds. Before Deploy Database AWS
+is dispatched, read the row count instead, read only:
+
+```sql
+select n_live_tup
+from pg_stat_user_tables
+where schemaname = 'payments'
+  and relname = 'plan_versions';
+```
+
+Zero means nothing can conflict. Otherwise the index finds any duplicate itself: the
+migration fails and rolls back whole, and nothing changes. Which price stays on sale is then
+the gym's decision, not the deploy's.
+
+**Deploy order.** Merging runs **Deploy AWS**, which rolls out the API first. Then dispatch
+**Deploy Database AWS**. Until the migrations are applied:
+
+- **The five plan routes answer `503`.** Their functions do not exist yet (`42883`), and
+  the API maps any other database failure to `upstream-unavailable`.
+- **Space keeps answering as before.** Its list and subscribe functions keep their old
+  bodies, and no remote version can exist without the new column.
+
+**Rollback.** The migrations are forward only. An API rollback leaves the five functions
+unused; the column, the index and the in-person filter stay.
+
+**Check after the deploy.** Expected: five rows, each `true`.
+
+```sql
+select procedure.proname, has_function_privilege('allfit_api', procedure.oid, 'execute')
+from pg_proc as procedure
+join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+where namespace.nspname = 'payments'
+  and procedure.proname in (
+    'create_organization_plan', 'rename_organization_plan', 'publish_plan_version',
+    'deprecate_plan_version', 'list_organization_plans_for_team'
+  );
+```
+
+Tests:
+
+- `T-PAY-GYM-PLAN-01` covers creating, renaming and listing.
+- `T-PAY-GYM-PLAN-02` covers publishing, replacing, retiring and what Space offers.
+- `T-PAY-SUBSCRIPTION-01` writes its second version after retiring the first.
+- `T-PAY-API-02` (`studio-plans.test.ts`) checks the routes against the contract.
+- The race between retiring and subscribing needs two sessions, so pgTAP cannot run it. It
+  was checked by hand on 9 November 2026. With the lock, the subscription waited for the
+  retirement and was refused with `P0002`. Without the lock, it landed on the retired
+  version.

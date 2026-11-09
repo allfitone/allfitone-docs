@@ -2730,27 +2730,27 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 - **Columnas:** `id` · `organization_id uuid` · `name text` · `status catalog.publication_status` · `created_at timestamptz`.
 - **FKs y borrado:** `organization_id → organizations.organizations(id) RESTRICT`; clave portadora `UNIQUE (id, organization_id)`.
 - **Uniques y checks:** `UNIQUE (organization_id, lower(name))`.
-- **Actores:** `admin` y `owner` escriben; el resto de la organización lee.
+- **Actores:** `admin` y `owner` escriben; el resto de la organización lee. Un plan publicado también se renombra.
 - **RLS:** `access_control.has_membership(organization_id)`; la escritura exige `manage_billing`.
 - **Consultas / índices:** `(organization_id, status)`.
 - **Retención:** con la organización.
-- **Eventos:** `payments.plan_created.v1`.
+- **Eventos:** ninguno se emite todavía; `payments.plan_created.v1` queda reservado.
 
 ---
 
 ### 13.3 `payments.plan_versions`
 
-- **Propósito:** versión publicada e **inmutable** de un plan: precio, moneda y periodo. Una suscripción congela una de estas y nunca cambia bajo los pies de la persona.
+- **Propósito:** versión publicada e **inmutable** de un plan: precio, moneda, periodo y modalidad. Una suscripción congela una de estas y nunca cambia bajo los pies de la persona.
 - **Dominio / fuente de verdad:** Pagos.
 - **Clasificación:** `operational`.
-- **Columnas:** `id` · `plan_id uuid` · `organization_id uuid` · `version_number integer` · `amount_minor bigint` · `currency_code text` (ISO 4217) · `billing_period text` (`month`, `year`) · `status catalog.publication_status` · `published_at timestamptz` · `deprecated_at timestamptz` (nullable).
+- **Columnas:** `id` · `plan_id uuid` · `organization_id uuid` · `version_number integer` · `amount_minor bigint` · `currency_code text` (ISO 4217) · `billing_period text` (`month`, `year`) · `delivery_mode text` (`in_person`, `remote`; default `in_person`) · `status catalog.publication_status` · `published_at timestamptz` · `deprecated_at timestamptz` (nullable).
 - **FKs y borrado:** `(plan_id, organization_id) → organization_plans(id, organization_id) RESTRICT`; clave portadora `UNIQUE (id, organization_id)`.
-- **Uniques y checks:** `UNIQUE (plan_id, version_number)`; `CHECK (billing_period in ('month','year'))`; `CHECK (amount_minor > 0)`. Sin `UPDATE` en runtime salvo la marca de deprecación: una versión publicada no se edita jamás.
+- **Uniques y checks:** `UNIQUE (plan_id, version_number)`; `uidx_plan_versions_live`, único parcial sobre `(plan_id) WHERE status = 'published'`: **un solo precio en venta por plan**; `CHECK (billing_period in ('month','year'))`; `ck_plan_versions_delivery_mode`; `CHECK (amount_minor > 0)`. Sin `UPDATE` en runtime salvo la marca de deprecación: `plan_version_guard_tg` congela también `delivery_mode`. Publicar acepta solo `COP` en pesos enteros; la columna sigue admitiendo cualquier ISO 4217.
 - **Actores:** `admin` y `owner` publican; nadie edita.
 - **RLS:** vía el plan; una organización nunca ve versiones de otra.
 - **Consultas / índices:** `(plan_id, status)`.
 - **Retención:** se conserva mientras exista una suscripción que la referencie.
-- **Eventos:** `payments.plan_version_published.v1`, `payments.plan_version_deprecated.v1`.
+- **Eventos:** ninguno se emite todavía; `payments.plan_version_published.v1` y `payments.plan_version_deprecated.v1` quedan reservados.
 
 ---
 

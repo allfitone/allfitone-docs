@@ -1505,6 +1505,13 @@ estado de pago de una persona no es un dato de entrenamiento.
 2. Un borrador **no se le puede vender a nadie** hasta publicarlo.
 3. No podemos tener dos planes con el mismo nombre.
 
+> **Implemented as (TECH-48, backend).** `POST /studio/v1/organizations/{organizationId}/plans`
+> creates a draft and `PATCH …/plans/{planId}` renames it (`OP-PAY-002`, `OP-PAY-003`). A
+> name is trimmed, 1 to 80 characters, and unique in the gym without regard to case. A
+> published plan can be renamed too, and its subscribers read the new name. Only `owner` and
+> `admin` (`manage_billing`) write; a coach or staff member is told `403`. Migration
+> `20261120090000_a_gym_sells_its_plans.sql`.
+
 ### HU-STUDIO-075 — Publicar una versión de plan
 
 **Como** admin u owner
@@ -1520,6 +1527,14 @@ estado de pago de una persona no es un dato de entrenamiento.
 3. **A quien ya está suscrito no se le sube el precio**: conserva la versión que aceptó.
 4. Un plan presencial se paga dentro de Space. Uno remoto se paga solo con el link que le mandamos a cada persona (`HU-STUDIO-088`).
 
+> **Implemented as (TECH-130, backend).** `POST …/plans/{planId}/versions` (`OP-PAY-004`) with
+> `amount_minor`, `currency_code`, `billing_period` and `delivery_mode`. **A plan has one
+> price on sale:** publishing retires the previous version in the same command, and whoever
+> subscribed to it keeps it. Monthly and yearly are separate plans. Amounts are whole pesos in
+> `COP`, because Mercado Pago Colombia charges in pesos. Publishing the price already on sale
+> changes nothing. Space offers and subscribes only to `in_person` versions. Migrations
+> `20261120090000_a_gym_sells_its_plans.sql` and `20261120100000_space_offers_only_in_person_plans.sql`.
+
 ### HU-STUDIO-076 — Retirar una versión de plan
 
 **Como** admin u owner
@@ -1533,6 +1548,12 @@ estado de pago de una persona no es un dato de entrenamiento.
 1. Retirar impide **suscripciones nuevas**.
 2. **No cancela, no suspende y no cambia de plan** a nadie que ya esté suscrito.
 
+> **Implemented as (TECH-71, backend).** `POST …/plans/{planId}/versions/{planVersionId}/deprecation`
+> (`OP-PAY-005`), without a body. Retiring the price on sale takes the plan off sale until
+> another is published. Retiring a version a newer price already replaced changes nothing. A
+> subscription in flight waits for the retirement and is then refused, so nobody subscribes
+> to a version already retired. Migration `20261120090000_a_gym_sells_its_plans.sql`.
+
 ### HU-STUDIO-077 — Ver nuestros planes
 
 **Como** integrante de la organización
@@ -1545,6 +1566,11 @@ estado de pago de una persona no es un dato de entrenamiento.
 
 1. Distingo borradores de versiones publicadas.
 2. Nunca veo los planes de otra organización.
+
+> **Implemented as (TECH-133, backend).** `GET …/plans` (`OP-PAY-006`). Every active member
+> reads it, coach and staff included, because a price is nobody's personal data. It lists
+> published plans first, then drafts, by name; each plan says whether it is on sale and
+> carries every version, newest first. Migration `20261120090000_a_gym_sells_its_plans.sql`.
 
 ### HU-STUDIO-078 — Ver quién está suscrito y quién debe
 
