@@ -54,6 +54,7 @@
 | ADR-044 | La persona trae su historial de otra app, y entra como entrenamiento suyo |
 | ADR-046 | An Allfit admin acts with the full authority of the platform |
 | ADR-047 | A former professional learns why, for thirty days |
+| ADR-048 | A gym charges its clients through its own Mercado Pago account |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -5362,6 +5363,9 @@ El plan de pago de Allfit para personas se llamaba **Premium** y desde el 12 de 
 - a Pro se llega **pagándoselo a Allfit** o **entrando invitado por un gimnasio activo**, y
   un gimnasio activo es uno que le está pagando a Allfit.
 
+> **Reopened by `ADR-048`** (9 November 2026): the gyms charge their clients through their own
+> Mercado Pago account. Every decision below still stands.
+
 El catálogo de planes (`HU-BO-025`, `HU-BO-026`) ya está construido en
 `20260927050000_platform_plan_catalogue.sql`. Dejó sin decidir, a propósito, de dónde sale
 el Pro de una persona. `DB-P5-008` hacía cinco preguntas que esta decisión responde.
@@ -6224,3 +6228,255 @@ The design choices that follow from them, as built:
 | Today per role, counts and five items, `empty`, refusals | `T-REL-TODAY-01` (24), `T-REL-TODAY-API-01..03` |
 | Training: the closed week in her timezone, cancelled, paused and annulled sessions, 48 hours, one event per client evaluated, none without the grant, the request id | `T-REL-TODAY-02` (17), `card-and-today.test.ts` |
 | The access log: who, organization, holder or cover, denied, break-glass and support, horizon, her own excluded, scope, keyset, no table privilege | `T-PRV-ACCESSLOG-01` (21), `T-PRV-API-SPACE-19..22`, `my-access-log.test.ts` |
+
+---
+
+## ADR-048 — A gym charges its clients through its own Mercado Pago account
+
+**Status:** accepted for V1; not built.<br>
+**Date:** 9 November 2026<br>
+**Reopens:** `E-STUDIO-13`, `E-SP-13` and `E-SP-14`, deferred on 1 October 2026 together with
+`ADR-043`, and adds `HU-STUDIO-088`.<br>
+**Departs from:** the context of `ADR-043`, where the gyms do not charge their clients through
+Allfit One; `HU-STUDIO-073`, which named Wompi; and `OP-PAY-001`, `OP-PAY-010`, `OP-PAY-012`,
+`OP-PAY-015` and `OP-PAY-016` of `V1_OPERATIONS_MATRIX.md`, in the points listed under
+*Earlier decisions this changes*.
+
+### Context
+
+`ADR-043` deferred the three epics in which a gym charges its clients. In the first version the
+gym paid Allfit One outside the platform, and everybody it invited got Pro. The database half was
+built anyway in October:
+
+- **`20261012130000_a_person_subscribes_to_a_gym.sql`:** gateway connections (`mercado_pago` or
+  `wompi`) whose credentials exist only as a reference (`credential_secret_ref`); plans whose
+  published versions never change, billed monthly or yearly; and subscriptions that freeze the
+  version she accepted.
+- **`20261012140000_a_subscription_has_a_life.sql`:** suspension through
+  `planning.service_access_blocks`, which never touches grants, relationships, assignments or
+  sessions, and a table check that lets only a person or a professional end a subscription.
+
+Nothing talks to a gateway. `POST /space/v1/subscriptions` returns the price and the provider but
+no checkout, no route receives a gateway's notifications, and no code connects an account.
+
+Two outside rules bound the design:
+
+- **The App Store.** Guideline 3.1.1 requires in-app purchase for digital content. 3.1.3(e) lets
+  an app sell services consumed outside the app by other means, and 3.1.3(d) does the same for
+  real-time one-to-one services. A program followed remotely is neither. In Colombia an app may
+  not link to a purchase made outside it (`ADR-043`).
+- **The gateways.** A Mercado Pago Colombia subscription (`preapproval`) charges every period by
+  itself. Wompi Colombia's documentation describes no subscription engine: the merchant fires each
+  charge with a saved payment source (*Fuentes de pago*), which would make Allfit One the one
+  charging.
+
+### Decision
+
+The owner decided eight things on 9 November 2026:
+
+1. **All of it enters V1 now:** connecting the gym's account, plans and versions, and real
+   charging. The three epics get back the priorities they had before the deferral.
+2. **A plan is in-person or remote.**
+   - An in-person plan is paid inside Space, with Mercado Pago (3.1.3(e)).
+   - A remote plan is paid outside Space, through a link that Studio produces and the gym sends by
+     WhatsApp or email. Space shows a remote plan once it is active, with no pay button and no
+     link.
+3. **No commission.** The charge goes whole to the gym. Allfit One earns from the platform plan the
+   gym pays it, which this decision does not change.
+4. **Pro does not change (`ADR-043`).** A client has Pro while she has an active relationship with
+   an active gym, whatever the state of her subscription with that gym.
+5. **Mercado Pago only, at launch.** Wompi comes later, once it can charge each period by itself.
+6. **The owner connects the account with OAuth.** The tokens live in AWS Secrets Manager, and the
+   database keeps only their reference.
+7. **A subscription is suspended only once Mercado Pago stops retrying a charge**, never at the
+   first rejection. The gym can still suspend by hand (`HU-STUDIO-079`).
+8. **A cancellation made in Mercado Pago:**
+   - if Mercado Pago says she cancelled it, the subscription ends as her decision, as with
+     `OP-PAY-015`;
+   - if Mercado Pago cancelled it for lack of payment, or nobody can tell who did, the
+     subscription is only suspended and the gym decides.
+
+The design choices that follow from them:
+
+1. **The connection (`OP-PAY-001`, `HU-STUDIO-073`).**
+   - Allfit One is registered as an application in Mercado Pago, with PKCE required. The owner
+     taps «Conectar con Mercado Pago», authorizes on Mercado Pago and comes back to Studio.
+   - The `state` of the flow is single use, short lived, and bound to the owner's membership and
+     organization. The callback exchanges the code, stores the access and refresh tokens in one
+     Secrets Manager secret per connection, and writes `gateway_connections` with
+     `external_account_ref` (the gym's Mercado Pago user id) and the secret's reference.
+   - The access token lasts 180 days. A worker renews it well before then, with the
+     `offline_access` scope, and stores the new refresh token every time. The documentation
+     contradicts itself on whether a refresh token can be reused, so it is treated as single use.
+   - When the gym revokes access (`mp-connect`, `application.deauthorized`) or a renewal fails, the
+     connection becomes `revoked`, no subscription can start, and Studio asks the owner to connect
+     again.
+   - Only `mercado_pago` can be connected, and `wompi` leaves `ck_gateway_connections_provider`.
+2. **A version says how the plan is delivered.** Each published version carries `in_person` or
+   `remote` next to its price and period, so what she bought never changes under her.
+   `HU-STUDIO-075` gains that field.
+3. **She subscribes on Mercado Pago's own page.**
+   - Allfit One creates, with the gym's token, a subscription without an associated plan: a
+     `preapproval` with status `pending`. It carries the amount, `COP`, a frequency of 1 month or
+     12 months, her email as `payer_email`, the Allfit One subscription id as
+     `external_reference`, and a return address.
+   - Mercado Pago answers with `init_point`, its own page, where she enters her card. Neither her
+     card nor a card token ever reaches Allfit One.
+   - Mercado Pago rejects the payment when the email she types differs from `payer_email`, so the
+     page that sends her there tells her which email to use.
+4. **A subscription is `pending` until Mercado Pago authorizes it.** `payments.subscription_status`
+   gains `pending`. A pending subscription counts as live, so asking again returns the same page
+   instead of a second subscription. She can cancel it and the gym can end it, like any other;
+   nothing ends it on its own.
+5. **An in-person plan, from Space (`OP-PAY-011`, `OP-PAY-012`).** Space lists only the published
+   in-person versions of gyms she has a relationship with, and opens `init_point` in the system
+   browser. A remote plan is never listed, priced or linked in Space.
+6. **A remote plan, through a link (`HU-STUDIO-088`).**
+   - An owner or an administrator picks a client and a published remote version. Studio gives a
+     link to an Allfit One web page, not to Mercado Pago. The link works only for that person.
+   - She opens it, signs in with her Allfit One account, sees the gym, the plan and the price, and
+     taps pay. Only then does Allfit One create the subscription, through the same `OP-PAY-012`
+     with her as the actor, and send her to `init_point`.
+7. **Notifications are hints (`OP-PAY-016`).**
+   - Mercado Pago signs each notification (`x-signature`, HMAC-SHA256 with the application's
+     secret). The worker verifies it, reads the agreement or the charge back from Mercado Pago with
+     that gym's token, and records what it read, never what the notification body says.
+   - The topics are `subscription_preapproval`, `subscription_authorized_payment`, `payment` and
+     `mp-connect`.
+   - A daily reconciliation reads every live subscription back, for the notifications that never
+     arrived.
+   - Each charge is recorded once (`UNIQUE (organization_id, external_payment_ref)`).
+8. **When she is suspended.**
+   - Mercado Pago retries a rejected charge up to four times within ten days. When the charge ends
+     `processed` with a rejected payment, the worker suspends the subscription with the cause
+     `charge_failed`.
+   - A later approved charge closes only that block. A block the gym opened by hand stays open.
+   - For an in-person plan, Space opens `init_point` again so she can change her card. For a
+     remote plan, the gym sends the link again.
+9. **When the agreement is cancelled.**
+   - **Mercado Pago cancels an agreement by itself** after three rejected charges, and its
+     `canceled` state is final.
+   - **From Space or Studio (`OP-PAY-015`, `OP-PAY-010`):** Allfit One cancels the agreement in
+     Mercado Pago first, and ends the subscription only once Mercado Pago confirms it, so she is
+     never charged for a subscription Allfit One shows as ended. The `canceled` notification that
+     follows changes nothing.
+   - **From anywhere else, Mercado Pago does not say who cancelled.** The agreement has a status
+     and no reason, and a gym can also cancel from its own Mercado Pago panel. Until the sandbox
+     shows a signal that tells her cancellation apart, every such cancellation takes the second
+     branch of decision 8. The subscription is suspended with the cause `gateway_cancelled`; the
+     gym reads «cancelada en Mercado Pago», not «debe»; and she can end it herself from Space.
+   - **A cancelled agreement cannot be reactivated**, by hand or otherwise, because nothing would
+     charge it. Coming back is a new subscription, as it already is.
+10. **No commission, by construction.** No `marketplace_fee` or application fee is ever sent.
+    Mercado Pago does not offer its split payments for subscriptions anyway.
+
+### What the sandbox must confirm before the charge is built
+
+The research of 9 November 2026 read the Mercado Pago Colombia developer documentation, and these
+points are not written there. Each one is a test in the sandbox, with a test seller connected by
+OAuth:
+
+1. A subscription created with the gym's token charges into the gym's account (`collector_id`).
+2. The application's webhook receives the notifications of agreements created with a connected
+   gym's token. If it does not, reconciliation becomes the only source and runs more often.
+3. A yearly plan is `frequency: 12` with `frequency_type: months`.
+4. Whether `payer_email` is required, since the two versions of the reference disagree, and whether
+   the page fills it in.
+5. Whether an `init_point` expires.
+6. What happens to running agreements when a gym revokes access.
+7. Whether any signal tells her cancellation apart from the gym's or Mercado Pago's. If one exists,
+   the first branch of decision 8 applies without a new decision.
+8. Which authorization host Colombia uses, and whether the `ts` of `x-signature` is in seconds or
+   milliseconds.
+
+The plans (`HU-STUDIO-074..077`) depend on none of them.
+
+### Earlier decisions this changes
+
+- **`ADR-043`, its context only.** Its decisions stand: Pro is still bought through the stores and
+  resolved on read, and the gyms still pay Allfit One through Backoffice.
+- **The deferral notes** of `E-STUDIO-13`, `E-SP-13` and `E-SP-14`, and the `después` priorities
+  they set.
+- **`HU-STUDIO-073`:** «Mercado Pago o Wompi» becomes Mercado Pago.
+- **`OP-PAY-001`:** connected through OAuth, not by posting credentials; the closed catalogue holds
+  only `mercado_pago`.
+- **`OP-PAY-010` and `OP-PAY-015`:** the agreement is cancelled in Mercado Pago before the
+  subscription ends.
+- **`OP-PAY-012`:** the subscription starts `pending`, and the answer carries Mercado Pago's page.
+- **`OP-PAY-016`:** a failed charge suspends only once Mercado Pago stops retrying it.
+
+### Known limits
+
+- Colombia and `COP` only.
+- She pays with the email of her Allfit One account, or Mercado Pago rejects the payment.
+- A gym that connects a different Mercado Pago account cannot read the agreements of the old one,
+  so its clients subscribe again.
+- No proration, change of plan, trial or coupon.
+- Whether Apple accepts in-person plans paid with Mercado Pago inside Space is known only at
+  Space's review.
+
+### Invariants
+
+- No card number, card token or reusable payment method ever reaches Allfit One.
+- No Mercado Pago token is stored in the database or written to a log; the database holds only the
+  secret's reference.
+- Every charge goes to the gym's own account, and Allfit One takes nothing from it.
+- Nothing automatic ends a subscription (`ck_plan_subscriptions_ended_actor`).
+- A notification changes nothing until its signature checks out and Mercado Pago, read back with
+  that gym's token, confirms it.
+- The same charge or notification, delivered twice, is recorded once.
+- A remote plan is never listed, priced or linked inside Space.
+- A subscription ended from Space or Studio ends only after Mercado Pago confirms the cancellation.
+- Paying grants no data and cancelling revokes none. The coach and staff never see payment state.
+- No state of a gym subscription enters the resolution of Pro.
+
+### Alternatives considered
+
+- **Wompi at launch.** Rejected: with no subscription engine, Allfit One would fire each monthly
+  charge with her saved payment source, which makes it the one charging.
+- **The gym pastes its access token into Studio.** Rejected: every gym would handle API keys, and
+  one mistake exposes its account.
+- **Suspend at the first rejection.** Rejected: a card declined for a day would pause her coach
+  until a retry succeeds.
+- **Every cancellation made in Mercado Pago only suspends.** Rejected by the owner, because it
+  shows her as owing when she cancelled. It stays as the fallback until a signal exists.
+- **Subscriptions with an associated plan.** Rejected: Mercado Pago creates them only with a
+  `card_token_id`, which means tokenizing her card on a page Allfit One serves.
+- **The remote link straight to Mercado Pago's page.** Rejected: the gym would create a
+  subscription she never asked for, her account email would reach the gym's Mercado Pago account
+  before she did anything, and nobody knows whether the page expires.
+
+### Consequences
+
+- The build goes in this order. Each step has its own pull request, which updates the operations
+  matrix, the data dictionary and the contracts:
+  1. plans and versions with how they are delivered (`HU-STUDIO-074..077`);
+  2. the connection (`HU-STUDIO-073`), once Allfit One is registered as an application in Mercado
+     Pago;
+  3. subscribing from Space, the notification worker and the reconciliation (`HU-SP-079..083`,
+     `OP-PAY-016`), once the sandbox checks pass;
+  4. the remote link and its web page (`HU-STUDIO-088`).
+- Allfit One needs its own Mercado Pago account and application, with the webhook and its secret.
+
+### Mandatory test scenarios
+
+1. Only the owner connects, and the database ends with a reference, never a token.
+2. A callback with an unknown, used or expired `state`, or one from another membership, connects
+   nothing.
+3. A revocation from Mercado Pago leaves the connection `revoked`, and no subscription can start.
+4. How a version is delivered cannot change after it is published.
+5. Space never lists a remote version.
+6. Subscribing creates one `pending` subscription, and asking again returns the same page.
+7. A notification with a bad signature, or one whose resource Mercado Pago does not confirm,
+   changes nothing.
+8. The same charge delivered twice is recorded once.
+9. A rejected charge still being retried leaves her active. One that exhausted its retries suspends
+   her, and a later approved charge reactivates her.
+10. An approved charge does not close a block the gym opened by hand.
+11. A cancellation from Space reaches Mercado Pago before anything ends, and a failure there ends
+    nothing.
+12. A cancellation made in Mercado Pago suspends with `gateway_cancelled` and ends nothing.
+13. A subscription whose agreement was cancelled cannot be reactivated.
+14. The remote link creates nothing until she signs in and taps pay, and refuses anybody else.
+15. A coach or a staff member never reads payment state.
+16. A suspended subscription does not touch her Pro.
