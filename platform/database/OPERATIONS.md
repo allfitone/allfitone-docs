@@ -1776,9 +1776,8 @@ Tests:
 
 ## The client card, today, search and her access log (STUDIO-74..77)
 
-Four migrations build `HU-STUDIO-081..084` and `OP-PRV-015` (code branch
-`feat/studio-client-card-and-today`; its pull request, merge and database deploy are
-pending). The decisions, and how they differ from earlier documents, are in
+Four migrations build `HU-STUDIO-081..084` and `OP-PRV-015` (pull request allfitone#204;
+its merge and database deploy are pending). The decisions, and how they differ from earlier documents, are in
 [ALLFIT_ARCHITECTURE_DECISIONS.md](refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md),
 ADR-047.
 
@@ -1870,14 +1869,6 @@ where schemaname = 'relationships'
 
 -- Expected: false. Her log is read only through privacy.list_my_access_events.
 select has_table_privilege('allfit_api', 'privacy.access_events', 'select') as api_selects;
-
--- How many rows today wrote, per day (the last week only, so the partition key prunes).
-select date_trunc('day', occurred_at) as day, count(*) as rows_written
-from privacy.access_events
-where resource = 'relationships.studio_today'
-  and occurred_at >= now() - interval '7 days'
-group by 1
-order by 1;
 ```
 
 **Open follow-ups.**
@@ -1902,7 +1893,7 @@ Tests:
   level, meal photos only with the meals, withdrawn and shared again, refused nowhere, an
   accepted cover with its `ends_on`, owner, admin and staff not found, a non-member
   refused, no access event, and which functions the runtime may call.
-- `T-REL-CARD-02` (18) covers the former card: each reason and its instant, a cover ended
+- `T-REL-CARD-02` (22) covers the former card: each reason and its instant, a cover ended
   early or by its date, held and then covered, thirty days, a refused or unanswered cover,
   no name, her return changing nothing, another coach and the owner told nothing, no
   access event, the policy for `allfit_owner` only and its scope read once per statement.
@@ -1915,7 +1906,7 @@ Tests:
 - `T-REL-TODAY-01` (24) covers the notices per role, the counts and the five items, a
   coach's own invitations, unassigned and termination requests, team invitations and the
   team, new relationships, `empty`, refusals, and no access event for the counts.
-- `T-REL-TODAY-02` (15) covers `training`: the closed week, cancelled, paused and annulled
+- `T-REL-TODAY-02` (17) covers `training`: the closed week, cancelled, paused and annulled
   sessions, 48 hours, the screening scope closed afterwards, one access event per client
   evaluated with its grant and none without one, a lapsed cover, the request id, the week
   in her timezone, and that the runtime cannot call the helper.

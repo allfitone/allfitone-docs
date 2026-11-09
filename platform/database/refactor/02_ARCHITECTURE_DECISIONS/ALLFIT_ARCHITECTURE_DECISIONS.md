@@ -5963,9 +5963,8 @@ nobody follows items 16 and 23 as written.
 
 ## ADR-047 — A former professional learns why, for thirty days
 
-**Status:** accepted for V1 and built (STUDIO-74..77, code branch
-`feat/studio-client-card-and-today`; its pull request, merge and database deploy are
-pending).<br>
+**Status:** accepted for V1 and built (STUDIO-74..77, pull request allfitone#204; its merge
+and database deploy are pending).<br>
 **Date:** 8 November 2026<br>
 **Builds:** `HU-STUDIO-081..084` and `OP-PRV-015`, through migrations
 `20261118090000_a_member_finds_a_client_by_name.sql`,
@@ -6218,10 +6217,10 @@ The design choices that follow from them, as built:
 | --- | --- |
 | The live card: sections, order, version, level, `nutrition_media` only with intake, withdrawn, refused nowhere, no event | `T-REL-CARD-01` (19), `T-REL-CARD-API-01`, `-03` |
 | Owner, admin, staff and another coach get the same not-found; a non-member is refused | `T-REL-CARD-01`, `T-REL-CARD-02`, `T-REL-CARD-API-04` |
-| Each reason, its instant, the last attendance deciding, covers by date and by acceptance, thirty days, her return changing nothing, no name | `T-REL-CARD-02` (18), `T-REL-CARD-API-02` |
+| Each reason, its instant, the last attendance deciding, covers by date and by acceptance, thirty days, her return changing nothing, no name | `T-REL-CARD-02` (22), `T-REL-CARD-API-02` |
 | The `former_attendance` policy reads only for `allfit_owner`, and the scope closes | `T-REL-CARD-02` |
 | Studio says `session_unavailable`; she still reads the real reason | `T-EXE-PROPOSAL-CANCEL-LIST-03/04`, `T-EXE-PROPOSAL-API-09` |
 | Search: accents, case, spaces, `%` and `_`, no invitations, keyset, a coach's narrowing, the limits, no event, both signatures | `T-REL-DIRECTORY-03` (19), the search tests of `relationships/handlers/studio.test.ts`, `directory.test.ts` |
 | Today per role, counts and five items, `empty`, refusals | `T-REL-TODAY-01` (24), `T-REL-TODAY-API-01..03` |
-| Training: the closed week in her timezone, cancelled, paused and annulled sessions, 48 hours, one event per client evaluated, none without the grant, the request id | `T-REL-TODAY-02` (15), `card-and-today.test.ts` |
+| Training: the closed week in her timezone, cancelled, paused and annulled sessions, 48 hours, one event per client evaluated, none without the grant, the request id | `T-REL-TODAY-02` (17), `card-and-today.test.ts` |
 | The access log: who, organization, holder or cover, denied, break-glass and support, horizon, her own excluded, scope, keyset, no table privilege | `T-PRV-ACCESSLOG-01` (21), `T-PRV-API-SPACE-19..22`, `my-access-log.test.ts` |

@@ -191,8 +191,8 @@ generado son el inventario exhaustivo.
 - **Not changed.** `OP-NUT-011` already declared an optional `X-Historical-Access-Case` (parameter `HistoricalAccessCase`) for frozen nutrition guidance. Neither that Studio route nor frozen nutrition is built in the API yet.
 - **Changed by STUDIO-61..65.** The optional header and its `HistoricalAccessCase` parameter component are gone from `OP-NUT-011`. Frozen nutrition guidance is a route of its own, `GET /studio/v1/organizations/{organizationId}/historical-relationships/{relationshipId}/nutrition/goal-versions` (`listFrozenNutritionGoalVersions`). It requires `X-Historical-Access-Case`, like the other frozen reads. `credential-required` (403) joins the error catalog.
 
-**The client card, today, search and her access log (STUDIO-74..77, ADR-047).** Code branch
-`feat/studio-client-card-and-today`; its pull request, merge and database deploy are pending.
+**The client card, today, search and her access log (STUDIO-74..77, ADR-047).** Pull request
+allfitone#204; its merge and database deploy are pending.
 
 - **Search (`OP-REL-010`).** `listStudioOrganizationClients` gains the query parameter `q`
   (`minLength` 2, `maxLength` 200; 2 to 80 characters once spaces are collapsed, names only,
