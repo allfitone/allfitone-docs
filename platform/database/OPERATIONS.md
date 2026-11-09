@@ -1776,8 +1776,8 @@ Tests:
 
 ## The client card, today, search and her access log (STUDIO-74..77)
 
-Four migrations build `HU-STUDIO-081..084` and `OP-PRV-015` (pull request allfitone#204;
-its merge and database deploy are pending). The decisions, and how they differ from earlier documents, are in
+Four migrations build `HU-STUDIO-081..084` and `OP-PRV-015` (pull request allfitone#204,
+merged and deployed on 9 November 2026). The decisions, and how they differ from earlier documents, are in
 [ALLFIT_ARCHITECTURE_DECISIONS.md](refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md),
 ADR-047.
 
@@ -1786,7 +1786,8 @@ ADR-047.
   - It creates the eight-argument `relationships.list_organization_clients(…, p_query)`,
     `security definer`, executable by `allfit_api`.
   - It replaces the seven-argument signature with a `security invoker` wrapper that calls
-    the new one with a null search. Both stay executable by `allfit_api`.
+    the new one with a null search. Both stayed executable by `allfit_api` until
+    `20261119090000_the_directory_keeps_one_signature.sql` (allfitone#205) dropped the wrapper.
 - **`20261118100000_a_coach_opens_the_card_of_a_client.sql` (`OP-REL-019`, STUDIO-76/77).**
   - It creates the policy `service_relationships_select_former_attendance` on
     `relationships.service_relationships`, `for select to allfit_owner`, admitting the one
@@ -1844,8 +1845,8 @@ content.
 ```sql
 -- Owner, security and who may call each function. Expected: every row owned by
 -- allfit_owner; security definer for the eight-argument directory, read_client_card,
--- read_studio_today and list_my_access_events; allfit_api executes those four and the
--- seven-argument directory, and none of the five helpers.
+-- read_studio_today and list_my_access_events; allfit_api executes those four and none
+-- of the five helpers. Since allfitone#205 the directory has one signature.
 select procedure.oid::regprocedure as function,
        pg_get_userbyid(procedure.proowner) as owner,
        procedure.prosecdef as security_definer,
@@ -1875,8 +1876,8 @@ select has_table_privilege('allfit_api', 'privacy.access_events', 'select') as a
 
 - No screen calls the new routes yet: the Studio screens are STUDIO-146..149, and the Space
   screen for the access log is front work too.
-- A later migration drops the seven-argument `list_organization_clients` once no deployed
-  API calls it.
+- The seven-argument `list_organization_clients` is gone: allfitone#205 dropped it on
+  9 November 2026, once no deployed API called it.
 - A coach who comes back under a different membership gets no reason: only the current
   membership is looked at.
 - Name folding covers Latin accents only.
@@ -1887,8 +1888,8 @@ Tests:
 
 - `T-REL-DIRECTORY-03` (19) covers `q`: accents and case, spaces, `%` and `_` as
   characters, no invitations, keyset through the matches, an owner searching `terminated`,
-  a coach finding only his clients, the length limits and `invited`, no access event, both
-  signatures equal without a search, and the folding helper closed to the runtime.
+  a coach finding only his clients, the length limits and `invited`, no access event, the
+  one signature left since allfitone#205, and the folding helper closed to the runtime.
 - `T-REL-CARD-01` (19) covers the live card: the sections and their order, version and
   level, meal photos only with the meals, withdrawn and shared again, refused nowhere, an
   accepted cover with its `ends_on`, owner, admin and staff not found, a non-member
@@ -1912,8 +1913,8 @@ Tests:
   in her timezone, and that the runtime cannot call the helper.
 - `T-EXE-PROPOSAL-CANCEL-01` now has 22: `-CANCEL-LIST-03/04` show Studio's
   `session_unavailable` and her real reason.
-- `T-ORG-CLOSE-01` counts twenty relationship functions the runtime reaches, the directory
-  under two signatures.
+- `T-ORG-CLOSE-01` counts the relationship functions the runtime reaches: nineteen since
+  allfitone#205, which left the directory with one signature.
 - API:
   - `relationships/handlers/client-card.test.ts`: `T-REL-CARD-API-01..05` and
     `T-REL-TODAY-API-01..03` (the contract, the links, the error mapping, origin, session
@@ -1926,3 +1927,35 @@ Tests:
     scope, and the binding;
   - `execution/handlers/studio.test.ts` (`T-EXE-PROPOSAL-API-09`): the contract refuses
     `session_hidden` and `session_annulled` for Studio.
+
+## The directory keeps one signature (allfitone#205)
+
+`20261119090000_the_directory_keeps_one_signature.sql` drops the seven-argument
+`relationships.list_organization_clients`, the `security invoker` wrapper that STUDIO-75 kept
+for its deploy gap. The API binds the search, or null, as the eighth argument. The function
+is dropped without `cascade`, so the migration fails if anything still calls it.
+
+**Deploy order.** Either order is safe:
+
+- the new API calls only the eight-argument function, live since allfitone#204;
+- Deploy Database AWS waits for that commit's migrator.
+
+It was applied on 9 November 2026.
+
+**Check after the deploy.** Expected: one row, the eight-argument signature.
+
+```sql
+select procedure.oid::regprocedure as signature
+from pg_proc as procedure
+join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+where namespace.nspname = 'relationships'
+  and procedure.proname = 'list_organization_clients';
+```
+
+Tests:
+
+- `T-REL-DIRECTORY-03` proves that only that signature is left and that `allfit_api`
+  executes it.
+- `T-REL-DIRECTORY-01/02` call it.
+- `T-ORG-CLOSE-01` counts nineteen relationship functions.
+- `directory.test.ts` binds a null search in the last position.

@@ -5963,8 +5963,7 @@ nobody follows items 16 and 23 as written.
 
 ## ADR-047 — A former professional learns why, for thirty days
 
-**Status:** accepted for V1 and built (STUDIO-74..77, pull request allfitone#204; its merge
-and database deploy are pending).<br>
+**Status:** accepted for V1 and built (STUDIO-74..77, pull request allfitone#204, merged and deployed on 9 November 2026).<br>
 **Date:** 8 November 2026<br>
 **Builds:** `HU-STUDIO-081..084` and `OP-PRV-015`, through migrations
 `20261118090000_a_member_finds_a_client_by_name.sql`,
@@ -6092,7 +6091,8 @@ The design choices that follow from them, as built:
    - **The deploy gap:** the seven-argument `relationships.list_organization_clients`
      stays, as a `security invoker` wrapper over the new eight-argument function. The API
      calls it when there is no `q`, so the directory keeps working while the API is ahead of
-     the migration.
+     the migration. allfitone#205 (`20261119090000_the_directory_keeps_one_signature.sql`) removed it on
+     9 November 2026, once that API was live.
 6. **Today is built from what the caller's roles resolve (`OP-REL-020`, `HU-STUDIO-081`).**
    `GET /studio/v1/organizations/{organizationId}/today`,
    `relationships.read_studio_today(person, organization)`. A notice the caller cannot act
@@ -6171,8 +6171,8 @@ The design choices that follow from them, as built:
   current membership is looked at.
 - **Name folding covers Latin accents only** (`ÁÀÂÄÃ`, `ÉÈÊË`, `ÍÌÎÏ`, `ÓÒÔÖÕ`, `ÚÙÛÜ`,
   `Ñ`, `Ç` and their lower case).
-- **The seven-argument directory wrapper** stays until a later migration removes it, once
-  no deployed API calls it.
+- **The seven-argument directory wrapper** is gone: allfitone#205 removed it on
+  9 November 2026, once no deployed API called it.
 - **Every opening of today** adds one line per evaluated client to that client's access
   log. A coach who opens it often fills his clients' logs.
 - **`training` counts the planned sessions that exist.** `ADR-032` plants the week of a
@@ -6220,7 +6220,7 @@ The design choices that follow from them, as built:
 | Each reason, its instant, the last attendance deciding, covers by date and by acceptance, thirty days, her return changing nothing, no name | `T-REL-CARD-02` (22), `T-REL-CARD-API-02` |
 | The `former_attendance` policy reads only for `allfit_owner`, and the scope closes | `T-REL-CARD-02` |
 | Studio says `session_unavailable`; she still reads the real reason | `T-EXE-PROPOSAL-CANCEL-LIST-03/04`, `T-EXE-PROPOSAL-API-09` |
-| Search: accents, case, spaces, `%` and `_`, no invitations, keyset, a coach's narrowing, the limits, no event, both signatures | `T-REL-DIRECTORY-03` (19), the search tests of `relationships/handlers/studio.test.ts`, `directory.test.ts` |
+| Search: accents, case, spaces, `%` and `_`, no invitations, keyset, a coach's narrowing, the limits, no event, one signature (allfitone#205) | `T-REL-DIRECTORY-03` (19), the search tests of `relationships/handlers/studio.test.ts`, `directory.test.ts` |
 | Today per role, counts and five items, `empty`, refusals | `T-REL-TODAY-01` (24), `T-REL-TODAY-API-01..03` |
 | Training: the closed week in her timezone, cancelled, paused and annulled sessions, 48 hours, one event per client evaluated, none without the grant, the request id | `T-REL-TODAY-02` (17), `card-and-today.test.ts` |
 | The access log: who, organization, holder or cover, denied, break-glass and support, horizon, her own excluded, scope, keyset, no table privilege | `T-PRV-ACCESSLOG-01` (21), `T-PRV-API-SPACE-19..22`, `my-access-log.test.ts` |
