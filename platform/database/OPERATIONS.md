@@ -1994,18 +1994,20 @@ and building the index blocks writes to it while it reads a small table. With
 
 **Before the deploy: one price on sale per plan.** The index cannot be built if a plan
 already has two published versions. Nothing in production has published one yet, because
-Studio had no route for it. Still, this read-only query must return nothing before Deploy
-Database AWS is dispatched:
+Studio had no route for it. The master user does not bypass RLS, so a `select` on
+`payments.plan_versions` returns nothing whatever the table holds. Before Deploy Database AWS
+is dispatched, read the row count instead, read only:
 
 ```sql
-select version.plan_id, count(*) as on_sale
-from payments.plan_versions as version
-where version.status = 'published'
-group by version.plan_id
-having count(*) > 1;
+select n_live_tup
+from pg_stat_user_tables
+where schemaname = 'payments'
+  and relname = 'plan_versions';
 ```
 
-If it returns a row, stop. Which price stays on sale is the gym's decision, not the deploy's.
+Zero means nothing can conflict. Otherwise the index finds any duplicate itself: the
+migration fails and rolls back whole, and nothing changes. Which price stays on sale is then
+the gym's decision, not the deploy's.
 
 **Deploy order.** Merging runs **Deploy AWS**, which rolls out the API first. Then dispatch
 **Deploy Database AWS**. Until the migrations are applied:
