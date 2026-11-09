@@ -6486,7 +6486,8 @@ The plans (`HU-STUDIO-074..077`) depend on none of them.
 
 ## ADR-049 — Allfit One sends its email through Amazon SES
 
-**Status:** accepted for V1; not built.<br>
+**Status:** accepted for V1. The SES account is set up and out of the sandbox; the code is not
+built.<br>
 **Date:** 9 November 2026<br>
 **Replaces:** Resend as the email provider. No earlier ADR chose it; it is named in
 `CURRENT_ARCHITECTURE_DIAGRAM.md`, `V1_DEGRADATION_AND_RECOVERY_MATRIX.md` and the deployment
@@ -6564,12 +6565,21 @@ The design choices that follow from it:
    with it. Terraform creates the identity and outputs the records, which are added by hand in
    GoDaddy, like the certificate's.
 4. **Production access is requested first.** A new SES account sends only to verified addresses,
-   200 a day. AWS reviews the request and may ask how bounces and complaints are handled; decision
-   5 is the answer.
+   200 a day. AWS granted it on 9 November 2026, minutes after the request (case
+   `179426258400350`): 50,000 emails a day, 14 a second, in `us-east-1`.
 5. **Bounces and complaints.** The account-level suppression list is on for both, so SES itself
    stops sending to an address that bounced or complained. A configuration set publishes the
    sending events, and CloudWatch alarms fire on the bounce and complaint rates well before the
    levels at which AWS reviews the account. No code consumes the events in V1.
+   - **Open and click tracking is off.** It would route every link, the private tokens of the
+     waitlist included, through an Amazon tracking domain, and the privacy policy does not cover
+     measuring who opens an email. What the launch needs (who joined, who confirmed, who came
+     through whose link) is already exact in the database.
+   - **Automatic address validation is off.** It drops an email to an address it doubts without
+     telling anybody, so a person could join and never get the confirmation. It can be turned on
+     once the bounce rate is known.
+   - **Virtual Deliverability Manager is on**, with its optimized shared delivery. It is included
+     in the Essentials plan and shows what was delivered, bounced or complained about.
 6. **A rare duplicate is accepted.** SES has no idempotency key. The worker keeps sending before it
    acknowledges: if it stops between the two, the event comes back after the visibility timeout
    and the email goes out twice. Marking the event as sent before sending would instead risk a
@@ -6599,11 +6609,10 @@ The design choices that follow from it:
 
 ### Known limits
 
-- Production access is AWS's decision. Until it is granted, only verified addresses receive email,
-  and the waitlist cannot open.
 - An email can arrive twice (decision 6).
-- SES has no dashboard of sent emails like Resend's. To follow one email, support reads the
-  worker's log and the sending events.
+- Virtual Deliverability Manager shows delivery, bounces and complaints, but without open and
+  click tracking it cannot say whether anybody read an email. To follow one email, support reads
+  the worker's log and the sending events.
 - Allfit One sends from SES's shared addresses, so its reputation depends on its own bounce and
   complaint rates. A dedicated address is not needed at this volume.
 
@@ -6627,14 +6636,23 @@ The design choices that follow from it:
 
 ### Consequences
 
-- The build goes in this order:
-  1. the infrastructure (`TECH-318`): the identity, DKIM, MAIL FROM, DMARC, the configuration set,
-     the suppression list, the alarms and the production access request;
+- **Done on 9 November 2026, by hand in the SES console** (`TECH-318`):
+  - the Essentials plan;
+  - the `allfit.one` identity with Easy DKIM (RSA 2048) and the MAIL FROM `mail.allfit.one`, which
+    falls back to the default when its MX fails;
+  - its five records in GoDaddy, the identity verified, and `admin@allfit.one` verified for tests;
+  - the account suppression list for bounces and complaints, and decision 5's settings;
+  - the configuration set `my-first-configuration-set`, which the setup made the identity's
+    default;
+  - production access.
+
+  Terraform imports all of it rather than creating it again.
+- **What remains:**
+  1. the infrastructure (`TECH-318`): importing the above into Terraform, publishing the sending
+     events, and the CloudWatch alarms;
   2. the code (`TECH-319`): the adapter, the task role, `EMAIL_PROVIDER`, `EMAIL_FROM` and the
      documents named above;
   3. the waitlist emails (`TECH-292`, `TECH-293`, `TECH-294`), on SES.
-- The waitlist cannot open before production access is granted, so the request goes out before
-  anything else is built.
 
 ### Mandatory test scenarios
 
