@@ -53,6 +53,7 @@
 | ADR-043 | Allfit Pro: se paga con la compra integrada de cada tienda y se resuelve al leer |
 | ADR-044 | La persona trae su historial de otra app, y entra como entrenamiento suyo |
 | ADR-046 | An Allfit admin acts with the full authority of the platform |
+| ADR-047 | A former professional learns why, for thirty days |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -3148,6 +3149,11 @@ La petición identifica el caso mediante `X-Historical-Access-Case`. Puede consu
 - no permite observaciones, correcciones, asignaciones, reprogramación o cualquier escritura;
 - no revela si existe una relación ante un actor que no supera el predicado completo.
 
+> **Narrowed by ADR-047 (STUDIO-77).** Outside this surface, the client card (`OP-REL-019`)
+> tells a coach who attended a person through his current membership why he stopped, for
+> thirty days, when he asks for her by the id he already holds. It lists and searches nobody,
+> reads no frozen data and tells nobody else that a relationship existed.
+
 #### 3. Propósito cerrado, caso vigente y MFA
 
 El caso usa uno de estos propósitos:
@@ -5952,3 +5958,269 @@ nobody follows items 16 and 23 as written.
    event; a wildcard never lists everybody (`T-SUP-SEARCH-02`, `T-SUP-RLS-03`).
 10. Support reads work without a case reference, and starting an account recovery still
     refuses one that is missing (`T-SUP-SEARCH-02`, `T-IDN-RECOVERY-API-10`).
+
+---
+
+## ADR-047 — A former professional learns why, for thirty days
+
+**Status:** accepted for V1 and built (STUDIO-74..77, pull request allfitone#204; its merge
+and database deploy are pending).<br>
+**Date:** 8 November 2026<br>
+**Builds:** `HU-STUDIO-081..084` and `OP-PRV-015`, through migrations
+`20261118090000_a_member_finds_a_client_by_name.sql`,
+`20261118100000_a_coach_opens_the_card_of_a_client.sql`,
+`20261118110000_a_person_reads_who_read_her_data.sql` and
+`20261118120000_a_studio_member_sees_what_needs_attention_today.sql`.<br>
+**Departs from:** `ADR-023` item 2, in part; `V1_OPERATIONS_MATRIX.md` §5.7, for one actor;
+`V1_RLS_MATRIX.md` `T-PERSON-3`, in its letter; and the view and self policy that
+`V1_DATA_DICTIONARY.md` §7.9 and `T-ACCESS-10` name for the access log. Each is under
+*Deviations* below.
+
+### Context
+
+`E-STUDIO-14` has four stories, and none had a backend:
+
+- **Today (`HU-STUDIO-081`)** had no canonical operation (`NEW-Studio-TODAY`).
+- **Search (`HU-STUDIO-082`)** belonged to `OP-REL-010`, which did not filter by name.
+- **The client card (`HU-STUDIO-083`)** had no operation (`NEW-Studio-CLIENT-DETAIL`). Its
+  criterion 3 says every read is recorded and the person sees it, but only the Backoffice
+  auditors could read access events (`OP-SUP-009`); `OP-PRV-015` was not built.
+- **Why I stopped seeing something (`HU-STUDIO-084`)** had no operation
+  (`NEW-AUTH-DENIAL-REASON`). A coach who stopped attending someone got the same `404` as
+  for someone who never existed, which §5.7, `T-PERSON-3` and `ADR-023` all ask for. The
+  story asks the opposite: that he be told why, and that «I was removed» and «she left» read
+  differently.
+
+One leak contradicted criterion 4 of `HU-STUDIO-084`: a coach's correction proposals
+(`OP-EXE-020`) said `session_hidden` when she hid the session from his organization.
+
+### Decision
+
+The owner decided four things on 8 November 2026:
+
+1. **The reason is given when the card is opened.** A coach who no longer attends the
+   person gets the reason instead of the `404`: she left the organization
+   (`relationship_ended`), his attendance ended while the link went on (`assignment_ended`),
+   or his cover ran out (`substitution_ended`). Only for thirty days and only to whoever
+   attended her; anyone else gets today's `404`. It never says who ended the link or why.
+   What she withdrew is told on the live card.
+2. **The Space access log is part of this work** (`OP-PRV-015`,
+   `GET /space/v1/access-events`).
+3. **Unlogged sessions are measured over the last closed week** (`ADR-032`). On a Monday
+   the coach reads «Ana: 2 of 4 sessions of last week not logged».
+4. **One code pull request**, and one documentation pull request.
+
+The design choices that follow from them, as built:
+
+1. **The card is an index, not a copy of her data (`OP-REL-019`).**
+   `GET /studio/v1/organizations/{organizationId}/clients/{personId}`,
+   `relationships.read_client_card(person, organization, subject)`.
+   - **Who opens it:** the holder, or a cover she accepted whose `ends_on` has not passed,
+     with an active assignment in effect; the predicate of
+     `relationships.actor_is_assigned`, holder first. No capability is checked: an owner or
+     an administrator who does not attend her gets the `404`.
+   - **What it says:** `kind: attending`, her `display_name`, the relationship (`id`,
+     `started_at`), the attendance (`role` holder or substitute, and `ends_on` for a
+     cover), `sections` and `withdrawn`.
+   - **`sections`:** each category she shares now, in the order of `ScopeCode`, with the
+     version she accepted, the level and `granted_at`. The API adds `reads`, the operations
+     that read the category (`CARD_READS` in `apps/api/src/domains/relationships/handlers/client-card.ts`).
+     `nutrition_media` appears only while `nutrition_intake` is active too: a photo shows
+     nothing on its own.
+   - **`withdrawn`:** each category she revoked and has not shared again, with the latest
+     `revoked_at` as `withdrawn_at`. A category withdrawn and shared again is a section.
+   - **Never shown:** a category she never shared, or refused, appears nowhere, not as empty
+     and not as locked (criterion 2). The card carries no counts, so it never says whether
+     there is anything behind a category (`HU-STUDIO-084` criterion 3).
+   - **No access event.** Opening the card reads no fitness data, like
+     `relationships.read_relationship_state` (`OP-REL-011`) and the authorized scopes
+     (`OP-PRV-023`). Each section is read through its existing audited operation, which
+     records its own access (criterion 3).
+2. **The former card.** When the caller does not attend her,
+   `relationships.former_attendance(membership, organization, subject)` decides whether to
+   answer `{kind: former, person_id, reason, lost_at}`.
+   - **Whose attendance counts:** only the assignments of the caller's **current**
+     membership with that person in that organization, `active` or `ended`. A holder counts
+     from `valid_from` to `valid_to`. A cover counts only once she accepted it, from the
+     later of `valid_from` and `accepted_by_person_at` to the earlier of `valid_to` and the
+     start of the day after `ends_on`, so a cover that ran out by its date has ended though
+     nothing was written. A cover proposed, refused or never answered was never attendance.
+   - **Which one decides:** the last attendance that took effect and has ended: the latest
+     end, holder first on a tie.
+   - **The reason:** `relationship_ended` at the relationship's `ended_at` when the link is
+     terminated and that attendance was still in effect when it ended; otherwise
+     `assignment_ended` for a holder or `substitution_ended` for a cover, at the end of that
+     attendance.
+   - **Thirty days:** it answers only while `lost_at` is less than thirty days old.
+     Everyone else, and the same coach afterwards, gets the same `P0002 client not found`
+     as for somebody who does not exist.
+   - **Nothing of hers:** no name, no relationship, no grants. `person_id` is the id he
+     sent. The answer depends only on facts up to `lost_at`, so if she later comes back to
+     the organization with another coach, the answer does not change.
+3. **One row he no longer sees, through a contract scope.** Reading how the link ended
+   needs the relationship row, which the row policy hides from a coach who no longer
+   attends her. The policy `service_relationships_select_former_attendance`
+   (`for select to allfit_owner using (id::text = (select
+   access_control.contract_scope('former_attendance')))`) admits exactly that row while the
+   contract scope `former_attendance` is open. Only `relationships.former_attendance` opens
+   it, for one relationship, reads `status` and `ended_at`, and closes it. `allfit_api`
+   cannot execute that function or `relationships.client_card_grants`.
+4. **A hidden session leaves no trace in Studio (`HU-STUDIO-084` criterion 4).**
+   `execution.proposal_for_proposer`, the projection behind `OP-EXE-020` in Studio, now
+   says `session_unavailable` for both `session_hidden` and `session_annulled`. The stored
+   `cancel_reason` does not change, and Space (`execution.proposal_for_person`) still shows
+   her the real reason. The contract gives Studio's `ProposedCorrection.cancel_reason` its
+   own enum, `ProposedCorrectionCancelReason` (`target_changed`, `session_unavailable`,
+   `relationship_terminated`); Space keeps `CorrectionCancelReason`.
+5. **Search narrows the directory and never widens it (`OP-REL-010`, `HU-STUDIO-082`).**
+   - **`q`:** 2 to 80 characters once surrounding and repeated spaces are removed. It
+     matches names only, without accents (`relationships.fold_name`, an explicit
+     `translate`, because `unaccent` is not installed) or case, with `%` and `_` matched as
+     characters.
+   - **Invitations:** with `q`, no invitation appears, because an unanswered invitation has
+     no name, only a masked contact. `q` with `status=invited` is refused with `422` rather
+     than answered with an empty page that would mislead.
+   - **Who is found** is still the row policy's decision: a coach finds only the people
+     assigned to him (criterion 2). An owner who asks for `terminated` searches the former
+     clients the directory already lists.
+   - **No match** is an empty `data` with `has_more: false` (criterion 4). A search writes
+     no access event: a match carries identity and the state of the link, never fitness
+     data (criterion 3).
+   - **The cursor** (version 3) is bound to the status filter and to a short digest of `q`,
+     so it never resumes another search. A version 2 cursor still resumes an unsearched
+     page.
+   - **The deploy gap:** the seven-argument `relationships.list_organization_clients`
+     stays, as a `security invoker` wrapper over the new eight-argument function. The API
+     calls it when there is no `q`, so the directory keeps working while the API is ahead of
+     the migration.
+6. **Today is built from what the caller's roles resolve (`OP-REL-020`, `HU-STUDIO-081`).**
+   `GET /studio/v1/organizations/{organizationId}/today`,
+   `relationships.read_studio_today(person, organization)`. A notice the caller cannot act
+   on is absent, not empty (criterion 4).
+
+   | Notice | Capability | What it counts |
+   | --- | --- | --- |
+   | `client_invitations` | `invite_clients` | Client invitations awaiting an answer, or lapsed in the last seven days; only the caller's own without `view_directory`; masked contact |
+   | `unassigned_relationships` | `assign_professionals` | Live relationships with no holder in effect; a cover does not count |
+   | `termination_requests` | `terminate_relationships` | Pending requests |
+   | `team_invitations` | `invite` | Team invitations awaiting an answer, or lapsed in the last seven days, with the proposed role |
+   | `team` | `manage_memberships` | Members with a role in force, by role |
+   | `new_relationships` | `view_directory` | Live relationships begun in the last seven days |
+   | `training` | `observe_training` | See below |
+
+   - **Each notice** counts everything it covers, lists at most five, and carries a link to
+     the operation that resolves it (`TODAY_LINKS` in `client-card.ts`; criterion 5).
+     `empty` is true when no notice other than `team`, which is a state, has a count
+     (criterion 6). Failed charges join when `E-STUDIO-13` exists.
+   - **With the V1 roles:** an owner or administrator gets every notice but `training`; a
+     coach gets his own client invitations and `training`; staff get client and team
+     invitations and new relationships, never training (criterion 4).
+   - **`training`** looks at each client the caller attends who shares
+     `relationship_training` with this relationship: her last closed week, Monday to Sunday
+     in the timezone of each planned session (`ADR-032`), with the sessions planned and not
+     logged, cancelled and paused ones excluded and an annulled one counted as not logged;
+     and what she finished inside the relationship in the last 48 hours, never an
+     autonomous session. She is listed when something is unlogged or recent, the most
+     unlogged first.
+   - **Recorded per client evaluated.** Each client evaluated leaves one access event,
+     whether she is listed or not, because not being listed tells him something too:
+     resource `relationships.studio_today`, purpose `studio_attention_today`, `live`,
+     `allowed`, under her `relationship_training` grant. A client without an active
+     `relationship_training` grant is neither evaluated nor recorded, so a refused or
+     revoked category never surfaces here (criterion 7).
+   - **Refusals:** a caller with none of the seven capabilities gets `42501` (`403`); the
+     training part needs a request id (`22023` otherwise), which the API always sends.
+7. **She sees who read her data (`OP-PRV-015`, `HU-STUDIO-083` criterion 3).**
+   `GET /space/v1/access-events`, `privacy.list_my_access_events(person, scope_code, limit,
+   before_occurred_at, before_id)`.
+   - **Who read:** the real human actor by name and the organization they read for, from
+     the reader's membership or else from the relationship. `actor.kind` is `allfit_team`
+     for `break_glass` and `support_metadata` reads, and `professional` otherwise. A
+     coach's read says whether he was her holder or a cover at that moment.
+   - **What is listed:** allowed and denied reads alike, for twenty-four months, newest
+     first, ties broken by id, optionally one `scope_code`. Her own reads are not listed.
+   - **The page:** keyset on `(occurred_at, id)` descending; the cursor keeps the instant
+     to the microsecond and is bound to `scope_code`. `private, no-store`, and reading the
+     log is not itself recorded.
+   - **How it is served:** a closed `security definer` function. There is no view and no
+     table privilege for `allfit_api`, which keeps `privacy.access_events` unreadable by
+     the runtime role, like every other projection. It reuses
+     `idx_access_events_target_occurred` (subject, `occurred_at desc`, id); building a new
+     index on the partitioned table now would block the audit writes every read needs.
+
+### Deviations
+
+- **`ADR-023` item 2 («no lista ni busca antiguos clientes»).** The former card answers a
+  lookup by an id the coach already holds; it lists and searches nobody and reads no frozen
+  data. The directory's `terminated` group already listed former clients to whoever reads
+  the whole directory; `q` only narrows it.
+- **`V1_OPERATIONS_MATRIX.md` §5.7 (the same answer for «does not exist» and «not
+  allowed»).** Kept for everyone except a coach who attended her through his current
+  membership, within thirty days of losing her.
+- **`T-PERSON-3` (a coach without an effective assignment gets no client row).** The former
+  card returns no personal data: the id he sent, a reason code and an instant. No row of
+  `identity.people` reaches him.
+- **`V1_DATA_DICTIONARY.md` §7.9 and `T-ACCESS-10` (`privacy.v_my_access_events` and a self
+  `SELECT` policy).** Neither exists. The closed function replaces both, and `allfit_api`
+  has no privilege on the table.
+- **`OP-PRV-015` «cacheable para presentación».** It answers `private, no-store`.
+
+### Known limits
+
+- **A coach who returns under a different membership** gets no reason: only the caller's
+  current membership is looked at.
+- **Name folding covers Latin accents only** (`ÁÀÂÄÃ`, `ÉÈÊË`, `ÍÌÎÏ`, `ÓÒÔÖÕ`, `ÚÙÛÜ`,
+  `Ñ`, `Ç` and their lower case).
+- **The seven-argument directory wrapper** stays until a later migration removes it, once
+  no deployed API calls it.
+- **Every opening of today** adds one line per evaluated client to that client's access
+  log. A coach who opens it often fills his clients' logs.
+- **`training` counts the planned sessions that exist.** `ADR-032` plants the week of a
+  program without an end when she reads it, so a week she never opened may hold no planned
+  session, and then nothing in it counts as unlogged.
+- **No screen calls any of this yet:** the Studio screens are front work (STUDIO-146..149),
+  and so is the Space screen for the access log.
+
+### Invariants
+
+1. The card and the former card write no access event, and every section is read through an
+   operation that records its own.
+2. A category she never shared or refused appears in no card, and no card carries a count.
+3. A former card carries no name, no relationship and no grant, and depends only on facts up
+   to `lost_at`.
+4. Only `relationships.former_attendance` opens `former_attendance`, for one relationship,
+   and closes it before returning.
+5. Studio never tells a hidden session from an annulled one; what is stored, and what she
+   sees, is unchanged.
+6. A search never widens the directory the caller already reads, and never returns an
+   invitation.
+7. Today writes exactly one access event per client whose training it evaluates, and none
+   for a client without an active `relationship_training` grant.
+8. A person reads only her own access log, and `allfit_api` cannot select from
+   `privacy.access_events`.
+
+### Alternatives considered
+
+- **Record only the clients today lists.** Rejected: not being listed says that she logged
+  everything, which is a read of her training.
+- **Serve the access log through the view and self policy of the data dictionary.**
+  Rejected: it would give `allfit_api` `SELECT` on the audit table, which the build keeps
+  unreadable by the runtime role; only closed functions read it.
+- **Fold names with `unaccent`.** Not installed; an explicit `translate`, as
+  `execution.fold_text` already does, needs no extension.
+- **Add an index for the access log.** Rejected for now: building it on the partitioned
+  table would block the audit writes; the existing subject index serves the read.
+
+### Mandatory test scenarios
+
+| Scenario | Tests |
+| --- | --- |
+| The live card: sections, order, version, level, `nutrition_media` only with intake, withdrawn, refused nowhere, no event | `T-REL-CARD-01` (19), `T-REL-CARD-API-01`, `-03` |
+| Owner, admin, staff and another coach get the same not-found; a non-member is refused | `T-REL-CARD-01`, `T-REL-CARD-02`, `T-REL-CARD-API-04` |
+| Each reason, its instant, the last attendance deciding, covers by date and by acceptance, thirty days, her return changing nothing, no name | `T-REL-CARD-02` (22), `T-REL-CARD-API-02` |
+| The `former_attendance` policy reads only for `allfit_owner`, and the scope closes | `T-REL-CARD-02` |
+| Studio says `session_unavailable`; she still reads the real reason | `T-EXE-PROPOSAL-CANCEL-LIST-03/04`, `T-EXE-PROPOSAL-API-09` |
+| Search: accents, case, spaces, `%` and `_`, no invitations, keyset, a coach's narrowing, the limits, no event, both signatures | `T-REL-DIRECTORY-03` (19), the search tests of `relationships/handlers/studio.test.ts`, `directory.test.ts` |
+| Today per role, counts and five items, `empty`, refusals | `T-REL-TODAY-01` (24), `T-REL-TODAY-API-01..03` |
+| Training: the closed week in her timezone, cancelled, paused and annulled sessions, 48 hours, one event per client evaluated, none without the grant, the request id | `T-REL-TODAY-02` (17), `card-and-today.test.ts` |
+| The access log: who, organization, holder or cover, denied, break-glass and support, horizon, her own excluded, scope, keyset, no table privilege | `T-PRV-ACCESSLOG-01` (21), `T-PRV-API-SPACE-19..22`, `my-access-log.test.ts` |

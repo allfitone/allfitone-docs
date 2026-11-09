@@ -277,6 +277,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **`T-PERSON-1` (positiva)** — Una persona lee y actualiza su propia fila.
 - **`T-PERSON-2` (negativa)** — Una persona no puede leer la fila de otra, ni siquiera conociendo su identificador.
 - **`T-PERSON-3` (negativa)** — Un coach con membresía y rol pero **sin** asignación efectiva no obtiene ninguna fila de cliente.
+  - **As implemented (STUDIO-77), deviation in letter (ADR-047):** the client card (`OP-REL-019`) answers a coach who attended her through his current membership, for thirty days, with `{kind: former, person_id, reason, lost_at}`: the id he sent, a reason code and an instant. No row of `identity.people`, no name and no relationship reach him. Everyone else gets the same `404`. Tests: `T-REL-CARD-02`.
 - **`T-PERSON-4` (negativa)** — Un `INSERT` directo con el rol `allfit_api` falla: solo la función de activación crea personas.
 
 #### `ACCESS_ACCOUNT`
@@ -596,6 +597,11 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **`T-REL-9` (negativa)** — Un grant `frozen` **no** habilita ninguna escritura: ni observaciones, ni propuestas de corrección, ni asignaciones.
 - **`T-REL-6` (negativa)** — Los datos creados después de la terminación no son visibles para la organización anterior.
 - **`T-REL-7` (negativa)** — Una relación nueva con la misma organización no hereda gestión, grants, notas privadas ni acceso a la asignación desacoplada.
+- **As implemented, `former_attendance` (STUDIO-77, migration `20261118100000_a_coach_opens_the_card_of_a_client.sql`).** The policy `service_relationships_select_former_attendance` is `for select to allfit_owner using (id::text = (select access_control.contract_scope('former_attendance')))`. It admits one row, only while that contract scope is open.
+  - **Who opens it:** only `relationships.former_attendance`, which `relationships.read_client_card` calls when the caller does not attend the person. It opens the scope for the relationship the caller's current membership last attended, reads `status` and `ended_at`, and closes it before returning. `allfit_api` cannot execute it.
+  - **Why:** telling a former attendant whether she left or he was removed (`HU-STUDIO-084`) needs how the link ended, and the normal predicate hides that row from him once he no longer attends her.
+  - **Tests:** `T-REL-CARD-02` checks in `pg_policies` that the policy is `SELECT` for `allfit_owner` only and that its predicate reads the scope through a `(SELECT …)`, once per statement; that the scope is closed again after the card answers; and every reason through the card. It also reads the policy directly as `allfit_owner`: without the scope the lost link is out of reach, with the scope naming it that link is read, and no other link opens with it. Dropping the policy, or opening it to every row, turns these red.
+- **As implemented, search and the card (STUDIO-75/76).** Neither adds a policy on relationships. The directory search (`OP-REL-010` with `q`) still reads through the policy above, so a coach finds only the people assigned to him (`T-REL-DIRECTORY-03`). The live card checks the attending assignment of the caller's membership itself, with the predicate of `relationships.actor_is_assigned` (`T-REL-CARD-01`).
 
 #### `RELATIONSHIP_PROFESSIONAL_ASSIGNMENT` · suplencias
 
@@ -792,6 +798,11 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 - **`T-ACCESS-8` (organización)** — `OP-ORG-013` registra sujeto organización, modo `organization_operational`, recurso cerrado, actor/persona/membresía/request/purpose de contexto y todos los campos de relación/grant/caso/scope nulos antes de devolver contenido.
 - **`T-ACCESS-9` (negativa)** — Rechaza cero/dos sujetos, membership inactivo, de otro tenant o de otra persona, recurso distinto y cualquier contexto personal en la rama organización; el fallo revierte la lectura.
 - **`T-ACCESS-10` (proyección)** — `privacy.v_my_access_events` devuelve solo filas `subject_person_id = access_control.person()` y nunca eventos cuyo sujeto es organización.
+- **As implemented, her access log (STUDIO-76, migration `20261118110000_a_person_reads_who_read_her_data.sql`). Deviation (ADR-047).** There is no `privacy.v_my_access_events` and no self `SELECT` policy: `A2` reads her events only through `privacy.list_my_access_events`, a `security definer` function owned by `allfit_owner`, and `allfit_api` still has no privilege on `privacy.access_events`.
+  - **The function's filter:** `subject_person_id` is the actor's person (`42501` otherwise), `actor_person_id` is somebody else, `occurred_at` is within 24 months, and an optional `scope_code`. An event whose subject is an organization never matches, because its `subject_person_id` is null.
+  - **`T-ACCESS-4`:** each row says whether the reader was holder or cover at that instant, and `break_glass` and `support_metadata` reads come as `allfit_team` with the person's name. `T-PRV-ACCESSLOG-01` asserts both.
+  - **`T-ACCESS-10`:** `T-PRV-ACCESSLOG-01` asserts that she sees only her own events, that nobody reads another person's log, and that the table stays closed to `allfit_api`.
+- **As implemented, today writes here (STUDIO-74).** `OP-REL-020` writes one `live`, `allowed` row per client whose training it evaluates (`resource = 'relationships.studio_today'`, `purpose = 'studio_attention_today'`) through `privacy.log_access_event`, and none for a client without an active `relationship_training` grant (`T-REL-TODAY-02`).
 
 #### `ERASURE_REQUEST` · `RETENTION_POLICY` · `DISPOSITION_CASE` · `DISPOSITION_ITEM` · `DISPOSITION_EVENT`
 
@@ -1135,7 +1146,7 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
   - **`T-PROP-4`:** `T-EXE-PROPOSAL-API-18` (`allfit_api` can neither select, insert nor update a proposal, nor update `execution.strength_sets`).
   - **Policy tests, `T-EXE-PROPOSAL-01` (49):** `select_self` `-RLS-01` (allowed) and `-RLS-02` (another person sees none); `select_proposer` `-RLS-03` (allowed) and `-RLS-04` (not by naming a colleague's membership); `insert_contribute` `-RLS-05` (denied with a read-only grant), `-RLS-06` (denied when signed as another professional) and `-RLS-07` (allowed); `update_self` `-RLS-08` (the proposer does not decide), `-RLS-09` (nor does another person), `-RLS-10` (she does not cancel) and `-RLS-11` (her decision is allowed).
   - **Policy tests, `T-EXE-PROPOSAL-DECIDE-01` (31):** `select_worker` `-SYS-RLS-01` (only what is due) and `update_worker` `-SYS-RLS-02` (it only expires) and `-SYS-RLS-03` (never one within its thirty days).
-  - **Policy tests, `T-EXE-PROPOSAL-CANCEL-01` (20):** `-CANCEL-RLS-01/02` (outside a contract, an unrelated professional sees and cancels none); `select_cancellation` `-CANCEL-RLS-03` (allowed) and `update_cancellation` `-CANCEL-RLS-04` (not another session's), `-05` (it only cancels) and `-06` (allowed); `select_detachment` `-CANCEL-RLS-07` (nothing of another relationship) and `-09` (allowed); `update_detachment` `-CANCEL-RLS-08` (nothing of another relationship) and `-10` (allowed). `-CANCEL-LIST-01/02` show both lists keep a cancelled proposal.
+  - **Policy tests, `T-EXE-PROPOSAL-CANCEL-01` (20):** `-CANCEL-RLS-01/02` (outside a contract, an unrelated professional sees and cancels none); `select_cancellation` `-CANCEL-RLS-03` (allowed) and `update_cancellation` `-CANCEL-RLS-04` (not another session's), `-05` (it only cancels) and `-06` (allowed); `select_detachment` `-CANCEL-RLS-07` (nothing of another relationship) and `-09` (allowed); `update_detachment` `-CANCEL-RLS-08` (nothing of another relationship) and `-10` (allowed). `-CANCEL-LIST-01/02` show both lists keep a cancelled proposal. Since STUDIO-77 the file has 22: `-CANCEL-LIST-03` shows Studio reads a hidden and an annulled session alike as `session_unavailable` (`execution.proposal_for_proposer`), and `-CANCEL-LIST-04` that she still reads which.
 
 #### `REVISION_EVENT` · `RESULT_VALIDATION_EVENT`
 
@@ -1397,6 +1408,7 @@ through the role is never suspended, recertified or revoked on its own.
 - Toda lectura de datos de una persona por parte de la plataforma escribe un `ACCESS_EVENT` **en la misma transacción**, con identidad real, deber, categoría, propósito y resultado.
 - **Si el registro no puede escribirse, la lectura no ocurre.**
 - **`T-AUDIT-1` (positiva)** — La persona ve los accesos de Allfit desde su propia aplicación, con nombre, categoría, momento y resultado.
+  - **As implemented (STUDIO-76):** `OP-PRV-015` lists `break_glass` and `support_metadata` reads as `actor.kind = allfit_team` with the reader's name, category, instant and result (`T-PRV-ACCESSLOG-01`). No Space screen shows them yet.
 - **`T-AUDIT-2` (negativa)** — El registro no admite `UPDATE` ni `DELETE` por ningún rol en runtime, incluido `allfit_admin`.
 
 ## 8. Índices exigidos por las policies

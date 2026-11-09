@@ -78,10 +78,14 @@ generado son el inventario exhaustivo.
 | List the photos she shows this gym | `GET …/clients/{personId}/body-photos` | `OP-IDN-059` | query `limit`, `cursor` | `ClientBodyPhotoPage` | `private, no-store` |
 | Open one of them | `GET …/clients/{personId}/body-photos/{photoId}/content` | `OP-IDN-060` | path + cookie | `image/jpeg` bytes | `private, no-store` |
 | Read a client's health context | `GET …/clients/{personId}/health-context` | `OP-IDN-020` | query `limit`, `cursor` | `ClientHealthContextPage` | `private, no-store` |
+| Find a client by name | `GET /studio/v1/organizations/{organizationId}/clients` | `OP-REL-010` | query `status`, `q`, `limit`, `cursor` | `ClientDirectoryPage` | `private, no-store` |
+| Open the card of a client | `GET /studio/v1/organizations/{organizationId}/clients/{personId}` | `OP-REL-019` | path | `StudioClientCard` | `private, no-store` |
+| See what needs attention today | `GET /studio/v1/organizations/{organizationId}/today` | `OP-REL-020` | path | `StudioToday` | `private, no-store` |
 | Show a body photo to a gym | `PUT /space/v1/body-photos/{photoId}/shares` | `OP-IDN-061` | `BodyPhotoShareCreate` | `BodyPhotoShare` | `no-store` |
 | Stop showing it | `DELETE /space/v1/body-photos/{photoId}/shares/{relationshipId}` | `OP-IDN-062` | path | `BodyPhotoShare` | `no-store` |
 | Listar lo que comparto | `GET /space/v1/consents` | `OP-PRV-013` | sin body | `SpaceConsentList` | `private, no-store` |
 | Revocar consentimiento | `POST /space/v1/consents/{grantId}/revocation` | `OP-PRV-005` | sin body | `ConsentRevocation` | `no-store` |
+| Read who read my data | `GET /space/v1/access-events` | `OP-PRV-015` | query `limit`, `cursor`, `scope_code` | `MyAccessEventPage` | `private, no-store` |
 | Registrar/listar comidas | `POST/GET /space/v1/nutrition/meals` | `OP-NUT-001/002` | `NutritionMealCreate` / query | `NutritionMeal` / `NutritionMealPage` | `no-store` |
 | Revisar/eliminar comida | `PATCH/DELETE /space/v1/nutrition/meals/{mealId}` | `OP-NUT-003/004` | `NutritionMealPatch` / sin body | `NutritionMeal` / `204` | `no-store` |
 | Resumen personal | `GET /space/v1/nutrition/daily-summaries` | `OP-NUT-005` | rango | `NutritionDailySummaryPage` | `private, no-store` |
@@ -123,7 +127,7 @@ generado son el inventario exhaustivo.
 - **Space.** Both operations are under the tag *Space Execution* and use `bearerAuth`.
   - `CorrectionProposal` carries `execution_id`, `set_order`, `movement_id`, `movement_name`, `field`, `current` and `proposed` (each a `CorrectionValue {value, unit}`), `reason`, the state and its instants, `proposer_name` and `organization_name`.
   - `CorrectionDecisionCreate` is `{decision}`, `accept` or `reject`. The decision takes `Idempotency-Key` and `Command-Id` and declares `404` and `409` as `CorrectionConflict`. A bad request is `400`.
-- **Shared.** `CorrectionProposalStatus` (`pending`, `accepted`, `rejected`, `expired`, `cancelled`), where `expired` includes a proposal past its thirty days that no sweep has marked yet. `CorrectionCancelReason` is nullable: `target_changed`, `session_annulled`, `session_hidden` or `relationship_terminated`. The query parameter `CorrectionProposalStatusFilter` filters both lists. The response `CorrectionConflict` is `conflict` (the field already waits on her, she has no address, the proposal is no longer open, its set moved on, or the idempotency identity was reused), `service-paused`, or `idempotency-in-progress` with `Retry-After`.
+- **Shared.** `CorrectionProposalStatus` (`pending`, `accepted`, `rejected`, `expired`, `cancelled`), where `expired` includes a proposal past its thirty days that no sweep has marked yet. `CorrectionCancelReason` is nullable: `target_changed`, `session_annulled`, `session_hidden` or `relationship_terminated`. Since STUDIO-77 only Space uses it; Studio's `ProposedCorrection` uses `ProposedCorrectionCancelReason`, which says `session_unavailable` for both sessions (see below). The query parameter `CorrectionProposalStatusFilter` filters both lists. The response `CorrectionConflict` is `conflict` (the field already waits on her, she has no address, the proposal is no longer open, its set moved on, or the idempotency identity was reused), `service-paused`, or `idempotency-in-progress` with `Retry-After`.
 - **Error mapping.**
   - **Studio:** AF430 → `403 scope-required` naming the scope; `42501` → `403`; `P0002` → `404`; AF424 → `409 service-paused`; `23505`, `P0004` and `55000` → `409 conflict`; `40001` → `409 idempotency-in-progress`; `22023` (and `22P02`, `23514`) → `422`. Its `errors[]` carry the database's codes with paths `/execution_id`, `/set_order`, `/field`, `/value`, `/unit` and `/reason`.
   - **Space:** `42501` → `403`; `P0002` → `404`; `22023` and `23514` → `400`; `23505`, `40001` and `55000` → `409 conflict`.
@@ -186,6 +190,54 @@ generado son el inventario exhaustivo.
   - **Before the database:** a wrong `Origin` is `403`. An invalid identifier, cursor or command header is `400`. A body that is not JSON is `415`, and a body outside the closed schema is `422`.
 - **Not changed.** `OP-NUT-011` already declared an optional `X-Historical-Access-Case` (parameter `HistoricalAccessCase`) for frozen nutrition guidance. Neither that Studio route nor frozen nutrition is built in the API yet.
 - **Changed by STUDIO-61..65.** The optional header and its `HistoricalAccessCase` parameter component are gone from `OP-NUT-011`. Frozen nutrition guidance is a route of its own, `GET /studio/v1/organizations/{organizationId}/historical-relationships/{relationshipId}/nutrition/goal-versions` (`listFrozenNutritionGoalVersions`). It requires `X-Historical-Access-Case`, like the other frozen reads. `credential-required` (403) joins the error catalog.
+
+**The client card, today, search and her access log (STUDIO-74..77, ADR-047).** Pull request
+allfitone#204; its merge and database deploy are pending.
+
+- **Search (`OP-REL-010`).** `listStudioOrganizationClients` gains the query parameter `q`
+  (`minLength` 2, `maxLength` 200; 2 to 80 characters once spaces are collapsed, names only,
+  without accents or case). `q` with `status=invited` is `422`. The cursor (version 3) is
+  bound to the status and to the search; a version 2 cursor still resumes an unsearched page.
+- **The card (`OP-REL-019`).** `getStudioClientCard`, tag *Studio Relationships*,
+  `cookieAuth`, `200`, `400`, `401`, `403`, `404` and `503`.
+  - `StudioClientCard` is a `oneOf` discriminated by `kind`: `StudioAttendedClientCard`
+    (`person_id`, `display_name`, `relationship {id, started_at}`, `attendance {role,
+    ends_on}`, `sections`, `withdrawn`) or `StudioFormerClientCard` (`person_id`, `reason`,
+    `lost_at`).
+  - `StudioClientCardSection` carries `scope_code`, `scope_version`, `access_level`,
+    `granted_at` and `reads`, a list of `StudioClientCardRead`: the operation ids that read
+    the category. `StudioClientCardWithdrawal` is `{scope_code, withdrawn_at}`.
+  - `StudioClientLossReason` is `relationship_ended`, `assignment_ended` or
+    `substitution_ended`.
+- **Today (`OP-REL-020`).** `getStudioToday`, tag *Studio Relationships*, `cookieAuth`,
+  `200`, `400`, `401`, `403` and `503`.
+  - `StudioToday` is `{organization_id, generated_at, empty, notices}`. Each notice is
+    optional, and an absent notice is one the caller cannot act on.
+  - The notices are `StudioTodayInvitations` (clients and team), `StudioTodayRelationships`
+    (unassigned and new), `StudioTodayTerminationRequests`, `StudioTodayTeam` and
+    `StudioTodayTraining`, each with at most five items and a `StudioTodayLink` to the
+    operation that resolves it.
+- **Her access log (`OP-PRV-015`).** `listMyAccessEvents`, tag *Space Privacy*,
+  `bearerAuth`, the parameters `Limit`, `Cursor` and `scope_code`; `200`, `400`, `401`, `403`
+  and `503`.
+  - `MyAccessEvent` carries `occurred_at`, `actor {kind, display_name}`, a nullable
+    `organization {id, display_name}`, a nullable `attendance`, `access_mode` (`live`,
+    `frozen`, `break_glass`, `support_metadata`), `scope_code`, `scope_version`, `resource`
+    and `result`. It does not expose the event id.
+  - `MyAccessEventPage` is `{data, page {has_more, next_cursor}}`.
+- **Studio's cancel reason (`OP-EXE-020`).** `ProposedCorrection.cancel_reason` is now
+  `ProposedCorrectionCancelReason`: `target_changed`, `session_unavailable`,
+  `relationship_terminated` or null. Space's `CorrectionProposal` keeps
+  `CorrectionCancelReason`.
+- **Error mapping.**
+  - **Studio relationships:** `42501` → `403`; `P0002` → `404`; `22023`, `23514` and
+    `22P02` → `422 validation-failed`; `P0004`, `23505` and `40001` → `409`; anything else,
+    a missing function included, → `503`. A wrong `Origin` is `403`, and an invalid
+    identifier or cursor `400`.
+  - **Space privacy:** the route refuses a page, cursor or scope outside the contract with
+    `400` before the database, so it declares only `400`, `401`, `403` and `503`. Behind it,
+    the shared Space privacy mapping applies: `42501` → `403`, `P0002` → `404`, `22023` and
+    `22P02` → `422`, anything else → `503`.
 
 La lectura Studio posterior a la revocación reutiliza las operaciones GET correspondientes y, salvo la excepción de medios, responde `403 scope-required`; la revocación no crea operaciones adicionales. `OP-NUT-013` es la excepción cerrada: ante recurso inexistente o cualquier autorización no efectiva responde siempre el mismo `404` sin bytes para no revelar la existencia de la foto.
 

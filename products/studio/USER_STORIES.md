@@ -1610,6 +1610,17 @@ estado de pago de una persona no es un dato de entrenamiento.
 6. Si no hay nada pendiente se dice, en lugar de mostrar una pantalla vacía.
 7. Un scope rechazado o revocado nunca reaparece como “permiso pendiente” ni como una acción para que el coach vuelva a solicitarlo. Las decisiones de scopes ocurren únicamente dentro de la aceptación de una nueva relación.
 
+> **Implemented as (STUDIO-74, backend).** `GET /studio/v1/organizations/{organizationId}/today`
+> (`OP-REL-020`). Each notice appears only when the caller's roles can resolve it, counts
+> everything it covers, lists at most five, and links to the operation that resolves it:
+> client and team invitations awaiting an answer or lapsed in the last seven days,
+> relationships with no holder, termination requests, the team by role, relationships begun
+> in the last seven days, and the coach's clients with sessions of **last week** (Monday to
+> Sunday, in each session's timezone) not logged or results finished in the last 48 hours. `empty` says
+> there is nothing to do. Staff never see training. Only clients who share
+> `relationship_training` are looked at, and each one evaluated leaves one line in her access
+> log. Failed charges join with `E-STUDIO-13`. The screen is `STUDIO-146`. See ADR-047.
+
 ### HU-STUDIO-082 — Buscar a una persona de mi gimnasio
 
 **Como** integrante del gimnasio
@@ -1625,6 +1636,14 @@ estado de pago de una persona no es un dato de entrenamiento.
 3. Los resultados muestran nombre y estado de la relación. **Ningún dato de entrenamiento**, ni siquiera resumido.
 4. Si no hay resultados se dice claramente.
 
+> **Implemented as (STUDIO-75, backend).** `q` on
+> `GET /studio/v1/organizations/{organizationId}/clients` (`OP-REL-010`): 2 to 80
+> characters, matched against names only, without accents or case. It narrows the directory
+> the caller already reads, so a coach finds only his assigned clients; invitations never
+> match, because they have no name yet. No match is an empty list. A search writes no access
+> event: results carry identity and the state of the link, never training data. The screen
+> is `STUDIO-147`. See ADR-047.
+
 ### HU-STUDIO-083 — Ver la ficha de una persona que atiendo
 
 **Como** coach con asignación vigente
@@ -1638,6 +1657,15 @@ estado de pago de una persona no es un dato de entrenamiento.
 1. En un solo lugar veo su perfil, su programa, sus sesiones y su progreso, **según lo que me haya autorizado**.
 2. Lo que no me autorizó **no aparece como vacío ni como bloqueado**: no aparece.
 3. Cada consulta queda registrada y la persona la ve.
+
+> **Implemented as (STUDIO-76, backend).** `GET /studio/v1/organizations/{organizationId}/clients/{personId}`
+> (`OP-REL-019`) is the card of a client the caller attends, as holder or as a cover she
+> accepted. It lists each category she shares now, with the operations that read it, and what
+> she withdrew; a category she never shared appears nowhere. The card carries no counts and
+> writes no access event: each section is read through its own operation, which records the
+> read. She sees those records in Space at `GET /space/v1/access-events` (`OP-PRV-015`): who
+> read what, for which organization, and when. The Studio screen is `STUDIO-148`; the Space
+> screen is front work too. See ADR-047.
 
 ### HU-STUDIO-084 — Entender por qué dejé de ver algo
 
@@ -1653,6 +1681,16 @@ estado de pago de una persona no es un dato de entrenamiento.
 2. Son motivos distintos y se distinguen: que me quiten de un cliente no es lo mismo a que el cliente se vaya del gimnasio.
 3. Saber que una categoría no está disponible **no me dice si esa persona tiene o no datos** de ese tipo.
 4. Si la persona ocultó una sesión concreta, **no me entero**: para mí simplemente no existe.
+
+> **Implemented as (STUDIO-77, backend).** A category she revoked is listed as withdrawn, with
+> when, on the live card. A coach who no longer attends her and opens her card gets the reason
+> instead of «not found» for thirty days: she left the gym (`relationship_ended`), his
+> attendance ended while the link went on (`assignment_ended`), or his cover ran out
+> (`substitution_ended`), with the instant. Only whoever attended her through his current
+> membership is told; anyone else, the owner included, gets «not found». It never says who
+> ended the link or why, and never carries her name. No answer says whether there is data
+> behind a category. A correction proposal whose session she hid or annulled reads
+> `session_unavailable` in Studio. The screen is `STUDIO-149`. See ADR-047.
 
 ---
 
