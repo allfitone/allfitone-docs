@@ -4817,6 +4817,28 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Falla cerrada** | Deber del consultante ausente o vencido: rechazo |
 | **Implemented (ADR-046)** | Each `PlatformDutyAssignment` now carries the required `basis` (`granted` or `admin_role`). The Backoffice web shows an `admin_role` duty as «Permanente · rol admin» instead of its far `valid_to`, and «Sigue al rol» instead of the recertify, suspend and revoke actions. A temporary duty from before keeps its dates and actions until it lapses |
 
+#### Backoffice reads built under their gap identifiers
+
+Seven Backoffice reads were built without an `OP-*` number. The contract still names them
+by the `NEW-*` gap of the traceability matrix (`x-allfit-operation`), so this table lists
+them under that name. Each one is a read with no domain writes, `no-store`, and checks
+its duty inside the database function (`42501` → `403`).
+
+| Gap identifier | Route | Function | Duty | Stories |
+| --- | --- | --- | --- | --- |
+| `NEW-SUP-DASHBOARD` | `GET /backoffice/v1/support/business` | `support.read_business_panel` | `view_platform_metrics` | `HU-BO-004`; `HU-BO-020` c1 and c2 |
+| `NEW-SUP-ATTENTION` | `GET /backoffice/v1/support/attention` | `support.read_attention_panel` | Each block shows only for the duty that can act on it | `HU-BO-005` |
+| `NEW-SUP-PERSON-PAYMENTS` | `GET /backoffice/v1/support/people/{personId}/payments` | `support.person_payments` | `view_billing_metadata` | `HU-BO-018` |
+| `NEW-SUP-BILLING-FOLLOW-UP` | `GET /backoffice/v1/support/billing-follow-up` | `support.billing_follow_up` | `view_billing_metadata` | `HU-BO-005` c1 and c5; `HU-BO-020` c3 and c4 |
+| `NEW-SUP-JOB-HEALTH` | `GET /backoffice/v1/support/job-health` | `support.list_job_health` | `diagnose_support_metadata` | `HU-BO-031` |
+| `NEW-SUP-ORG-SEARCH` | `GET /backoffice/v1/organizations` | `organizations.list_backoffice_organizations` | `diagnose_support_metadata` or `manage_organization_lifecycle` | `HU-BO-012` |
+| `NEW-SUP-ORG-DETAIL` | `GET /backoffice/v1/organizations/{organizationId}` | `organizations.read_backoffice_organization` | `diagnose_support_metadata` or `manage_organization_lifecycle` | `HU-BO-013` |
+
+The two billing reads and the gym's file write one `privacy.access_events` row per person
+they name before they answer; if the record fails, the read fails. The two panels name
+nobody. A figure of the business panel that counts people, or money paid by people, is
+`below_threshold` under the minimum of five.
+
 ### 7.10 Nutrición
 
 Regla que gobierna todo el dominio: **la persona escribe su registro; el profesional verificado solo lee o propone**. Todas las lecturas Studio usan una organización explícita de ruta y todas las mutaciones nutricionales son transaccionales.
