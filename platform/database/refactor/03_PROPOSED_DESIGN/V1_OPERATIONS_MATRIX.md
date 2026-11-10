@@ -2184,9 +2184,8 @@ Reglas que gobiernan todo el dominio:
 | `OP-PRV-021` | Seguir las solicitudes de eliminación | Consulta | `A6` con `manage_privacy_requests` |
 | `OP-PRV-022` | Consultar las categorías de información | Consulta | `A2`, `A3`–`A6` |
 | `OP-PRV-023` | Ver qué nos autorizó cada persona | Consulta | `A3`–`A5` con capacidad de directorio |
+| `OP-PRV-024` | List legal holds | Consulta | `A12` con `manage_privacy_requests` |
 | `OP-PRV-025` | List historical access cases | Consulta | `A3`–`A5`: every case with `manage_historical_access`, otherwise only the cases that authorize them |
-
-`OP-PRV-024` is not listed here, but it is taken: the OpenAPI assigns it to `listBackofficeLegalHolds` (`GET /backoffice/v1/legal-holds`).
 
 ---
 
@@ -2280,6 +2279,7 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | Un hold **suspende disposición**; no concede ni mantiene acceso operativo. No existen holds globales ni indefinidos: alcance, motivo, vigencia y liberación son obligatorios y auditables |
 | **Falla cerrada** | Sin alcance acotado o sin vigencia, rechazo |
 | **Implementado** | `privacy.apply_legal_hold` sobre `POST /backoffice/v1/legal-holds`. La separación de deberes se comprueba **por persona**, no por caso: quien pidió o aprobó una ventana break-glass sobre alguien no puede suspender la disposición de esa persona. Responde `AF403`, distinto del `42501` general, para que la pantalla diga cuál de los dos 403 es. Un ítem ya ejecutado responde `55000` y uno inexistente `P0002` |
+| **As built since allfitone#163** | Migration `20261104140000_a_legal_hold_keeps_what_it_names.sql` replaced the function. The first version held only dispositions that were already waiting, and none ever waited: a person's own deletion opened its disposition and executed it in one transaction. A hold now **names a person and kinds of their data**: `privacy.apply_legal_hold(actor, session, scope_description, reason_code, case_reference, valid_to, subject_person_id, data_classification_codes, idempotency_key, command_id, request_hash)`. It is applied when the order arrives, and covers what of those kinds already waits and what she asks to delete while it is in force. Refusals: no kind named (`22023`, «a legal hold names the kinds of data it keeps»); a kind no published policy disposes of (`22023`); nobody with that identifier (`P0002`); the same person-level separation of duties (`AF403`). **Her deletion asks first.** Under a live hold, `nutrition.delete_meal`, `identity.delete_body_progress` and `identity.delete_health_context` keep the record and leave its disposition suspended in an open case. The answer says so, on what ground and until when, never the case reference, the scope or who applied it; for a meal it is `202 MealDeletionHeld`. Asking again answers the same case |
 
 #### `OP-PRV-010` — Liberar un hold legal
 
@@ -2298,6 +2298,7 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | Liberar reanuda la disposición de los ítems **dentro de su alcance** y solo de esos |
 | **Falla cerrada** | — |
 | **Implementado** | `privacy.release_legal_hold` sobre `POST /backoffice/v1/legal-holds/{id}/release`. Devuelve los ítems a `pending` y nunca los ejecuta; un hold ya liberado responde `55000`, y la misma separación de deberes aplica al liberar |
+| **As built since allfitone#163** | Releasing still executes nothing by itself, and a hold already released or lapsed answers `55000`. **No hold is indefinite.** A hold is live while `valid_to` is ahead: one past its date suspends nothing new before any sweep runs, and reads as lapsed. The worker's `privacy_disposition` job then runs `privacy.lapse_legal_holds`, which sets `status = 'lapsed'` and `lapsed_at`, and only the privacy worker may call it (`42501`). What a hold stops holding passes to another live hold over the same data, so a renewed order leaves no gap, or goes back to `pending`. The same job then runs `privacy.execute_due_dispositions`, which executes what is pending and due as the person's own deletion would have, attributed to `privacy_worker`. The row goes, a meal's photo is queued and its deletion announced, and the case closes (`HU-BO-033` criterion 4) |
 
 #### `OP-PRV-011` — Publicar una versión de definición de scope
 
@@ -2528,6 +2529,25 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | **El filtro sale del vínculo, no del permiso.** La política de `privacy.data_grants` estrecha a la organización —`person_id = person() or organization_id = org()`— y no sabe de asignación. En la ficha de un vínculo eso basta, porque la proyección de permisos sólo se alcanza después de que el vínculo pasó su guarda; en un registro a través de clientes no, y leer `data_grants` sola entrega a un coach lo que autorizaron clientes que no atiende. La unión obligatoria con `relationships.service_relationships` es la guarda, no una conveniencia. **Criterio 5:** esto es un informe y nunca la fuente que decide un acceso; quien vaya a leer un dato resuelve la política en ese instante, dentro de la transacción que escribe el registro de acceso |
 | **Falla cerrada** | Sin capacidad de directorio, `42501`. Un cursor a medias o un tamaño de página fuera de rango, `22023` — no la primera página, que se leería como filas saltadas |
 | **Implementado** | `privacy.list_authorized_scopes`. Cubierta por `T-PRV-SCOPES-01`, cuya aserción de negación se escribió **antes** de la unión y se vio fallar: un coach recibía tres filas donde dos eran suyas. El test se cae el día que alguien quite esa unión |
+
+#### `OP-PRV-024` — List legal holds
+
+Added with `HU-BO-033` in migration `20261104140000_a_legal_hold_keeps_what_it_names.sql`
+(allfitone#163), so the officer can find the holds in force and the ones that ended.
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /backoffice/v1/legal-holds` (`listBackofficeLegalHolds`) with the optional query `status` and `limit`, `200 LegalHoldPage`, `no-store` |
+| **Actor** | `A12` with the base role, `manage_privacy_requests`, AAL2 and the duty in force (`privacy.require_privacy_request_manager`) |
+| **Filtros obligatorios** | `status` is in force (the default) or ended; the database refuses anything else with `22023`. `limit` 1 to 200 |
+| **Transacción** | One, `privacy.list_legal_holds`. It writes one `privacy.access_events` row per person the page names before returning, because each hold names a person by identifier |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | In force: the one ending soonest first. Ended (released by an officer or lapsed on its date): the latest first |
+| **Offline / concurrencia** | `no-store`. A hold past its date reads as lapsed before the worker records it, because it already keeps nothing new |
+| **Información sensible** | The person's identifier, the kinds of data held, the reason, the case reference and who applied and released it |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | `privacy.legal_hold_projection` shapes each hold. `T-PRV-HOLD-02` |
 
 #### `OP-PRV-025` — List historical access cases
 
@@ -4798,6 +4818,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Reglas** | Nadie se autoasigna; un deber no implica otro; vencer se evalúa por tiempo aunque el job no haya corrido |
 | **Falla cerrada** | Rol base ausente, catálogo/AAL/vigencia inválidos o autoasignación: rechazo |
 | **Implemented (ADR-046)** | Migration `20261114090000_an_admin_holds_every_duty.sql`. Every duty requires `allfit_admin`, and the role already brings all thirteen, so these commands only matter for a temporary duty granted before ADR-046. **Granting converges:** `support.assign_platform_duty` still validates the role, the catalogue and a window of at most 90 days, then answers the assignment the person already holds (scheduled or active, in any basis, preferring `admin_role`) and adds no row; granting an administrator a duty answers it with `basis: admin_role`. **A duty held through the role follows the role:** `support.suspend_platform_duty`, `support.revoke_platform_duty` and `support.recertify_platform_duty` (`POST .../{id}/recertification`, also `OP-SUP-010`) fail on it with `23514 a duty held through the admin role follows the role`, which the API answers as `409 conflict`; the rule lives in `support.preserve_platform_duty_history`, which also freezes `basis`. **Concurrency:** the current-assignment unique index is `(person_id, duty_code, basis)`, so a temporary duty from before lives beside the standing one and lapses on its own date, and two temporary ones of the same duty never coexist. The Backoffice web no longer offers a grant form. Tests: `T-SUP-STANDING-01`, `T-SUP-RECERT-01` |
+| **Recertification and lapse (allfitone#161)** | Migration `20261104120000_a_duty_is_recertified_and_closes_its_windows.sql` (`HU-BO-028` c4 and c5, `HU-BO-029` c2). **Recertifying:** `support.recertify_platform_duty` behind `POST /backoffice/v1/platform/duty-assignments/{assignmentId}/recertification` (`recertifyBackofficePlatformDuty`). It records who attests that a duty in force is still needed, and when, in `recertified_by_person_id` and `recertified_at`, which existed and nothing wrote. It requires `manage_platform_access` and AAL2, and never the duty's own holder (`42501`); a duty not in force answers `23514`. It does not extend the window: longer authority is a new assignment. Since ADR-046 a duty held through the role is never recertified on its own. **Lapsing:** `support.lapse_platform_duties` moves every duty past `valid_to` to `expired` and closes the break-glass windows of a requester left without `request_break_glass`. The worker's `platform_duty_lapse` job runs it each minute as `worker`, so no one is named as its author. The policies `break_glass_requests_select_worker` and `break_glass_requests_update_worker` let the worker see open requests and only close them. `support.close_revoked_platform_access` also closes the windows when the base role is withdrawn, which until then left them `approved` |
 
 #### `OP-SUP-011` — Consultar asignaciones de deber
 

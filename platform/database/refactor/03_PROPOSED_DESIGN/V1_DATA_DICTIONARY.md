@@ -41,7 +41,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 | `identity` | 21 | §4 |
 | `organizations` | 12 | §5 |
 | `relationships` | 6 | §6 |
-| `privacy` | 17 | §7 |
+| `privacy` | 18 | §7 |
 | `catalog` | 18 | §8 |
 | `planning` | 22 | §9 |
 | `execution` | 14 | §10 |
@@ -1110,6 +1110,35 @@ PRE_PHASE_5 §9.2 proposed it; this is its physical form.
   `tax_or_accounting_obligation`), que es lo que pide el criterio 5. Suma `case_reference` (la
   orden o requerimiento que sustenta el hold) y `released_by_person_id`. Un trigger impide
   borrar la fila: un hold es evidencia.
+- **As built since allfitone#163 (migration `20261104140000`):** a hold names a person and
+  kinds of their data, and no hold is indefinite.
+  - **New columns.** `subject_person_id uuid` (nullable, only for holds filed before, which
+    named dispositions and not a person; `→ identity.people(id) RESTRICT`) and
+    `lapsed_at timestamptz` (nullable).
+  - **Statuses.** `status` gains `lapsed` (`ck_legal_holds_status`), and
+    `ck_legal_holds_lapsed` makes `lapsed` and `lapsed_at` go together. A hold is released by
+    somebody or lapses on its own date, never both.
+  - **Index.** `idx_legal_holds_subject (subject_person_id, status, valid_to)`.
+  - **Ownership.** The table moved to `allfit_owner`, which owns the deletions that now
+    read it.
+  - **Who changes it.** Only `privacy.lapse_legal_holds`, run by the privacy worker, sets
+    `lapsed`.
+
+### 7.15.1 `privacy.legal_hold_categories`
+
+Built in migration `20261104140000_a_legal_hold_keeps_what_it_names.sql` (`HU-BO-033`).
+
+- **Purpose:** the kinds of a person's data a hold keeps.
+- **Domain / source of truth:** Privacy.
+- **Classification:** `audit`.
+- **Columns:** `legal_hold_id uuid` · `data_classification_code text`.
+- **FKs and deletion:** `legal_hold_id → legal_holds(id) RESTRICT`; `data_classification_code → data_classifications(code) RESTRICT`.
+- **Uniques and checks:** primary key `(legal_hold_id, data_classification_code)`. The trigger `trg_legal_hold_categories_immutable` (`privacy.reject_hold_category_rewrite_tg`) refuses any change after the hold is applied (`55000`, «what a hold covers is fixed when it is applied»). `privacy.apply_legal_hold` accepts only kinds that a published retention policy disposes of on request.
+- **Actors:** `privacy.apply_legal_hold` inserts; the person's deletions and the privacy worker read it.
+- **RLS:** forced; `legal_hold_categories_all_owner` for `allfit_owner` only.
+- **Queries and indexes:** by hold through the primary key; `idx_legal_hold_categories_classification (data_classification_code)`.
+- **Retention:** audit, with its hold.
+- **Events:** none of its own.
 
 ### 7.16 `privacy.hold_applications`
 
@@ -1129,6 +1158,13 @@ PRE_PHASE_5 §9.2 proposed it; this is its physical form.
   hold vigente por ítem, porque dos harían ambigua la liberación. Suma `released_at`. Liberar
   devuelve el ítem a `pending` y a nada más: ejecutar la eliminación de alguien no es decisión
   de quien revisa.
+- **As built since allfitone#163:** the person's own deletion opens an application when a
+  live hold covers the kind of data she deletes, and her record stays. Releasing or lapsing
+  a hold hands each item to another live hold over the same data, or back to `pending`.
+  Then the privacy worker's `privacy.execute_due_dispositions` executes what is pending and
+  due: the release still decides nothing by itself. A disposition's hold on its target is
+  now a key checked at commit (deferrable `no action`) instead of `restrict`, so the worker
+  can delete the row while its disposition still names it.
 
 ---
 
@@ -2945,7 +2981,7 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 | `identity` | 21 |
 | `organizations` | 12 |
 | `relationships` | 6 |
-| `privacy` | 17 |
+| `privacy` | 18 |
 | `catalog` | 18 |
 | `planning` | 23 |
 | `execution` | 14 |
@@ -2953,7 +2989,7 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 | `payments` | 12 |
 | `system` | 4 |
 | `support` | 5 |
-| **Total** | **140** |
+| **Total** | **141** |
 
 ### 14.2 Invariantes transversales confirmadas por el diccionario
 
