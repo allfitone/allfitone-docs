@@ -38,14 +38,14 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 | Schema | Tablas | Sección |
 | --- | --- | --- |
-| `identity` | 21 | §4 |
+| `identity` | 22 | §4 |
 | `organizations` | 12 | §5 |
 | `relationships` | 6 | §6 |
 | `privacy` | 18 | §7 |
 | `catalog` | 18 | §8 |
 | `planning` | 22 | §9 |
 | `execution` | 14 | §10 |
-| `nutrition` | 8 | §10A |
+| `nutrition` | 9 | §10A |
 | `system` | 4 | §11 |
 | `payments` | 12 | §13 |
 | `support` | 5 | §12 |
@@ -331,6 +331,27 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Actores / RLS:** RLS forzado y sin privilegios de runtime; las funciones de progreso corporal la leen.
 - **Retención:** permanente; una medida referenciada no se elimina.
 - **Eventos:** ninguno.
+
+### 4.7.3 `identity.body_photo_disposals`
+
+Built in migration `20261103030400_pro_measures_the_body.sql`; the sweep columns come with
+migration `20261122150000_the_worker_sweeps_photo_disposals.sql` (code branch
+`feat/backoffice-last-gaps`, merge and deploy pending).
+
+- **Purpose:** the queue of body photos to remove from the object store. A photo leaves the store only after the commit that disposes of it, so the row is written in that transaction and sealed once the store confirms.
+- **Domain / source of truth:** Identity. The object store holds the file.
+- **Classification:** `body`: the row names the object key of a person's body photo.
+- **Columns:** `id uuid` · `person_id uuid` · `media_ref text` · `requested_at timestamptz` (default `clock_timestamp()`) · `sealed_at timestamptz` (nullable) · `purge_attempts integer` (default `0`) · `next_attempt_at timestamptz` (nullable).
+- **FKs and deletion:** `person_id → identity.people(id) RESTRICT`.
+- **Uniques and checks:** `ck_body_photo_disposals_ref` (`media_ref` starts with `body/`); `ck_body_photo_disposals_purge_attempts` (`purge_attempts >= 0`).
+- **Actors:**
+  - **The person's deletion** inserts the row.
+  - **The API** removes the photo right after the commit and seals the row with `identity.seal_body_photo_disposal`.
+  - **The worker's `media_disposal` job** sweeps what that step missed. `identity.claim_body_photo_disposals(limit)` returns the rows that have waited five minutes, or whose `next_attempt_at` has passed; it counts an attempt and pushes `next_attempt_at` further each time, doubling from one minute up to a day. `identity.seal_swept_body_photo_disposal(id)` seals one. Both are worker-only (`42501`); a claim takes 1 to 500 rows (`22023`).
+- **RLS:** forced. `body_photo_disposals_all_self` for the person. `body_photo_disposals_select_worker_sweep` lets the worker read the queue. `body_photo_disposals_update_worker_sweep` lets it change only unsealed rows. `allfit_api` has no privilege on the table.
+- **Queries and indexes:** `idx_body_photo_disposals_pending (requested_at) WHERE sealed_at IS NULL`; `idx_body_photo_disposals_person (person_id)`. The claim locks with `for update skip locked`, so two sweeps never take the same row.
+- **Retention:** a sealed row stays as evidence that the file was removed.
+- **Events:** none. The claim hands over the row's identifier, the object key and the attempt count, never the person, so the worker never learns whose photo it removes.
 
 ### 4.8 `identity.health_context_claims`
 
@@ -2568,6 +2589,28 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Retención:** permanente; referenciado por `meal_items.product_id`.
 - **Eventos:** ninguno.
 
+### 10A.12 `nutrition.media_disposals`
+
+Built in migration `20261007100000_what_a_person_eats_is_theirs.sql` (ADR-039); the sweep
+columns come with migration `20261122150000_the_worker_sweeps_photo_disposals.sql` (code
+branch `feat/backoffice-last-gaps`, merge and deploy pending).
+
+- **Purpose:** the queue of meal photos to remove from the object store: the photo a revision replaced, or the one of a deleted meal.
+- **Domain / source of truth:** Nutrition. The object store holds the file.
+- **Classification:** `nutrition`: the row names the object key of a person's meal photo.
+- **Columns:** `id uuid` · `person_id uuid` · `media_ref text` · `requested_at timestamptz` (default `clock_timestamp()`) · `sealed_at timestamptz` (nullable) · `purge_attempts integer` (default `0`) · `next_attempt_at timestamptz` (nullable).
+- **FKs and deletion:** `person_id → identity.people(id) RESTRICT`.
+- **Uniques and checks:** `ck_media_disposals_ref` (`media_ref` starts with `nutrition/`); `ck_media_disposals_purge_attempts` (`purge_attempts >= 0`).
+- **Actors:**
+  - **The person's revision or deletion** inserts the row.
+  - **The privacy worker** inserts it when it deletes a meal after a legal hold ends (`media_disposals_insert_worker_disposal`, allfitone#163).
+  - **The API** removes the photo right after the commit and seals the row with `nutrition.seal_media_disposal`.
+  - **The worker's `media_disposal` job** sweeps the rows nobody removed. That covers the meal the worker deleted, with no API request around it, and a removal the store refused. `nutrition.claim_media_disposals(limit)` and `nutrition.seal_swept_media_disposal(id)` behave as their `identity` twins in §4.7.3.
+- **RLS:** forced. `media_disposals_all_self` for the person, the worker's insert policy, `media_disposals_select_worker_sweep`, and `media_disposals_update_worker_sweep`, which changes only unsealed rows. `allfit_api` has no privilege on the table.
+- **Queries and indexes:** `idx_media_disposals_pending (requested_at) WHERE sealed_at IS NULL`; the claim locks with `for update skip locked`.
+- **Retention:** a sealed row stays as evidence that the file was removed.
+- **Events:** none of its own; a meal deleted by the worker announces its deletion through the meal.
+
 ## 11. Schema `system`
 
 ### 11.1 `system.outbox_events`
@@ -2980,18 +3023,18 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 
 | Schema | Tablas fichadas |
 | --- | --- |
-| `identity` | 21 |
+| `identity` | 22 |
 | `organizations` | 12 |
 | `relationships` | 6 |
 | `privacy` | 18 |
 | `catalog` | 18 |
 | `planning` | 23 |
 | `execution` | 14 |
-| `nutrition` | 8 |
+| `nutrition` | 9 |
 | `payments` | 12 |
 | `system` | 4 |
 | `support` | 5 |
-| **Total** | **141** |
+| **Total** | **143** |
 
 ### 14.2 Invariantes transversales confirmadas por el diccionario
 

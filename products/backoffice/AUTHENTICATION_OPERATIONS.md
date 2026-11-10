@@ -74,15 +74,42 @@ Con el gate apagado, sesión, logout, verificación de intentos ya abiertos, res
 
 Todas las rutas requieren `Origin` exacto, responden `Cache-Control: no-store` y `Referrer-Policy: no-referrer`, y nunca registran email, contraseña, TOTP, QR, clave manual, factor/challenge ID o tokens. The `allfit_backoffice_session` cookie uses path `/backoffice/v1` and `Max-Age=43200`. The session ends after 60 minutes without activity or 12 hours in all (ADR-046); PostgreSQL enforces both through `access_control.backoffice_idle_limit()` and `access_control.backoffice_session_lifetime()`, and `GET /backoffice/v1/session` reports `inactivity_expires_at` as the last activity plus 60 minutes.
 
-## Límites en Vercel
+## Límites por dirección
 
-Crear reglas por proyecto API sin persistir IP en PostgreSQL:
+**Before AWS, on Vercel.** These rules lived in the Vercel project of the API, with no IP
+stored in PostgreSQL:
 
 - password: 10 solicitudes cada 15 minutos por IP;
 - TOTP: 20 solicitudes cada 15 minutos por IP, además de cinco códigos inválidos por intento en PostgreSQL;
 - reset: 5 solicitudes por hora por IP.
 
 El rechazo es `429 rate-limited` con `Retry-After`. Las métricas son contadores sin PII para password, enrollment, challenge, verification, session, logout, reset y rate limiting.
+
+**On AWS.** The Vercel rules did not move with the API, so production has had no per-address
+limit since. The five-failure lockout per attempt in PostgreSQL still holds, but nothing
+slows down someone who tries many accounts from one address. It matters more for Space,
+whose sign-in passes through the API, so the identity provider only ever sees the API's
+address.
+
+The code branch `feat/backoffice-last-gaps` (`infra/modules/edge`) restores the limit with
+an AWS WAF web ACL on the load balancer. It takes effect when Terraform is applied in
+`infra/production`:
+
+- **Backoffice:** 20 `POST` per address in 5 minutes, over `/backoffice/v1/auth/password`,
+  `totp/verification` and `password-resets` together. A sign-in is two requests, so that
+  is ten sign-ins.
+- **Space:** 100 `POST` per address in 5 minutes, over `/space/v1/auth/sessions`,
+  `registrations`, `registrations/verification` and `password-resets`. It is looser
+  because a phone carrier puts many people behind one address.
+- **The answer** is the API's: `429` with `{"error":{"code":"rate-limited"}}`,
+  `Retry-After: 300` and `Cache-Control: no-store`. It also carries the CORS headers for
+  the Backoffice origin, so the screen reads the `429` instead of a network error.
+- **Nothing else is counted:** every other route and method passes untouched, and no
+  address reaches PostgreSQL.
+- **Cost (AWS price list, November 2026):** US$5 a month for the web ACL, US$1 a month per
+  rule (two), and US$0.60 per million requests inspected.
+- **Tests:** `infra/modules/edge/tests/edge.tftest.hcl` checks the limits, the window, the
+  `429` and the association with the load balancer.
 
 ## Bootstrap protegido
 

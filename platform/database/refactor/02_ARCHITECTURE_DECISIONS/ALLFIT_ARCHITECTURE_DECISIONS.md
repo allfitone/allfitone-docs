@@ -5037,6 +5037,37 @@ cerrada, 422).
   el proveedor de identidad.
 - No sirve fotos a Studio: el proxy autenticado de `OP-NUT-013` llega con Studio.
 
+### As built: the worker sweeps the queue
+
+Point 5 left the worker's sweep of `nutrition.media_disposals` deferred. Two paths made it
+necessary:
+
+- **A meal the worker deletes.** Since allfitone#163 the worker deletes a meal once a legal
+  hold over it ends, and queues its photo with no API request around it to remove it.
+- **A refused removal.** A removal the store refused stayed pending with nothing to retry
+  it.
+
+In both cases the photo stayed in the store for good. The same applies to body photos
+(`identity.body_photo_disposals`).
+
+Migration `20261122150000_the_worker_sweeps_photo_disposals.sql` and the worker's
+`media_disposal` job sweep both queues (code branch `feat/backoffice-last-gaps`, merge and
+deploy pending):
+
+- **Waiting.** The worker claims only what has waited five minutes, so it does not race the
+  API's own removal. Removing twice is harmless, because the store answers a missing key as
+  removed.
+- **Backoff.** Each claim counts an attempt and pushes the next one further, doubling from a
+  minute up to a day. A photo the store keeps refusing therefore costs no call every minute
+  and does not hold up newer ones.
+- **Order.** The worker removes the file and then seals the row. A store error leaves the
+  row for the next attempt; any other error fails the job.
+- **Last in the batch.** The job runs last, and builds its store client only when something
+  is due. A worker without the store keys therefore still runs every other job.
+- **What it learns.** The claim hands over the object key, never the person.
+
+The data dictionary §4.7.3 and §10A.12 hold the physical form.
+
 ## ADR-040 — Alcance V1 de nutrición en Space
 
 **Estado:** aceptada para V1<br>
