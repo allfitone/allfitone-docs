@@ -1756,6 +1756,27 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Evento de dominio** | `organization.cancelled.v1` |
 | **Reglas** | `HU-BO-015`. `cancelled` solo se alcanza desde `unclaimed` y conserva la auditoría |
 
+#### `OP-ORG-023` — Fijar el cupo de invitados de un gimnasio
+
+Added with `HU-BO-034`, which began as the gap `NEW-ORG-INVITE-QUOTA`. Built in migration
+`20261015120000_what_a_gym_may_fill.sql` (allfitone#108). Migration
+`20261108090000_a_quota_names_the_agreement_that_sold_it.sql` (allfitone#175) added the agreement
+reference and dropped the signature without it.
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/organizations/{organizationId}/guest-quota` (`setBackofficeOrganizationGuestQuota`), body `{seats, agreement_reference}`, `200 OrganizationGuestQuota` |
+| **Actor** | `A11` with the base role, `manage_platform_commercial`, AAL2 and the duty in force (`organizations.require_platform_commercial_duty`, `42501` → `403`). It is not the duty that creates a gym (`manage_organization_lifecycle`, `OP-ORG-018`) |
+| **Filtros obligatorios** | `seats` from 1 to 1,000,000, or `null` for no limit; zero is refused. `agreement_reference` is required: one line of at most 120 characters, trimmed. A `closed` or `cancelled` gym is not sold a quota (`55000` → `409`) |
+| **Transacción** | Locks the organization, writes `guest_quota_seats`, `guest_quota_agreement_reference` and `revision_number + 1`, and records `organization.guest_quota_set.v1` with the previous seats and agreement as `before_snapshot`, the person and the duty assignment |
+| **Idempotencia** | `Idempotency-Key` and `Command-Id` (`system.begin_idempotency`, `OP-ORG-023`). The same number under the same agreement writes nothing; the same number under a new agreement is a renewal and is recorded |
+| **Paginación y orden** | Not applicable. The response carries the whole history, newest first |
+| **Offline / concurrencia** | `no-store`. Two operators deciding at once are serialized by the row lock |
+| **Información sensible** | Commercial terms of the gym. No personal data: the occupancy is a count |
+| **Evento de dominio** | `organization.guest_quota_set.v1` in `organizations.organization_events`; no outbox event |
+| **Reglas** | A live relationship and an invitation still awaiting an answer each take a place. `organizations.organization_guest_occupancy` counts them, and `HU-STUDIO-087` enforces the quota with the same function. Lowering the quota below the occupancy ends no relationship and revokes no invitation, because the command has no statement that could. The gym is over its quota, and the next invitation is refused (`AF409`, migration `20261103003415_enforce_guest_quota.sql`). The response puts `occupied`, `relationships_active`, `invitations_pending`, `places_left` and `over_quota` beside the number, because a quota cannot be judged without them |
+
 #### `OP-REL-001` — Invitar a una persona como cliente
 
 | Campo | Valor |
