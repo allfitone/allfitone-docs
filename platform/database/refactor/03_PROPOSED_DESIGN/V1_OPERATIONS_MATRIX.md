@@ -1777,6 +1777,44 @@ reference and dropped the signature without it.
 | **Evento de dominio** | `organization.guest_quota_set.v1` in `organizations.organization_events`; no outbox event |
 | **Reglas** | A live relationship and an invitation still awaiting an answer each take a place. `organizations.organization_guest_occupancy` counts them, and `HU-STUDIO-087` enforces the quota with the same function. Lowering the quota below the occupancy ends no relationship and revokes no invitation, because the command has no statement that could. The gym is over its quota, and the next invitation is refused (`AF409`, migration `20261103003415_enforce_guest_quota.sql`). The response puts `occupied`, `relationships_active`, `invitations_pending`, `places_left` and `over_quota` beside the number, because a quota cannot be judged without them |
 
+#### `OP-ORG-024` — Suspender un gimnasio
+
+Added with `HU-BO-016`, which began as the gap `NEW-ORG-SUSPEND`. Built in migrations
+`20261018120000_an_organization_can_be_suspended.sql` and
+`20261018130000_suspending_a_gym_without_destroying_it.sql`.
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/organizations/{organizationId}/suspension` (`suspendBackofficeOrganization`), body `{reason_code}`, `200 OrganizationSuspension` |
+| **Actor** | `A10` with the base role, `manage_organization_lifecycle`, AAL2 and the duty in force |
+| **Filtros obligatorios** | `reason_code` from the closed list `nonpayment`, `terms_breach`, `security_incident`, `legal_requirement` (`22023` → `422`). Only an `active` gym is suspended: one nobody claimed is not operating, and `cancelled` or `closed` are terminal (`55000` → `409`) |
+| **Transacción** | Sets `status = 'suspended'` and `suspended_at`; records `organization.suspended.v1` with the person and the duty assignment; opens one `organizations.organization_suspensions` period; opens one `planning.service_access_blocks` row (`organization_suspension`, both flags true) per person with a live relationship with the gym; enqueues `organization.suspended.v1` |
+| **Idempotencia** | `Idempotency-Key` and `Command-Id`. Suspending a suspended gym converges and opens no second period |
+| **Paginación y orden** | Not applicable |
+| **Offline / concurrencia** | `no-store`. `uidx_organization_suspensions_open` allows one open period per gym |
+| **Información sensible** | The reason, and how many people are affected. No person is named |
+| **Evento de dominio** | `organization.suspended.v1` (`organization_id`, `reason_code`) |
+| **Reglas** | Nothing is destroyed: the command has no statement that revokes a grant, ends a relationship, drops a membership or deletes a session. The functions that ask `status = 'active'` stop the gym from inviting, assigning, publishing and charging, and `payments.resolve_pro` drops its clients to the free plan. Since allfitone#165 the sessions of a program the gym assigned show paused and refuse to start (`23514`), and its coach contributes nothing (`AF424` → `409 service-paused`). Her own programs are untouched. The policy `service_access_blocks_select_lifecycle` lets this duty count the people affected |
+
+#### `OP-ORG-025` — Reactivar un gimnasio suspendido
+
+Added with `HU-BO-016` criteria 6 and 7, in the same migration as `OP-ORG-024`.
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/organizations/{organizationId}/reactivation` (`reactivateBackofficeOrganization`), no body, `200 OrganizationSuspension` |
+| **Actor** | `A10` with the base role, `manage_organization_lifecycle`, AAL2 and the duty in force |
+| **Filtros obligatorios** | A `suspended` gym with its open period; one that was never suspended answers `409` (`55000`) |
+| **Transacción** | Sets `status = 'active'`, clears `suspended_at`, records `organization.reactivated.v1`, ends the open period with who lifted it, closes the blocks opened by that suspension's event and enqueues `organization.reactivated.v1` |
+| **Idempotencia** | `Idempotency-Key` and `Command-Id`. Reactivating a gym that is operating converges |
+| **Paginación y orden** | Not applicable |
+| **Offline / concurrencia** | `no-store`. A suspended gym without an open period answers `40001` |
+| **Información sensible** | Ninguna |
+| **Evento de dominio** | `organization.reactivated.v1` |
+| **Reglas** | Subtractive: it closes only the blocks of this suspension, found by its event and never by person or organization, and restores no copy of anything. A subscription suspended for non-payment during the period keeps denying, because its block is a different row. Nothing revoked, ended, cancelled, started or expired during the suspension comes back, and the days missed stay missed |
+
 #### `OP-REL-001` — Invitar a una persona como cliente
 
 | Campo | Valor |

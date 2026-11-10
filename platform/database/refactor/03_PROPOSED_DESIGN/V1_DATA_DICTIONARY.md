@@ -39,7 +39,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 | Schema | Tablas | Sección |
 | --- | --- | --- |
 | `identity` | 21 | §4 |
-| `organizations` | 11 | §5 |
+| `organizations` | 12 | §5 |
 | `relationships` | 6 | §6 |
 | `privacy` | 17 | §7 |
 | `catalog` | 18 | §8 |
@@ -503,17 +503,18 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** frontera estable de operación, autoría y permisos; conserva su `id` al crecer a equipo.
 - **Dominio / fuente de verdad:** Organizaciones.
 - **Clasificación:** `operational`; `legal_name` puede ser `identity_pii` y el JSON `responsible_party` contiene identidad/contacto restringido.
-- **Columnas:** `id uuid` · `type_code text` · `legal_name text` (nullable) · `display_name text` · `status organizations.organization_status` (`unclaimed`, `active`, `closed`, `cancelled`) · `responsible_party_schema_version smallint` (`1`) · `responsible_party jsonb` · `revision_number bigint` (`0`) · `claimed_at timestamptz` (nullable; default `clock_timestamp()`) · `cancelled_at timestamptz` (nullable) · `guest_quota_seats integer` (nullable; `null` is no limit) · `guest_quota_agreement_reference text` (nullable) · `created_at timestamptz` · `updated_at timestamptz`.
+- **Columnas:** `id uuid` · `type_code text` · `legal_name text` (nullable) · `display_name text` · `status organizations.organization_status` (`unclaimed`, `active`, `suspended`, `closed`, `cancelled`) · `responsible_party_schema_version smallint` (`1`) · `responsible_party jsonb` · `revision_number bigint` (`0`) · `claimed_at timestamptz` (nullable; default `clock_timestamp()`) · `cancelled_at timestamptz` (nullable) · `suspended_at timestamptz` (nullable) · `guest_quota_seats integer` (nullable; `null` is no limit) · `guest_quota_agreement_reference text` (nullable) · `created_at timestamptz` · `updated_at timestamptz`.
 - **FKs y borrado:** `type_code → organization_types(code) RESTRICT`.
-- **Uniques y checks:** `ck_organizations_lifecycle_shape`: `unclaimed` sin `claimed_at` ni `cancelled_at`; `active` con `claimed_at` y sin `cancelled_at`; `cancelled` con `cancelled_at` y nunca `claimed_at`; `closed` sin `cancelled_at` (su forma queda abierta hasta que exista el flujo de cierre). `ck_organizations_responsible_party` exige `party_kind`, `purpose = 'studio_operations'` y un `party_name` no vacío, salvo en una organización `unclaimed` o `cancelled` de persona natural, que no lo lleva: Allfit nunca escribe el nombre de una persona, y se toma de su propia identidad cuando acepta (`HU-BO-014`). La versión anterior del check aceptaba cualquier organización sin `party_name`, porque una clave ausente evaluaba a null y un check en null pasa. `revision_number >= 0`. El cambio de `type_code` exige una transición activa en `organization_type_transitions`. El trigger `trg_organization_memberships_before_insert_claimed` sobre `organization_memberships` rechaza (`55000`) cualquier membresía de una organización `unclaimed` o `cancelled`: reclamar pasa la organización a `active` antes de insertar al dueño, en la misma transacción. Las organizaciones existentes antes de `20260913150100` recibieron `claimed_at = created_at`, porque hasta entonces solo su dueño podía crearlas.
+- **Uniques y checks:** `ck_organizations_lifecycle_shape`: `unclaimed` sin `claimed_at` ni `cancelled_at`; `active` con `claimed_at` y sin `cancelled_at`; `cancelled` con `cancelled_at` y nunca `claimed_at`; `closed` sin `cancelled_at` (su forma queda abierta hasta que exista el flujo de cierre). Since migration `20261018130000` (`HU-BO-016`), `suspended` has `claimed_at` and `suspended_at` and no `cancelled_at`, and every other state has no `suspended_at`. `ck_organizations_responsible_party` exige `party_kind`, `purpose = 'studio_operations'` y un `party_name` no vacío, salvo en una organización `unclaimed` o `cancelled` de persona natural, que no lo lleva: Allfit nunca escribe el nombre de una persona, y se toma de su propia identidad cuando acepta (`HU-BO-014`). La versión anterior del check aceptaba cualquier organización sin `party_name`, porque una clave ausente evaluaba a null y un check en null pasa. `revision_number >= 0`. El cambio de `type_code` exige una transición activa en `organization_type_transitions`. El trigger `trg_organization_memberships_before_insert_claimed` sobre `organization_memberships` rechaza (`55000`) cualquier membresía de una organización `unclaimed` o `cancelled`: reclamar pasa la organización a `active` antes de insertar al dueño, en la misma transacción. Las organizaciones existentes antes de `20260913150100` recibieron `claimed_at = created_at`, porque hasta entonces solo su dueño podía crearlas.
 - **Actores:** miembros leen una proyección cerrada; admin/owner llaman `organizations.update_organization` para modificar por autoservicio solo `display_name`, `legal_name` y `type_code`. `responsible_party`, su `purpose`/schema version, `id`, `status` y timestamps no son editables por `OP-ORG-002`. El equipo de Allfit (`allfit_admin` con `diagnose_support_metadata` o `manage_organization_lifecycle`, `HU-BO-012`, `NEW-SUP-ORG-SEARCH`) lee el directorio por `organizations.list_backoffice_organizations`: nombre visible, tipo, estado, `created_at`, `claimed_at`, `cancelled_at`, membresías activas y sedes activas. Nunca recibe `legal_name` ni `responsible_party`. `people_served` es null hasta que exista `relationships`: un cero afirmaría que la organización no atiende a nadie. La ficha de Backoffice (`HU-BO-013`, `NEW-SUP-ORG-DETAIL`) se lee por `organizations.read_backoffice_organization` con el mismo par de deberes: organización, dueño y equipo por identificador y rol, y sedes; nunca nombres, contactos ni `responsible_party`, y la dirección de la sede de una persona natural se reserva porque puede ser su casa. Cada miembro activo que devuelve queda en `privacy.access_events` (`support_metadata`) antes de responder; un exmiembro se cuenta y no se lista.
 - **RLS:** la función `organizations.read_organization` aplica `access_control.has_membership(id)` y devuelve columnas cerradas. `allfit_api` no recibe `SELECT` ni DML sobre la tabla base y escribe únicamente por funciones cerradas. El directorio de Backoffice exige el deber dentro de la función (`42501`) y no escribe `privacy.access_events`, porque no alcanza datos de ninguna persona.
 - **Consultas:** por `id`; por membresía del actor; directorio de Backoffice por `display_name` (búsqueda literal, desde 2 caracteres, sin tocar `legal_name`) y por estado, paginado por `(lower(display_name), id)`.
 - **Índices:** PK; `idx_organizations_directory (lower(display_name), id)`; `idx_organizations_status_created (status, created_at)`.
 - **Panel de negocio (`HU-BO-004`):** `support.read_business_panel` cuenta todas las organizaciones, las `unclaimed` y las que **operan**: `active` con al menos una membresía `active`. Una organización no es una persona, así que estos conteos no se someten al umbral mínimo.
 - **Guest quota (`HU-BO-034`, `OP-ORG-023`, as built):** `guest_quota_seats` is how many people the gym was sold, from 1 to 1,000,000 (`ck_organizations_guest_quota_seats`). It is `null` when the gym has no limit, which is every gym created before migration `20261015120000`. `guest_quota_agreement_reference` names the commercial agreement it was sold under, because Allfit bills the gym outside the platform: one trimmed line of 1 to 120 characters with no control characters (`ck_organizations_guest_quota_agreement_reference`, migration `20261108090000`). Only `organizations.set_organization_guest_quota` writes them, under `manage_platform_commercial`. `organizations.organization_guest_occupancy` counts live relationships and unanswered client invitations; `organizations.guest_quota_projection` returns the number, the agreement, the occupancy, the places left, whether the gym is over its quota, and the history. Reading occupancy needs the policy `service_relationships_select_guest_quota`, because `service_relationships` forces row security and without it the count would come back zero.
+- **Suspension (`HU-BO-016`, `OP-ORG-024` and `OP-ORG-025`, as built):** the status answers whether the gym may act: the functions that ask `status = 'active'` refuse a suspended gym without being edited, and `payments.resolve_pro` stops giving its clients Pro. Who suspended it, why and for how long lives in `organization_suspensions` (§5.11); what stops being effective for each person lives in `planning.service_access_blocks` (§9.17). Only `organizations.suspend_organization` and `reactivate_organization` change it, under `manage_organization_lifecycle`. A suspended gym appears in the Backoffice directory (allfitone#159) and cannot gain a client by an invitation accepted while it lasts.
 - **Retención:** el cierre termina relaciones y abre disposición; conserva activos propios.
-- **Eventos:** `organization.created.v1`, `organization.updated.v1`, `organization.ownership_transferred.v1`, `organization.closed.v1`. `organization.guest_quota_set.v1` is recorded only in `organization_events`, with the previous seats and agreement.
+- **Eventos:** `organization.created.v1`, `organization.updated.v1`, `organization.ownership_transferred.v1`, `organization.closed.v1`, `organization.suspended.v1` and `organization.reactivated.v1`. `organization.guest_quota_set.v1` is recorded only in `organization_events`, with the previous seats and agreement.
 
 ### 5.2 `organizations.organization_types`
 
@@ -644,7 +645,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Clasificación:** `audit`; snapshots de `legal_name` o `address` domiciliaria heredan además tratamiento `identity_pii`.
 - **Columnas:** `id` · `organization_id uuid` · `event_type text` · `snapshot_schema_version smallint` (`1`) · `before jsonb` (nullable) · `after jsonb` (nullable) · `actor_membership_id uuid` (nullable) · `actor_person_id uuid` (nullable) · `actor_duty_assignment_id uuid` (nullable).
 - **FKs y borrado:** `organization_id → organizations(id) ON DELETE CASCADE`; FK compuesta opcional `(actor_membership_id, organization_id) → organization_memberships(id, organization_id) RESTRICT` (`IX-25`); `actor_person_id → identity.people(id) RESTRICT`; `actor_duty_assignment_id → support.platform_duty_assignments(id) RESTRICT`.
-- **Uniques y checks:** append-only: `INSERT` directo, `UPDATE` y `DELETE` revocados al runtime. El snapshot v1 admite datos organizacionales, sede (`site_id`, `name`, `address`, `status`, `revision_number`), transferencia (`previous_owner_membership_id`, `owner_membership_id`) o reclamo (`owner_membership_id`) según `event_type`; claves adicionales o combinaciones ajenas se rechazan. `ck_organization_events_platform_actor`: la persona y la asignación de deber de Allfit van juntas, nunca con una membresía; `organization.created_unclaimed.v1` y `organization.cancelled.v1` exigen actor de Allfit, y `organization.claimed.v1` exige la membresía del nuevo dueño (`HU-BO-014`, `HU-BO-015`). Una membresía ausente nunca representa "lo hizo Allfit". `organization.guest_quota_set.v1` (`HU-BO-034`) also requires an Allfit actor, so a gym never sets its own quota, and carries a before and an after snapshot. The snapshot holds `guest_quota_seats`, `agreement_reference` and `revision_number`; a change recorded before migration `20261108090000` has no `agreement_reference`, and that shape is still accepted.
+- **Uniques y checks:** append-only: `INSERT` directo, `UPDATE` y `DELETE` revocados al runtime. El snapshot v1 admite datos organizacionales, sede (`site_id`, `name`, `address`, `status`, `revision_number`), transferencia (`previous_owner_membership_id`, `owner_membership_id`) o reclamo (`owner_membership_id`) según `event_type`; claves adicionales o combinaciones ajenas se rechazan. `ck_organization_events_platform_actor`: la persona y la asignación de deber de Allfit van juntas, nunca con una membresía; `organization.created_unclaimed.v1` y `organization.cancelled.v1` exigen actor de Allfit, y `organization.claimed.v1` exige la membresía del nuevo dueño (`HU-BO-014`, `HU-BO-015`). Una membresía ausente nunca representa "lo hizo Allfit". `organization.suspended.v1` and `organization.reactivated.v1` (`HU-BO-016`) require an Allfit actor too. `organization.guest_quota_set.v1` (`HU-BO-034`) also requires an Allfit actor, so a gym never sets its own quota, and carries a before and an after snapshot. The snapshot holds `guest_quota_seats`, `agreement_reference` and `revision_number`; a change recorded before migration `20261108090000` has no `agreement_reference`, and that shape is still accepted.
 - **Actores:** las funciones cerradas del agregado insertan; admin/owner leen. Allfit inserta la creación no reclamada, su sede y su cancelación por `create_unclaimed_organization` y `cancel_unclaimed_organization`; el dueño inserta el reclamo al aceptar.
 - **RLS:** hereda de la organización.
 - **Consultas:** `(organization_id, created_at desc)`.
@@ -666,6 +667,23 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** `(membership_id, created_at desc)`.
 - **Retención:** auditoría.
 - **Eventos:** ninguno propio.
+
+### 5.11 `organizations.organization_suspensions`
+
+Built in migration `20261018130000_suspending_a_gym_without_destroying_it.sql` (`HU-BO-016`).
+PRE_PHASE_5 §9.2 proposed it; this is its physical form.
+
+- **Purpose:** who suspended a gym, why and for how long. A status column cannot keep that once the gym is `active` again, and criterion 8 asks for it.
+- **Domain / source of truth:** Organizations.
+- **Classification:** `audit`.
+- **Columns:** `id uuid` · `organization_id uuid` · `reason_code text` (`nonpayment`, `terms_breach`, `security_incident`, `legal_requirement`) · `started_at timestamptz` (default `clock_timestamp()`) · `started_by_person_id uuid` · `started_by_duty_assignment_id uuid` · `started_event_id uuid` · `ended_at timestamptz` (nullable) · `ended_by_person_id uuid` (nullable) · `ended_by_duty_assignment_id uuid` (nullable) · `ended_event_id uuid` (nullable).
+- **FKs and deletion:** every reference is `RESTRICT`: `organization_id → organizations(id)`; both people → `identity.people(id)`; both duty assignments → `support.platform_duty_assignments(id)`; both events → `organization_events(id)`.
+- **Uniques and checks:** `ck_organization_suspensions_reason` closes the reason list. `ck_organization_suspensions_ended`: the four `ended_*` columns are all null or all set, with `ended_at >= started_at`. `uidx_organization_suspensions_open` allows one open period per organization, which makes suspending idempotent and reactivating unambiguous. The trigger `trg_organization_suspensions_guard` (`organizations.prevent_organization_suspension_rewrite`) refuses a delete, a change of reason and reopening an ended period.
+- **Actors:** only `organizations.suspend_organization` opens a period and only `organizations.reactivate_organization` ends it. `organizations.organization_suspension_projection` returns the current state with the history to the Backoffice.
+- **RLS:** forced; `organization_suspensions_all_owner` for `allfit_owner` only. `allfit_api` has no privilege on the table.
+- **Queries and indexes:** `idx_organization_suspensions_organization_started (organization_id, started_at desc)` and the partial unique index.
+- **Retention:** audit evidence of the stopped period.
+- **Events:** none of its own; the period points at `organization.suspended.v1` and `organization.reactivated.v1`.
 
 ---
 
@@ -1931,6 +1949,10 @@ administraba desde una relación, y `ended` lo escribe la persona sobre lo suyo.
 - **Consultas / índices:** `(person_id, ended_at)`, `(organization_id, ended_at)`, `(relationship_id, ended_at)` y el unique parcial de fuente abierta.
 - **Retención:** se conserva como evidencia del periodo bloqueado junto con el evento causal; su cierre no altera ni revive grants, relaciones, membresías, asignaciones o sesiones.
 - **Eventos:** ninguno propio; la transición causal emite el evento de suscripción u organización correspondiente.
+- **As built for a gym's suspension (`HU-BO-016`):**
+  - **Opening and closing.** `organizations.suspend_organization` opens one row per person with a live relationship with the gym, with `source_kind = 'organization_suspension'`, both flags true and `created_by_kind = 'support'`. `organizations.reactivate_organization` closes the rows of that suspension's event.
+  - **Who reads.** The policy `service_access_blocks_select_lifecycle` lets `manage_organization_lifecycle` read organization blocks, so the Backoffice can count the people affected.
+  - **What reads them.** Migration `20261105101000` made the program a suspended gym assigned show paused and refuse to start. Migration `20261105101100` (allfitone#165) extended that hold to any open block that `blocks_future_sessions`, an unpaid plan included. `planning.session_hold_of` derives it at read time, as `{state, cause}`. `access_control.has_service_block` answers a coach only whether a block is open, through the policy `service_access_blocks_select_service_block`. `access_control.can_access(..., 'contribute')` refuses while one is open, and `planning.require_training_grant` says why with `AF424`. Nothing is written to a session: a day missed while it lasted stays missed.
 
 ### 9.18 `planning.program_version_goals`
 
@@ -2921,7 +2943,7 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 | Schema | Tablas fichadas |
 | --- | --- |
 | `identity` | 21 |
-| `organizations` | 11 |
+| `organizations` | 12 |
 | `relationships` | 6 |
 | `privacy` | 17 |
 | `catalog` | 18 |
@@ -2931,7 +2953,7 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 | `payments` | 12 |
 | `system` | 4 |
 | `support` | 5 |
-| **Total** | **139** |
+| **Total** | **140** |
 
 ### 14.2 Invariantes transversales confirmadas por el diccionario
 
