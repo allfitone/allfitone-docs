@@ -625,7 +625,7 @@ La resolución y decisión se realizan en Studio mediante `HU-STUDIO-085` y
 
 **Criterios**
 
-1. Invito por email o celular. Nunca puedo crear la cuenta, la persona ni el Fitness ID de alguien.
+1. Invito por email; V1 no invita por celular (ADR-050). Nunca puedo crear la cuenta, la persona ni el Fitness ID de alguien.
 2. Puedo proponer la relación y, opcionalmente, un programa inicial. **Cada propuesta se decidirá por separado.**
 3. La invitación presenta por separado cada scope solicitado, su finalidad, la versión de su contrato y el nivel de acceso solicitado.
 4. La persona acepta o rechaza cada scope de forma independiente dentro de la misma confirmación. **Aceptar la relación no concede automáticamente ningún scope.**

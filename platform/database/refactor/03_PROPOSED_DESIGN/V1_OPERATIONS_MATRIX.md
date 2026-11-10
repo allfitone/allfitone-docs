@@ -680,14 +680,15 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Superficie** | `PATCH /space/v1/me/contact` |
 | **Actor** | `A2` |
 | **Filtros obligatorios** | Sujeto = persona autenticada. Formato válido; teléfono en E.164 |
-| **Transacción** | Registrar el contacto **pendiente de verificación** sin sustituir todavía el vigente, y emitir el desafío de verificación. El contacto anterior sigue siendo el efectivo hasta que el nuevo se verifique |
+| **Transacción** | **Correo:** registrar el contacto **pendiente de verificación** sin sustituir todavía el vigente, y emitir el desafío de verificación; el anterior sigue siendo el efectivo hasta que el nuevo se verifique. **Teléfono:** se guarda vigente en el acto y sin verificar, o se borra; V1 no envía SMS (ADR-050) |
 | **Idempotencia** | `Idempotency-Key`. Reenviar el mismo cambio reutiliza el desafío vigente en lugar de crear otro |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | `identity_pii` |
 | **Evento de dominio** | `identity.contact_changed.v1` |
-| **Reglas** | **El correo de contacto y el correo de ingreso son el mismo dato.** Cambiarlo actualiza también la identidad en WorkOS AuthKit, y ambos lados quedan consistentes o no se aplica ninguno. El dueño del dato es el perfil de la persona, no el proveedor de autenticación. Un contacto en uso por otra persona se rechaza **sin revelar** que existe: el mensaje es el mismo que para un formato inválido, porque distinguirlos filtraría quién tiene cuenta en Allfit |
+| **Reglas** | **El correo de contacto y el correo de ingreso son el mismo dato.** Cambiarlo actualiza también la identidad en WorkOS AuthKit, y ambos lados quedan consistentes o no se aplica ninguno. El dueño del dato es el perfil de la persona, no el proveedor de autenticación. Un correo, o un teléfono verificado, en uso por otra persona se rechaza **sin revelar** que existe; un teléfono sin verificar no es único (ADR-050): el mensaje es el mismo que para un formato inválido, porque distinguirlos filtraría quién tiene cuenta en Allfit |
 | **Falla cerrada** | Si WorkOS AuthKit o el envío del desafío no confirman, no se cambia nada: nunca queda un correo distinto a cada lado |
+| **Implemented (TECH-43), phone half** | `identity.correct_own_phone(provider, issuer, subject, phone, …)` behind `PATCH /space/v1/me/contact` with `{ phone }`. Spaces, dashes and parentheses are dropped, the rest must be E.164; `null` removes it. Saved at once and unverified, a new number drops any earlier verification, and `uidx_people_contact_phone` covers verified numbers only. The email half is not built. Tests: `T-IDN-OWN-PROFILE-01`, `T-IDN-OWNPROFILE-API-13..14` |
 
 #### `OP-IDN-022` — Verificar un contacto
 
@@ -696,7 +697,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Tipo** | Comando |
 | **Superficie** | `POST /space/v1/me/contact/verification` |
 | **Actor** | `A2`, titular del contacto |
-| **Filtros obligatorios** | Desafío vigente, no vencido y del propio sujeto |
+| **Filtros obligatorios** | Desafío vigente, no vencido y del propio sujeto. En V1 solo hay desafío de correo: un teléfono no se verifica (ADR-050) |
 | **Transacción** | Marcar el contacto como verificado, promoverlo a vigente y fijar su marca de verificación |
 | **Idempotencia** | `Idempotency-Key`; converge |
 | **Paginación y orden** | No aplica |
@@ -4430,7 +4431,7 @@ Regla que gobierna todo el dominio: un worker es **idempotente y auditable**. Re
 | **Transacción** | Registrar el intento y su resultado |
 | **Idempotencia** | Clave derivada de `(evento, destinatario, canal)`: un reintento no envía dos veces |
 | **Paginación y orden** | Lotes acotados por proveedor |
-| **Offline / concurrencia** | Cada proveedor —email, SMS, push— tiene su **propio** circuit breaker, timeout, cola y DLQ |
+| **Offline / concurrencia** | Cada proveedor —email y push; V1 no envía SMS (ADR-050)— tiene su **propio** circuit breaker, timeout, cola y DLQ |
 | **Información sensible** | El contenido del mensaje es minimizado: notifica el hecho, no el dato |
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Un proveedor degradado no bloquea a los otros ni consume el presupuesto de requests síncronos. Una notificación nunca contiene resultados, medidas ni contexto de salud: enlaza a la aplicación, donde se vuelve a autorizar |

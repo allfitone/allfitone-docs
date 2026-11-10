@@ -219,10 +219,13 @@ movilidad no se organizan en series y repeticiones.
 
 **Construida el 9 de noviembre de 2026 (`TECH-43`).** «Identidad y acceso» muestra el
 Fitness ID con el nombre, el usuario y desde cuándo está activo; el nombre y el usuario se
-corrigen desde ahí (`HU-SP-098`, criterio 6), cada uno en su propia hoja. El correo, el
+corrigen desde ahí (`HU-SP-098`, criterio 6), cada uno en su propia pantalla. El correo, el
 teléfono y la contraseña también viven en esta pantalla y no en filas sueltas de Perfil:
-el correo y el teléfono se ven con su estado de verificación, y cambiarlos (`HU-SP-076`)
-o cambiar la contraseña (`HU-SP-005`) aparece como «Pronto» hasta que se construya. Los
+el teléfono se corrige en su propia pantalla, con el indicativo elegido de una lista de los
+países de América del Norte, Central y del Sur y el número aparte, sin verificación
+(`HU-SP-076`, ADR-050); el
+correo se ve con su estado de verificación, y cambiarlo (`HU-SP-076`) o cambiar la
+contraseña (`HU-SP-005`) aparece como «Pronto» hasta que se construya. Los
 permisos y los gimnasios no aparecen, como pide el criterio 2.
 
 ### HU-SP-101 — Decir qué disciplina entreno
@@ -488,7 +491,7 @@ respuesta válida.
 6. Puedo cambiar mi nombre y mi usuario después desde mi perfil.
 
 **El criterio 6 se cumple desde «Identidad y acceso» desde el 9 de noviembre de 2026
-(`TECH-43`).** El nombre y el apellido se cambian en una hoja y el usuario en otra, así
+(`TECH-43`).** El nombre y el apellido se cambian en una pantalla y el usuario en otra, así
 que cambiar uno nunca pide el otro. Un usuario que ya tiene otra persona se rechaza con el
 mismo mensaje del onboarding, sin decir quién lo tiene.
 
@@ -1843,14 +1846,14 @@ bloque 4 ya introduce.
 **Criterios**
 
 1. **Mi correo de contacto y mi correo de ingreso son el mismo.** Cambiarlo cambia con qué correo entro a la aplicación.
-2. El cambio no es efectivo hasta que verifico el contacto nuevo: mientras tanto sigue funcionando el anterior.
-3. Si el correo o el teléfono ya los usa otra persona, el mensaje que recibo es indistinguible del de un formato inválido. Allfit **no me confirma** que ese contacto ya tiene cuenta.
+2. Un correo nuevo no es efectivo hasta que lo verifico: mientras tanto sigue funcionando el anterior. Mi teléfono es solo un dato de contacto: lo escribo y queda guardado, sin verificación (ADR-050).
+3. Si el correo ya lo usa otra persona, el mensaje que recibo es indistinguible del de un formato inválido. Allfit **no me confirma** que ese contacto ya tiene cuenta.
 4. Nunca quedo con un correo distinto en la aplicación y en el inicio de sesión: o cambian los dos o no cambia ninguno.
 5. Mis datos de contacto son míos y viven en mi perfil, no en el sistema de autenticación.
 
-### HU-SP-077 — Verificar mi correo o mi teléfono
+### HU-SP-077 — Verificar mi correo
 
-**Como** persona que cambió su contacto
+**Como** persona que cambió su correo
 **quiero** verificarlo
 **para** que Allfit pueda escribirme ahí.
 
@@ -1862,6 +1865,7 @@ bloque 4 ya introduce.
 2. Al verificar, el contacto nuevo reemplaza al anterior.
 3. Si el desafío venció, el contacto anterior sigue siendo el vigente y no pierdo nada.
 4. Verificar mi contacto no me da ningún permiso ni cambia lo que comparto.
+5. En V1 solo se verifica el correo: Allfit no envía SMS, así que mi teléfono no se verifica ni recibe nada (ADR-050).
 
 ### HU-SP-078 — Elegir cómo quiero que me avisen
 
@@ -1873,7 +1877,7 @@ bloque 4 ya introduce.
 
 **Criterios**
 
-1. Elijo canal por tipo de aviso: relación, asignación, consentimiento, corrección, nutrición y seguridad.
+1. Elijo canal por tipo de aviso: relación, asignación, consentimiento, corrección, nutrición y seguridad. Los canales son correo y push; V1 no envía SMS (ADR-050).
 2. **Los avisos de seguridad no se pueden desactivar.**
 3. Ninguna organización ve ni cambia mis preferencias.
 4. Un canal desactivado no cancela lo que ocurrió: la operación de negocio sigue su curso y puedo verla en la aplicación.

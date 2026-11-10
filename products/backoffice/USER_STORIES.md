@@ -274,12 +274,12 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 1. Desde Backoffice **no puedo escribir directamente** el nombre, correo ni teléfono de una persona.
 2. Si todavía puede entrar, la persona cambia su nombre, correo o teléfono desde Allfit Space y confirma nuevamente su identidad. Backoffice solo la orienta y consulta el estado.
-3. Si no puede entrar pero controla un correo o teléfono previamente verificado, puedo enviarle el flujo oficial de recuperación, temporal y de un solo uso.
+3. Si no puede entrar pero controla un correo previamente verificado, puedo enviarle el flujo oficial de recuperación, temporal y de un solo uso. V1 no recupera por teléfono: no envía SMS (ADR-050).
 4. Si no controla ningún contacto verificado, V1 **falla cerrado**: no cambio datos, no acepto fotos de documentos, no vinculo otra cuenta a su Fitness ID y cierro o escalo la atención como recuperación no disponible.
 5. El equipo ve contactos parcialmente ocultos y estados como iniciado, esperando verificación, confirmado, vencido, cancelado o fallido; nunca ve contraseñas, códigos ni enlaces completos.
-6. Un correo o teléfono nuevo debe verificarse antes de sustituir al anterior. Si ya pertenece a otra cuenta, se rechaza sin revelar quién lo usa.
+6. Un correo nuevo debe verificarse antes de sustituir al anterior. Si ya pertenece a otra cuenta, se rechaza sin revelar quién lo usa. El teléfono es solo un dato de contacto y se guarda sin verificar (ADR-050).
 7. El correo de acceso en WorkOS AuthKit y el correo de contacto cambian como una sola decisión. Si una parte falla, ambas conservan el valor anterior.
-8. Al confirmar un nuevo correo se cierran las demás sesiones y se notifica al contacto anterior y al nuevo. Un cambio de teléfono también se notifica por los canales verificados disponibles.
+8. Al confirmar un nuevo correo se cierran las demás sesiones y se notifica al contacto anterior y al nuevo. Un cambio de teléfono se notifica por correo.
 9. El nombre declarado lo modifica la persona. Cambiarlo no reescribe una credencial profesional verificada; una incompatibilidad abre una nueva revisión y conserva la evidencia anterior.
 10. Puedo reenviar una verificación pendiente o cancelar una intención sospechosa, pero nunca confirmar, marcar como verificado ni elegir el dato por la persona.
 11. **No puedo tocar** su entrenamiento, su cuerpo, su salud ni su nutrición. Ese historial es suyo y se corrige desde su app.
@@ -721,7 +721,7 @@ donde se ven sus efectos y sus fallos, en `HU-BO-005` y `HU-BO-031`.
 | Proceso | Cuándo corre | Qué garantiza |
 | --- | --- | --- |
 | Entrega de eventos internos | Continuo | Un evento se publica solo después de confirmarse la operación que lo produjo, nunca antes |
-| Envío de notificaciones | Por evento | Solo a contactos verificados. Un aviso **nunca** contiene resultados, medidas, salud ni comidas: avisa el hecho y enlaza a la app. Correo, SMS y push van aislados: uno caído no arrastra a los otros |
+| Envío de notificaciones | Por evento | Solo a contactos verificados. Un aviso **nunca** contiene resultados, medidas, salud ni comidas: avisa el hecho y enlaza a la app. Correo y push van aislados: uno caído no arrastra al otro; V1 no envía SMS (ADR-050) |
 | Vencimiento de invitaciones | Programado | Vencer conserva la evidencia. Una invitación ya aceptada nunca se revierte |
 | Vencimiento de cambios y recuperaciones de identidad | Según la vigencia presentada a la persona | Una intención vencida no confirma nada ni vuelve a funcionar; reintentar crea una nueva y conserva la evidencia anterior |
 | Vencimiento de propuestas de corrección | Programado, 30 días | El silencio de la persona **nunca** cuenta como aceptación |
