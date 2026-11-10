@@ -37,7 +37,7 @@ El ecosistema mantiene **por ambiente** un WorkOS environment y un PostgreSQL co
 | Registro interno de deberes | Autoridad temporal de `A10/A11/A12` | No para operación ordinaria; sí para verificación/break-glass | Esas capacidades fallan cerradas; no se confía en claims ni caché |
 | API Allfit | Cómputo | Sí en V1 | Ambos productos, salvo lo cacheado de solo lectura |
 | Outbox + workers | Asíncrono | Por dominio | Se retrasa lo asíncrono; lo síncrono continúa |
-| Email (Resend) | Proveedor externo | No | Invitaciones y avisos se retrasan; nada se pierde |
+| Email (Amazon SES, ADR-049) | Proveedor externo | No | Invitaciones y avisos se retrasan; nada se pierde |
 | SMS / WhatsApp | Proveedor externo | No | Invitación por celular se retrasa; fallback a email |
 | Push (Expo/FCM/APNs) | Proveedor externo | No | Recordatorios se retrasan; la app los ve al abrir |
 | Almacenamiento de imágenes | Proveedor externo | No | Fotos de progreso/nutrición no suben ni se sirven; el resto opera |

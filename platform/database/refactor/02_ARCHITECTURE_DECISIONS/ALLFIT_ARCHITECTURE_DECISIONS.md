@@ -55,6 +55,7 @@
 | ADR-046 | An Allfit admin acts with the full authority of the platform |
 | ADR-047 | A former professional learns why, for thirty days |
 | ADR-048 | A gym charges its clients through its own Mercado Pago account |
+| ADR-049 | Allfit One sends its email through Amazon SES |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -6480,3 +6481,220 @@ The plans (`HU-STUDIO-074..077`) depend on none of them.
 14. The remote link creates nothing until she signs in and taps pay, and refuses anybody else.
 15. A coach or a staff member never reads payment state.
 16. A suspended subscription does not touch her Pro.
+
+---
+
+## ADR-049 — Allfit One sends its email through Amazon SES
+
+**Status:** accepted for V1. The SES account is set up, out of the sandbox and managed by
+Terraform; the code is built (allfitone#210) and production has not switched yet.<br>
+**Date:** 9 November 2026<br>
+**Replaces:** Resend as the email provider. No earlier ADR chose it; it is named in
+`V1_DEGRADATION_AND_RECOVERY_MATRIX.md` and the deployment steps of `OPERATIONS.md`.
+
+### Context
+
+Every email Allfit One sends leaves the same way:
+
+1. A database function writes the change and, in the same transaction, an event in
+   `system.outbox_events`.
+2. The worker (`apps/worker`), a long-lived container on ECS, claims the events through the
+   PostgreSQL queue (`@allfitone/queue`: up to 5 attempts, a 120 s visibility timeout), prepares
+   each delivery with a database function, renders the email with `@allfitone/notifications`,
+   sends it, and only then acknowledges the event.
+3. Sending is one port, `EmailSender` (`packages/notifications/src/index.ts`). Its only adapter,
+   `createResendEmailSender`, posts to the Resend API with `RESEND_API_KEY` and the sender
+   `RESEND_FROM_EMAIL`. Each message carries an idempotency key built from the event id
+   (`staff-invitation/<event id>`), so Resend drops a second send of the same event. Network
+   failures, `429` and `5xx` are retried; any other rejection is not.
+4. `STAFF_INVITATION_DELIVERY_ENABLED` turns every email off, not only the staff invitations.
+   `CLIENT_INVITATION_DELIVERY_ENABLED` and `ACCOUNT_RECOVERY_DELIVERY_ENABLED` narrow it further.
+
+Ten templates exist: the team, ownership and client invitations, reassignments, substitutions,
+correction proposals, resignations and the three subscription notices. All are in Spanish only.
+
+Everything else runs in AWS `us-east-1`: ECS, the database, Secrets Manager and the static sites
+behind CloudFront. Resend is the one outside provider on the email path, with its own account, key
+and bill.
+
+The Allfit Space waitlist (`TECH-290`) changes the volume. Each person who joins gets a
+confirmation email, and the referral levels (5, 15, 30 and 100) make people invite others in
+bursts. One launch day can send thousands of emails, where today a gym sends a few invitations a
+week.
+
+Two facts of the infrastructure bound the design:
+
+- The DNS for `allfit.one` lives in GoDaddy, outside Terraform. `infra/modules/certificate`
+  already outputs its validation records for someone to add there by hand.
+- The ECS services have an execution role, which reads the secret, and no task role: no container
+  calls AWS with an identity of its own today.
+
+Production, checked read-only on 9 November 2026:
+
+- **No email leaves it.** `STAFF_INVITATION_DELIVERY_ENABLED`, `CLIENT_INVITATION_DELIVERY_ENABLED`
+  and `ACCOUNT_RECOVERY_DELIVERY_ENABLED` are `false`, and so are both `*_ISSUANCE_ENABLED`
+  switches. Nothing depends on Resend yet.
+- `RESEND_API_KEY` is set, and the sender is `Allfit One <invites@allfit.one>`. Resend has
+  `allfit.one` verified since 11 August 2026, in its `sa-east-1` region, and its log lists no
+  email.
+- **Resend itself sends through Amazon SES** in São Paulo: the MX of `send.allfit.one`, its
+  bounce domain, is `feedback-smtp.sa-east-1.amazonses.com`. DKIM is `resend._domainkey`.
+- `allfit.one` already publishes DMARC (`p=quarantine`, relaxed DKIM and SPF alignment). Its
+  inboxes are in Google Workspace.
+- The SES account in `us-east-1` is in the sandbox (200 emails a day, one a second) and has no
+  identity.
+
+### Decision
+
+The owner decided on 9 November 2026 that Allfit One sends its email through Amazon SES, in
+`us-east-1`, instead of Resend.
+
+The design choices that follow from it:
+
+1. **A second adapter behind the same port.** `packages/notifications` gains
+   `createSesEmailSender`, which calls the SES v2 `SendEmail` operation through
+   `@aws-sdk/client-sesv2`. The templates, the outbox, the queue, the processors and their tests do
+   not change.
+2. **No key.** The worker gets an ECS task role allowed `ses:SendEmail` only on the `allfit.one`
+   identity and its configuration set, and only from the configured sender (`ses:FromAddress`).
+   No other container gets a role. `RESEND_FROM_EMAIL` becomes `EMAIL_FROM`. Its value moved on
+   9 November 2026 from `invites@allfit.one`, which has no mailbox, to `hello@allfit.one`, which
+   has one in Google Workspace, so a reply reaches someone instead of bouncing.
+   `EMAIL_FROM` and `EMAIL_PROVIDER` are plain environment of the worker, set in Terraform beside
+   the role, so the address the role allows and the address the worker sends from are written in
+   one place (`infra/production/main.tf`). `RESEND_API_KEY` leaves the secret with Resend.
+3. **The domain is verified with Easy DKIM**, with a custom MAIL FROM subdomain so that SPF aligns
+   with `allfit.one`. The subdomain is not `send`, which Resend holds while both exist; `mail` is
+   free. The DMARC record `allfit.one` already publishes stays, and DKIM on `allfit.one` aligns
+   with it. Terraform manages the identity (`infra/modules/email`) and outputs the records, which
+   are kept by hand in GoDaddy, like the certificate's. The identity was created in the SES console
+   and imported, so its DKIM tokens never change, and Terraform refuses to destroy it.
+4. **Production access is requested first.** A new SES account sends only to verified addresses,
+   200 a day. AWS granted it on 9 November 2026, minutes after the request (case
+   `179426258400350`): 50,000 emails a day, 14 a second, in `us-east-1`.
+5. **Bounces and complaints.** The account-level suppression list is on for both, so SES itself
+   stops sending to an address that bounced or complained. Every email goes through the
+   configuration set `allfitone`, the identity's default, which suppresses the same two reasons
+   and keeps reputation metrics.
+   - **Two CloudWatch alarms watch the account's reputation**, which SES publishes on its own:
+     the bounce rate above 2% and the complaint rate above 0.05%, against the 5% and 0.1% at which
+     AWS reviews the account. Terraform refuses a threshold at or above AWS's. They notify the SNS
+     topic `allfitone-email-alerts`, subscribed by the people who receive the budget alerts; each
+     address confirms its subscription once, or the alarm reaches nobody.
+   - **No event destination in V1.** No code consumes the sending events, and one message can be
+     followed without them: Virtual Deliverability Manager keeps each message's send, delivery,
+     bounce and complaint events, found by its SES message id (`GetMessageInsights`).
+   - **Open and click tracking is off.** It would route every link, the private tokens of the
+     waitlist included, through an Amazon tracking domain, and the privacy policy does not cover
+     measuring who opens an email. What the launch needs (who joined, who confirmed, who came
+     through whose link) is already exact in the database.
+   - **Automatic address validation is off.** It drops an email to an address it doubts without
+     telling anybody, so a person could join and never get the confirmation. It can be turned on
+     once the bounce rate is known.
+   - **Virtual Deliverability Manager is on**, with its optimized shared delivery. It is included
+     in the Essentials plan and shows what was delivered, bounced or complained about.
+6. **A rare duplicate is accepted.** SES has no idempotency key. The worker keeps sending before it
+   acknowledges: if it stops between the two, the event comes back after the visibility timeout
+   and the email goes out twice. Marking the event as sent before sending would instead risk a
+   confirmation that never arrives, which is worse. The SES message id goes into the worker's
+   operational log.
+7. **Errors keep the existing codes of `NotificationDeliveryError`.** Network failures, `5xx`,
+   `TooManyRequestsException` and `LimitExceededException` are retried. `MessageRejected`,
+   `MailFromDomainNotVerifiedException`, `AccountSuspendedException` and `SendingPausedException`
+   are not.
+8. **The switch.** While both adapters exist, `EMAIL_PROVIDER` (`resend` or `ses`) chooses one, and
+   an unknown value stops the worker at start. Unset keeps Resend, so a task definition from before
+   the switch still starts after the code deploys. Production moves to `ses` once access is granted and
+   an email sent from production reaches a team address; since production sends nothing today, it
+   can move before any delivery switch is turned on. The Resend adapter, its secret, its account
+   and its DNS records (`resend._domainkey` and the MX and SPF of `send.allfit.one`) go once SES
+   has carried production email for two weeks without incident.
+9. **The waitlist emails are built on SES**, and they are the first templates in two languages
+   (`TECH-293`).
+
+### Earlier decisions this changes
+
+- `V1_DEGRADATION_AND_RECOVERY_MATRIX.md` named Resend as the email provider, `OPERATIONS.md`
+  listed it among the deployment steps of the staff invitations, and HU-BO-003 said the Backoffice
+  password reset does not use it. All three now name SES. `CURRENT_ARCHITECTURE_DIAGRAM.md` also
+  names Resend, but it describes Factory Fitness, the earlier system, as historical evidence, so it
+  stays as it is.
+- The privacy policy on www.allfit.one names no email provider, only cloud providers that may host
+  data outside Colombia, so it does not change. SES runs in the same region as the database: no new
+  country receives the addresses.
+
+### Known limits
+
+- An email can arrive twice (decision 6).
+- Virtual Deliverability Manager shows delivery, bounces and complaints, but without open and
+  click tracking it cannot say whether anybody read an email. To follow one email, support takes
+  its SES message id from the worker's log and looks it up in Virtual Deliverability Manager.
+- **Outlook does not trust the domain yet.** On 9 November 2026 a test message reached the Gmail
+  inbox and went to Junk at Outlook.com, with SPF, DKIM, DMARC and Microsoft's composite
+  authentication passing in both (spam score SCL 5, not classed as bulk). That is the verdict for a
+  domain with no sending history at Microsoft, on a message that read like a test. No setting
+  changes it: reputation there grows with real emails that people asked for, such as the waitlist
+  confirmation.
+- Allfit One sends from SES's shared addresses, so its reputation depends on its own bounce and
+  complaint rates. A dedicated address is not needed at this volume.
+
+### Invariants
+
+1. No email leaves Allfit One except through `EmailSender`.
+2. No container holds a long-lived AWS key to send email; the worker sends with its task role.
+3. Only the worker can send, and only from the configured sender on `allfit.one`.
+4. An address on the suppression list receives nothing.
+
+### Alternatives considered
+
+- **Keep Resend.** Its idempotency key prevents duplicates, and its dashboard is better. Rejected
+  by the owner to keep the infrastructure with one provider, with no key to store, at a price that
+  fits the waitlist's volume. Resend already sends through SES, so dropping it removes a layer
+  rather than changing the service that delivers the email.
+- **The SES SMTP interface.** Rejected: it needs SMTP credentials, which is the kind of key this
+  decision removes.
+- **A consumer for the bounce and complaint events.** Deferred: the suppression list already stops
+  sending to those addresses, and nothing in V1 shows a bounce in a product.
+
+### Consequences
+
+- **Done on 9 November 2026, first by hand in the SES console** (`TECH-318`):
+  - the Essentials plan;
+  - the `allfit.one` identity with Easy DKIM (RSA 2048) and the MAIL FROM `mail.allfit.one`, which
+    falls back to the default when its MX fails;
+  - its five records in GoDaddy, the identity verified, and `admin@allfit.one` verified for tests;
+  - the account suppression list for bounces and complaints, and decision 5's settings;
+  - the configuration set `my-first-configuration-set`, which the setup made the identity's
+    default;
+  - production access.
+
+- **Then in Terraform, the same day** (`TECH-318`, allfitone#208, applied to production):
+  - the identity and its MAIL FROM, imported unchanged;
+  - the configuration set `allfitone`, now the default of both identities;
+    `my-first-configuration-set` was deleted once nothing used it;
+  - the account suppression list and Virtual Deliverability Manager settings;
+  - the two alarms and their SNS topic;
+  - an inbox check from SES: Gmail delivered to the inbox with SPF, DKIM and DMARC passing.
+- **The code** (`TECH-319`, allfitone#210): the SES adapter behind `EmailSender`, at its own entry
+  point so the API never loads the AWS SDK; `EMAIL_PROVIDER` and `EMAIL_FROM`; the worker's task
+  role; and a lint rule that keeps `@aws-sdk/client-sesv2` inside `packages/notifications`. The
+  compiled adapter sent the real team-invitation template through SES before the pull request
+  opened. Every mandatory scenario below has a test.
+- **What remains:**
+  1. switching production (`TECH-319`): apply the worker's role and task definition, deploy, send
+     one email from production through the role, and repeat the Outlook inbox check with a real
+     template, to an address that has not marked the sender as safe;
+  2. the waitlist emails (`TECH-292`, `TECH-293`, `TECH-294`), on SES;
+  3. after two weeks of production email on SES, removing Resend (decision 8).
+
+### Mandatory test scenarios
+
+1. The SES adapter sends the subject, both bodies and the sender it was given, to the one recipient
+   it was given.
+2. Throttling, `5xx` and network failures are retried; a rejection is not.
+3. `EMAIL_PROVIDER=resend` sends through Resend and `ses` through SES; any other value stops the
+   worker at start.
+4. The task role cannot send from another address or another domain (Terraform test, like those in
+   `infra/modules/*/tests`).
+5. An event delivered again after its email was sent is sent and acknowledged again, without an
+   error.
