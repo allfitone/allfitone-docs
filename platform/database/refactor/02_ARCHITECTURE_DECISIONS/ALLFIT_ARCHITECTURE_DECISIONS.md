@@ -6987,7 +6987,7 @@ follow from it:
   - the emails not yet templated: «Eres Founding Member #037», the deadline reminder, a reward,
     the launch email and the confirmation of leaving the list;
   - the shared secret between space-web and the API, and the device cookie in space-web.
-- **Jira:** `HU-SP-123` (leaving the list) has no ticket yet. `HU-BO-037` is criterion 1 of
+- **Jira:** `HU-SP-123` (leaving the list) is `TECH-323`. `HU-BO-037` is criterion 1 of
   `TECH-321`.
 
 ### Mandatory test scenarios
