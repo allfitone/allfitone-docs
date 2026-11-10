@@ -56,6 +56,7 @@
 | ADR-047 | A former professional learns why, for thirty days |
 | ADR-048 | A gym charges its clients through its own Mercado Pago account |
 | ADR-049 | Allfit One sends its email through Amazon SES |
+| ADR-050 | V1 sends no SMS: the phone is a contact value |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -201,7 +202,7 @@ La operación de aceptación debe:
 - El contacto se retiene únicamente durante el periodo necesario.
 - Toda aceptación, rechazo, expiración y revocación queda auditada.
 
-AuthKit verifica email como identidad primaria. La ruta de invitación por celular queda bloqueada hasta decidir e implementar un OTP propio o proveedor específico, con propósito, expiración, rate limit, evidencia y retención. Un desafío SMS antifraude de WorkOS Radar no se considera automáticamente prueba de identidad para aceptar una invitación.
+AuthKit verifica email como identidad primaria. La ruta de invitación por celular queda bloqueada hasta decidir e implementar un OTP propio o proveedor específico, con propósito, expiración, rate limit, evidencia y retención; ADR-050 la deja fuera de V1. Un desafío SMS antifraude de WorkOS Radar no se considera automáticamente prueba de identidad para aceptar una invitación.
 
 ### Consecuencias
 
@@ -6698,3 +6699,59 @@ The design choices that follow from it:
    `infra/modules/*/tests`).
 5. An event delivered again after its email was sent is sent and acknowledged again, without an
    error.
+
+## ADR-050 — V1 sends no SMS: the phone is a contact value
+
+**Status:** accepted for V1.<br>
+**Date:** 9 November 2026<br>
+**Modifies:** `OP-IDN-021`, `OP-IDN-022`, `OP-SYS-002`, the notification channels of
+`identity.notification_preferences`, `HU-SP-076..078`, `HU-STUDIO-023` and `HU-BO-010`.
+
+### Context
+
+The person's phone has lived in `identity.people` since the contact moved out of the identity
+provider: `contact_phone` in E.164 and `contact_phone_verified_at`. Verifying it needs a code
+sent by SMS, and no SMS provider was ever chosen; there is none in the code.
+
+No user story needs SMS for its own sake. It appears only as one channel among others: verifying
+a phone (`HU-SP-077`), choosing the channel of each notice (`HU-SP-078`), inviting «by email or
+mobile» (`HU-STUDIO-023`, whose mobile path ADR-001 already blocked and the API rejects with
+`422`), and recovering or notifying through a verified phone (`HU-BO-010`). Every one of those
+has email beside it.
+
+An SMS provider costs per message and adds a verification flow, a degraded mode and a queue,
+for no capability V1 lacks without it.
+
+### Decision
+
+1. **V1 sends no SMS.** No verification codes, notices, invitations or account recovery go by
+   phone. The notification channels are email and push.
+2. **The phone is a contact value.** The person writes it and corrects it herself, in E.164,
+   and it is saved at once, without a challenge. `contact_phone_verified_at` stays empty in V1,
+   and the apps show no verification state for the phone: one nobody can resolve would only
+   warn.
+3. **Only a verified phone is unique.** An unverified number proves nothing, so a unique index
+   over every number would let anybody write somebody else's and lock its owner out of it. The
+   index becomes partial on `contact_phone_verified_at IS NOT NULL`; two people may hold the
+   same unverified number, which is harmless because nothing is sent to it.
+4. **Unverified still means unreachable.** `OP-SYS-002` keeps requiring a verified contact, so
+   the phone never receives anything in V1.
+5. **Email keeps its verification.** It is also how the person signs in (`OP-IDN-021`,
+   `OP-IDN-022`), and nothing in this decision changes that.
+
+### Consequences
+
+- No SMS provider, no `notifications.sms` queue and no SMS breaker in V1.
+- Backoffice recovers an account only through a verified email, and notifies a phone change by
+  email.
+- Studio invites by email.
+- Bringing SMS back is a decision of its own: a provider, a phone challenge in `OP-IDN-022`, the
+  channel in the preferences, and the unique index stays partial on verified numbers.
+
+### Mandatory test scenarios
+
+1. A person saves a phone in E.164 and it is in force at once, unverified.
+2. A number that is not E.164 is rejected.
+3. Two people can save the same unverified number; a verified number stays unique.
+4. An unverified phone never satisfies the recipient filter of `OP-SYS-002`.
+5. The notification preferences accept no `sms` channel.

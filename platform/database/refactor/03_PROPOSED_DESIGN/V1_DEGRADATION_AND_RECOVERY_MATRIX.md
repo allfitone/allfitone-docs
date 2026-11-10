@@ -38,7 +38,6 @@ El ecosistema mantiene **por ambiente** un WorkOS environment y un PostgreSQL co
 | API Allfit | Cómputo | Sí en V1 | Ambos productos, salvo lo cacheado de solo lectura |
 | Outbox + workers | Asíncrono | Por dominio | Se retrasa lo asíncrono; lo síncrono continúa |
 | Email (Amazon SES, ADR-049) | Proveedor externo | No | Invitaciones y avisos se retrasan; nada se pierde |
-| SMS / WhatsApp | Proveedor externo | No | Invitación por celular se retrasa; fallback a email |
 | Push (Expo/FCM/APNs) | Proveedor externo | No | Recordatorios se retrasan; la app los ve al abrir |
 | Almacenamiento de imágenes | Proveedor externo | No | Fotos de progreso/nutrición no suben ni se sirven; el resto opera |
 | Frontend Space | Cliente | No | Studio continúa |
@@ -57,7 +56,6 @@ El ecosistema mantiene **por ambiente** un WorkOS environment y un PostgreSQL co
 | Worker de outbox | Notificaciones se retrasan | Igual | Acumula | Lo síncrono no se bloquea |
 | Worker de disposición | Sin efecto operativo | Sin efecto operativo | Acumula | **Los plazos legales siguen corriendo**: alerta desde el primer ciclo perdido |
 | Email caído | Invitación se retrasa | Igual | Breaker abierto | La invitación existe y es válida; el envío reintenta |
-| SMS caído | Igual | Igual | Breaker abierto | Fallback a email si hay contacto verificado |
 | Push caído | Recordatorios se retrasan | — | Breaker abierto | La app muestra el estado al abrir |
 | Almacenamiento caído | No sube ni ve fotos | No ve fotos | Breaker abierto | `body_progress` y nutrición estructurada operan; un PATCH que incluye foto falla sin mutación parcial |
 | Caché o read model atrasado | — | — | — | **Ninguna.** Nunca concede permisos, grants, asignaciones ni confirmaciones |
@@ -164,7 +162,6 @@ Una cola por dominio, no una global. Un atasco en notificaciones no puede retras
 | --- | --- | --- | --- | --- |
 | `outbox.dispatch` | 8 | Exponencial con jitter, máx 5 min | Sí | Profundidad > 1 000 o antigüedad > 15 min |
 | `notifications.email` | 5 | Exponencial, máx 30 min | Sí | Breaker abierto > 5 min |
-| `notifications.sms` | 5 | Igual | Sí | Igual |
 | `notifications.push` | 3 | Igual | Sí | Igual |
 | `privacy.disposition` | 10 | Exponencial, máx 1 h | Sí | **Cualquier ítem vencido sin ejecutar** |
 | `maintenance.expiry` | 5 | Fijo 5 min | Sí | Ciclo perdido |
@@ -177,7 +174,6 @@ Una cola por dominio, no una global. Un atasco en notificaciones no puede retras
 | Proveedor | Abre | Permanece | Half-open | Fallback |
 | --- | --- | --- | --- | --- |
 | Email | 50% de error en ventana de 30 s, mín. 20 peticiones | 60 s | 3 pruebas | Cola; la invitación sigue válida |
-| SMS | Igual | 60 s | 3 | Email si hay contacto verificado |
 | Push | Igual | 60 s | 3 | La app muestra el estado al abrir |
 | Almacenamiento | 30% en 30 s | 120 s | 3 | La subida de foto falla explícitamente; el resto de `body_progress` opera |
 

@@ -280,6 +280,9 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-060` | Open one body photo a client shows this gym | Consulta | `A3`, `A7` |
 | `OP-IDN-061` | Show one of my body photos to one gym | Comando idempotente | `A2` |
 | `OP-IDN-062` | Stop showing a body photo to a gym | Comando idempotente | `A2` |
+| `OP-IDN-063` | Correct my name and username | Comando | `A2` |
+| `OP-IDN-064` | Correct my biological sex | Comando | `A2` |
+| `OP-IDN-065` | Declare the equipment I have | Comando | `A2` |
 
 > **`OP-IDN-045` a `OP-IDN-048` estuvieron asignados dos veces, y ya no.** Space los usa
 > para el sexo biológico, las zonas de énfasis, saltarse un paso y cerrar sesión. Las
@@ -303,6 +306,12 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 > no receipt, so no receipt is ambiguous today, but the body photo operations
 > (`OP-IDN-056` to `OP-IDN-058` in the contract) have no card here yet. `OP-IDN-059` to
 > `OP-IDN-062` were checked free in both the OpenAPI and this matrix.
+>
+> **`OP-IDN-063` to `OP-IDN-065` (TECH-43)** were checked free in both on 9 November 2026.
+> The name and the sex already had onboarding commands, `OP-IDN-043` and `OP-IDN-045`, but
+> both belong to an open attempt and refuse once it is `activated`; correcting them from
+> the profile months later is a different actor in a different state, so it got its own
+> numbers rather than a loophole in the onboarding ones.
 
 ---
 
@@ -373,6 +382,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | `identity.profile_claim_declared.v1` |
 | **Reglas** | Nunca sobrescribe una observación profesional ni una inferencia sobre el mismo atributo: las afirmaciones **coexisten** con procedencias distintas. Declarar no verifica |
 | **Falla cerrada** | Atributo desconocido, rechazo |
+| **Attributes (TECH-43)** | The contract adds `training_days_per_week`, `session_duration` and `training_place` to the goal, the experience and the discipline. They are written from the profile, not the onboarding. The command already accepted an activated person, because it never looked at the attempt |
 
 #### `OP-IDN-005` — Corregir afirmación propia
 
@@ -518,6 +528,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Devuelve el Fitness ID y las cuentas vinculadas, no los grants concedidos ni las relaciones: esos son recursos propios |
 | **Falla cerrada** | — |
+| **Implemented (TECH-43)** | `identity.read_own_identity(provider, issuer, subject)`. Answers `SpaceIdentity`: name, family name, username, since when the Fitness ID is active, the contact email and the contact phone, each with whether it is verified, and each linked access account by provider and link date — never its subject. No active person behind the token: `403`. Tests: `T-IDN-OWN-PROFILE-01`, `T-IDN-OWNPROFILE-API-*` |
 
 #### `OP-IDN-013` — Consultar la proyección actual de mi perfil
 
@@ -535,6 +546,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno |
 | **Reglas** | La proyección aplica reglas versionadas de selección y **explica** qué afirmación eligió y por qué. Nunca destruye las alternativas ni oculta la procedencia. La persona ve todo lo suyo: declaraciones, observaciones profesionales, mediciones, inferencias y verificaciones |
 | **Falla cerrada** | — |
+| **Implemented (TECH-43)** | `identity.read_own_profile(provider, issuer, subject)`. Answers `SpaceFitnessProfile`: the biological sex and one entry per attribute with live claims, of every classification. **Selection rule v1:** among the live claims of an attribute, the most recent one she declared wins (`selected_because = declared_by_you`); without one, the most recent of any provenance (`most_recent`). Every other live claim travels in `alternatives` with its provenance and date. A multi-valued attribute is selected as a set: the members she declared, together. An attribute nobody answered is absent, not null. Weight and height are not claims; they stay in `OP-IDN-015`. Tests: `T-IDN-OWN-PROFILE-01`, `T-IDN-OWNPROFILE-API-*` |
 
 #### `OP-IDN-014` — Consultar el historial de un atributo
 
@@ -668,14 +680,15 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Superficie** | `PATCH /space/v1/me/contact` |
 | **Actor** | `A2` |
 | **Filtros obligatorios** | Sujeto = persona autenticada. Formato válido; teléfono en E.164 |
-| **Transacción** | Registrar el contacto **pendiente de verificación** sin sustituir todavía el vigente, y emitir el desafío de verificación. El contacto anterior sigue siendo el efectivo hasta que el nuevo se verifique |
+| **Transacción** | **Correo:** registrar el contacto **pendiente de verificación** sin sustituir todavía el vigente, y emitir el desafío de verificación; el anterior sigue siendo el efectivo hasta que el nuevo se verifique. **Teléfono:** se guarda vigente en el acto y sin verificar, o se borra; V1 no envía SMS (ADR-050) |
 | **Idempotencia** | `Idempotency-Key`. Reenviar el mismo cambio reutiliza el desafío vigente en lugar de crear otro |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | `identity_pii` |
 | **Evento de dominio** | `identity.contact_changed.v1` |
-| **Reglas** | **El correo de contacto y el correo de ingreso son el mismo dato.** Cambiarlo actualiza también la identidad en WorkOS AuthKit, y ambos lados quedan consistentes o no se aplica ninguno. El dueño del dato es el perfil de la persona, no el proveedor de autenticación. Un contacto en uso por otra persona se rechaza **sin revelar** que existe: el mensaje es el mismo que para un formato inválido, porque distinguirlos filtraría quién tiene cuenta en Allfit |
+| **Reglas** | **El correo de contacto y el correo de ingreso son el mismo dato.** Cambiarlo actualiza también la identidad en WorkOS AuthKit, y ambos lados quedan consistentes o no se aplica ninguno. El dueño del dato es el perfil de la persona, no el proveedor de autenticación. Un correo, o un teléfono verificado, en uso por otra persona se rechaza **sin revelar** que existe; un teléfono sin verificar no es único (ADR-050): el mensaje es el mismo que para un formato inválido, porque distinguirlos filtraría quién tiene cuenta en Allfit |
 | **Falla cerrada** | Si WorkOS AuthKit o el envío del desafío no confirman, no se cambia nada: nunca queda un correo distinto a cada lado |
+| **Implemented (TECH-43), phone half** | `identity.correct_own_phone(provider, issuer, subject, phone, …)` behind `PATCH /space/v1/me/contact` with `{ phone }`. Spaces, dashes and parentheses are dropped, the rest must be E.164; `null` removes it. Saved at once and unverified, a new number drops any earlier verification, and `uidx_people_contact_phone` covers verified numbers only. The email half is not built. Tests: `T-IDN-OWN-PROFILE-01`, `T-IDN-OWNPROFILE-API-13..14` |
 
 #### `OP-IDN-022` — Verificar un contacto
 
@@ -684,7 +697,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Tipo** | Comando |
 | **Superficie** | `POST /space/v1/me/contact/verification` |
 | **Actor** | `A2`, titular del contacto |
-| **Filtros obligatorios** | Desafío vigente, no vencido y del propio sujeto |
+| **Filtros obligatorios** | Desafío vigente, no vencido y del propio sujeto. En V1 solo hay desafío de correo: un teléfono no se verifica (ADR-050) |
 | **Transacción** | Marcar el contacto como verificado, promoverlo a vigente y fijar su marca de verificación |
 | **Idempotencia** | `Idempotency-Key`; converge |
 | **Paginación y orden** | No aplica |
@@ -1299,6 +1312,57 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | The share becomes `withdrawn` with `withdrawn_at`; the next Studio read no longer lists or opens it. Answers `200` with `BodyPhotoShare`, like `OP-PRV-007` |
 | **Falla cerrada** | No share: `404` |
 | **Implemented (STUDIO-45)** | Migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql`. `GET /space/v1/body-photos` gains `shared_with: [{relationship_id, organization_name, shared_at}]`, live shares only. Tests: `T-IDN-PHOTO-SHARE-01` |
+
+#### `OP-IDN-063` — Correct my name and username
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/me/name` |
+| **Actor** | `A2`, an active person |
+| **Filtros obligatorios** | The person the token resolves to, `active` |
+| **Transacción** | `identity.correct_own_name(...)`: rewrites `given_name`, `family_name` and `username` on `identity.people` |
+| **Idempotencia** | `Idempotency-Key` + `Command-Id`, durable receipt; the aggregate is the person, so a replay answers the name in force |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada: a username is unique across everybody and only the database can say whether it is free |
+| **Información sensible** | `identity_pii` |
+| **Evento de dominio** | Ninguno en V1 |
+| **Reglas** | `HU-SP-098` criterion 6 and `HU-SP-009`. Same normalisation as `OP-IDN-043`: trimmed names, a lower-case username. **The contact email is not touched**: it belongs to the credential and changing it is `OP-IDN-021`, with its own verification |
+| **Falla cerrada** | A username somebody else holds: `409` from `uidx_people_username`, without saying who. An empty name: `422` |
+
+#### `OP-IDN-064` — Correct my biological sex
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/profile/biological-sex` |
+| **Actor** | `A2`, an active person |
+| **Filtros obligatorios** | The person the token resolves to, `active` |
+| **Transacción** | `identity.correct_own_biological_sex(...)`: rewrites `identity.people.biological_sex` |
+| **Idempotencia** | As `OP-IDN-063` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Admite `draft_local` |
+| **Información sensible** | Classified `training`, as in `OP-IDN-045` |
+| **Evento de dominio** | Ninguno en V1 |
+| **Reglas** | `HU-SP-096` criteria 3 and 4. `null` is declining, and it is valid: it clears the value. **Changing it does not rewrite anything already recorded**, because nothing recorded was computed from it and stored |
+| **Falla cerrada** | A value outside the enum: `422`, nothing written |
+
+#### `OP-IDN-065` — Declare the equipment I have
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/profile/equipment` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | As `OP-IDN-046`, over `available_equipment`. At least one piece, no repeats, no internal nulls, every member in the attribute catalogue |
+| **Transacción** | As `OP-IDN-046`: the whole set in one transaction, sealing what left, inserting what arrived, leaving what stayed |
+| **Idempotencia** | As `OP-IDN-046`; the replay answers the live set |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Admite `draft_local`; two different sets serialise per person and the last wins |
+| **Información sensible** | Perfil fitness, `training` |
+| **Evento de dominio** | Ninguno en V1 |
+| **Reglas** | `HU-SP-013` criterion 2. **It is what she has, not what exists**: the codes match `catalog.equipment` so exercises can later be filtered by them, but the list lives in the attribute catalogue because the published catalogue is empty in production until Backoffice publishes it. No member is exclusive |
+| **Falla cerrada** | An empty set, a repeat, a null or an unknown piece: `422` and nothing is written |
 
 ### 7.2 Organizaciones
 
@@ -4367,7 +4431,7 @@ Regla que gobierna todo el dominio: un worker es **idempotente y auditable**. Re
 | **Transacción** | Registrar el intento y su resultado |
 | **Idempotencia** | Clave derivada de `(evento, destinatario, canal)`: un reintento no envía dos veces |
 | **Paginación y orden** | Lotes acotados por proveedor |
-| **Offline / concurrencia** | Cada proveedor —email, SMS, push— tiene su **propio** circuit breaker, timeout, cola y DLQ |
+| **Offline / concurrencia** | Cada proveedor —email y push; V1 no envía SMS (ADR-050)— tiene su **propio** circuit breaker, timeout, cola y DLQ |
 | **Información sensible** | El contenido del mensaje es minimizado: notifica el hecho, no el dato |
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Un proveedor degradado no bloquea a los otros ni consume el presupuesto de requests síncronos. Una notificación nunca contiene resultados, medidas ni contexto de salud: enlaza a la aplicación, donde se vuelve a autorizar |
