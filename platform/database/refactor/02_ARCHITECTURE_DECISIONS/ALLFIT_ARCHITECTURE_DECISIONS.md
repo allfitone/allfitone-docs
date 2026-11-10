@@ -56,6 +56,7 @@
 | ADR-047 | A former professional learns why, for thirty days |
 | ADR-048 | A gym charges its clients through its own Mercado Pago account |
 | ADR-049 | Allfit One sends its email through Amazon SES |
+| ADR-050 | The Allfit Space waitlist is a domain of its own, and forgets who never joins |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -6729,3 +6730,283 @@ The design choices that follow from it:
    `infra/modules/*/tests`).
 5. An event delivered again after its email was sent is sent and acknowledged again, without an
    error.
+
+---
+
+## ADR-050 — The Allfit Space waitlist is a domain of its own, and forgets who never joins
+
+**Status:** proposed for V1. The owner decided its four open questions on 10 November 2026; the
+rest is the design that follows from them, reviewed with this change. Nothing is built yet: the
+stories are `E-SP-17` (`HU-SP-115` to `HU-SP-123`) and `E-BO-10` (`HU-BO-035` to `HU-BO-037`).<br>
+**Date:** 10 November 2026<br>
+**Source:** the internal document «Estrategia de lanzamiento de Allfit Space» v1.0 (7 November
+2026), the epic `TECH-290` and its tickets.
+
+### Context
+
+Allfit Space launches with a waitlist. People join before the app is in the stores, and three
+things come with joining:
+
+- **Founding Members.** The first 100 people who join and confirm their email get a number, #001
+  to #100, in confirmation order. They keep it by creating their Space account within 7 days of
+  the launch. The number is a permanent badge on their profile, and it unlocks Allfit Pro at
+  COP 19.900 a month for as long as the subscription stays active.
+- **Referrals.** Each person gets a code and a link. A referral counts toward the counter once it
+  confirms its email, and toward the rewards once it creates a Space account after the launch.
+  The levels are 5, 15, 30 and 100 referrals, rewarded with Allfit Pro months delivered as
+  App Store or Google Play offer codes.
+- **Ambassadors**, after the launch (`TECH-305`). Their rules are not closed, and this ADR does
+  not decide them.
+
+Some of it already exists:
+
+- The form, the `/{lang}/waitlist` page and the share panel are in `apps/space-web`, on the
+  branch `feat/space-waitlist`. The owner moved the waitlist from www.allfit.one to
+  space.allfit.one on 8 November 2026. The browser posts to `POST /api/waitlist` on space-web,
+  which answers `501` until it can forward the request to the API from the server (`TECH-295`,
+  `TECH-296`).
+- The confirmation and link emails, in Spanish and English, are in `packages/notifications`
+  (allfitone#214). The worker sends them through Amazon SES (`ADR-049`).
+
+Four facts bound the design:
+
+1. **A sign-up is not a person.** It has no WorkOS account and no `PERSON`. It arrives through a
+   public endpoint, as actor `A0`. The ten domains hold persons, organizations and what they do.
+   None of them owns people who have not joined yet.
+2. **Law 1581 of 2012.** Processing needs the person's prior authorization, and the data may be
+   kept only while it serves the purpose it was collected for. The privacy policy published on
+   www.allfit.one says today that waitlist data is kept "until you ask us to delete it", with no
+   end.
+3. **Shared addresses.** Colombian mobile carriers put many subscribers behind one public
+   address. Five friends on mobile data can share an IP without being the same person.
+4. **Mail scanners open links.** Outlook's Safe Links and similar filters fetch every link in an
+   email before the person sees it. A link that changes something when opened is triggered by a
+   machine.
+
+### Decision
+
+The owner decided on 10 November 2026 where the waitlist lives, how long it keeps data, how
+repeated sign-ups are discarded, and that the referral levels add up. The design choices that
+follow from it:
+
+1. **A new domain, `waitlist`.** It gets its own PostgreSQL schema, `waitlist`, and its own module,
+   `domains/waitlist`, added to `DOMAINS` in `eslint.config.js`. Nothing in `identity` changes
+   shape to hold people without an account. The whole schema can be swept by its retention rule
+   without touching a person's data.
+
+2. **What a sign-up keeps, and nothing else.**
+
+   | Kept | Why |
+   | --- | --- |
+   | The name and the email, as typed | To greet the person and write to them |
+   | The canonical email: lower case, without a `+tag`, and without dots for `gmail.com` and `googlemail.com` | One sign-up per mailbox: `ana.ruiz+x@gmail.com` and `anaruiz@gmail.com` are the same |
+   | The language, `es` or `en` | Every email goes in the language the person joined in |
+   | The authorization: when, and which version of the privacy policy | Law 1581 asks for proof of the authorization |
+   | The person's own code: 4 to 16 letters and digits, without `0`, `O`, `1`, `I` or `L` | It is read aloud and typed by hand |
+   | Who invited them, as a reference to the inviter's sign-up | The counter and the rewards |
+   | The channel: `utm_source`, `utm_medium` and `utm_campaign` from the link, each up to 64 characters | The strategy measures demand by channel |
+   | When the person joined and when they confirmed | Confirmation order makes the Founding Members |
+   | The Founding Member number, when it was assigned, and its deadline | `HU-SP-118` |
+   | The person it was linked to, when, and the platform of the device | The badge, the rewards, and which store's code to send |
+   | Whether it counts for its inviter, and the reason when it does not | `self_referral`, `same_device`, `connection_cap` or `fraud` |
+   | A keyed hash (HMAC-SHA-256) of the connection and of the device | Discarding repeats without keeping either |
+   | Hashes of the confirmation token and of the private-link tokens | Never the tokens themselves |
+
+   - **The connection** is the visitor's IPv4 address, or the `/64` prefix of an IPv6 address.
+   - **The device** is a random identifier that space-web keeps in a first-party cookie. It is not
+     a fingerprint of the browser.
+   - **The key** of both hashes lives in Secrets Manager, so a copy of the database alone cannot
+     turn a hash back into an address.
+   - **Never kept:** the raw address, the user agent, the city, a phone number, or anything about
+     health or training.
+   - **A sign-up with a disposable address is refused** before anything is written. The disposable
+     domains are a list kept in the repository as data, not a dependency, and updated by hand.
+
+3. **What does not count.** A discarded sign-up is still a sign-up: it has its own code, its own
+   counter, and it can become a Founding Member. It only stops counting for the person who invited
+   it. The owner chose the device as the signal, with a ceiling per connection, and not a strict
+   rule per IP, because a strict rule would discard real friends on a carrier's shared address.
+   - **Self-referral:** the device is the inviter's own device.
+   - **Same device:** the device already counts for the same inviter.
+   - **Connection cap:** more than 3 sign-ups counting for the same inviter from the same
+     connection within 24 hours. The ones beyond the third do not count.
+   - **Fraud:** the team marks it in the Backoffice, with a reason (`HU-BO-035`).
+
+   The counter is the number of the inviter's sign-ups that are confirmed and count. It is computed
+   when it is read, never stored, so a fraud mark lowers it at once.
+
+4. **The public endpoints trust space-web, and only space-web.**
+   - The waitlist's public operations live under `/space/v1/waitlist/*` as actor `A0`, like the
+     headless sign-in under `/space/v1/auth/*`.
+   - space-web calls them from its server with a secret kept in Secrets Manager, and passes the
+     visitor's address and device in headers. The API reads those headers only when the secret
+     matches; without it, the route does not exist. A visitor who calls the API directly cannot
+     choose the address that the attempt limits count.
+   - Joining, asking for the email again, reading «mi link» and leaving each have their own limit
+     per connection.
+   - **No `GET` changes anything.** Confirming the email and leaving the list are a `POST` from a
+     page with a button. A scanner that opens the link only loads the page.
+   - **Private links.** Every email carries a new private-link token. Each one opens «mi link» and
+     lets the person leave the list, and each lasts as long as the sign-up does.
+   - **The confirmation token** is single use. It expires after 7 days, and sending a new one voids
+     the previous one.
+   - An unknown, used or voided token gets the same answer as one that never existed.
+
+5. **Founding Members.**
+   - **Assignment.** A number is assigned when a sign-up confirms and fewer than 100 numbers are
+     held. The assignment is serialized, so two confirmations at the same instant cannot take the
+     same number.
+   - **Before the deadline**, a number moves to the earliest-confirmed sign-up that has none and is
+     not marked as fraud. It moves when its holder leaves the list or is marked as fraud, or when
+     the holder's deadline passes without an account. The next holder gets the same number, with a
+     deadline 7 days from that moment.
+   - **The deadline** is the launch plus 7 days for numbers held at the launch. A reminder goes out
+     2 days before it.
+   - **Linking.** When the holder links an account, the number is copied to the person through
+     `identity`'s own function, reached through its `index.ts`. From then on the number belongs to
+     the person: it survives the waitlist's retention rule, it never moves again, and it is deleted
+     with the account.
+
+6. **The referral levels add up.** The strategy's table said they do not, and the conditions
+   drafted on `feat/space-waitlist` repeat it. The owner chose on 10 November 2026 that they do.
+   - Each level reached is delivered once: 5 referrals give 1 month, 15 give 2, 30 give 3, and
+     100 give 12 months and Allfit One merch. Thirty referrals are 1 + 2 + 3 = 6 months.
+   - A referral counts for the rewards when it is confirmed, it counts, and it is linked to a
+     person whose Space account was created after the launch.
+   - Rewards go to the inviter's person, so the inviter needs an account of their own. A level
+     reached before that waits for the link.
+   - A reward is an offer code for the platform recorded at linking, taken from the pool loaded in
+     the Backoffice (`HU-BO-036`) and sent by email.
+   - When the pool is empty, the reward stays pending, and it is delivered when codes are loaded.
+   - A delivered reward is never taken back. Merch is handled by the team by hand.
+
+7. **Linking a sign-up to a Space account** happens in the worker, on the event that `identity`
+   writes when a person's Space account is created with a verified email. The worker calls the
+   waitlist's linking function with the person and that email. Neither domain writes the other's
+   tables.
+   - The function finds the sign-up with the same canonical email. If that sign-up never
+     confirmed, the verified email proves it, and it is confirmed at that moment.
+   - It records the person and the platform.
+   - It copies the Founding Member number, as in decision 5.
+   - From that moment, the sign-up counts with an account for its inviter's rewards.
+
+8. **The waitlist closes at the launch and forgets who never joins.**
+   - **The launch** is a date the team marks once in the Backoffice (`HU-BO-037`). From then on
+     space.allfit.one leads to the stores and accepts no more sign-ups.
+   - **90 days after the launch**, a worker job deletes every sign-up that never linked to a
+     person, with its tokens, hashes and reward marks. It also strips the linked sign-ups down to
+     what the badge and the rewards need: the person, the code, the inviter, the number and the
+     deliveries. Their name, email, hashes and tokens go.
+   - **What survives the 90 days** is a table of daily totals with no personal data: sign-ups,
+     confirmations and links, by channel and language.
+   - **A person can leave at any time** (`HU-SP-123`). Leaving deletes the sign-up at once, and the
+     people they invited stop counting for anyone.
+   - **Deleting a Space account** deletes the linked sign-up and its reward deliveries with the
+     rest of the person's data.
+
+9. **Every waitlist email goes through the outbox and the worker**, on SES, in the sign-up's
+   language. Each one carries the private «Ver mis referidos» link and a link to leave the list.
+   The launch email goes out in batches within the account's sending rate (`TECH-321`).
+
+### Earlier decisions this changes
+
+- **The privacy policy on www.allfit.one** keeps waitlist data "until you ask us to delete it".
+  It must say 90 days after the launch for those who never create an account, and name the
+  device cookie. The lines that name the inviter's code, the connection and the device are already
+  drafted on `feat/waitlist-on-space`.
+- **The conditions on space.allfit.one/waitlist**, drafted on `feat/space-waitlist`, say that
+  levels do not add up and that the highest one is the reward. Both languages change before the
+  list opens.
+- **`TECH-301`** said, in criterion 3, that levels do not add up, pending a decision. They do.
+- **`TECH-294`** said that a private token "invalid or expired" answers like one that does not
+  exist. Private links do not expire on a clock: they end with the sign-up (decision 4).
+
+### Known limits
+
+- **The 90 days need a launch date.** Until the team marks one, sign-ups are kept, and leaving the
+  list is the only way out. If the launch slips past a year from the first sign-up, this ADR is
+  revisited.
+- **One person with two devices and two mailboxes is two sign-ups.** The ceiling per connection
+  limits it, and the Backoffice can mark it. Nothing stronger is proportionate to a reward of a
+  few months of Pro.
+- **Several offer codes per person are not verified.** It is not known whether App Store and
+  Google Play let one subscriber redeem a second offer code while the first free period runs.
+  `TECH-304` checks it before the first reward goes out. If they do not, the next code waits until
+  the current period ends.
+- **Cost.** Adding the levels up raises the months given away. In the strategy's base scenario
+  they go from 234 to 306 months.
+- The response to a repeated email reveals that the email is on the list, and only that. This was
+  decided on 9 November 2026 (`HU-SP-115`, criterion 5).
+
+### Invariants
+
+1. No sign-up exists without its authorization, its date and the version of the policy.
+2. One sign-up per canonical email.
+3. Neither the visitor's address nor the device identifier is ever stored in clear.
+4. A sign-up's code, link and counter are read only with one of its own private tokens, or from
+   the Backoffice with `manage_platform_commercial`.
+5. At most 100 Founding Member numbers are held at a time, and each number has at most one
+   holder.
+6. A discarded sign-up never counts for its inviter.
+7. Each level is delivered at most once per person, and each offer code at most once.
+8. 90 days after the launch, no sign-up without a person keeps a name, an email, a token or a
+   hash.
+9. No `GET` on the waitlist changes state.
+
+### Alternatives considered
+
+- **Inside `identity`.** Rejected by the owner: it mixes people without an account with the
+  accounts, and the retention sweep would run inside the domain that holds every person.
+- **A strict rule per IP.** Rejected by the owner: a carrier's shared address would discard real
+  referrals.
+- **The device alone.** Rejected by the owner: several browsers or a private window inflate it
+  freely.
+- **Keep the data until the person asks.** Rejected by the owner: it has no end, and Law 1581 asks
+  that data be kept only while it serves its purpose.
+- **Rewards by the highest level only.** It was the strategy's table, and the owner chose to add
+  the levels up instead.
+- **A hosted waitlist service.** Rejected: it would put names, emails and referral graphs in a
+  third party's hands, outside the authorization and the deletion this ADR controls, for a feature
+  that is a few tables and a public endpoint.
+
+### Consequences
+
+- **Documentation, in this change:**
+  - the stories `E-SP-17` and `E-BO-10`;
+  - the `waitlist` row in `DOMAIN_OWNERSHIP_MAP.md`;
+  - section 7.12 and the `WL` prefix in `V1_OPERATIONS_MATRIX.md`;
+  - the new rows in `V1_HU_DATABASE_TRACEABILITY_MATRIX.md`.
+
+  The full sheet of each operation, the data dictionary, the RLS matrix and the OpenAPI contract
+  are written by the pull request that builds each operation.
+- **Code:**
+  - the `waitlist` schema and its functions, and the module with its place in `DOMAINS`;
+  - the routes under `/space/v1/waitlist/*` and `/backoffice/v1/waitlist/*`;
+  - the worker jobs: the Founding Member deadlines, the rewards, the launch email and the 90-day
+    sweep;
+  - the emails not yet templated: «Eres Founding Member #037», the deadline reminder, a reward,
+    the launch email and the confirmation of leaving the list;
+  - the shared secret between space-web and the API, and the device cookie in space-web.
+- **Jira:** `HU-SP-123` (leaving the list) has no ticket yet. `HU-BO-037` is criterion 1 of
+  `TECH-321`.
+
+### Mandatory test scenarios
+
+1. Joining without authorization writes nothing.
+2. Two sign-ups whose emails differ only by case, a `+tag` or Gmail's dots: the second gets the
+   repeated-email answer, without code or counter, and the private link goes out by email.
+3. A disposable domain is refused, and nothing is written.
+4. A sign-up from the inviter's own device, or from a device that already counts for the inviter,
+   is kept and does not count.
+5. A fourth sign-up for the same inviter from one connection within 24 hours does not count; a
+   different inviter from the same connection does.
+6. The API ignores the address and device headers without space-web's secret.
+7. Opening a confirmation or leave link with `GET` changes nothing; the `POST` does, once.
+8. Two confirmations at the same instant never take the same Founding Member number, and the 101st
+   confirmation gets none.
+9. A holder who misses the deadline, leaves or is marked as fraud before linking hands the same
+   number to the earliest-confirmed sign-up without one; after linking, the number never moves.
+10. Reaching 5, 15 and 30 delivers three rewards once each, even when the job runs twice; an empty
+    pool leaves the reward pending and delivers it when codes arrive.
+11. The 90-day sweep deletes unlinked sign-ups and strips linked ones, and the daily totals stay.
+12. An unknown, used or voided token answers exactly like one that never existed.

@@ -50,6 +50,7 @@ Cada operación tiene una ficha con los nueve campos exigidos por el plan de fas
 | `SYS` | Procesos de sistema sin actor humano |
 | `PAY` | Pagos y planes |
 | `SUP` | Soporte de plataforma |
+| `WL` | Lista de espera (`ADR-050`) |
 
 El identificador es estable: la matriz de RLS, los contratos de API y las pruebas de Fase 6 lo referencian.
 
@@ -206,7 +207,8 @@ Toda sesión conserva la zona horaria de la persona en el momento del hecho. La 
 | Pagos | 16 | 7 | 23 |
 | Sistema | 10 | 1 | 11 |
 | Soporte | 6 | 5 | 11 |
-| **Total** | **133** | **75** | **208** |
+| Lista de espera | 12 | 3 | 15 |
+| **Total** | **145** | **78** | **223** |
 
 Algunas fichas cubren dos identificadores cuando la operación es simétrica —crear y editar un borrador, listar y consultar el detalle—. En esos casos el encabezado nombra ambos y el contenido aplica a los dos.
 
@@ -5190,6 +5192,44 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Guarda la versión del texto aceptado; una versión nueva exige aceptar otra vez |
 | **Falla cerrada** | Una versión desconocida se rechaza |
+
+### 7.12 Lista de espera
+
+Dominio nuevo de `ADR-050` (10 de noviembre de 2026). Reglas que gobiernan todo el dominio:
+
+- Una inscripción **no es una persona**: no tiene cuenta ni `PERSON`, y entra como `A0` por un
+  endpoint público que solo acepta las llamadas que space-web hace desde su servidor con su
+  secreto.
+- **Sin autorización no se escribe nada**, y se guarda la fecha y la versión de la política.
+- La conexión y el dispositivo solo se guardan como huella con clave; **nunca en claro**.
+- **Ningún `GET` cambia estado:** confirmar y salir son `POST` desde una página.
+- El contador se calcula al leer: inscripciones confirmadas del invitador que cuentan.
+- Noventa días después del lanzamiento, ninguna inscripción sin persona conserva datos
+  personales.
+
+Las fichas completas las escribe el pull request que construye cada operación, empezando por
+`TECH-292`, `TECH-293` y `TECH-294`. Hasta entonces, esta tabla y `ADR-050` son el contrato.
+
+| ID | Operación | Tipo | Actor |
+| --- | --- | --- | --- |
+| `OP-WL-001` | Unirme a la lista de espera | Comando | `A0` desde space-web |
+| `OP-WL-002` | Confirmar mi correo | Comando | `A0` con token de confirmación |
+| `OP-WL-003` | Pedir de nuevo el correo de la lista | Comando | `A0` desde space-web |
+| `OP-WL-004` | Consultar mi link y mi contador | Consulta | `A0` con token privado |
+| `OP-WL-005` | Salir de la lista de espera | Comando | `A0` con token privado |
+| `OP-WL-006` | Enlazar una inscripción con la cuenta de Allfit Space | Comando | `A9` |
+| `OP-WL-007` | Asignar, recordar y liberar los números de Founding Member | Comando | `A9` |
+| `OP-WL-008` | Entregar los premios por referidos | Comando | `A9` |
+| `OP-WL-009` | Enviar el correo de apertura | Comando | `A9` |
+| `OP-WL-010` | Borrar la lista 90 días después del lanzamiento | Comando | `A9` |
+| `OP-WL-011` | Listar, buscar y totalizar la lista de espera | Consulta | `A11` con `manage_platform_commercial` |
+| `OP-WL-012` | Marcar una inscripción como fraude | Comando | `A11` con `manage_platform_commercial` |
+| `OP-WL-013` | Cargar códigos de oferta | Comando | `A11` con `manage_platform_commercial` |
+| `OP-WL-014` | Consultar la bolsa de códigos y los premios pendientes | Consulta | `A11` con `manage_platform_commercial` |
+| `OP-WL-015` | Marcar el lanzamiento de Allfit Space | Comando | `A11` con `manage_platform_commercial` |
+
+El precio de fundador (`HU-SP-120`) no es una operación de este dominio: es un producto más de
+`OP-PAY-018` y `OP-PAY-019`, que se ofrece solo a quien tiene número de Founding Member.
 
 ## 8. Catálogo de eventos de dominio
 
