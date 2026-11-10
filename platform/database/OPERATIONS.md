@@ -308,7 +308,7 @@ Despliegue en este orden:
 1. integrar documentación y código con los tres gates desactivados;
 2. aplicar primero la migración de enums y después la de funciones, índices,
    límites y ciclo de vida mediante el workflow protegido de producción;
-3. configurar claves HMAC, Resend, cron, base URL y reglas Vercel; desplegar API,
+3. configurar claves HMAC, correo (Amazon SES, ADR-049), cron, base URL y reglas Vercel; desplegar API,
    worker y Studio con los gates todavía apagados;
 4. consultar invitaciones productivas pendientes. Si alguna fue enviada con un
    enlace antiguo de Space, detener la activación y aprobar explícitamente una
