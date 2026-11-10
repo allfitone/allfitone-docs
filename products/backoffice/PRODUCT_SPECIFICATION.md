@@ -76,6 +76,7 @@ Los modos describen el deber ejercido; no son roles enviados por el cliente, rol
 - Crear una organización inicial y entregarla a su dueño mediante invitación.
 - Cancelar una organización no reclamada.
 - Suspender de forma reversible cuando exista causa operativa.
+- Reactivate a suspended gym, which closes only that suspension's causes.
 - No administrar el gimnasio en nombre de su owner.
 
 El cierre unilateral de una organización ya reclamada está diferido y no genera capacidades de base de datos en V1.
@@ -83,12 +84,22 @@ El cierre unilateral de una organización ya reclamada está diferido y no gener
 ### 4.4 Suscripciones y actividad comercial
 
 - Consultar metadatos minimizados de pagos de una persona.
-- Consultar suscripciones de organizaciones.
 - Consultar ingresos agregados de Allfit Pro.
+- List the charges to follow up: Allfit subscriptions that are suspended or in their grace
+  period, and charges that failed in the last thirty days.
 - Publicar planes de plataforma y definir sus entitlements.
-- Habilitar a una organización elegible para conceder Pro.
+- Set how many people a gym may have, under the commercial agreement it was sold with.
 
 Backoffice no cobra, gira, concilia ni altera dinero. La pasarela es la fuente de los resultados de cobro.
+
+Two capabilities left this list on 1 October 2026:
+
+- **A gym's subscriptions (`HU-BO-019`) are deferred.** Gyms did not charge their clients
+  through Allfit One. `ADR-048` reopens that charging without naming this story, so its
+  return is a product decision still to take.
+- **Enabling a gym to grant Pro no longer exists.** Under `ADR-043` every active gym gives
+  its clients Pro, so nothing is switched on gym by gym (`HU-BO-027`). The commercial act
+  left is setting the gym's quota (`HU-BO-034`).
 
 ### 4.5 Catálogo y verificación
 

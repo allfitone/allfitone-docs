@@ -2043,3 +2043,87 @@ Tests:
   was checked by hand on 9 November 2026. With the lock, the subscription waited for the
   retirement and was refused with `P0002`. Without the lock, it landed on the retired
   version.
+
+## The Backoffice closes (code branch `feat/backoffice-last-gaps`)
+
+The branch closes what was left of the Backoffice in code. Its pull request and its deploy
+are pending. It brings seven migrations:
+
+| Migration | What it does | Where it is documented |
+| --- | --- | --- |
+| `20261122090000_the_team_names_who_holds_access.sql` | Names the holder and the grantor in the team inventory, with an access event per person named | `OP-SUP-008`, `OP-SUP-011` |
+| `20261122100000_a_window_sees_what_she_hid_from_a_gym.sql` | Shows a window which sessions she hid and from which gym | `OP-SUP-003`, data dictionary §7.7 |
+| `20261122110000_a_new_name_reopens_a_verified_credential.sql` | Opens a `name_change` review when she changes her name | Data dictionary §4.12.1 |
+| `20261122120000_the_unpaged_access_log_read_goes.sql` | Drops `privacy.list_access_events` | `OP-SUP-009` |
+| `20261122130000_an_archived_movement_still_reads_by_name.sql` | Keeps an archived global movement readable by name | Data dictionary §8.4 |
+| `20261122140000_a_window_reads_every_session.sql` | Pages a window's training past the newest 100 sessions | `OP-SUP-003` |
+| `20261122150000_the_worker_sweeps_photo_disposals.sql` | Lets the worker sweep both photo disposal queues | ADR-039, data dictionary §4.7.3 and §10A.12 |
+
+It also changes Terraform in `infra/production`:
+
+- **The worker's secret keys.** The worker receives the six `OBJECT_STORE_*` keys the API
+  already has. They are in the same environment secret, so no new value is created.
+- **A per-address limit on sign-in.** An AWS WAF web ACL limits the sign-in routes on the
+  load balancer (see
+  [AUTHENTICATION_OPERATIONS.md](../../products/backoffice/AUTHENTICATION_OPERATIONS.md#límites-por-dirección)).
+
+**Deploy order.**
+
+1. Merging runs **Deploy AWS**, which rolls out the API, the webs and the worker.
+2. Then dispatch **Deploy Database AWS** without `include_all`. The plan must list only
+   the seven `20261122…` migrations.
+3. Then run `terraform plan` in `infra/production`, review it, and `terraform apply`.
+   **Deploy AWS** only swaps images and keeps the task definitions Terraform wrote, so
+   neither the WAF nor the worker's keys exist until this apply.
+
+**Between steps 1 and 2:**
+
+- **No break-glass window can be read.** The new API calls `support.exercise_break_glass`
+  with eight arguments, and the database still has only the six-argument version, so every
+  read fails. The reverse order would fail the same way, because the migration drops the
+  six-argument version that the old API calls.
+- **The Team screen reads «Sin nombre registrado»** for everyone, because the database does
+  not return names yet.
+- **The worker's minute job fails at `media_disposal`, every minute.** The claim functions
+  do not exist yet. The job is the last of the batch, so every other job has already run,
+  but the batch answers `503`. The Backoffice diagnosis names the job «Borrado de fotos
+  eliminadas».
+
+**Between steps 2 and 3:**
+
+- **Sign-in has no per-address limit**, as it has had none since the move to AWS.
+- **`media_disposal` fails whenever a photo is due.** The worker has no store keys yet,
+  and it builds its store client only when something is due. With nothing due it
+  succeeds. The rows wait, and the next claim after the apply removes them.
+
+**Rollback.** The migrations are forward only. An API rolled back to before the branch
+cannot read a break-glass window, because the six-argument function is gone; roll the
+database forward rather than the API back. The WAF is removed by reverting the Terraform
+change and applying again.
+
+**Check after the deploy.** Expected: five rows, each `true`.
+
+```sql
+select namespace.nspname, procedure.proname,
+       has_function_privilege('allfit_api', procedure.oid, 'execute')
+from pg_proc as procedure
+join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+where (namespace.nspname, procedure.proname) in (
+  ('nutrition', 'claim_media_disposals'), ('nutrition', 'seal_swept_media_disposal'),
+  ('identity', 'claim_body_photo_disposals'), ('identity', 'seal_swept_body_photo_disposal'),
+  ('support', 'exercise_break_glass')
+);
+```
+
+After the apply, the AWS console lists the web ACL `allfitone-sign-in` (scope `REGIONAL`), associated
+with the load balancer.
+
+Tests:
+
+- pgTAP: `T-SUP-TEAM-01`, `T-SUP-BG-HIDDEN-01`, `T-IDN-VERIFY-NAME-01`,
+  `T-CAT-GLOBAL-ARCHIVE-01`, `T-PRV-SCOPE-WIDER-01`, `T-SUP-BG-PAGE-01` and
+  `T-NUT-MEDIA-SWEEP-01`. `T-PRV-AUD-01` now runs against the paged read.
+- API: `T-BG-API-31` and `T-BG-API-32` page a window and refuse a malformed cursor.
+- Worker: `media-disposals.test.ts` and `main.test.ts`, including a failure in the last job
+  after every other job ran.
+- Terraform: `infra/modules/edge/tests/edge.tftest.hcl`, 8 runs.

@@ -38,14 +38,14 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 | Schema | Tablas | Sección |
 | --- | --- | --- |
-| `identity` | 21 | §4 |
-| `organizations` | 11 | §5 |
+| `identity` | 22 | §4 |
+| `organizations` | 12 | §5 |
 | `relationships` | 6 | §6 |
-| `privacy` | 17 | §7 |
+| `privacy` | 18 | §7 |
 | `catalog` | 18 | §8 |
 | `planning` | 22 | §9 |
 | `execution` | 14 | §10 |
-| `nutrition` | 8 | §10A |
+| `nutrition` | 9 | §10A |
 | `system` | 4 | §11 |
 | `payments` | 12 | §13 |
 | `support` | 5 | §12 |
@@ -332,6 +332,27 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Retención:** permanente; una medida referenciada no se elimina.
 - **Eventos:** ninguno.
 
+### 4.7.3 `identity.body_photo_disposals`
+
+Built in migration `20261103030400_pro_measures_the_body.sql`; the sweep columns come with
+migration `20261122150000_the_worker_sweeps_photo_disposals.sql` (code branch
+`feat/backoffice-last-gaps`, merge and deploy pending).
+
+- **Purpose:** the queue of body photos to remove from the object store. A photo leaves the store only after the commit that disposes of it, so the row is written in that transaction and sealed once the store confirms.
+- **Domain / source of truth:** Identity. The object store holds the file.
+- **Classification:** `body`: the row names the object key of a person's body photo.
+- **Columns:** `id uuid` · `person_id uuid` · `media_ref text` · `requested_at timestamptz` (default `clock_timestamp()`) · `sealed_at timestamptz` (nullable) · `purge_attempts integer` (default `0`) · `next_attempt_at timestamptz` (nullable).
+- **FKs and deletion:** `person_id → identity.people(id) RESTRICT`.
+- **Uniques and checks:** `ck_body_photo_disposals_ref` (`media_ref` starts with `body/`); `ck_body_photo_disposals_purge_attempts` (`purge_attempts >= 0`).
+- **Actors:**
+  - **The person's deletion** inserts the row.
+  - **The API** removes the photo right after the commit and seals the row with `identity.seal_body_photo_disposal`.
+  - **The worker's `media_disposal` job** sweeps what that step missed. `identity.claim_body_photo_disposals(limit)` returns the rows that have waited five minutes, or whose `next_attempt_at` has passed; it counts an attempt and pushes `next_attempt_at` further each time, doubling from one minute up to a day. `identity.seal_swept_body_photo_disposal(id)` seals one. Both are worker-only (`42501`); a claim takes 1 to 500 rows (`22023`).
+- **RLS:** forced. `body_photo_disposals_all_self` for the person. `body_photo_disposals_select_worker_sweep` lets the worker read the queue. `body_photo_disposals_update_worker_sweep` lets it change only unsealed rows. `allfit_api` has no privilege on the table.
+- **Queries and indexes:** `idx_body_photo_disposals_pending (requested_at) WHERE sealed_at IS NULL`; `idx_body_photo_disposals_person (person_id)`. The claim locks with `for update skip locked`, so two sweeps never take the same row.
+- **Retention:** a sealed row stays as evidence that the file was removed.
+- **Events:** none. The claim hands over the row's identifier, the object key and the attempt count, never the person, so the worker never learns whose photo it removes.
+
 ### 4.8 `identity.health_context_claims`
 
 - **Propósito:** dolor, limitación o recuperación declarados; salud fitness minimizada.
@@ -420,11 +441,12 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** cola de trabajo de verificación: una solicitud por versión exacta de credencial. Cierra la brecha técnica de `HU-BO-021` que PRE_PHASE_5 §6 dejaba como `NEW-IDN-VERIFY-REQUEST`.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `identity_pii` (enlaza a la persona y a su credencial).
-- **Columnas:** `id uuid` · `professional_credential_id uuid` · `requested_by_person_id uuid` · `kind text` (`initial`, `renewal`) · `status text` (`pending`, `resolved`, `cancelled`) · `supersedes_request_id uuid` (nullable) · `created_at timestamptz` · `resolved_at timestamptz` (nullable) · `cancelled_at timestamptz` (nullable).
+- **Columnas:** `id uuid` · `professional_credential_id uuid` · `requested_by_person_id uuid` · `kind text` (`initial`, `renewal`, and `name_change` once migration `20261122110000` is deployed) · `status text` (`pending`, `resolved`, `cancelled`) · `supersedes_request_id uuid` (nullable) · `created_at timestamptz` · `resolved_at timestamptz` (nullable) · `cancelled_at timestamptz` (nullable).
 - **Divergencia con PRE_PHASE_5 §6.2, deliberada:** el boceto incluía `verified`, `rejected`, `unverifiable`, `expired`, `appealed` e `in_review` entre los estados de la solicitud. Eso guardaría el resultado dos veces —aquí y en la verificación— y dos copias se desincronizan. **La solicitud no lleva resultado**: sólo `pending`, `resolved` o `cancelled`, y lo decidido vive únicamente en `professional_credential_verifications`. Tampoco se modelaron verificador asignado, `due_at` ni `in_review`: ningún criterio los exige y la concurrencia la resuelve el bloqueo de la fila al decidir.
 - **FKs y borrado:** credencial, solicitante y `supersedes_request_id` con `RESTRICT`. Clave portadora `UNIQUE (id, professional_credential_id)` para la verificación.
 - **Uniques y checks:** forma exacta de timestamps por estado; `UNIQUE (professional_credential_id) WHERE status = 'pending'` (una revisión vigente por versión, §6.3); sin auto-referencia. `identity.guard_credential_verification_request_transition` impide salir de un estado terminal o reescribir campos. **El borrado no se guarda**: el runtime no tiene DML sobre la tabla, y una solicitud decidida no puede borrarse porque su verificación la referencia.
 - **Actores:** los triggers de `professional_credentials` abren y cancelan; `A11/verify_professional_credentials` lee, decide y abre renovaciones mediante funciones cerradas.
+- **A new name reopens the review (code branch `feat/backoffice-last-gaps`, `HU-BO-021` c7).** Migration `20261122110000_a_new_name_reopens_a_verified_credential.sql` adds the trigger `trg_people_open_name_change_review` on `identity.people` (`identity.open_name_change_review_tg`). When her name changes, it opens a `name_change` request for each active credential whose latest verification is `verified` and in force, superseding the request that verified it. The verification stays in force until the reviewer decides. A lapsed verification is renewed, not reopened; a credential with a pending request gets no second one; a change that leaves the name as it was opens nothing.
 - **RLS:** sin DML de runtime; `force row level security` y política sólo para el dueño.
 - **Consultas:** `identity.list_credential_verification_requests` (cola pendiente; `viewer_can_decide` es pista para la pantalla, nunca autoridad) · `identity.list_due_credential_renewals` · `identity.open_credential_verification_renewal`. Las dos lecturas **escriben un `privacy.access_events` por titular devuelto** antes de devolverlo, porque muestran nombre, número de registro y dónde consultarlo.
 - **Renovación (criterio 4):** nadie corre en el instante en que una verificación vence, así que vencer no puede abrir una solicitud. La lista de renovaciones se calcula —credenciales activas cuya última verificación es `verified` y termina en menos de **30 días**— y un verificador abre la renovación, que es una solicitud nueva enlazada a la anterior y nunca extiende la verificación vieja. **Los 30 días son un número inventado**: ninguna fuente normativa fija esa ventana.
@@ -503,16 +525,18 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** frontera estable de operación, autoría y permisos; conserva su `id` al crecer a equipo.
 - **Dominio / fuente de verdad:** Organizaciones.
 - **Clasificación:** `operational`; `legal_name` puede ser `identity_pii` y el JSON `responsible_party` contiene identidad/contacto restringido.
-- **Columnas:** `id uuid` · `type_code text` · `legal_name text` (nullable) · `display_name text` · `status organizations.organization_status` (`unclaimed`, `active`, `closed`, `cancelled`) · `responsible_party_schema_version smallint` (`1`) · `responsible_party jsonb` · `revision_number bigint` (`0`) · `claimed_at timestamptz` (nullable; default `clock_timestamp()`) · `cancelled_at timestamptz` (nullable) · `created_at timestamptz` · `updated_at timestamptz`.
+- **Columnas:** `id uuid` · `type_code text` · `legal_name text` (nullable) · `display_name text` · `status organizations.organization_status` (`unclaimed`, `active`, `suspended`, `closed`, `cancelled`) · `responsible_party_schema_version smallint` (`1`) · `responsible_party jsonb` · `revision_number bigint` (`0`) · `claimed_at timestamptz` (nullable; default `clock_timestamp()`) · `cancelled_at timestamptz` (nullable) · `suspended_at timestamptz` (nullable) · `guest_quota_seats integer` (nullable; `null` is no limit) · `guest_quota_agreement_reference text` (nullable) · `created_at timestamptz` · `updated_at timestamptz`.
 - **FKs y borrado:** `type_code → organization_types(code) RESTRICT`.
-- **Uniques y checks:** `ck_organizations_lifecycle_shape`: `unclaimed` sin `claimed_at` ni `cancelled_at`; `active` con `claimed_at` y sin `cancelled_at`; `cancelled` con `cancelled_at` y nunca `claimed_at`; `closed` sin `cancelled_at` (su forma queda abierta hasta que exista el flujo de cierre). `ck_organizations_responsible_party` exige `party_kind`, `purpose = 'studio_operations'` y un `party_name` no vacío, salvo en una organización `unclaimed` o `cancelled` de persona natural, que no lo lleva: Allfit nunca escribe el nombre de una persona, y se toma de su propia identidad cuando acepta (`HU-BO-014`). La versión anterior del check aceptaba cualquier organización sin `party_name`, porque una clave ausente evaluaba a null y un check en null pasa. `revision_number >= 0`. El cambio de `type_code` exige una transición activa en `organization_type_transitions`. El trigger `trg_organization_memberships_before_insert_claimed` sobre `organization_memberships` rechaza (`55000`) cualquier membresía de una organización `unclaimed` o `cancelled`: reclamar pasa la organización a `active` antes de insertar al dueño, en la misma transacción. Las organizaciones existentes antes de `20260913150100` recibieron `claimed_at = created_at`, porque hasta entonces solo su dueño podía crearlas.
+- **Uniques y checks:** `ck_organizations_lifecycle_shape`: `unclaimed` sin `claimed_at` ni `cancelled_at`; `active` con `claimed_at` y sin `cancelled_at`; `cancelled` con `cancelled_at` y nunca `claimed_at`; `closed` sin `cancelled_at`. Its owner closes it through `OP-ORG-012` since migration `20261103014500_close_organizations.sql`; there is no `closed_at` column, and the instant lives on `organization.closed.v1`. Since migration `20261018130000` (`HU-BO-016`), `suspended` has `claimed_at` and `suspended_at` and no `cancelled_at`, and every other state has no `suspended_at`. `ck_organizations_responsible_party` exige `party_kind`, `purpose = 'studio_operations'` y un `party_name` no vacío, salvo en una organización `unclaimed` o `cancelled` de persona natural, que no lo lleva: Allfit nunca escribe el nombre de una persona, y se toma de su propia identidad cuando acepta (`HU-BO-014`). La versión anterior del check aceptaba cualquier organización sin `party_name`, porque una clave ausente evaluaba a null y un check en null pasa. `revision_number >= 0`. El cambio de `type_code` exige una transición activa en `organization_type_transitions`. El trigger `trg_organization_memberships_before_insert_claimed` sobre `organization_memberships` rechaza (`55000`) cualquier membresía de una organización `unclaimed` o `cancelled`: reclamar pasa la organización a `active` antes de insertar al dueño, en la misma transacción. Las organizaciones existentes antes de `20260913150100` recibieron `claimed_at = created_at`, porque hasta entonces solo su dueño podía crearlas.
 - **Actores:** miembros leen una proyección cerrada; admin/owner llaman `organizations.update_organization` para modificar por autoservicio solo `display_name`, `legal_name` y `type_code`. `responsible_party`, su `purpose`/schema version, `id`, `status` y timestamps no son editables por `OP-ORG-002`. El equipo de Allfit (`allfit_admin` con `diagnose_support_metadata` o `manage_organization_lifecycle`, `HU-BO-012`, `NEW-SUP-ORG-SEARCH`) lee el directorio por `organizations.list_backoffice_organizations`: nombre visible, tipo, estado, `created_at`, `claimed_at`, `cancelled_at`, membresías activas y sedes activas. Nunca recibe `legal_name` ni `responsible_party`. `people_served` es null hasta que exista `relationships`: un cero afirmaría que la organización no atiende a nadie. La ficha de Backoffice (`HU-BO-013`, `NEW-SUP-ORG-DETAIL`) se lee por `organizations.read_backoffice_organization` con el mismo par de deberes: organización, dueño y equipo por identificador y rol, y sedes; nunca nombres, contactos ni `responsible_party`, y la dirección de la sede de una persona natural se reserva porque puede ser su casa. Cada miembro activo que devuelve queda en `privacy.access_events` (`support_metadata`) antes de responder; un exmiembro se cuenta y no se lista.
 - **RLS:** la función `organizations.read_organization` aplica `access_control.has_membership(id)` y devuelve columnas cerradas. `allfit_api` no recibe `SELECT` ni DML sobre la tabla base y escribe únicamente por funciones cerradas. El directorio de Backoffice exige el deber dentro de la función (`42501`) y no escribe `privacy.access_events`, porque no alcanza datos de ninguna persona.
 - **Consultas:** por `id`; por membresía del actor; directorio de Backoffice por `display_name` (búsqueda literal, desde 2 caracteres, sin tocar `legal_name`) y por estado, paginado por `(lower(display_name), id)`.
 - **Índices:** PK; `idx_organizations_directory (lower(display_name), id)`; `idx_organizations_status_created (status, created_at)`.
 - **Panel de negocio (`HU-BO-004`):** `support.read_business_panel` cuenta todas las organizaciones, las `unclaimed` y las que **operan**: `active` con al menos una membresía `active`. Una organización no es una persona, así que estos conteos no se someten al umbral mínimo.
+- **Guest quota (`HU-BO-034`, `OP-ORG-023`, as built):** `guest_quota_seats` is how many people the gym was sold, from 1 to 1,000,000 (`ck_organizations_guest_quota_seats`). It is `null` when the gym has no limit, which is every gym created before migration `20261015120000`. `guest_quota_agreement_reference` names the commercial agreement it was sold under, because Allfit bills the gym outside the platform: one trimmed line of 1 to 120 characters with no control characters (`ck_organizations_guest_quota_agreement_reference`, migration `20261108090000`). Only `organizations.set_organization_guest_quota` writes them, under `manage_platform_commercial`. `organizations.organization_guest_occupancy` counts live relationships and unanswered client invitations; `organizations.guest_quota_projection` returns the number, the agreement, the occupancy, the places left, whether the gym is over its quota, and the history. Reading occupancy needs the policy `service_relationships_select_guest_quota`, because `service_relationships` forces row security and without it the count would come back zero.
+- **Suspension (`HU-BO-016`, `OP-ORG-024` and `OP-ORG-025`, as built):** the status answers whether the gym may act: the functions that ask `status = 'active'` refuse a suspended gym without being edited, and `payments.resolve_pro` stops giving its clients Pro. Who suspended it, why and for how long lives in `organization_suspensions` (§5.11); what stops being effective for each person lives in `planning.service_access_blocks` (§9.17). Only `organizations.suspend_organization` and `reactivate_organization` change it, under `manage_organization_lifecycle`. A suspended gym appears in the Backoffice directory (allfitone#159) and cannot gain a client by an invitation accepted while it lasts.
 - **Retención:** el cierre termina relaciones y abre disposición; conserva activos propios.
-- **Eventos:** `organization.created.v1`, `organization.updated.v1`, `organization.ownership_transferred.v1`, `organization.closed.v1`.
+- **Eventos:** `organization.created.v1`, `organization.updated.v1`, `organization.ownership_transferred.v1`, `organization.closed.v1`, `organization.suspended.v1` and `organization.reactivated.v1`. `organization.guest_quota_set.v1` is recorded only in `organization_events`, with the previous seats and agreement.
 
 ### 5.2 `organizations.organization_types`
 
@@ -643,7 +667,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Clasificación:** `audit`; snapshots de `legal_name` o `address` domiciliaria heredan además tratamiento `identity_pii`.
 - **Columnas:** `id` · `organization_id uuid` · `event_type text` · `snapshot_schema_version smallint` (`1`) · `before jsonb` (nullable) · `after jsonb` (nullable) · `actor_membership_id uuid` (nullable) · `actor_person_id uuid` (nullable) · `actor_duty_assignment_id uuid` (nullable).
 - **FKs y borrado:** `organization_id → organizations(id) ON DELETE CASCADE`; FK compuesta opcional `(actor_membership_id, organization_id) → organization_memberships(id, organization_id) RESTRICT` (`IX-25`); `actor_person_id → identity.people(id) RESTRICT`; `actor_duty_assignment_id → support.platform_duty_assignments(id) RESTRICT`.
-- **Uniques y checks:** append-only: `INSERT` directo, `UPDATE` y `DELETE` revocados al runtime. El snapshot v1 admite datos organizacionales, sede (`site_id`, `name`, `address`, `status`, `revision_number`), transferencia (`previous_owner_membership_id`, `owner_membership_id`) o reclamo (`owner_membership_id`) según `event_type`; claves adicionales o combinaciones ajenas se rechazan. `ck_organization_events_platform_actor`: la persona y la asignación de deber de Allfit van juntas, nunca con una membresía; `organization.created_unclaimed.v1` y `organization.cancelled.v1` exigen actor de Allfit, y `organization.claimed.v1` exige la membresía del nuevo dueño (`HU-BO-014`, `HU-BO-015`). Una membresía ausente nunca representa "lo hizo Allfit".
+- **Uniques y checks:** append-only: `INSERT` directo, `UPDATE` y `DELETE` revocados al runtime. El snapshot v1 admite datos organizacionales, sede (`site_id`, `name`, `address`, `status`, `revision_number`), transferencia (`previous_owner_membership_id`, `owner_membership_id`) o reclamo (`owner_membership_id`) según `event_type`; claves adicionales o combinaciones ajenas se rechazan. `ck_organization_events_platform_actor`: la persona y la asignación de deber de Allfit van juntas, nunca con una membresía; `organization.created_unclaimed.v1` y `organization.cancelled.v1` exigen actor de Allfit, y `organization.claimed.v1` exige la membresía del nuevo dueño (`HU-BO-014`, `HU-BO-015`). Una membresía ausente nunca representa "lo hizo Allfit". `organization.suspended.v1` and `organization.reactivated.v1` (`HU-BO-016`) require an Allfit actor too. `organization.guest_quota_set.v1` (`HU-BO-034`) also requires an Allfit actor, so a gym never sets its own quota, and carries a before and an after snapshot. The snapshot holds `guest_quota_seats`, `agreement_reference` and `revision_number`; a change recorded before migration `20261108090000` has no `agreement_reference`, and that shape is still accepted.
 - **Actores:** las funciones cerradas del agregado insertan; admin/owner leen. Allfit inserta la creación no reclamada, su sede y su cancelación por `create_unclaimed_organization` y `cancel_unclaimed_organization`; el dueño inserta el reclamo al aceptar.
 - **RLS:** hereda de la organización.
 - **Consultas:** `(organization_id, created_at desc)`.
@@ -665,6 +689,23 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** `(membership_id, created_at desc)`.
 - **Retención:** auditoría.
 - **Eventos:** ninguno propio.
+
+### 5.11 `organizations.organization_suspensions`
+
+Built in migration `20261018130000_suspending_a_gym_without_destroying_it.sql` (`HU-BO-016`).
+PRE_PHASE_5 §9.2 proposed it; this is its physical form.
+
+- **Purpose:** who suspended a gym, why and for how long. A status column cannot keep that once the gym is `active` again, and criterion 8 asks for it.
+- **Domain / source of truth:** Organizations.
+- **Classification:** `audit`.
+- **Columns:** `id uuid` · `organization_id uuid` · `reason_code text` (`nonpayment`, `terms_breach`, `security_incident`, `legal_requirement`) · `started_at timestamptz` (default `clock_timestamp()`) · `started_by_person_id uuid` · `started_by_duty_assignment_id uuid` · `started_event_id uuid` · `ended_at timestamptz` (nullable) · `ended_by_person_id uuid` (nullable) · `ended_by_duty_assignment_id uuid` (nullable) · `ended_event_id uuid` (nullable).
+- **FKs and deletion:** every reference is `RESTRICT`: `organization_id → organizations(id)`; both people → `identity.people(id)`; both duty assignments → `support.platform_duty_assignments(id)`; both events → `organization_events(id)`.
+- **Uniques and checks:** `ck_organization_suspensions_reason` closes the reason list. `ck_organization_suspensions_ended`: the four `ended_*` columns are all null or all set, with `ended_at >= started_at`. `uidx_organization_suspensions_open` allows one open period per organization, which makes suspending idempotent and reactivating unambiguous. The trigger `trg_organization_suspensions_guard` (`organizations.prevent_organization_suspension_rewrite`) refuses a delete, a change of reason and reopening an ended period.
+- **Actors:** only `organizations.suspend_organization` opens a period and only `organizations.reactivate_organization` ends it. `organizations.organization_suspension_projection` returns the current state with the history to the Backoffice.
+- **RLS:** forced; `organization_suspensions_all_owner` for `allfit_owner` only. `allfit_api` has no privilege on the table.
+- **Queries and indexes:** `idx_organization_suspensions_organization_started (organization_id, started_at desc)` and the partial unique index.
+- **Retention:** audit evidence of the stopped period.
+- **Events:** none of its own; the period points at `organization.suspended.v1` and `organization.reactivated.v1`.
 
 ---
 
@@ -886,6 +927,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** único de par + `(relationship_id, status)`.
 - **Retención:** con la persona.
 - **Eventos:** `privacy.session_visibility_denied.v1`, `privacy.session_visibility_restored.v1`.
+- **A break-glass window reads them (code branch `feat/backoffice-last-gaps`, migration `20261122100000`, `HU-BO-008` c4).** The policy `session_visibility_denials_select_break_glass` lets the reader of a live window over her training see her active denials, so the window can say which sessions she hid and from which gym. `support.break_glass_hidden_sessions` returns them beside the sessions; no organization reads them, and `execution.session_projection` still never says a session was hidden.
 - **As implemented (STUDIO-47/48, migration `20261107090000_a_coach_reviews_what_a_client_trained.sql`).** Constraints:
   - `pk_session_visibility_denials`;
   - `uq_session_visibility_denials_pair`;
@@ -963,7 +1005,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `subject_person_id` y `actor_person_id` → `identity.people(id) RESTRICT`; `subject_organization_id → organizations.organizations(id) RESTRICT`. Las referencias de alto volumen a relación, grant y caso se validan en la entrada cerrada, no con FK dura sobre cada partición.
 - **Uniques y checks:** PK `(id,occurred_at)`; `CHECK (num_nonnulls(subject_person_id,subject_organization_id)=1)`; rango mensual; `access_events_id_partition_time_chk` exige UUIDv7 y `occurred_at=extensions.uuid_v7_timestamp(id)`. Actor humano obligatorio. La rama personal conserva sus reglas live/frozen/break-glass. La rama organización exige `access_mode='organization_operational'`, `actor_membership_id` activo del mismo tenant y de `actor_person_id`, `resource='organizations.organization_context'` y relación/grant/caso/scope/version nulos. `privacy.log_access_event` es la única entrada y `privacy.enforce_access_event_context_tg` valida `IX-23`.
 - **Actores:** la persona consulta las suyas mediante `privacy.v_my_access_events`; `A12` audita metadatos break-glass mediante `support.list_break_glass_audit_events`; `A10` consulta sus ejercicios en `support.break_glass_events`, no esta tabla. `privacy.log_access_event` inserta en la misma transacción de la lectura.
-- **Implementado (`HU-BO-030`, `OP-SUP-009`):** `privacy.list_access_events` y `privacy.count_withheld_access_events`. La autoridad —`audit_platform_access` sobre el rol base— la resuelve `privacy.require_access_log_auditor`, invocado con `perform` dentro de `plpgsql`: invocado como elemento del `FROM` en una función `language sql` devuelve `void`, el planificador puede eliminarlo y la comprobación no se ejecuta. Ese error se cometió primero y `T-PRV-AUD-01` lo detectó.
+- **Implementado (`HU-BO-030`, `OP-SUP-009`):** `privacy.list_access_events` y `privacy.count_withheld_access_events`. La autoridad —`audit_platform_access` sobre el rol base— la resuelve `privacy.require_access_log_auditor`, invocado con `perform` dentro de `plpgsql`: invocado como elemento del `FROM` en una función `language sql` devuelve `void`, el planificador puede eliminarlo y la comprobación no se ejecuta. Ese error se cometió primero y `T-PRV-AUD-01` lo detectó. Since allfitone#159 (`20261104100400`) the log is read with the paged `privacy.page_access_events`; the code branch `feat/backoffice-last-gaps` drops `privacy.list_access_events` (`20261122120000`), which nothing called any more.
   - **Append-only real desde `20260911030000`.** Antes de esa migración `UPDATE` y `DELETE` sobre esta tabla funcionaban: lo único que los impedía era que `allfit_api` no tiene permisos, lo que protege las rutas y no la tabla. `privacy.reject_access_event_rewrite` los rechaza con `55000`, también para el dueño. Soltar una partición mensual es DDL y un trigger de fila no la ve, así que la retención no se afecta.
   - **Separación de deberes por caso, no global.** Un auditor que pidió o aprobó una ventana break-glass no audita *esa* ventana y sigue auditando todas las demás. La versión global es más fácil de escribir y dejaría el registro sin auditor posible para cualquiera que haya aprobado algo alguna vez.
   - **Lo retenido se cuenta en su propia consulta**, para que sobreviva a una lista vacía: sin ese número, un auditor que filtra hasta su propia ventana lee «nadie accedió» cuando accedió él. Las dos consultas comparten un único predicado, `privacy.is_own_break_glass_case`, para que el conteo nunca describa un conjunto distinto del que se retiró, y la API las lee en una sola transacción.
@@ -1091,6 +1133,35 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
   `tax_or_accounting_obligation`), que es lo que pide el criterio 5. Suma `case_reference` (la
   orden o requerimiento que sustenta el hold) y `released_by_person_id`. Un trigger impide
   borrar la fila: un hold es evidencia.
+- **As built since allfitone#163 (migration `20261104140000`):** a hold names a person and
+  kinds of their data, and no hold is indefinite.
+  - **New columns.** `subject_person_id uuid` (nullable, only for holds filed before, which
+    named dispositions and not a person; `→ identity.people(id) RESTRICT`) and
+    `lapsed_at timestamptz` (nullable).
+  - **Statuses.** `status` gains `lapsed` (`ck_legal_holds_status`), and
+    `ck_legal_holds_lapsed` makes `lapsed` and `lapsed_at` go together. A hold is released by
+    somebody or lapses on its own date, never both.
+  - **Index.** `idx_legal_holds_subject (subject_person_id, status, valid_to)`.
+  - **Ownership.** The table moved to `allfit_owner`, which owns the deletions that now
+    read it.
+  - **Who changes it.** Only `privacy.lapse_legal_holds`, run by the privacy worker, sets
+    `lapsed`.
+
+### 7.15.1 `privacy.legal_hold_categories`
+
+Built in migration `20261104140000_a_legal_hold_keeps_what_it_names.sql` (`HU-BO-033`).
+
+- **Purpose:** the kinds of a person's data a hold keeps.
+- **Domain / source of truth:** Privacy.
+- **Classification:** `audit`.
+- **Columns:** `legal_hold_id uuid` · `data_classification_code text`.
+- **FKs and deletion:** `legal_hold_id → legal_holds(id) RESTRICT`; `data_classification_code → data_classifications(code) RESTRICT`.
+- **Uniques and checks:** primary key `(legal_hold_id, data_classification_code)`. The trigger `trg_legal_hold_categories_immutable` (`privacy.reject_hold_category_rewrite_tg`) refuses any change after the hold is applied (`55000`, «what a hold covers is fixed when it is applied»). `privacy.apply_legal_hold` accepts only kinds that a published retention policy disposes of on request.
+- **Actors:** `privacy.apply_legal_hold` inserts; the person's deletions and the privacy worker read it.
+- **RLS:** forced; `legal_hold_categories_all_owner` for `allfit_owner` only.
+- **Queries and indexes:** by hold through the primary key; `idx_legal_hold_categories_classification (data_classification_code)`.
+- **Retention:** audit, with its hold.
+- **Events:** none of its own.
 
 ### 7.16 `privacy.hold_applications`
 
@@ -1110,6 +1181,13 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
   hold vigente por ítem, porque dos harían ambigua la liberación. Suma `released_at`. Liberar
   devuelve el ítem a `pending` y a nada más: ejecutar la eliminación de alguien no es decisión
   de quien revisa.
+- **As built since allfitone#163:** the person's own deletion opens an application when a
+  live hold covers the kind of data she deletes, and her record stays. Releasing or lapsing
+  a hold hands each item to another live hold over the same data, or back to `pending`.
+  Then the privacy worker's `privacy.execute_due_dispositions` executes what is pending and
+  due: the release still decides nothing by itself. A disposition's hold on its target is
+  now a key checked at commit (deferrable `no action`) instead of `restrict`, so the worker
+  can delete the row while its disposition still names it.
 
 ---
 
@@ -1180,7 +1258,7 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **FKs y borrado:** `discipline_code → disciplines(code) RESTRICT`; `owner_organization_id → organizations.organizations(id) RESTRICT`; `owner_person_id → identity.people(id) RESTRICT`; `successor_movement_id → movements(id) RESTRICT`.
 - **Uniques y checks:** `CHECK` de un solo owner según `content_scope`; `UNIQUE parcial (owner_organization_id, normalized_name) WHERE content_scope='organization'`; `uidx_movements_global_name`, único parcial sobre `normalized_name WHERE content_scope='global'`: dos movimientos globales con el mismo nombre son el mismo escrito dos veces (`HU-BO-022`).
 - **Actores:** lectura autenticada de globales publicados; owner personal u organización con membresía vigente leen/escriben su contenido; la plataforma publica y archiva globales (`OP-CAT-004`, `OP-CAT-005`), y `trg_movements_before_delete_global` rechaza (`55000`) borrar uno.
-- **RLS:** `global` abierto; `organization` solo a su organización con membresía; `person` solo a su dueño. `movements_all_platform` añade la curaduría: actor `support` y `content_scope = 'global'` sin dueño.
+- **RLS:** `global` abierto; `organization` solo a su organización con membresía; `person` solo a su dueño. `movements_all_platform` añade la curaduría: actor `support` y `content_scope = 'global'` sin dueño. A person or a gym read a global movement only while it was `published`, so archiving one emptied its name where it had been used. The code branch `feat/backoffice-last-gaps` adds `movements_select_offered_global` (`20261122130000`, `HU-BO-022` c3): a read-only policy for a global movement that was ever offered (`published`, `deprecated` or `archived`); a `draft` stays out of reach. It sits beside `movements_all_actor_access` rather than widening it, because that `for all` policy would also let a function update an archived movement and accept it back. Search and new content still filter `published` themselves.
 - **Consultas / índices:** `(content_scope, owner_organization_id, status)`; `(content_scope, discipline_code, status)`; índice sobre `normalized_name`.
 - **Retención:** archivado, no borrado, si está referenciado.
 - **Eventos:** `catalog.private_movement_created.v1`, `catalog.private_movement_updated.v1`, `catalog.private_movement_archived.v1`.
@@ -1930,6 +2008,10 @@ administraba desde una relación, y `ended` lo escribe la persona sobre lo suyo.
 - **Consultas / índices:** `(person_id, ended_at)`, `(organization_id, ended_at)`, `(relationship_id, ended_at)` y el unique parcial de fuente abierta.
 - **Retención:** se conserva como evidencia del periodo bloqueado junto con el evento causal; su cierre no altera ni revive grants, relaciones, membresías, asignaciones o sesiones.
 - **Eventos:** ninguno propio; la transición causal emite el evento de suscripción u organización correspondiente.
+- **As built for a gym's suspension (`HU-BO-016`):**
+  - **Opening and closing.** `organizations.suspend_organization` opens one row per person with a live relationship with the gym, with `source_kind = 'organization_suspension'`, both flags true and `created_by_kind = 'support'`. `organizations.reactivate_organization` closes the rows of that suspension's event.
+  - **Who reads.** The policy `service_access_blocks_select_lifecycle` lets `manage_organization_lifecycle` read organization blocks, so the Backoffice can count the people affected.
+  - **What reads them.** Migration `20261105101000` made the program a suspended gym assigned show paused and refuse to start. Migration `20261105101100` (allfitone#165) extended that hold to any open block that `blocks_future_sessions`, an unpaid plan included. `planning.session_hold_of` derives it at read time, as `{state, cause}`. `access_control.has_service_block` answers a coach only whether a block is open, through the policy `service_access_blocks_select_service_block`. `access_control.can_access(..., 'contribute')` refuses while one is open, and `planning.require_training_grant` says why with `AF424`. Nothing is written to a session: a day missed while it lasted stays missed.
 
 ### 9.18 `planning.program_version_goals`
 
@@ -2507,6 +2589,28 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Retención:** permanente; referenciado por `meal_items.product_id`.
 - **Eventos:** ninguno.
 
+### 10A.12 `nutrition.media_disposals`
+
+Built in migration `20261007100000_what_a_person_eats_is_theirs.sql` (ADR-039); the sweep
+columns come with migration `20261122150000_the_worker_sweeps_photo_disposals.sql` (code
+branch `feat/backoffice-last-gaps`, merge and deploy pending).
+
+- **Purpose:** the queue of meal photos to remove from the object store: the photo a revision replaced, or the one of a deleted meal.
+- **Domain / source of truth:** Nutrition. The object store holds the file.
+- **Classification:** `nutrition`: the row names the object key of a person's meal photo.
+- **Columns:** `id uuid` · `person_id uuid` · `media_ref text` · `requested_at timestamptz` (default `clock_timestamp()`) · `sealed_at timestamptz` (nullable) · `purge_attempts integer` (default `0`) · `next_attempt_at timestamptz` (nullable).
+- **FKs and deletion:** `person_id → identity.people(id) RESTRICT`.
+- **Uniques and checks:** `ck_media_disposals_ref` (`media_ref` starts with `nutrition/`); `ck_media_disposals_purge_attempts` (`purge_attempts >= 0`).
+- **Actors:**
+  - **The person's revision or deletion** inserts the row.
+  - **The privacy worker** inserts it when it deletes a meal after a legal hold ends (`media_disposals_insert_worker_disposal`, allfitone#163).
+  - **The API** removes the photo right after the commit and seals the row with `nutrition.seal_media_disposal`.
+  - **The worker's `media_disposal` job** sweeps the rows nobody removed. That covers the meal the worker deleted, with no API request around it, and a removal the store refused. `nutrition.claim_media_disposals(limit)` and `nutrition.seal_swept_media_disposal(id)` behave as their `identity` twins in §4.7.3.
+- **RLS:** forced. `media_disposals_all_self` for the person, the worker's insert policy, `media_disposals_select_worker_sweep`, and `media_disposals_update_worker_sweep`, which changes only unsealed rows. `allfit_api` has no privilege on the table.
+- **Queries and indexes:** `idx_media_disposals_pending (requested_at) WHERE sealed_at IS NULL`; the claim locks with `for update skip locked`.
+- **Retention:** a sealed row stays as evidence that the file was removed.
+- **Events:** none of its own; a meal deleted by the worker announces its deletion through the meal.
+
 ## 11. Schema `system`
 
 ### 11.1 `system.outbox_events`
@@ -2919,18 +3023,18 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 
 | Schema | Tablas fichadas |
 | --- | --- |
-| `identity` | 21 |
-| `organizations` | 11 |
+| `identity` | 22 |
+| `organizations` | 12 |
 | `relationships` | 6 |
-| `privacy` | 17 |
+| `privacy` | 18 |
 | `catalog` | 18 |
 | `planning` | 23 |
 | `execution` | 14 |
-| `nutrition` | 8 |
+| `nutrition` | 9 |
 | `payments` | 12 |
 | `system` | 4 |
 | `support` | 5 |
-| **Total** | **139** |
+| **Total** | **143** |
 
 ### 14.2 Invariantes transversales confirmadas por el diccionario
 

@@ -1756,6 +1756,65 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Evento de dominio** | `organization.cancelled.v1` |
 | **Reglas** | `HU-BO-015`. `cancelled` solo se alcanza desde `unclaimed` y conserva la auditoría |
 
+#### `OP-ORG-023` — Fijar el cupo de invitados de un gimnasio
+
+Added with `HU-BO-034`, which began as the gap `NEW-ORG-INVITE-QUOTA`. Built in migration
+`20261015120000_what_a_gym_may_fill.sql` (allfitone#108). Migration
+`20261108090000_a_quota_names_the_agreement_that_sold_it.sql` (allfitone#175) added the agreement
+reference and dropped the signature without it.
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/organizations/{organizationId}/guest-quota` (`setBackofficeOrganizationGuestQuota`), body `{seats, agreement_reference}`, `200 OrganizationGuestQuota` |
+| **Actor** | `A11` with the base role, `manage_platform_commercial`, AAL2 and the duty in force (`organizations.require_platform_commercial_duty`, `42501` → `403`). It is not the duty that creates a gym (`manage_organization_lifecycle`, `OP-ORG-018`) |
+| **Filtros obligatorios** | `seats` from 1 to 1,000,000, or `null` for no limit; zero is refused. `agreement_reference` is required: one line of at most 120 characters, trimmed. A `closed` or `cancelled` gym is not sold a quota (`55000` → `409`) |
+| **Transacción** | Locks the organization, writes `guest_quota_seats`, `guest_quota_agreement_reference` and `revision_number + 1`, and records `organization.guest_quota_set.v1` with the previous seats and agreement as `before_snapshot`, the person and the duty assignment |
+| **Idempotencia** | `Idempotency-Key` and `Command-Id` (`system.begin_idempotency`, `OP-ORG-023`). The same number under the same agreement writes nothing; the same number under a new agreement is a renewal and is recorded |
+| **Paginación y orden** | Not applicable. The response carries the whole history, newest first |
+| **Offline / concurrencia** | `no-store`. Two operators deciding at once are serialized by the row lock |
+| **Información sensible** | Commercial terms of the gym. No personal data: the occupancy is a count |
+| **Evento de dominio** | `organization.guest_quota_set.v1` in `organizations.organization_events`; no outbox event |
+| **Reglas** | A live relationship and an invitation still awaiting an answer each take a place. `organizations.organization_guest_occupancy` counts them, and `HU-STUDIO-087` enforces the quota with the same function. Lowering the quota below the occupancy ends no relationship and revokes no invitation, because the command has no statement that could. The gym is over its quota, and the next invitation is refused (`AF409`, migration `20261103003415_enforce_guest_quota.sql`). The response puts `occupied`, `relationships_active`, `invitations_pending`, `places_left` and `over_quota` beside the number, because a quota cannot be judged without them |
+
+#### `OP-ORG-024` — Suspender un gimnasio
+
+Added with `HU-BO-016`, which began as the gap `NEW-ORG-SUSPEND`. Built in migrations
+`20261018120000_an_organization_can_be_suspended.sql` and
+`20261018130000_suspending_a_gym_without_destroying_it.sql`.
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/organizations/{organizationId}/suspension` (`suspendBackofficeOrganization`), body `{reason_code}`, `200 OrganizationSuspension` |
+| **Actor** | `A10` with the base role, `manage_organization_lifecycle`, AAL2 and the duty in force |
+| **Filtros obligatorios** | `reason_code` from the closed list `nonpayment`, `terms_breach`, `security_incident`, `legal_requirement` (`22023` → `422`). Only an `active` gym is suspended: one nobody claimed is not operating, and `cancelled` or `closed` are terminal (`55000` → `409`) |
+| **Transacción** | Sets `status = 'suspended'` and `suspended_at`; records `organization.suspended.v1` with the person and the duty assignment; opens one `organizations.organization_suspensions` period; opens one `planning.service_access_blocks` row (`organization_suspension`, both flags true) per person with a live relationship with the gym; enqueues `organization.suspended.v1` |
+| **Idempotencia** | `Idempotency-Key` and `Command-Id`. Suspending a suspended gym converges and opens no second period |
+| **Paginación y orden** | Not applicable |
+| **Offline / concurrencia** | `no-store`. `uidx_organization_suspensions_open` allows one open period per gym |
+| **Información sensible** | The reason, and how many people are affected. No person is named |
+| **Evento de dominio** | `organization.suspended.v1` (`organization_id`, `reason_code`) |
+| **Reglas** | Nothing is destroyed: the command has no statement that revokes a grant, ends a relationship, drops a membership or deletes a session. The functions that ask `status = 'active'` stop the gym from inviting, assigning, publishing and charging, and `payments.resolve_pro` drops its clients to the free plan. Since allfitone#165 the sessions of a program the gym assigned show paused and refuse to start (`23514`), and its coach contributes nothing (`AF424` → `409 service-paused`). Her own programs are untouched. The policy `service_access_blocks_select_lifecycle` lets this duty count the people affected |
+
+#### `OP-ORG-025` — Reactivar un gimnasio suspendido
+
+Added with `HU-BO-016` criteria 6 and 7, in the same migration as `OP-ORG-024`.
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/organizations/{organizationId}/reactivation` (`reactivateBackofficeOrganization`), no body, `200 OrganizationSuspension` |
+| **Actor** | `A10` with the base role, `manage_organization_lifecycle`, AAL2 and the duty in force |
+| **Filtros obligatorios** | A `suspended` gym with its open period; one that was never suspended answers `409` (`55000`) |
+| **Transacción** | Sets `status = 'active'`, clears `suspended_at`, records `organization.reactivated.v1`, ends the open period with who lifted it, closes the blocks opened by that suspension's event and enqueues `organization.reactivated.v1` |
+| **Idempotencia** | `Idempotency-Key` and `Command-Id`. Reactivating a gym that is operating converges |
+| **Paginación y orden** | Not applicable |
+| **Offline / concurrencia** | `no-store`. A suspended gym without an open period answers `40001` |
+| **Información sensible** | Ninguna |
+| **Evento de dominio** | `organization.reactivated.v1` |
+| **Reglas** | Subtractive: it closes only the blocks of this suspension, found by its event and never by person or organization, and restores no copy of anything. A subscription suspended for non-payment during the period keeps denying, because its block is a different row. Nothing revoked, ended, cancelled, started or expired during the suspension comes back, and the days missed stay missed |
+
 #### `OP-REL-001` — Invitar a una persona como cliente
 
 | Campo | Valor |
@@ -2125,9 +2184,8 @@ Reglas que gobiernan todo el dominio:
 | `OP-PRV-021` | Seguir las solicitudes de eliminación | Consulta | `A6` con `manage_privacy_requests` |
 | `OP-PRV-022` | Consultar las categorías de información | Consulta | `A2`, `A3`–`A6` |
 | `OP-PRV-023` | Ver qué nos autorizó cada persona | Consulta | `A3`–`A5` con capacidad de directorio |
+| `OP-PRV-024` | List legal holds | Consulta | `A12` con `manage_privacy_requests` |
 | `OP-PRV-025` | List historical access cases | Consulta | `A3`–`A5`: every case with `manage_historical_access`, otherwise only the cases that authorize them |
-
-`OP-PRV-024` is not listed here, but it is taken: the OpenAPI assigns it to `listBackofficeLegalHolds` (`GET /backoffice/v1/legal-holds`).
 
 ---
 
@@ -2221,6 +2279,7 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | Un hold **suspende disposición**; no concede ni mantiene acceso operativo. No existen holds globales ni indefinidos: alcance, motivo, vigencia y liberación son obligatorios y auditables |
 | **Falla cerrada** | Sin alcance acotado o sin vigencia, rechazo |
 | **Implementado** | `privacy.apply_legal_hold` sobre `POST /backoffice/v1/legal-holds`. La separación de deberes se comprueba **por persona**, no por caso: quien pidió o aprobó una ventana break-glass sobre alguien no puede suspender la disposición de esa persona. Responde `AF403`, distinto del `42501` general, para que la pantalla diga cuál de los dos 403 es. Un ítem ya ejecutado responde `55000` y uno inexistente `P0002` |
+| **As built since allfitone#163** | Migration `20261104140000_a_legal_hold_keeps_what_it_names.sql` replaced the function. The first version held only dispositions that were already waiting, and none ever waited: a person's own deletion opened its disposition and executed it in one transaction. A hold now **names a person and kinds of their data**: `privacy.apply_legal_hold(actor, session, scope_description, reason_code, case_reference, valid_to, subject_person_id, data_classification_codes, idempotency_key, command_id, request_hash)`. It is applied when the order arrives, and covers what of those kinds already waits and what she asks to delete while it is in force. Refusals: no kind named (`22023`, «a legal hold names the kinds of data it keeps»); a kind no published policy disposes of (`22023`); nobody with that identifier (`P0002`); the same person-level separation of duties (`AF403`). **Her deletion asks first.** Under a live hold, `nutrition.delete_meal`, `identity.delete_body_progress` and `identity.delete_health_context` keep the record and leave its disposition suspended in an open case. The answer says so, on what ground and until when, never the case reference, the scope or who applied it; for a meal it is `202 MealDeletionHeld`. Asking again answers the same case |
 
 #### `OP-PRV-010` — Liberar un hold legal
 
@@ -2239,6 +2298,7 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | Liberar reanuda la disposición de los ítems **dentro de su alcance** y solo de esos |
 | **Falla cerrada** | — |
 | **Implementado** | `privacy.release_legal_hold` sobre `POST /backoffice/v1/legal-holds/{id}/release`. Devuelve los ítems a `pending` y nunca los ejecuta; un hold ya liberado responde `55000`, y la misma separación de deberes aplica al liberar |
+| **As built since allfitone#163** | Releasing still executes nothing by itself, and a hold already released or lapsed answers `55000`. **No hold is indefinite.** A hold is live while `valid_to` is ahead: one past its date suspends nothing new before any sweep runs, and reads as lapsed. The worker's `privacy_disposition` job then runs `privacy.lapse_legal_holds`, which sets `status = 'lapsed'` and `lapsed_at`, and only the privacy worker may call it (`42501`). What a hold stops holding passes to another live hold over the same data, so a renewed order leaves no gap, or goes back to `pending`. The same job then runs `privacy.execute_due_dispositions`, which executes what is pending and due as the person's own deletion would have, attributed to `privacy_worker`. The row goes, a meal's photo is queued and its deletion announced, and the case closes (`HU-BO-033` criterion 4) |
 
 #### `OP-PRV-011` — Publicar una versión de definición de scope
 
@@ -2469,6 +2529,25 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | **El filtro sale del vínculo, no del permiso.** La política de `privacy.data_grants` estrecha a la organización —`person_id = person() or organization_id = org()`— y no sabe de asignación. En la ficha de un vínculo eso basta, porque la proyección de permisos sólo se alcanza después de que el vínculo pasó su guarda; en un registro a través de clientes no, y leer `data_grants` sola entrega a un coach lo que autorizaron clientes que no atiende. La unión obligatoria con `relationships.service_relationships` es la guarda, no una conveniencia. **Criterio 5:** esto es un informe y nunca la fuente que decide un acceso; quien vaya a leer un dato resuelve la política en ese instante, dentro de la transacción que escribe el registro de acceso |
 | **Falla cerrada** | Sin capacidad de directorio, `42501`. Un cursor a medias o un tamaño de página fuera de rango, `22023` — no la primera página, que se leería como filas saltadas |
 | **Implementado** | `privacy.list_authorized_scopes`. Cubierta por `T-PRV-SCOPES-01`, cuya aserción de negación se escribió **antes** de la unión y se vio fallar: un coach recibía tres filas donde dos eran suyas. El test se cae el día que alguien quite esa unión |
+
+#### `OP-PRV-024` — List legal holds
+
+Added with `HU-BO-033` in migration `20261104140000_a_legal_hold_keeps_what_it_names.sql`
+(allfitone#163), so the officer can find the holds in force and the ones that ended.
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /backoffice/v1/legal-holds` (`listBackofficeLegalHolds`) with the optional query `status` and `limit`, `200 LegalHoldPage`, `no-store` |
+| **Actor** | `A12` with the base role, `manage_privacy_requests`, AAL2 and the duty in force (`privacy.require_privacy_request_manager`) |
+| **Filtros obligatorios** | `status` is in force (the default) or ended; the database refuses anything else with `22023`. `limit` 1 to 200 |
+| **Transacción** | One, `privacy.list_legal_holds`. It writes one `privacy.access_events` row per person the page names before returning, because each hold names a person by identifier |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | In force: the one ending soonest first. Ended (released by an officer or lapsed on its date): the latest first |
+| **Offline / concurrencia** | `no-store`. A hold past its date reads as lapsed before the worker records it, because it already keeps nothing new |
+| **Información sensible** | The person's identifier, the kinds of data held, the reason, the case reference and who applied and released it |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | `privacy.legal_hold_projection` shapes each hold. `T-PRV-HOLD-02` |
 
 #### `OP-PRV-025` — List historical access cases
 
@@ -4610,6 +4689,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Reglas** | Sólo lectura. Otro A10, un A12 o el mismo actor con otra solicitud no puede ejercer |
 | **Falla cerrada** | Cualquier falla de autorización o auditoría devuelve cero contenido |
 | **Implemented (ADR-046)** | Unchanged. A window opened since ADR-046 is `approved` from the request with 0 required approvals, so its requester can exercise it at once; every read still writes `support.break_glass_events` and `privacy.access_events` before content |
+| **Code branch `feat/backoffice-last-gaps` (merge and deploy pending)** | **What she hid** (`HU-BO-008` c4, migration `20261122100000`): a training read returns `hidden_sessions` beside the sessions, never inside them: each active hiding among the sessions on the page, with its relationship and the gym's name. A hiding she took back is not listed. `support.break_glass_hidden_sessions` reads it through the policy `session_visibility_denials_select_break_glass`, which admits only the reader of a live window over her. **Every session** (migration `20261122140000`): `support.exercise_break_glass` gains `p_before_started_at` and `p_before_id`, and the body takes the optional `before` cursor. A training read answers the 100 sessions older than the cursor and `has_older_sessions`; without a cursor it answers the newest 100, as before. Both halves of the cursor or neither, and only for a training category, else `422` (`22023`). Each page passes the same gate and writes its own events. The six-argument function is dropped, so an API older than the migration cannot exercise a window, and an API newer than the database cannot either |
 
 **Contenido implementado (`HU-BO-009`, mediciones).** Con `body_progress`, una lectura permitida responde `outcome: "allowed"` y `content.body_progress`, con hasta 500 mediciones de la persona del expediente, las más recientes primero, y la misma proyección que ve la persona: `has_media` sin referencia. `body_progress` lee sólo `identity.body_progress_records`; apuntarla a otro `resource_type` se registra y responde `denied` con `resource_out_of_scope`. Las categorías cuyos datos la plataforma todavía no guarda siguen respondiendo `content_unavailable`.
 
@@ -4704,6 +4784,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Muestra vigentes y retiradas, con quién asignó y cuándo. Ninguna organización ni persona externa lo consulta |
 | **Falla cerrada** | — |
+| **Code branch `feat/backoffice-last-gaps` (merge and deploy pending)** | `HU-BO-029` c1, migration `20261122090000_the_team_names_who_holds_access.sql`. Each assignment carries `person_name` and `granted_by_name`, the `display_name` of the holder and the grantor, null only when a person has no name on file. Naming a person is reading her, so `support.record_platform_access_read` writes one `privacy.access_events` row per distinct person a page names before it travels, as the person search does since ADR-046. The commands that return an assignment carry the names too and write no extra event, because each is itself a record of who acted on whom. The same applies to `OP-SUP-011` |
 
 #### `OP-SUP-009` — Consultar el registro de accesos de plataforma
 
@@ -4721,6 +4802,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Identifica a la persona real, deber, categoría, sujeto, propósito, resultado e instante. El registro es inmutable. Un auditor no revisa como independiente un caso que solicitó o aprobó. La persona afectada ve el reflejo minimizado desde su aplicación |
 | **Falla cerrada** | Si el registro no puede escribirse en el momento de una lectura, **esa lectura no ocurre** |
+| **Paged read** | allfitone#159 (`20261104100400_the_access_log_pages_to_the_end.sql`) reads the log to the end, one page at a time, with `privacy.page_access_events`. The unpaged `privacy.list_access_events` stayed for the API deployed before it. Migration `20261122120000_the_unpaged_access_log_read_goes.sql` (code branch `feat/backoffice-last-gaps`, merge and deploy pending) drops it: nothing called it, and nobody kept it in step with the paged read |
 
 #### `OP-SUP-010` — Asignar, suspender o revocar un deber de plataforma
 
@@ -4739,6 +4821,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Reglas** | Nadie se autoasigna; un deber no implica otro; vencer se evalúa por tiempo aunque el job no haya corrido |
 | **Falla cerrada** | Rol base ausente, catálogo/AAL/vigencia inválidos o autoasignación: rechazo |
 | **Implemented (ADR-046)** | Migration `20261114090000_an_admin_holds_every_duty.sql`. Every duty requires `allfit_admin`, and the role already brings all thirteen, so these commands only matter for a temporary duty granted before ADR-046. **Granting converges:** `support.assign_platform_duty` still validates the role, the catalogue and a window of at most 90 days, then answers the assignment the person already holds (scheduled or active, in any basis, preferring `admin_role`) and adds no row; granting an administrator a duty answers it with `basis: admin_role`. **A duty held through the role follows the role:** `support.suspend_platform_duty`, `support.revoke_platform_duty` and `support.recertify_platform_duty` (`POST .../{id}/recertification`, also `OP-SUP-010`) fail on it with `23514 a duty held through the admin role follows the role`, which the API answers as `409 conflict`; the rule lives in `support.preserve_platform_duty_history`, which also freezes `basis`. **Concurrency:** the current-assignment unique index is `(person_id, duty_code, basis)`, so a temporary duty from before lives beside the standing one and lapses on its own date, and two temporary ones of the same duty never coexist. The Backoffice web no longer offers a grant form. Tests: `T-SUP-STANDING-01`, `T-SUP-RECERT-01` |
+| **Recertification and lapse (allfitone#161)** | Migration `20261104120000_a_duty_is_recertified_and_closes_its_windows.sql` (`HU-BO-028` c4 and c5, `HU-BO-029` c2). **Recertifying:** `support.recertify_platform_duty` behind `POST /backoffice/v1/platform/duty-assignments/{assignmentId}/recertification` (`recertifyBackofficePlatformDuty`). It records who attests that a duty in force is still needed, and when, in `recertified_by_person_id` and `recertified_at`, which existed and nothing wrote. It requires `manage_platform_access` and AAL2, and never the duty's own holder (`42501`); a duty not in force answers `23514`. It does not extend the window: longer authority is a new assignment. Since ADR-046 a duty held through the role is never recertified on its own. **Lapsing:** `support.lapse_platform_duties` moves every duty past `valid_to` to `expired` and closes the break-glass windows of a requester left without `request_break_glass`. The worker's `platform_duty_lapse` job runs it each minute as `worker`, so no one is named as its author. The policies `break_glass_requests_select_worker` and `break_glass_requests_update_worker` let the worker see open requests and only close them. `support.close_revoked_platform_access` also closes the windows when the base role is withdrawn, which until then left them `approved` |
 
 #### `OP-SUP-011` — Consultar asignaciones de deber
 
@@ -4757,6 +4840,29 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Reglas** | Muestra historial, otorgante, vigencia, AAL, recertificación, suspensión y revocación; sin `DELETE` |
 | **Falla cerrada** | Deber del consultante ausente o vencido: rechazo |
 | **Implemented (ADR-046)** | Each `PlatformDutyAssignment` now carries the required `basis` (`granted` or `admin_role`). The Backoffice web shows an `admin_role` duty as «Permanente · rol admin» instead of its far `valid_to`, and «Sigue al rol» instead of the recertify, suspend and revoke actions. A temporary duty from before keeps its dates and actions until it lapses |
+| **Code branch `feat/backoffice-last-gaps` (merge and deploy pending)** | Each assignment carries `person_name` and `granted_by_name`, and a page writes one access event per person it names, as `OP-SUP-008` does |
+
+#### Backoffice reads built under their gap identifiers
+
+Seven Backoffice reads were built without an `OP-*` number. The contract still names them
+by the `NEW-*` gap of the traceability matrix (`x-allfit-operation`), so this table lists
+them under that name. Each one is a read with no domain writes, `no-store`, and checks
+its duty inside the database function (`42501` → `403`).
+
+| Gap identifier | Route | Function | Duty | Stories |
+| --- | --- | --- | --- | --- |
+| `NEW-SUP-DASHBOARD` | `GET /backoffice/v1/support/business` | `support.read_business_panel` | `view_platform_metrics` | `HU-BO-004`; `HU-BO-020` c1 and c2 |
+| `NEW-SUP-ATTENTION` | `GET /backoffice/v1/support/attention` | `support.read_attention_panel` | Each block shows only for the duty that can act on it | `HU-BO-005` |
+| `NEW-SUP-PERSON-PAYMENTS` | `GET /backoffice/v1/support/people/{personId}/payments` | `support.person_payments` | `view_billing_metadata` | `HU-BO-018` |
+| `NEW-SUP-BILLING-FOLLOW-UP` | `GET /backoffice/v1/support/billing-follow-up` | `support.billing_follow_up` | `view_billing_metadata` | `HU-BO-005` c1 and c5; `HU-BO-020` c3 and c4 |
+| `NEW-SUP-JOB-HEALTH` | `GET /backoffice/v1/support/job-health` | `support.list_job_health` | `diagnose_support_metadata` | `HU-BO-031` |
+| `NEW-SUP-ORG-SEARCH` | `GET /backoffice/v1/organizations` | `organizations.list_backoffice_organizations` | `diagnose_support_metadata` or `manage_organization_lifecycle` | `HU-BO-012` |
+| `NEW-SUP-ORG-DETAIL` | `GET /backoffice/v1/organizations/{organizationId}` | `organizations.read_backoffice_organization` | `diagnose_support_metadata` or `manage_organization_lifecycle` | `HU-BO-013` |
+
+The two billing reads and the gym's file write one `privacy.access_events` row per person
+they name before they answer; if the record fails, the read fails. The two panels name
+nobody. A figure of the business panel that counts people, or money paid by people, is
+`below_threshold` under the minimum of five.
 
 ### 7.10 Nutrición
 

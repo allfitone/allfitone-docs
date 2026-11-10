@@ -74,15 +74,42 @@ Con el gate apagado, sesión, logout, verificación de intentos ya abiertos, res
 
 Todas las rutas requieren `Origin` exacto, responden `Cache-Control: no-store` y `Referrer-Policy: no-referrer`, y nunca registran email, contraseña, TOTP, QR, clave manual, factor/challenge ID o tokens. The `allfit_backoffice_session` cookie uses path `/backoffice/v1` and `Max-Age=43200`. The session ends after 60 minutes without activity or 12 hours in all (ADR-046); PostgreSQL enforces both through `access_control.backoffice_idle_limit()` and `access_control.backoffice_session_lifetime()`, and `GET /backoffice/v1/session` reports `inactivity_expires_at` as the last activity plus 60 minutes.
 
-## Límites en Vercel
+## Límites por dirección
 
-Crear reglas por proyecto API sin persistir IP en PostgreSQL:
+**Before AWS, on Vercel.** These rules lived in the Vercel project of the API, with no IP
+stored in PostgreSQL:
 
 - password: 10 solicitudes cada 15 minutos por IP;
 - TOTP: 20 solicitudes cada 15 minutos por IP, además de cinco códigos inválidos por intento en PostgreSQL;
 - reset: 5 solicitudes por hora por IP.
 
 El rechazo es `429 rate-limited` con `Retry-After`. Las métricas son contadores sin PII para password, enrollment, challenge, verification, session, logout, reset y rate limiting.
+
+**On AWS.** The Vercel rules did not move with the API, so production has had no per-address
+limit since. The five-failure lockout per attempt in PostgreSQL still holds, but nothing
+slows down someone who tries many accounts from one address. It matters more for Space,
+whose sign-in passes through the API, so the identity provider only ever sees the API's
+address.
+
+The code branch `feat/backoffice-last-gaps` (`infra/modules/edge`) restores the limit with
+an AWS WAF web ACL on the load balancer. It takes effect when Terraform is applied in
+`infra/production`:
+
+- **Backoffice:** 20 `POST` per address in 5 minutes, over `/backoffice/v1/auth/password`,
+  `totp/verification` and `password-resets` together. A sign-in is two requests, so that
+  is ten sign-ins.
+- **Space:** 100 `POST` per address in 5 minutes, over `/space/v1/auth/sessions`,
+  `registrations`, `registrations/verification` and `password-resets`. It is looser
+  because a phone carrier puts many people behind one address.
+- **The answer** is the API's: `429` with `{"error":{"code":"rate-limited"}}`,
+  `Retry-After: 300` and `Cache-Control: no-store`. It also carries the CORS headers for
+  the Backoffice origin, so the screen reads the `429` instead of a network error.
+- **Nothing else is counted:** every other route and method passes untouched, and no
+  address reaches PostgreSQL.
+- **Cost (AWS price list, November 2026):** US$5 a month for the web ACL, US$1 a month per
+  rule (two), and US$0.60 per million requests inspected.
+- **Tests:** `infra/modules/edge/tests/edge.tftest.hcl` checks the limits, the window, the
+  `429` and the association with the load balancer.
 
 ## Bootstrap protegido
 
@@ -142,3 +169,27 @@ Para rollback, apagar primero `BACKOFFICE_AUTH_ENABLED`. No apagar worker, logou
 ## Límite de la garantía
 
 Password + TOTP es la evidencia AAL2 interna aprobada para V1, vinculada a la sesión y no a claims. TOTP puede ser objeto de phishing; Allfit no declarará cumplimiento integral de una oferta AAL2 moderna hasta incorporar WebAuthn/passkeys. Añadir `auth.allfit.one` posteriormente sólo cambia el branding y la configuración de páginas alojadas de WorkOS: no migra contratos HTTP, cookies, factores ni sesiones locales.
+
+### Password + TOTP is not WebAuthn (`HU-BO-001` criterion 7)
+
+**What the gap is.** A TOTP code is not bound to the site that asks for it. A page that
+imitates the Backoffice can take the password and the current code and replay both to the
+real Backoffice within the code's window, and the session it opens is a genuine AAL2
+session. WebAuthn and passkeys sign a challenge bound to the origin, so a look-alike page
+gets nothing it can replay. That is why V1 never claims phishing resistance or full
+equivalence with an AAL2 offer built on WebAuthn.
+
+**What limits the damage in V1:**
+
+- Every action checks the duty and the session's AAL2 again inside its own transaction.
+- A session lasts 12 hours at most and ends after 60 idle minutes (ADR-046).
+- An attempt ends at the fifth wrong code.
+- Signing out, or withdrawing the base role, revokes the session.
+- Every read of a person's data is recorded before it is returned, so a stolen session leaves
+  a trail in `privacy.access_events`.
+
+None of these stops the relay itself; they bound how long and how far a relayed session
+goes.
+
+**What closes it.** WebAuthn or passkeys as the Backoffice factor, which `DB-P5-019` keeps
+open. Until then, nobody should be told that the Backoffice sign-in resists phishing.

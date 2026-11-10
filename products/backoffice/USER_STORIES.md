@@ -601,7 +601,12 @@ nadie verifica, esa función no se puede usar.
 
 `E-BO-07` · imprescindible
 
-*Historia nueva del 1 de octubre de 2026, todavía sin construir. La consume `HU-STUDIO-087`.*
+*Historia nueva del 1 de octubre de 2026. La consume `HU-STUDIO-087`.*
+
+*Built (`OP-ORG-023`). The founder sets the quota from the gym's file, and `HU-STUDIO-087`
+refuses the invitation that would exceed it. Since allfitone#175 every decision also names
+the commercial agreement it was sold under (`HU-BO-027` c2 and c5). Without a quota a gym
+has no limit: every gym that existed before was sold without one.*
 
 **Criterios**
 
