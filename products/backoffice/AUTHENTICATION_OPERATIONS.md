@@ -142,3 +142,27 @@ Para rollback, apagar primero `BACKOFFICE_AUTH_ENABLED`. No apagar worker, logou
 ## Límite de la garantía
 
 Password + TOTP es la evidencia AAL2 interna aprobada para V1, vinculada a la sesión y no a claims. TOTP puede ser objeto de phishing; Allfit no declarará cumplimiento integral de una oferta AAL2 moderna hasta incorporar WebAuthn/passkeys. Añadir `auth.allfit.one` posteriormente sólo cambia el branding y la configuración de páginas alojadas de WorkOS: no migra contratos HTTP, cookies, factores ni sesiones locales.
+
+### Password + TOTP is not WebAuthn (`HU-BO-001` criterion 7)
+
+**What the gap is.** A TOTP code is not bound to the site that asks for it. A page that
+imitates the Backoffice can take the password and the current code and replay both to the
+real Backoffice within the code's window, and the session it opens is a genuine AAL2
+session. WebAuthn and passkeys sign a challenge bound to the origin, so a look-alike page
+gets nothing it can replay. That is why V1 never claims phishing resistance or full
+equivalence with an AAL2 offer built on WebAuthn.
+
+**What limits the damage in V1:**
+
+- Every action checks the duty and the session's AAL2 again inside its own transaction.
+- A session lasts 12 hours at most and ends after 60 idle minutes (ADR-046).
+- An attempt ends at the fifth wrong code.
+- Signing out, or withdrawing the base role, revokes the session.
+- Every read of a person's data is recorded before it is returned, so a stolen session leaves
+  a trail in `privacy.access_events`.
+
+None of these stops the relay itself; they bound how long and how far a relayed session
+goes.
+
+**What closes it.** WebAuthn or passkeys as the Backoffice factor, which `DB-P5-019` keeps
+open. Until then, nobody should be told that the Backoffice sign-in resists phishing.
