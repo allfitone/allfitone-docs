@@ -6557,7 +6557,9 @@ The design choices that follow from it:
    not change.
 2. **No key.** The worker gets an ECS task role allowed `ses:SendEmail` only on the `allfit.one`
    identity and its configuration set, and only from the configured sender (`ses:FromAddress`).
-   No other container gets a role. `RESEND_FROM_EMAIL` becomes `EMAIL_FROM` with the same value.
+   No other container gets a role. `RESEND_FROM_EMAIL` becomes `EMAIL_FROM`. Its value moved on
+   9 November 2026 from `invites@allfit.one`, which has no mailbox, to `hello@allfit.one`, which
+   has one in Google Workspace, so a reply reaches someone instead of bouncing.
    `EMAIL_FROM` and `EMAIL_PROVIDER` are plain environment of the worker, set in Terraform beside
    the role, so the address the role allows and the address the worker sends from are written in
    one place (`infra/production/main.tf`). `RESEND_API_KEY` leaves the secret with Resend.
