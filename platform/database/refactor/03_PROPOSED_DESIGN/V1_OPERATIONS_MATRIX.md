@@ -4689,6 +4689,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Reglas** | Sólo lectura. Otro A10, un A12 o el mismo actor con otra solicitud no puede ejercer |
 | **Falla cerrada** | Cualquier falla de autorización o auditoría devuelve cero contenido |
 | **Implemented (ADR-046)** | Unchanged. A window opened since ADR-046 is `approved` from the request with 0 required approvals, so its requester can exercise it at once; every read still writes `support.break_glass_events` and `privacy.access_events` before content |
+| **Code branch `feat/backoffice-last-gaps` (merge and deploy pending)** | **What she hid** (`HU-BO-008` c4, migration `20261122100000`): a training read returns `hidden_sessions` beside the sessions, never inside them: each active hiding among the sessions on the page, with its relationship and the gym's name. A hiding she took back is not listed. `support.break_glass_hidden_sessions` reads it through the policy `session_visibility_denials_select_break_glass`, which admits only the reader of a live window over her. **Every session** (migration `20261122140000`): `support.exercise_break_glass` gains `p_before_started_at` and `p_before_id`, and the body takes the optional `before` cursor. A training read answers the 100 sessions older than the cursor and `has_older_sessions`; without a cursor it answers the newest 100, as before. Both halves of the cursor or neither, and only for a training category, else `422` (`22023`). Each page passes the same gate and writes its own events. The six-argument function is dropped, so an API older than the migration cannot exercise a window, and an API newer than the database cannot either |
 
 **Contenido implementado (`HU-BO-009`, mediciones).** Con `body_progress`, una lectura permitida responde `outcome: "allowed"` y `content.body_progress`, con hasta 500 mediciones de la persona del expediente, las más recientes primero, y la misma proyección que ve la persona: `has_media` sin referencia. `body_progress` lee sólo `identity.body_progress_records`; apuntarla a otro `resource_type` se registra y responde `denied` con `resource_out_of_scope`. Las categorías cuyos datos la plataforma todavía no guarda siguen respondiendo `content_unavailable`.
 
@@ -4783,6 +4784,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Muestra vigentes y retiradas, con quién asignó y cuándo. Ninguna organización ni persona externa lo consulta |
 | **Falla cerrada** | — |
+| **Code branch `feat/backoffice-last-gaps` (merge and deploy pending)** | `HU-BO-029` c1, migration `20261122090000_the_team_names_who_holds_access.sql`. Each assignment carries `person_name` and `granted_by_name`, the `display_name` of the holder and the grantor, null only when a person has no name on file. Naming a person is reading her, so `support.record_platform_access_read` writes one `privacy.access_events` row per distinct person a page names before it travels, as the person search does since ADR-046. The commands that return an assignment carry the names too and write no extra event, because each is itself a record of who acted on whom. The same applies to `OP-SUP-011` |
 
 #### `OP-SUP-009` — Consultar el registro de accesos de plataforma
 
@@ -4800,6 +4802,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Identifica a la persona real, deber, categoría, sujeto, propósito, resultado e instante. El registro es inmutable. Un auditor no revisa como independiente un caso que solicitó o aprobó. La persona afectada ve el reflejo minimizado desde su aplicación |
 | **Falla cerrada** | Si el registro no puede escribirse en el momento de una lectura, **esa lectura no ocurre** |
+| **Paged read** | allfitone#159 (`20261104100400_the_access_log_pages_to_the_end.sql`) reads the log to the end, one page at a time, with `privacy.page_access_events`. The unpaged `privacy.list_access_events` stayed for the API deployed before it. Migration `20261122120000_the_unpaged_access_log_read_goes.sql` (code branch `feat/backoffice-last-gaps`, merge and deploy pending) drops it: nothing called it, and nobody kept it in step with the paged read |
 
 #### `OP-SUP-010` — Asignar, suspender o revocar un deber de plataforma
 
@@ -4837,6 +4840,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Reglas** | Muestra historial, otorgante, vigencia, AAL, recertificación, suspensión y revocación; sin `DELETE` |
 | **Falla cerrada** | Deber del consultante ausente o vencido: rechazo |
 | **Implemented (ADR-046)** | Each `PlatformDutyAssignment` now carries the required `basis` (`granted` or `admin_role`). The Backoffice web shows an `admin_role` duty as «Permanente · rol admin» instead of its far `valid_to`, and «Sigue al rol» instead of the recertify, suspend and revoke actions. A temporary duty from before keeps its dates and actions until it lapses |
+| **Code branch `feat/backoffice-last-gaps` (merge and deploy pending)** | Each assignment carries `person_name` and `granted_by_name`, and a page writes one access event per person it names, as `OP-SUP-008` does |
 
 #### Backoffice reads built under their gap identifiers
 
