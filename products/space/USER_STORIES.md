@@ -2215,6 +2215,193 @@ presenta con la tarjeta de Hoy, que es además lo que va a ver cada mañana si a
 
 ---
 
+## E-SP-17 · Lista de espera y lanzamiento
+
+Antes de que Allfit Space esté en las tiendas, la persona se une a una lista de espera en
+`space.allfit.one`, desde la web y sin cuenta. Es la única épica que ocurre fuera de la
+aplicación. La fuente es el documento interno «Estrategia de lanzamiento de Allfit Space»
+v1.0, y las decisiones de diseño están en `ADR-050`.
+
+Cuatro reglas gobiernan la épica:
+
+1. **Sin autorización no se guarda nada** (Ley 1581 de 2012).
+2. **Las primeras 100 personas que confirman su correo son Founding Members**, numeradas del #001
+   al #100 en el orden en que confirman.
+3. **Un referido cuenta en tres momentos.** Suma al contador cuando confirma su correo, a los
+   premios cuando crea su cuenta de Allfit Space después del lanzamiento, y al bono de un
+   embajador cuando paga su primer mes de Pro. Lo que se descarta no suma a nadie.
+4. **Nada se sortea.** Los lugares van por orden y los premios por número de referidos: un sorteo
+   exige autorización de Coljuegos.
+
+**El lanzamiento** es la fecha que alguien del equipo marca en el Backoffice cuando Allfit Space
+ya está publicado en App Store y Google Play (`HU-BO-037`). Desde ella corren los 7 días de los
+Founding Members y los 90 días tras los cuales se borran los datos de quien nunca creó su cuenta.
+
+Los embajadores se escribirán como historias cuando se cierren sus reglas (`TECH-305`).
+
+### HU-SP-115 — Unirme a la lista de espera
+
+**Como** persona interesada en Allfit Space
+**quiero** unirme a la lista de espera desde `space.allfit.one`
+**para** enterarme cuando abra y tener mi link para invitar.
+
+`E-SP-17` · imprescindible
+
+**Criterios**
+
+1. Doy mi nombre, mi correo y mi autorización de datos. Si llegué con el link o el código de alguien, mi inscripción guarda quién me invitó. El idioma es el de la página en que me uní.
+2. Sin autorización no se guarda nada. Se registran la fecha y la versión de la política que acepté.
+3. Recibo un código propio de 4 a 16 letras y números, fácil de dictar, y un link con ese código.
+4. Al unirme veo mi código, mi link y mi contador, y me llega el correo para confirmar (`HU-SP-116`).
+5. Un correo no se inscribe dos veces, y para esto `ana.ruiz+x@gmail.com` y `anaruiz@gmail.com` son el mismo. Si vuelvo a escribir un correo que ya está, la página no muestra código ni contador: solo dice «Te enviamos tu link a tu correo», y me llega mi enlace privado (`HU-SP-117`). Así nadie ve los datos de otra persona escribiendo su correo. A cambio, esa respuesta distinta revela que el correo ya estaba en la lista, y solo eso.
+6. Con un correo desechable no me puedo inscribir.
+7. Inscribirme con mi propio código, o desde el mismo dispositivo que quien me invitó, no le suma a nadie.
+8. Hay un límite de intentos por conexión.
+
+### HU-SP-116 — Confirmar mi correo
+
+**Como** persona que se unió a la lista
+**quiero** confirmar mi correo
+**para** que mi lugar cuente.
+
+`E-SP-17` · imprescindible · HU-SP-115
+
+**Criterios**
+
+1. Al unirme recibo un correo con un enlace de confirmación de un solo uso, que vence a los 7 días.
+2. El enlace abre una página donde confirmo con un botón. Abrir el enlace no confirma nada: los filtros de correo abren los enlaces solos.
+3. La fecha en que confirmo queda registrada, y define el orden de los Founding Members.
+4. Hasta que confirmo, no cuento en el contador de quien me invitó ni puedo ser Founding Member.
+5. El correo va en el idioma en que me uní e incluye mi código, mi link, mi contador y el enlace privado «Ver mis referidos».
+6. Si el enlace venció o perdí el correo, puedo pedir otro, con límite de intentos. El nuevo deja sin efecto el anterior.
+7. Confirmar otra vez no cambia nada: la página me dice que ya confirmé.
+
+### HU-SP-117 — Ver cuántas personas se han unido con mi link
+
+**Como** persona en la lista
+**quiero** saber cuántos referidos válidos llevo y cuántos me faltan para el siguiente nivel
+**para** seguir invitando.
+
+`E-SP-17` · imprescindible · HU-SP-116
+
+**Criterios**
+
+1. El contador suma a quienes se unieron con mi código y confirmaron su correo, sin contar lo descartado.
+2. Los niveles son 5, 15, 30 y 100. Veo cuántos llevo y cuántos me faltan para el siguiente.
+3. Lo veo al unirme y en cada correo de la lista.
+4. Lo consulto cuando quiera en «mi link», una página a la que solo llego con el enlace privado «Ver mis referidos» de cada correo. No pide contraseña.
+5. Ese enlace es largo, aleatorio y solo mío. Sirve para ver mi código, mi link y mi contador, y para salir de la lista (`HU-SP-123`); para nada más.
+6. Nunca veo los nombres ni los correos de las personas que invité.
+7. Un enlace inválido responde igual que uno que no existe, y me ofrece pedir el correo de nuevo.
+
+### HU-SP-118 — Ser Founding Member
+
+**Como** una de las primeras 100 personas en confirmar su correo
+**quiero** saber que soy Founding Member y qué número tengo
+**para** crear mi cuenta a tiempo y no perder mi lugar.
+
+`E-SP-17` · imprescindible · HU-SP-116
+
+**Criterios**
+
+1. Las primeras 100 inscripciones confirmadas reciben un número del #001 al #100, en el orden en que confirmaron.
+2. Me llega un correo que dice «Eres Founding Member #037» cuando recibo el número.
+3. Cuando Allfit Space abre, tengo 7 días para crear mi cuenta con el mismo correo. Dos días antes de que venzan me llega un aviso.
+4. Si no la creo a tiempo, pierdo el número. Lo recibe la siguiente inscripción confirmada que no tiene número, con el mismo número y 7 días desde ese momento.
+5. Antes de que venza mi plazo, el número también pasa a la siguiente persona si salgo de la lista o si el equipo marca mi inscripción como fraude (`HU-BO-035`).
+6. Una vez creo mi cuenta, el número es mío y no se transfiere. Solo lo pierdo si borro mi cuenta o por fraude comprobado, y entonces nadie lo hereda.
+7. Ser Founding Member no me impide ganar premios por referidos.
+
+### HU-SP-119 — Ver mi insignia de Founding Member en mi perfil
+
+**Como** Founding Member
+**quiero** ver «Founding Member #037» en mi perfil de Allfit Space
+**para** que mi lugar quede reconocido.
+
+`E-SP-17` · imprescindible · HU-SP-118
+
+**Criterios**
+
+1. Al crear mi cuenta de Allfit Space con el mismo correo, ya verificado, mi inscripción queda enlazada a mi cuenta.
+2. Si tengo número, mi perfil muestra la insignia con el número de forma permanente, pague Pro o no.
+3. El número queda en mi cuenta: no se pierde cuando se borran los datos de la lista (`ADR-050`).
+4. Si borro mi cuenta, pierdo la insignia y el número.
+5. Enlazar mi cuenta también me cuenta como referido con cuenta para quien me invitó, si la creé después del lanzamiento (`HU-SP-121`).
+
+### HU-SP-120 — Pagar Allfit Pro al precio de fundador
+
+**Como** Founding Member
+**quiero** pagar Allfit Pro a COP 19.900 al mes
+**para** mantener ese precio mientras siga suscrito.
+
+`E-SP-17` · imprescindible · HU-SP-119, HU-SP-085
+
+**Criterios**
+
+1. La pantalla de Pro me ofrece la suscripción de fundador solo si tengo número de Founding Member. Los demás ven el precio normal.
+2. El precio se mantiene mientras la suscripción siga activa, aunque Allfit suba el precio de Pro.
+3. Si la cancelo y vuelvo, ya no tengo el precio de fundador.
+4. La suscripción de fundador da Allfit Pro igual que la normal (`HU-SP-086`).
+
+### HU-SP-121 — Recibir mis premios por referidos
+
+**Como** persona que invitó a otras
+**quiero** recibir los meses de Allfit Pro que gané
+**para** usarlos en Allfit Space.
+
+`E-SP-17` · imprescindible · HU-SP-117, HU-SP-119
+
+**Criterios**
+
+1. Para los premios solo cuentan los referidos que confirmaron su correo y crearon su cuenta de Allfit Space después del lanzamiento, con el mismo correo.
+2. Niveles: 5 referidos dan 1 mes, 15 dan 2 meses, 30 dan 3 meses y 100 dan 1 año de Allfit Pro y merch de Allfit One.
+3. **Los niveles se suman:** recibo el premio de cada nivel que alcanzo. Con 30 referidos recibo 1 + 2 + 3 = 6 meses; con 100, 18 meses y el merch.
+4. Cada premio me llega por correo como un código de oferta de la tienda del teléfono en que creé mi cuenta, tomado de la bolsa que carga el equipo (`HU-BO-036`). Cada código se entrega una sola vez y queda registrado a quién.
+5. Necesito mi propia cuenta para recibir premios. Si llego a un nivel antes de crearla, el premio me espera hasta que la cree.
+6. Si la bolsa se queda sin códigos, el premio queda pendiente y se entrega cuando el equipo cargue más.
+7. Un premio entregado no se retira. Un referido marcado como fraude deja de contar para los siguientes.
+8. Del merch se encarga el equipo, que me escribe para pedir los datos de envío.
+
+### HU-SP-122 — Enterarme de que Allfit Space abrió
+
+**Como** persona en la lista de espera
+**quiero** recibir un correo cuando Allfit Space abra
+**para** descargar la app y crear mi cuenta a tiempo.
+
+`E-SP-17` · imprescindible · HU-SP-116
+
+**Criterios**
+
+1. Cuando el equipo marca el lanzamiento (`HU-BO-037`), me llega un correo una sola vez, aunque la acción se repita.
+2. Solo lo reciben las inscripciones confirmadas, porque las demás nunca probaron su correo.
+3. Dice que Allfit Space ya está disponible, enlaza a las dos tiendas y pide crear la cuenta con el mismo correo de la inscripción, para que mi número y mis referidos queden en ella.
+4. Si soy Founding Member, dice mi número y la fecha exacta en que vence mi plazo de 7 días.
+5. Dice que, si no creo mi cuenta, mis datos de la lista se borran 90 días después del lanzamiento.
+6. Va en mi idioma e incluye mi contador y el enlace «Ver mis referidos», como todos los correos de la lista.
+
+### HU-SP-123 — Salir de la lista de espera
+
+**Como** persona en la lista
+**quiero** salir de la lista cuando quiera
+**para** que Allfit One deje de tener mis datos.
+
+`E-SP-17` · imprescindible · HU-SP-115
+
+*Historia nueva del 10 de noviembre de 2026. La pide la Ley 1581: quien autoriza puede revocar
+la autorización.*
+
+**Criterios**
+
+1. Cada correo de la lista trae un enlace para salir, y «mi link» también lo ofrece.
+2. Salgo con un botón en la página. Abrir el enlace no borra nada, por la misma razón que en `HU-SP-116`.
+3. Al salir se borran mi nombre, mi correo, mi código y las huellas de mi dispositivo y mi conexión, y dejo de recibir correos de la lista.
+4. Si era Founding Member y mi plazo no había vencido, mi número pasa a la siguiente persona (`HU-SP-118`).
+5. Las personas que invité siguen en la lista, pero ya no le suman a nadie.
+6. Si ya creé mi cuenta de Allfit Space, salir de la lista no la toca. Mi número y mis premios entregados se quedan en la cuenta.
+7. Si nunca creo mi cuenta, mis datos se borran solos 90 días después del lanzamiento.
+
+---
+
 ## Resumen
 
 | Épica | Historias | Imprescindibles |
@@ -2236,7 +2423,8 @@ presenta con la tarjeta de Hoy, que es además lo que va a ver cada mañana si a
 | `E-SP-14` Qué pasa si no pago | `HU-SP-083` | 0 de 1 |
 | `E-SP-15` Allfit Pro | `HU-SP-084` – `HU-SP-088` | 5 de 5 |
 | `E-SP-16` Hoy y navegación | `HU-SP-089` – `HU-SP-094`, `HU-SP-100` | 4 de 7 |
-| **Total** | **99 historias** | **53 imprescindibles** |
+| `E-SP-17` Lista de espera y lanzamiento | `HU-SP-115` – `HU-SP-123` | 9 de 9 |
+| **Total** | **108 historias** | **62 imprescindibles** |
 
 El camino mínimo para lanzar es: crear cuenta y entrar, activar el Fitness ID,
 ver qué toca hoy, entrenar y registrarlo aunque no haya señal, ver el historial,

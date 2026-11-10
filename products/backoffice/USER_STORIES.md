@@ -718,6 +718,66 @@ has no limit: every gym that existed before was sold without one.*
 
 ---
 
+## E-BO-10 · Lista de espera y lanzamiento
+
+Lo que el equipo hace con la lista de espera de Allfit Space (`E-SP-17`, `ADR-050`): revisarla,
+cargar los códigos de los premios y marcar el día en que Allfit Space abre. La lista es interna:
+nunca se publica como ranking.
+
+### HU-BO-035 — Revisar la lista de espera
+
+**Como** fundador
+**quiero** ver la lista de espera
+**para** saber cuánta gente hay, quiénes son Founding Members y detectar fraude.
+
+`E-BO-10` · imprescindible
+
+**Criterios**
+
+1. Veo cada inscripción con su nombre, su correo, su fecha, si confirmó, su número de Founding Member, si ya creó su cuenta de Allfit Space y cuántos referidos válidos lleva.
+2. Busco por nombre, correo o código.
+3. Puedo marcar una inscripción como fraude, con un motivo. Deja de sumar a quien la invitó y, si era Founding Member y su plazo no había vencido, su número pasa a la siguiente persona (`HU-SP-118`).
+4. Veo los totales: inscritas, confirmadas, con cuenta y por canal de origen. El canal sale del link con el que llegó la persona, o es «referido» o «directo».
+5. Nunca veo las huellas de dispositivo ni de conexión: solo si una inscripción se descartó y por qué.
+6. Exige `manage_platform_commercial`, AAL2 y actor humano auditado. Marcar fraude queda en el registro de auditoría con su motivo.
+
+### HU-BO-036 — Cargar los códigos de oferta de las tiendas
+
+**Como** fundador
+**quiero** subir los códigos de oferta que generan App Store y Google Play
+**para** que los premios por referidos se entreguen solos.
+
+`E-BO-10` · imprescindible
+
+**Criterios**
+
+1. Los subo por archivo, separados por tienda y por premio: 1, 2, 3 o 12 meses.
+2. Veo cuántos quedan de cada tipo, cuántos se entregaron y a quién.
+3. Me avisa cuando quedan pocos de un tipo, y muestra los premios pendientes por falta de códigos.
+4. Un código repetido o ya entregado no se carga dos veces.
+5. Los códigos nunca se muestran completos, porque cada uno vale un premio.
+6. Exige `manage_platform_commercial`, AAL2 y actor humano auditado.
+
+### HU-BO-037 — Marcar el lanzamiento de Allfit Space
+
+**Como** fundador
+**quiero** marcar el día en que Allfit Space queda publicado en las dos tiendas
+**para** que la lista de espera sepa que ya abrió.
+
+`E-BO-10` · imprescindible
+
+*Historia nueva del 10 de noviembre de 2026. Sale de `TECH-321`, que necesitaba una fecha de
+lanzamiento registrada.*
+
+**Criterios**
+
+1. Lo marco cuando Allfit Space ya está publicado en App Store y Google Play. Se marca una sola vez y pide confirmación explícita, porque no se deshace.
+2. Marcarlo envía el correo de apertura a cada inscripción confirmada (`HU-SP-122`) y empieza a contar los 7 días de los Founding Members y los 90 días del borrado de la lista.
+3. Desde ese momento la lista ya no acepta inscripciones: `space.allfit.one` lleva a las tiendas.
+4. Exige `manage_platform_commercial`, AAL2 y actor humano auditado.
+
+---
+
 ## 4. Procesos automáticos
 
 No son historias porque nadie los pide: se disparan solos. El Backoffice es
@@ -738,6 +798,9 @@ donde se ven sus efectos y sus fallos, en `HU-BO-005` y `HU-BO-031`.
 | Recálculo de indicadores | Por corrección o cambio | Un indicador desactualizado **no se muestra** hasta recalcularse |
 | Registro de cobros de gimnasios | Webhook de la pasarela | Un cobro fallido suspende de forma indefinida. **Nunca termina nada** ni toca permisos |
 | Registro de cobros de Allfit | Webhook | Un cobro fallido baja a plan gratuito. **Bajar a gratis nunca elimina datos** |
+| Números de Founding Member | Al confirmar, al vencer cada plazo y dos días antes | Nunca hay más de 100 números con dueño. Un número sin cuenta a tiempo pasa a la siguiente persona confirmada; uno ya enlazado a una cuenta no se mueve nunca |
+| Premios por referidos | Al enlazar una cuenta y al cargar códigos | Cada nivel se entrega una vez por persona y cada código una vez. Sin códigos, el premio queda pendiente y el Backoffice lo muestra |
+| Borrado de la lista de espera | Una vez, 90 días después del lanzamiento | Borra las inscripciones que nunca crearon cuenta y deja de las demás solo lo que necesitan la insignia y los premios. Quedan totales diarios sin datos personales |
 
 ---
 
@@ -767,9 +830,11 @@ donde se ven sus efectos y sus fallos, en `HU-BO-005` y `HU-BO-031`.
 | `E-BO-07` Planes y Pro | `HU-BO-025` – `HU-BO-027`, `HU-BO-034` | 3 de 4 |
 | `E-BO-08` Equipo de Allfit | `HU-BO-028` – `HU-BO-031` | 2 de 4 |
 | `E-BO-09` Obligaciones legales | `HU-BO-032` – `HU-BO-033` | 0 de 2 |
-| **Total** | **34 historias** | **18 imprescindibles** |
+| `E-BO-10` Lista de espera y lanzamiento | `HU-BO-035` – `HU-BO-037` | 3 de 3 |
+| **Total** | **37 historias** | **21 imprescindibles** |
 
-Las 18 imprescindibles son el Backoffice mínimo para lanzar: entrar, ver cómo va
+Las 21 imprescindibles son el Backoffice mínimo para lanzar: entrar, ver cómo va
 el negocio, encontrar a una persona y abrir su ficha y su entrenamiento, montar
 y entregar un gimnasio con su cupo, ver los pagos a Allfit, verificar títulos, publicar el catálogo y
-los planes, y controlar quién del equipo tiene acceso.
+los planes, controlar quién del equipo tiene acceso, y llevar la lista de espera de Allfit Space
+hasta su lanzamiento.
