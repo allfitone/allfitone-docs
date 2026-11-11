@@ -1851,6 +1851,11 @@ bloque 4 ya introduce.
 4. Nunca quedo con un correo distinto en la aplicación y en el inicio de sesión: o cambian los dos o no cambia ninguno.
 5. Mis datos de contacto son míos y viven en mi perfil, no en el sistema de autenticación.
 
+**Construida para el correo el 10 de noviembre de 2026 (`TECH-44`).** Desde «Identidad y
+acceso» escribo el correo nuevo y me llega un código a ese correo; hasta que lo confirmo
+sigo entrando con el anterior. Un correo mal escrito, el mío y uno que ya usa otra persona
+reciben el mismo mensaje. El teléfono se corrige sin verificación (ADR-050).
+
 ### HU-SP-077 — Verificar mi correo
 
 **Como** persona que cambió su correo
@@ -1866,6 +1871,12 @@ bloque 4 ya introduce.
 3. Si el desafío venció, el contacto anterior sigue siendo el vigente y no pierdo nada.
 4. Verificar mi contacto no me da ningún permiso ni cambia lo que comparto.
 5. En V1 solo se verifica el correo: Allfit no envía SMS, así que mi teléfono no se verifica ni recibe nada (ADR-050).
+
+**Construida el 10 de noviembre de 2026 (`TECH-44`).** Escribo los seis dígitos que llegaron
+al correo nuevo. Con cinco intentos fallidos la solicitud se cierra y pido un código nuevo.
+Al acertar, el cambio se aplica primero en el inicio de sesión y después en mi perfil, se
+cierran mis otras sesiones (la de este teléfono sigue), y llega un aviso al correo anterior.
+Si el proveedor rechaza el correo, nada cambia en ningún lado.
 
 ### HU-SP-078 — Elegir cómo quiero que me avisen
 

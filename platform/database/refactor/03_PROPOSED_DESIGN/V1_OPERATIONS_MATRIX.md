@@ -681,7 +681,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Actor** | `A2` |
 | **Filtros obligatorios** | Sujeto = persona autenticada. Formato válido; teléfono en E.164 |
 | **Transacción** | **Correo:** registrar el contacto **pendiente de verificación** sin sustituir todavía el vigente, y emitir el desafío de verificación; el anterior sigue siendo el efectivo hasta que el nuevo se verifique. **Teléfono:** se guarda vigente en el acto y sin verificar, o se borra; V1 no envía SMS (ADR-050) |
-| **Idempotencia** | `Idempotency-Key`. Reenviar el mismo cambio reutiliza el desafío vigente en lugar de crear otro |
+| **Idempotencia** | `Idempotency-Key`: un reintento con la misma clave converge. Pedir el cambio otra vez, con otra clave, cancela la solicitud abierta y emite un desafío nuevo; solo vale el último código |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada |
 | **Información sensible** | `identity_pii` |
@@ -689,6 +689,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | **El correo de contacto y el correo de ingreso son el mismo dato.** Cambiarlo actualiza también la identidad en WorkOS AuthKit, y ambos lados quedan consistentes o no se aplica ninguno. El dueño del dato es el perfil de la persona, no el proveedor de autenticación. Un correo, o un teléfono verificado, en uso por otra persona se rechaza **sin revelar** que existe; un teléfono sin verificar no es único (ADR-050): el mensaje es el mismo que para un formato inválido, porque distinguirlos filtraría quién tiene cuenta en Allfit |
 | **Falla cerrada** | Si WorkOS AuthKit o el envío del desafío no confirman, no se cambia nada: nunca queda un correo distinto a cada lado |
 | **Implemented (TECH-43), phone half** | `identity.correct_own_phone(provider, issuer, subject, phone, …)` behind `PATCH /space/v1/me/contact` with `{ phone }`. Spaces, dashes and parentheses are dropped, the rest must be E.164; `null` removes it. Saved at once and unverified, a new number drops any earlier verification, and `uidx_people_contact_phone` covers verified numbers only. The email half is not built. Tests: `T-IDN-OWN-PROFILE-01`, `T-IDN-OWNPROFILE-API-13..14` |
+| **Implemented (TECH-44), email half** | `PATCH /space/v1/me/contact` with `{ email }` answers `202` with the pending change. `identity.request_email_change` opens an `identity.identity_action_requests` row of kind `email_change`, initiated by the person, with the proposed address, its fingerprint and hint, valid for 30 minutes, and enqueues `identity.contact_changed.v1`. A malformed address, her own and one somebody else holds answer the same `422`. At most five requests an hour (`409` beyond). The worker generates a six-digit code, records only `sha256(request id ‖ code)` through `record_email_change_code` and emails the code to the **new** address; a retry writes a new code and only the last one is valid. Nothing changes in `identity.people` here. Off until `EMAIL_CHANGE_DELIVERY_ENABLED=true` in the worker. Tests: `T-IDN-EMAIL-CHANGE-01`, `T-IDN-OWNPROFILE-API-15..16`, `T-WRK-EMAIL-01..04` |
 
 #### `OP-IDN-022` — Verificar un contacto
 
@@ -706,6 +707,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | `identity.contact_verified.v1` |
 | **Reglas** | Un contacto **sin verificar no recibe notificaciones** y no satisface el filtro de `OP-SYS-002`. Verificar no concede ningún acceso ni cambia permisos |
 | **Falla cerrada** | Desafío vencido o ajeno: rechazo, y el contacto anterior permanece vigente |
+| **Implemented (TECH-44), email** | `POST /space/v1/me/contact/verification` with `{ code }`. `identity.verify_email_change` compares the code with the stored hash: a wrong one counts an attempt and answers `422` (the count survives because the function returns the outcome instead of raising), the fifth wrong one fails the request. The right one moves it to `applying`, keeps the token's `sid` as the confirming session and enqueues `identity.contact_verified.v1`. The worker then calls `updateEmail` in WorkOS with the address marked verified, emails a notice to the **previous** address, promotes the new one in `identity.people` (`complete_email_change`, verified at once) and revokes every other session, keeping the confirming one. If WorkOS refuses, the request fails and the previous address stays on both sides; a retry after WorkOS accepted repeats an idempotent update and completes. `GET /space/v1/me` reads the pending change as `email.pending`. Tests: `T-IDN-EMAIL-CHANGE-01`, `T-IDN-OWNPROFILE-API-17..18`, `T-WRK-EMAIL-05..09` |
 
 #### `OP-IDN-023` — Consultar mis preferencias de notificación · `OP-IDN-024` — Actualizarlas
 
