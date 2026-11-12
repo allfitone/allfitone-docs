@@ -284,6 +284,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-064` | Correct my biological sex | Comando | `A2` |
 | `OP-IDN-065` | Declare the equipment I have | Comando | `A2` |
 | `OP-IDN-066` | Change my password | Comando | `A2` |
+| `OP-IDN-067` | Correct my health context claim | Comando | `A2` |
 
 > **`OP-IDN-045` a `OP-IDN-048` estuvieron asignados dos veces, y ya no.** Space los usa
 > para el sexo biológico, las zonas de énfasis, saltarse un paso y cerrar sesión. Las
@@ -315,6 +316,8 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 > numbers rather than a loophole in the onboarding ones.
 >
 > **`OP-IDN-066` (TECH-325)** was checked free in both on 11 November 2026.
+>
+> **`OP-IDN-067` (TECH-326)** was checked free in both on 12 November 2026.
 
 ---
 
@@ -1386,6 +1389,24 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | `HU-SP-005`. **The current password is required** (criterion 1). **Every other session is revoked and this one stays** (criterion 2): the worker revokes every WorkOS session of the account but the one the request came from, including the session the check opened, and emails a notice to the sign-in address. **Límite de intentos obligatorio**: at most five wrong current passwords in an hour |
 | **Falla cerrada** | A wrong current password: `422` `wrong-password`, counted. A password WorkOS refuses: `422` `weak-password`, and the check's session is revoked. After five wrong ones in an hour: `429` `rate-limited` with `Retry-After: 3600`, without calling WorkOS. If PostgreSQL fails after WorkOS accepted, the request answers an error and revokes the check's session; the new password is in force (ADR-051, consequences) |
 | **Implemented (TECH-325)** | `POST /space/v1/me/password` with `{ current_password, new_password }` answers `204`. `identity.prepare_password_change` answers a replay from the receipt (`OP-IDN-066`, same key) and counts refusals; the API then calls WorkOS `authenticateWithPassword` under Space's Application, reads the `sid` of the session it opens, and `updateUser({ password })`. `identity.record_password_change` stores an `identity.password_changes` row of outcome `changed` with the request's `sid` as the session to keep, closes the receipt as `204` and enqueues `identity.password_changed.v1`; a wrong current password goes through `identity.reject_password_change` with an id of its own. The receipt's request hash covers the method and path only. The worker (`identity.prepare_password_change_notice`) revokes every other WorkOS session first and then emails the notice, keyed `password-changed-notice/<event>`; off until `PASSWORD_CHANGE_DELIVERY_ENABLED=true`. Measured locally against WorkOS staging: `204` in 594 ms. Tests: `T-IDN-PASSWORD-CHANGE-01`, `T-IDN-PASSWORD-UNIT-01..08`, `T-IDN-PASSWORD-API-01..09`, `T-WRK-PASSWORD-01..06` |
+
+#### `OP-IDN-067` — Correct my health context claim
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `PUT /space/v1/health-context/{claimId}` |
+| **Actor** | `A2`, dueño de la declaración |
+| **Filtros obligatorios** | Sujeto = persona autenticada; the claim is hers and `person_declared`. Same validations as `OP-IDN-008`: three types, a description of 1 to 500 characters, an optional body area from the fourteen, a start no later than tomorrow and an end after it |
+| **Transacción** | One. Replaces type, description, area and dates of the claim in place (ADR-052); its id, person, provenance and recorded instant never change |
+| **Idempotencia** | `Idempotency-Key`; a replay answers the claim as it stands |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada; two corrections serialise on the row and the last one wins |
+| **Información sensible** | **Contexto de salud** |
+| **Evento de dominio** | Ninguno: nothing about a correction leaves the database |
+| **Reglas** | `HU-SP-022` for health context, as decided on 12 November 2026: correcting changes that claim and keeps no versions; something new is a new claim. The side of the body goes in the description, because the areas have none |
+| **Falla cerrada** | Somebody else's claim or one that does not exist: `404`. Under a live legal hold over `health`, or while the claim's deletion waits: `409` and nothing changes. Invalid values: `422` |
+| **Implemented (TECH-326)** | `identity.correct_health_context(provider, issuer, subject, claim_id, type, description, area, valid_from, valid_to, key, command, hash)`, migration `20261127090000_a_person_corrects_her_health_context.sql`, behind `PUT /space/v1/health-context/{claimId}` answering `200 HealthContextClaim`. The guard `identity.health_context_claim_guard_tg` now refuses only an update that changes `id`, `person_id`, `provenance` or `created_at`, or touches a claim that is not `person_declared`. A live hold is `privacy.live_hold_over(person, 'health')`; a waiting deletion is a `pending` or `suspended` disposition item on the claim. Space draws it as «Dolor y limitaciones» (`PF-7`, `PF-E19b` to `PF-E22`). Tests: `T-IDN-HEALTH-CORRECT-01`, `T-IDN-HEALTH-01` (the old immutability case now asserts the fixed origin), `T-IDN-HEALTH-API-12..15`, `T-SPC-UNIT-HEALTH-01..11` |
 
 ### 7.2 Organizaciones
 

@@ -58,6 +58,7 @@
 | ADR-049 | Allfit One sends its email through Amazon SES |
 | ADR-050 | V1 sends no SMS: the phone is a contact value |
 | ADR-051 | A password change speaks to WorkOS inside the request |
+| ADR-052 | A person corrects her health context in place |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -6828,3 +6829,58 @@ this operation would be an unsalted hash of two passwords.
 5. Neither the change row, the receipt nor the event contains anything derived from a password.
 6. The worker revokes every session but the kept one and sends the notice; on its last attempt it
    revokes them even if the notice failed.
+
+## ADR-052 — A person corrects her health context in place
+
+**Status:** accepted for V1.<br>
+**Date:** 12 November 2026<br>
+**Modifies:** the immutability of `identity.health_context_claims` (migration
+`20260927070000_person_health_context.sql`), `HU-SP-022` criterion 2 for health context;
+adds `OP-IDN-067`.
+
+### Context
+
+A declared health claim has been immutable since it was built: a trigger refuses every
+`UPDATE`, and the only way to change what a claim says is to delete it and declare another.
+Space now lets a person correct a pain, a limitation or a recovery she declared, and the
+product decision is that correcting changes that claim and keeps no versions. A new claim is
+how something new is told.
+
+`HU-SP-022` criterion 2 asks that a corrected value be kept as history. For the fitness
+profile that still holds: its claims are versioned on purpose, because which version is
+shown is part of the product (`HU-SP-023`). Health context is the most protected category V1
+keeps, and keeping every earlier wording of a pain is keeping more health data than the
+person meant to leave. Law 1581 asks for the minimum.
+
+### Decision
+
+1. **The person corrects her own declared claim in place** through
+   `identity.correct_health_context` (`OP-IDN-067`, `PUT /space/v1/health-context/{claimId}`).
+   Type, description, body area, start and end are replaced; the earlier wording is not kept.
+2. **What a correction can never change:** the claim's id, its person, its provenance and when
+   it was recorded. The trigger keeps refusing any update that touches them, and any update
+   at all to a claim that is not `person_declared`.
+3. **A live legal hold over `health` stops a correction**, as it stops a deletion: the hold
+   exists to keep what the data says. A claim whose deletion is already waiting cannot be
+   corrected either.
+4. **Nothing about a correction leaves the database.** No event is enqueued; the claim's
+   access records are untouched, so who read it before stays recorded, but not what it said.
+5. **Deleting is unchanged** (`OP-IDN-050`).
+
+### Consequences
+
+- A professional with `health_context` reads the corrected claim the next time they open it;
+  there is no trace of the earlier wording for them or for the person.
+- The fitness profile keeps its versions; only health context corrects in place.
+- Replaying a correction with the same key answers the claim as it stands.
+
+### Mandatory test scenarios
+
+1. A correction replaces type, description, area and dates of her own claim, and keeps its id,
+   person, provenance and recorded instant.
+2. An update that touches the id, the person, the provenance or the recorded instant is
+   refused, whoever runs it.
+3. Somebody else's claim and one that does not exist answer the same.
+4. Under a live legal hold over `health`, or while the claim's deletion waits, nothing changes.
+5. The same validations as a declaration apply.
+6. A professional with the grant reads the corrected claim.
