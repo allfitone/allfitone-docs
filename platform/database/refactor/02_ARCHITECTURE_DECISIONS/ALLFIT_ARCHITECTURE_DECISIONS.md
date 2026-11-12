@@ -57,6 +57,7 @@
 | ADR-048 | A gym charges its clients through its own Mercado Pago account |
 | ADR-049 | Allfit One sends its email through Amazon SES |
 | ADR-050 | V1 sends no SMS: the phone is a contact value |
+| ADR-051 | A password change speaks to WorkOS inside the request |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -6755,3 +6756,75 @@ for no capability V1 lacks without it.
 3. Two people can save the same unverified number; a verified number stays unique.
 4. An unverified phone never satisfies the recipient filter of `OP-SYS-002`.
 5. The notification preferences accept no `sms` channel.
+
+## ADR-051 — A password change speaks to WorkOS inside the request
+
+**Status:** accepted for V1.<br>
+**Date:** 11 November 2026<br>
+**Modifies:** the cross-system write rule of the monorepo `AGENTS.md` §8, for one operation:
+`OP-IDN-066`, `HU-SP-005`.
+
+### Context
+
+A change that must hold in PostgreSQL and in an external provider goes through the outbox with
+a pending state, and no HTTP request writes to the provider. The email change follows it
+(`OP-IDN-021`, `OP-IDN-022`): the request records the proposal, the worker updates WorkOS, and
+the effective address moves only after WorkOS confirms.
+
+A password cannot take that path. The worker would have to read the new password from
+somewhere, which means writing it to PostgreSQL first: in an outbox payload, a column or a
+ciphertext, for seconds or for the length of a retry window. Today no password, hash or
+derivative of one is ever stored by Allfit; WorkOS alone holds it.
+
+There is also nothing to keep consistent. Allfit keeps no copy of the password, so WorkOS is the
+only side where it exists, and a failure cannot leave two sides that disagree about it.
+
+Checking the current password needs WorkOS too: it offers no verification call, only
+`authenticateWithPassword`, which opens a session. And the request hash that
+`system.idempotency_keys` keeps for every command is a SHA-256 of the request body, which for
+this operation would be an unsalted hash of two passwords.
+
+### Decision
+
+1. **The request speaks to WorkOS directly.** It checks the current password with
+   `authenticateWithPassword` and sets the new one with `updateUser`. Nothing is written to
+   PostgreSQL before WorkOS confirms the change, and the password is never written at all.
+2. **What happened is recorded after WorkOS confirms, through the outbox as usual.**
+   `identity.record_password_change` stores the change, closes the idempotency receipt and
+   enqueues `identity.password_changed.v1`, whose payload is only the change id. The worker
+   revokes every other session, keeping the one the change came from, and emails a notice to
+   the sign-in address.
+3. **The session opened by the check is closed.** It is one of the other sessions the worker
+   revokes. If WorkOS refuses the new password, the request revokes it before answering.
+4. **A wrong current password is counted.** At most five in an hour; beyond that the request is
+   refused before WorkOS is called, so the operation cannot be used to guess passwords.
+5. **The request hash leaves the passwords out.** The idempotency receipt is keyed by the
+   person, the key and the command, and its hash covers the method and path only.
+6. **A replay never calls WorkOS.** After a change, the old password is no longer the current
+   one, so a retry with the same key is answered from the receipt.
+7. **This is the only exception.** Any other cross-system write still goes through the outbox
+   with a pending state.
+
+### Consequences
+
+- The request carries two WorkOS calls. Measured against the staging environment on
+  11 November 2026: about 340 ms to check the password and 230 ms to set it, within the one
+  second budget of a request.
+- If PostgreSQL fails after WorkOS accepted the new password, the password has changed but
+  nothing revokes the other sessions or sends the notice. The request answers an error and the
+  person can retry: her new password is now the current one. This window is accepted.
+- WorkOS does not revoke sessions when a password changes (verified on the staging
+  environment); the revocation is Allfit's.
+- No log line, trace or error detail carries either password.
+
+### Mandatory test scenarios
+
+1. A right current password and a valid new one change it, record the change and enqueue one
+   event; the session the request came from stays open.
+2. A wrong current password is counted and answers `422`; the sixth in an hour answers `409`
+   without calling WorkOS.
+3. A new password WorkOS refuses answers `422` and the session opened by the check is revoked.
+4. A replay with the same key answers `204` without calling WorkOS.
+5. Neither the change row, the receipt nor the event contains anything derived from a password.
+6. The worker revokes every session but the kept one and sends the notice; on its last attempt it
+   revokes them even if the notice failed.

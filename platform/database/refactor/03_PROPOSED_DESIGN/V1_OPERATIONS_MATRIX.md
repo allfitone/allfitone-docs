@@ -283,6 +283,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-063` | Correct my name and username | Comando | `A2` |
 | `OP-IDN-064` | Correct my biological sex | Comando | `A2` |
 | `OP-IDN-065` | Declare the equipment I have | Comando | `A2` |
+| `OP-IDN-066` | Change my password | Comando | `A2` |
 
 > **`OP-IDN-045` a `OP-IDN-048` estuvieron asignados dos veces, y ya no.** Space los usa
 > para el sexo biológico, las zonas de énfasis, saltarse un paso y cerrar sesión. Las
@@ -312,6 +313,8 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 > both belong to an open attempt and refuse once it is `activated`; correcting them from
 > the profile months later is a different actor in a different state, so it got its own
 > numbers rather than a loophole in the onboarding ones.
+>
+> **`OP-IDN-066` (TECH-325)** was checked free in both on 11 November 2026.
 
 ---
 
@@ -1365,6 +1368,24 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno en V1 |
 | **Reglas** | `HU-SP-013` criterion 2. **It is what she has, not what exists**: the codes match `catalog.equipment` so exercises can later be filtered by them, but the list lives in the attribute catalogue because the published catalogue is empty in production until Backoffice publishes it. No member is exclusive |
 | **Falla cerrada** | An empty set, a repeat, a null or an unknown piece: `422` and nothing is written |
+
+#### `OP-IDN-066` — Change my password
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/me/password` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | Sujeto = persona autenticada. The new password follows the sign-up policy (8 to 64 characters, an upper-case letter, a lower-case letter and a digit) and differs from the current one |
+| **Transacción** | **Not one transaction, by ADR-051.** The current password is checked and the new one set in WorkOS inside the request; only after WorkOS confirms does one transaction record the change, close the receipt and enqueue the event. Nothing derived from a password is ever written |
+| **Idempotencia** | `Idempotency-Key`. A replay is answered from the receipt and never calls WorkOS: after a change the old password is no longer the current one. The request hash covers the method and path only, never the body |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Falla cerrada |
+| **Información sensible** | Both passwords. They are never logged, stored, hashed into a receipt or returned |
+| **Evento de dominio** | `identity.password_changed.v1` (payload: `change_id`) |
+| **Reglas** | `HU-SP-005`. **The current password is required** (criterion 1). **Every other session is revoked and this one stays** (criterion 2): the worker revokes every WorkOS session of the account but the one the request came from, including the session the check opened, and emails a notice to the sign-in address. **Límite de intentos obligatorio**: at most five wrong current passwords in an hour |
+| **Falla cerrada** | A wrong current password: `422` `wrong-password`, counted. A password WorkOS refuses: `422` `weak-password`, and the check's session is revoked. After five wrong ones in an hour: `429` `rate-limited` with `Retry-After: 3600`, without calling WorkOS. If PostgreSQL fails after WorkOS accepted, the request answers an error and revokes the check's session; the new password is in force (ADR-051, consequences) |
+| **Implemented (TECH-325)** | `POST /space/v1/me/password` with `{ current_password, new_password }` answers `204`. `identity.prepare_password_change` answers a replay from the receipt (`OP-IDN-066`, same key) and counts refusals; the API then calls WorkOS `authenticateWithPassword` under Space's Application, reads the `sid` of the session it opens, and `updateUser({ password })`. `identity.record_password_change` stores an `identity.password_changes` row of outcome `changed` with the request's `sid` as the session to keep, closes the receipt as `204` and enqueues `identity.password_changed.v1`; a wrong current password goes through `identity.reject_password_change` with an id of its own. The receipt's request hash covers the method and path only. The worker (`identity.prepare_password_change_notice`) revokes every other WorkOS session first and then emails the notice, keyed `password-changed-notice/<event>`; off until `PASSWORD_CHANGE_DELIVERY_ENABLED=true`. Measured locally against WorkOS staging: `204` in 594 ms. Tests: `T-IDN-PASSWORD-CHANGE-01`, `T-IDN-PASSWORD-UNIT-01..08`, `T-IDN-PASSWORD-API-01..09`, `T-WRK-PASSWORD-01..06` |
 
 ### 7.2 Organizaciones
 

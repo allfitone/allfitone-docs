@@ -195,6 +195,21 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Retención:** con la solicitud.
 - **Eventos:** ninguno propio.
 
+### 4.2.8 `identity.password_changes`
+
+- **Propósito:** cada cambio de contraseña que la persona hace desde Space y cada contraseña actual equivocada (`OP-IDN-066`, `HU-SP-005`, ADR-051). Cuenta los intentos fallidos y es el agregado del evento que cierra las otras sesiones.
+- **Dominio / fuente de verdad:** Identidad para el registro; WorkOS conserva la contraseña.
+- **Clasificación:** `operational`. No guarda la contraseña, su hash ni nada derivado de ella.
+- **Columnas:** `id uuid` (Command-Id del comando) · `person_id uuid` · `access_account_id uuid` · `outcome text` (`rejected`, `changed`) · `keep_session_id text` (el `sid` de la sesión que se conserva; solo en `changed`) · `created_at timestamptz`.
+- **FKs y borrado:** `person_id → identity.people(id) RESTRICT`; `access_account_id → identity.access_accounts(id) RESTRICT`.
+- **Uniques y checks:** `outcome` cerrado a los dos valores; `keep_session_id` existe exactamente en `changed` y mide de 1 a 200 caracteres. Append-only: un trigger rechaza (`55000`) toda actualización o borrado.
+- **Actores:** la persona escribe por `identity.reject_password_change` y `identity.record_password_change`, y la API lee su estado por `identity.prepare_password_change`; el worker lee el aviso por `identity.prepare_password_change_notice`. Nadie lee ni escribe la tabla directamente.
+- **RLS:** `FORCE ROW LEVEL SECURITY` con política única para `allfit_owner`; `allfit_api` sin privilegios de tabla.
+- **Consultas:** rechazos de una persona en la última hora; el cambio de un evento.
+- **Índices:** PK; `(person_id, created_at DESC)`.
+- **Retención:** sigue la disposición de la identidad de la persona.
+- **Eventos:** `changed` emite `identity.password_changed.v1`, con solo `change_id` en el payload. `rejected` no emite nada.
+
 ### 4.3 `identity.onboarding_attempts`
 
 - **Propósito:** flujo previo a activar una persona; puede terminar sin crearla.

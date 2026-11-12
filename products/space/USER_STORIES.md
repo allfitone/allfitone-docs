@@ -150,6 +150,14 @@ movilidad no se organizan en series y repeticiones.
 1. Debo escribir la contraseña actual antes de poner la nueva.
 2. Al cambiarla se cierran mis sesiones en otros dispositivos y sigo dentro en este.
 
+**Construida el 11 de noviembre de 2026 (`TECH-325`, `OP-IDN-066`, ADR-051).** En
+«Identidad y acceso» la fila Contraseña abre su propia pantalla: la contraseña actual, la
+nueva con sus cuatro reglas (8 caracteres, mayúscula y minúscula, un número y distinta de
+la actual), que se marcan mientras se escribe, y el botón «Cambiar contraseña». Una
+contraseña actual equivocada se cuenta, y tras cinco en una hora hay que esperar. Al
+cambiarla se cierran las sesiones de los otros dispositivos, esta sigue abierta y llega un
+aviso al correo con el que se entra.
+
 ---
 
 ## E-SP-01 · Registro y onboarding
@@ -225,7 +233,8 @@ el teléfono se corrige en su propia pantalla, con el indicativo elegido de una 
 países de América del Norte, Central y del Sur y el número aparte, sin verificación
 (`HU-SP-076`, ADR-050); el
 correo se ve con su estado de verificación, y cambiarlo (`HU-SP-076`) o cambiar la
-contraseña (`HU-SP-005`) aparece como «Pronto» hasta que se construya. Los
+contraseña (`HU-SP-005`) aparece como «Pronto» hasta que se construya; la contraseña se
+construyó en `TECH-325`. Los
 permisos y los gimnasios no aparecen, como pide el criterio 2.
 
 ### HU-SP-101 — Decir qué disciplina entreno
