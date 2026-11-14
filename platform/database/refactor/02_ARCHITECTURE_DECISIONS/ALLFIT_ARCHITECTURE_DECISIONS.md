@@ -6739,6 +6739,8 @@ The design choices that follow from it:
 rest is the design that follows from them, reviewed with this change. Nothing is built yet: the
 stories are `E-SP-17` (`HU-SP-115` to `HU-SP-123`) and `E-BO-10` (`HU-BO-035` to `HU-BO-037`).<br>
 **Date:** 10 November 2026<br>
+**Changed:** 13 November 2026, decision 3: a shared connection is a signal for review, not a
+discard, after the launch strategy v1.2 tied rewards to active referrals.<br>
 **Source:** the internal document «Estrategia de lanzamiento de Allfit Space» v1.0 (7 November
 2026), the epic `TECH-290` and its tickets.
 
@@ -6808,8 +6810,8 @@ follow from it:
    | When the person joined and when they confirmed | Confirmation order makes the Founding Members |
    | The Founding Member number, when it was assigned, and its deadline | `HU-SP-118` |
    | The person it was linked to, when, and the platform of the device | The badge, the rewards, and which store's code to send |
-   | Whether it counts for its inviter, and the reason when it does not | `self_referral`, `same_device`, `connection_cap` or `fraud` |
-   | A keyed hash (HMAC-SHA-256) of the connection and of the device | Discarding repeats without keeping either |
+   | Whether it counts for its inviter, and the reason when it does not | `self_referral`, `same_device` or `fraud` |
+   | A keyed hash (HMAC-SHA-256) of the connection and of the device | Discarding repeats from one device, and showing the team sign-ups that share a connection, without keeping either |
    | Hashes of the confirmation token and of the private-link tokens | Never the tokens themselves |
 
    - **The connection** is the visitor's IPv4 address, or the `/64` prefix of an IPv6 address.
@@ -6824,13 +6826,21 @@ follow from it:
 
 3. **What does not count.** A discarded sign-up is still a sign-up: it has its own code, its own
    counter, and it can become a Founding Member. It only stops counting for the person who invited
-   it. The owner chose the device as the signal, with a ceiling per connection, and not a strict
-   rule per IP, because a strict rule would discard real friends on a carrier's shared address.
+   it. The owner chose the device as the signal, and not a rule per IP, because one public
+   address holds a whole gym's wifi or a carrier's customers.
    - **Self-referral:** the device is the inviter's own device.
    - **Same device:** the device already counts for the same inviter.
-   - **Connection cap:** more than 3 sign-ups counting for the same inviter from the same
-     connection within 24 hours. The ones beyond the third do not count.
    - **Fraud:** the team marks it in the Backoffice, with a reason (`HU-BO-035`).
+
+   **A shared connection is a signal, not a discard** (changed on 13 November 2026). Every
+   sign-up keeps its connection hash, and the Backoffice shows an inviter whose sign-ups share
+   one, for the team to review (`TECH-302`). Until then, a fourth sign-up for one inviter from
+   one connection within 24 hours did not count. The launch strategy v1.2 pays rewards only
+   for active referrals: an account after launch and 3 workouts or meals in the first 14 days
+   (`TECH-301`). Addresses typed by somebody else never get there, so the ceiling no longer
+   protected the rewards, and it discarded friends who joined together. Migration
+   `20261128090000_a_shared_connection_counts_for_the_inviter.sql` drops it and counts again
+   the sign-ups it had discarded, unless their device already counts for the same inviter.
 
    The counter is the number of the inviter's sign-ups that are confirmed and count. It is computed
    when it is read, never stored, so a fraud mark lowers it at once.
@@ -6926,9 +6936,9 @@ follow from it:
 - **The 90 days need a launch date.** Until the team marks one, sign-ups are kept, and leaving the
   list is the only way out. If the launch slips past a year from the first sign-up, this ADR is
   revisited.
-- **One person with two devices and two mailboxes is two sign-ups.** The ceiling per connection
-  limits it, and the Backoffice can mark it. Nothing stronger is proportionate to a reward of a
-  few months of Pro.
+- **One person with two devices and two mailboxes is two sign-ups.** Neither counts for rewards
+  unless both become active, and the Backoffice can mark them. Nothing stronger is proportionate
+  to a reward of a few months of Pro.
 - **Several offer codes per person are not verified.** It is not known whether App Store and
   Google Play let one subscriber redeem a second offer code while the first free period runs.
   `TECH-304` checks it before the first reward goes out. If they do not, the next code waits until
@@ -6959,8 +6969,12 @@ follow from it:
   accounts, and the retention sweep would run inside the domain that holds every person.
 - **A strict rule per IP.** Rejected by the owner: a carrier's shared address would discard real
   referrals.
-- **The device alone.** Rejected by the owner: several browsers or a private window inflate it
-  freely.
+- **The device alone.** Rejected by the owner on 10 November 2026: several browsers or a private
+  window inflate it freely. Since rewards need active referrals, a second browser earns nothing,
+  so the device now decides alone what is discarded, and a shared connection is reviewed.
+- **A ceiling per connection.** Built first, as three counting sign-ups per inviter and
+  connection in 24 hours, and dropped on 13 November 2026: it discarded real friends on a
+  shared address and protected nothing once rewards needed active referrals.
 - **Keep the data until the person asks.** Rejected by the owner: it has no end, and Law 1581 asks
   that data be kept only while it serves its purpose.
 - **Rewards by the highest level only.** It was the strategy's table, and the owner chose to add
@@ -6998,8 +7012,8 @@ follow from it:
 3. A disposable domain is refused, and nothing is written.
 4. A sign-up from the inviter's own device, or from a device that already counts for the inviter,
    is kept and does not count.
-5. A fourth sign-up for the same inviter from one connection within 24 hours does not count; a
-   different inviter from the same connection does.
+5. Any number of sign-ups for the same inviter from one connection count, and each keeps its
+   connection hash for review.
 6. The API ignores the address and device headers without space-web's secret.
 7. Opening a confirmation or leave link with `GET` changes nothing; the `POST` does, once.
 8. Two confirmations at the same instant never take the same Founding Member number, and the 101st
