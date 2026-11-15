@@ -2127,3 +2127,99 @@ Tests:
 - Worker: `media-disposals.test.ts` and `main.test.ts`, including a failure in the last job
   after every other job ran.
 - Terraform: `infra/modules/edge/tests/edge.tftest.hcl`, 8 runs.
+
+## The founders hear that someone confirmed on the waitlist (TECH-338, allfitone#258)
+
+When a person confirms their email on the Allfit Space waitlist (`OP-WL-002`), the founders'
+private Slack channel gets one notice. It carries the person's name and email, the channel they
+came through, the language, whether somebody invited them, and how many confirmed sign-ups the
+list holds. The decision and its limits are in `ADR-050`, decision 10.
+
+`20261129090000_the_team_hears_that_someone_confirmed_on_the_waitlist.sql` does two things:
+
+- It redefines `waitlist.confirm`, which now enqueues `waitlist.signup_confirmed.v1` in the
+  transaction that confirms, once per sign-up. The payload is `confirmed_total` alone.
+- It creates `waitlist.prepare_team_notice(uuid)`, for the worker actor only. It answers what the
+  notice says, or `skipped` when the sign-up is gone.
+
+The worker posts through the `TeamChannel` port of `packages/notifications`, whose adapter is a
+Slack incoming webhook. The consumer rides the existing outbox delivery job.
+
+**The channel's address.** `SLACK_FOUNDERS_WEBHOOK_URL`, in the environment secret and in the
+worker's secret keys in `infra/production`.
+
+- It is a credential: whoever holds it can post to the channel. It never goes in the repository,
+  in a log or in a ticket.
+- It is named by its channel, not by this notice. Any later notice for the founders reuses it.
+  Another channel gets its own key, because a Slack incoming webhook posts to one channel.
+- Without the key's value, or with one that does not start with `https://hooks.slack.com/`, the
+  worker claims no notice. The events wait in the outbox and every email is delivered as usual.
+  For a malformed value the worker logs one line that names the key, never the value.
+
+**Moving the notices to another channel.**
+
+1. In the Slack app «Allfit One Notifications», add an incoming webhook for the new channel.
+2. Replace the value of `SLACK_FOUNDERS_WEBHOOK_URL` in the environment secret.
+3. Force a new deployment of the worker: it reads the secret when the task starts.
+4. Delete the old webhook in the Slack app.
+
+**Switches.** No switch gates the notice itself. A notice needs a confirmation, though, and the
+confirmation email goes out only with `STAFF_INVITATION_DELIVERY_ENABLED` and
+`WAITLIST_EMAIL_DELIVERY_ENABLED` both `true`. The first is the worker's general switch for every
+email. It was still `false` when the list opened on 14 November 2026, and it was turned on that
+day.
+
+**Deploy order.** As it was done on 14 November 2026:
+
+1. Put the key in the environment secret first. ECS does not start a task whose listed secret key
+   is missing.
+2. Merging runs **Deploy AWS**.
+3. Apply Terraform to the worker's task definition alone, never during a Deploy AWS:
+   `terraform apply -target='module.services.aws_ecs_task_definition.service["worker"]'`.
+   Then dispatch **Deploy AWS** once more, so the worker starts on the revision that lists the
+   key (run 43647166762).
+4. Dispatch **Deploy Database AWS** without `include_all`. The plan must list only
+   `20261129090000` (run 43648281660).
+
+Steps 3 and 4 are safe in either order. Before the migration nothing enqueues the event, and
+before the key the worker claims none.
+
+**When a post fails.** Slack answering 429 or 5xx, and a network error, are retried. Any other
+answer is not, and the event is set aside as `provider_rejected`. Delivery is at-least-once, so a
+notice can arrive twice.
+
+**What the channel holds.** Names and emails. Leaving the list and the 90-day sweep delete them
+from the database, not from Slack. How long the channel keeps messages is set in Slack and was
+not decided on 14 November 2026. A test sign-up deleted from the database leaves its notice in
+the channel, to be removed by hand.
+
+**Check after the deploy.** Expected: one row, both `true`.
+
+```sql
+select to_regprocedure('waitlist.prepare_team_notice(uuid)') is not null as present,
+       has_function_privilege(
+         'allfit_api', 'waitlist.prepare_team_notice(uuid)', 'execute'
+       ) as granted;
+```
+
+Then a real confirmation posts a notice within about a minute. Notices that wait are counted as
+the owner role, because the outbox is forced under RLS:
+
+```sql
+select count(*) as waiting
+from system.outbox_events
+where event_type = 'waitlist.signup_confirmed.v1'
+  and published_at is null;
+```
+
+On 14 November 2026 three test sign-ups were confirmed in production. Each event was published,
+which the worker does only after Slack accepts the post, and the test sign-ups were deleted
+afterwards.
+
+Tests:
+
+- pgTAP: `T-WL-INT-03`, new, and `T-WL-RLS-01`, which covers the new function's grant and its
+  worker-only guard.
+- Worker: `T-WRK-WL-07` to `T-WRK-WL-15`, in `waitlist-team-notices.test.ts` and
+  `founders-channel.test.ts`. `delivery-coverage.test.ts` knows the new event.
+- `packages/notifications`: `team-channel.test.ts`.
