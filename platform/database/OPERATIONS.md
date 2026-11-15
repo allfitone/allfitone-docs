@@ -2307,3 +2307,84 @@ Tests:
 - `packages/notifications`: the template, in both languages.
 - space-web: the two answers in `waitlist.test.ts`, and the link pages in
   `e2e/waitlist-links.spec.ts`.
+
+## The team reviews the waitlist and marks fraud (TECH-302, allfitone#263)
+
+The Backoffice has a screen, `/waitlist`, where the team reads the Allfit Space waitlist, marks a
+sign-up as fraud and takes a mark back. The decisions are in `ADR-050`, decision 11.
+
+`20261201090000_the_team_reviews_the_space_waitlist.sql` does this:
+
+- It creates `waitlist.signup_events`, the append-only record of marks and of marks taken back.
+  It is forced under RLS and not granted to the runtime role. Its rows cascade from the sign-up:
+  they are deleted when the person leaves and when the list is swept.
+- It creates `waitlist.list_backoffice_signups` and `waitlist.read_backoffice_totals`
+  (`OP-WL-011`), `waitlist.mark_signup_as_fraud` (`OP-WL-012`) and
+  `waitlist.withdraw_fraud_mark` (`OP-WL-016`), granted to the runtime role. Each one checks
+  `manage_platform_commercial` and AAL2 itself.
+- It redefines `waitlist.fill_founding_numbers()`, which now reads the sign-up again before it
+  gives the number, so a sign-up marked while the fill waited is passed over.
+
+**No switch and no setting.** No Terraform, no secret, no email.
+
+**Who can open it.** Anybody with a live `manage_platform_commercial` duty. An Allfit One admin
+holds every duty (`ADR-046`).
+
+**Deploy order.**
+
+1. Merging runs **Deploy AWS**.
+2. Dispatch **Deploy Database AWS** without `include_all`. The plan must list only
+   `20261201090000`.
+
+Between the two steps the screen cannot read the list and says so. Nothing else depends on the
+migration: joining, confirming and the emails work as before.
+
+**Check after the deploy.** Expected: one row, all `true`.
+
+```sql
+select to_regclass('waitlist.signup_events') is not null as present,
+       has_function_privilege(
+         'allfit_api',
+         'waitlist.mark_signup_as_fraud(uuid, uuid, uuid, text, uuid, uuid, bytea)',
+         'execute'
+       ) as mark_granted,
+       has_function_privilege(
+         'allfit_api',
+         'waitlist.withdraw_fraud_mark(uuid, uuid, uuid, text, uuid, uuid, bytea)',
+         'execute'
+       ) as withdrawal_granted,
+       not has_table_privilege('allfit_api', 'waitlist.signup_events', 'select')
+         as record_kept_internal;
+```
+
+**Reading the record of a sign-up.** As the owner role, because the table is forced under RLS:
+
+```sql
+select event_type, reason, previous_discard_reason, released_founding_number,
+       actor_person_id, occurred_at
+from waitlist.signup_events
+where signup_id = '<id>'
+order by occurred_at;
+```
+
+**What a mark does to the numbers.** A marked sign-up gives up its number, and the next
+confirmed sign-up in line gets it, with the Founding Member email. Taking the mark back does not
+return that number: the sign-up waits for the next one free.
+
+**Deleting a test sign-up** is still `select waitlist.forget_signup('<id>')` as the owner role.
+The record of its review goes with it.
+
+**«Con cuenta» says «No» for everybody.** Nothing links a sign-up to its Allfit Space account
+until `OP-WL-006` (`TECH-299`). The answer carries `has_space_account` as `false` until then.
+
+When this was written, on 15 November 2026, the pull request was open and nothing was deployed.
+The screen had been tested against a mocked API, and the API against a local database.
+
+Tests:
+
+- pgTAP: `T-WL-RLS-02` and `T-WL-RLS-03` for who may read, mark and take a mark back;
+  `T-WL-INT-06` for the list, the totals, the mark and the record leaving with its sign-up;
+  `T-WL-INT-08` for taking a mark back; `T-WL-IDEM-02` and `T-WL-IDEM-03` for both commands.
+- API: `T-WL-API-02`, for the four routes against the contract.
+- Backoffice: `waitlist-review.test.ts` for what the screen says, and
+  `e2e/waitlist-review.spec.ts` for the screen.

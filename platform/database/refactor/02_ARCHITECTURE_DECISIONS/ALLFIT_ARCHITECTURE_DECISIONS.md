@@ -6743,7 +6743,9 @@ stories are `E-SP-17` (`HU-SP-115` to `HU-SP-123`) and `E-BO-10` (`HU-BO-035` to
 discard, after the launch strategy v1.2 tied rewards to active referrals. 14 November 2026,
 decision 10: the founders hear of each confirmation in a private Slack channel (`TECH-338`).
 14 November 2026, decision 5: the numbers are assigned and handed over as built in
-allfitone#261 (`TECH-298`); the deadline is not built.<br>
+allfitone#261 (`TECH-298`); the deadline is not built. 15 November 2026, decision 11: the
+team reviews the list in the Backoffice, marks fraud and takes a mark back, as built in
+allfitone#263 (`TECH-302`).<br>
 **Source:** the internal document «Estrategia de lanzamiento de Allfit Space» v1.0 (7 November
 2026), the epic `TECH-290` and its tickets.
 
@@ -6833,7 +6835,8 @@ follow from it:
    address holds a whole gym's wifi or a carrier's customers.
    - **Self-referral:** the device is the inviter's own device.
    - **Same device:** the device already counts for the same inviter.
-   - **Fraud:** the team marks it in the Backoffice, with a reason (`HU-BO-035`).
+   - **Fraud:** the team marks it in the Backoffice, with a reason (`HU-BO-035`), and can
+     take the mark back (decision 11).
 
    **A shared connection is a signal, not a discard** (changed on 13 November 2026). Every
    sign-up keeps its connection hash, and the Backoffice shows an inviter whose sign-ups share
@@ -6897,10 +6900,11 @@ follow from it:
        first.
      - **Where the person reads it.** Confirming and the private link (`OP-WL-004`) answer the
        number. The founders' notice of decision 10 carries it too.
+     - **Fraud.** Marking a sign-up as fraud (`OP-WL-012`) clears its number and fills
+       again. Taking the mark back (`OP-WL-016`) puts the sign-up back in line, for the
+       next number free (decision 11).
      - **Not built.** The deadline, its reminder and the hand-over when it passes wait for the
-       launch date (`HU-BO-037`). Marking a sign-up as fraud (`OP-WL-012`) does not exist yet:
-       when it does, it must clear the number and fill again. Linking (`OP-WL-006`) is
-       `TECH-299`.
+       launch date (`HU-BO-037`). Linking (`OP-WL-006`) is `TECH-299`.
 
 6. **The referral levels add up.** The strategy's table said they do not, and the conditions
    drafted on `feat/space-waitlist` repeat it. The owner chose on 10 November 2026 that they do.
@@ -6965,6 +6969,37 @@ follow from it:
       Slack webhook, the events wait unclaimed and every email is delivered as usual.
     - **Delivery is at-least-once.** A repeated notice costs less than a missed one.
 
+11. **The team reviews the list, marks fraud and takes a mark back** (`TECH-302`,
+    allfitone#263, `HU-BO-035`). The owner decided the points below on 15 November 2026.
+    - **Who.** A person of the team with `manage_platform_commercial`, in a Backoffice
+      session at AAL2. Reading is `OP-WL-011`, marking is `OP-WL-012`, and taking a mark
+      back is `OP-WL-016`. PostgreSQL checks the duty in every function.
+    - **What they read.** Each sign-up with its name, email, code and channel, when it
+      joined and confirmed, its number, who invited it, how many of its referrals count,
+      and why it does not count when it was discarded. The hashes never leave the
+      database: the answer says only how many of a sign-up's referrals share a connection
+      (decision 3).
+    - **Reads are not logged.** The list holds a name, an email and a channel, and
+      reviewing it is the team's ordinary work. Marking and taking a mark back are
+      recorded.
+    - **A mark.** The sign-up stops counting for whoever invited it and gives up its
+      number, which goes to the next sign-up in line (decision 5). It needs a one-line
+      reason.
+    - **A mark can be taken back**, with a reason, because a mark can be a mistake. The
+      sign-up returns to what it was before the mark, with two limits. The number it gave
+      up is somebody else's by then, so it waits in line for the next one free. And if
+      its device came to count for the same inviter in the meantime, it returns as a
+      repeated device instead of counting twice. It can be marked again.
+    - **The record.** `waitlist.signup_events` is append-only. Each row keeps who acted,
+      the duty assignment they acted under, when, the reason, the number released and
+      what the sign-up was before the mark. **It is deleted with its sign-up**, when the
+      person leaves and in the 90-day sweep, because the reason is free text about a
+      person.
+    - **«Has an account» is always no for now.** The screen shows the column and the
+      answer carries `has_space_account`, which is false until linking (`OP-WL-006`,
+      `TECH-299`) sets it. The total of sign-ups with an account that `HU-BO-035` asks
+      for is not built: it waits for the same operation.
+
 ### Earlier decisions this changes
 
 - **The privacy policy on www.allfit.one** keeps waitlist data "until you ask us to delete it".
@@ -6999,6 +7034,9 @@ follow from it:
   invariant 8 speaks of the database alone. How long the channel keeps messages is set in
   Slack, and on 14 November 2026 it was not yet decided. Until it is, a notice is removed by
   hand.
+- **A marked sign-up that leaves comes back clean.** The record of a mark is deleted with
+  the sign-up (decision 11), so the list does not remember a mark across leaving and joining
+  again. The device rules of decision 3 still apply to the new sign-up.
 
 ### Invariants
 
@@ -7014,6 +7052,7 @@ follow from it:
 8. 90 days after the launch, no sign-up without a person keeps a name, an email, a token or a
    hash.
 9. No `GET` on the waitlist changes state.
+10. The record of a review is never rewritten, and it does not outlive its sign-up.
 
 ### Alternatives considered
 
@@ -7081,6 +7120,13 @@ follow from it:
     A missing or malformed channel address leaves the events unclaimed and delays no email.
 14. The Founding Member email is never written for a sign-up that left, or that no longer holds
     the number its event names.
+15. Without `manage_platform_commercial` at AAL2 nobody reads the list, marks a sign-up or
+    takes a mark back, and what the team reads holds no hash.
+16. A mark lowers the inviter's counter and hands the number on. Taking it back returns the
+    sign-up to what it was and gives it the next number free, never the one it gave up. The
+    record of both is deleted with the sign-up.
 
 Scenario 8 is covered by `T-WL-INT-04` and `T-WL-INT-05`. Of scenario 9, leaving is covered by
-`T-WL-INT-04`; the deadline, fraud and linking wait for the code that builds them.
+`T-WL-INT-04` and fraud by `T-WL-INT-06`; the deadline and linking wait for the code that
+builds them. Scenarios 15 and 16 are covered by `T-WL-RLS-02`, `T-WL-RLS-03`, `T-WL-INT-06`
+and `T-WL-INT-08`.
