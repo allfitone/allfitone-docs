@@ -739,7 +739,11 @@ nunca se publica como ranking.
 3. Puedo marcar una inscripción como fraude, con un motivo. Deja de sumar a quien la invitó y, si era Founding Member y su plazo no había vencido, su número pasa a la siguiente persona (`HU-SP-118`).
 4. Veo los totales: inscritas, confirmadas, con cuenta y por canal de origen. El canal sale del link con el que llegó la persona, o es «referido» o «directo».
 5. Nunca veo las huellas de dispositivo ni de conexión: solo si una inscripción se descartó y por qué.
-6. Exige `manage_platform_commercial`, AAL2 y actor humano auditado. Marcar fraude queda en el registro de auditoría con su motivo.
+6. Exige `manage_platform_commercial`, AAL2 y actor humano auditado. Marcar fraude y quitar la marca quedan registrados con su motivo y con quien lo hizo. Ese registro se borra con la inscripción. Consultar la lista no se registra.
+7. Puedo quitar una marca de fraude, con un motivo. La inscripción vuelve a como estaba antes de la marca y vuelve a sumar a quien la invitó. Si había confirmado su correo, recibe el siguiente número de Founding Member que quede libre, no el que tenía.
+8. Una conexión compartida entre varios referidos se me muestra como señal para revisar. Nunca descarta una inscripción por sí sola.
+
+Mientras no exista el enlace con la cuenta de Allfit Space (`TECH-299`), «con cuenta» dice «no» en todas las inscripciones y el total con cuenta no se muestra.
 
 ### HU-BO-036 — Cargar los códigos de oferta de las tiendas
 

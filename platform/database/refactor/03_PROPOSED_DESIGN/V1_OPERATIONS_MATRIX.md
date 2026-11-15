@@ -5227,6 +5227,7 @@ Las fichas completas las escribe el pull request que construye cada operación, 
 | `OP-WL-013` | Cargar códigos de oferta | Comando | `A11` con `manage_platform_commercial` |
 | `OP-WL-014` | Consultar la bolsa de códigos y los premios pendientes | Consulta | `A11` con `manage_platform_commercial` |
 | `OP-WL-015` | Marcar el lanzamiento de Allfit Space | Comando | `A11` con `manage_platform_commercial` |
+| `OP-WL-016` | Quitar la marca de fraude de una inscripción | Comando | `A11` con `manage_platform_commercial` |
 
 `OP-WL-002` escribe además `waitlist.signup_confirmed.v1` en el outbox, una vez por inscripción
 y con el total de confirmadas como único dato. El worker lo convierte en un aviso al canal
@@ -5237,8 +5238,15 @@ operación del aviso están en [OPERATIONS.md](../../OPERATIONS.md).
 `OP-WL-005` pasa el número de quien sale a la siguiente inscripción confirmada sin número. Cada
 asignación escribe `waitlist.founding_number_assigned.v1`, con el número como único dato, y el
 worker envía el correo «Eres Founding Member #037» (`ADR-050`, decisión 5, `TECH-298`). De
-`OP-WL-007` existe la asignación y la liberación por salida; el plazo, su recordatorio y la
-liberación por fraude no están construidos.
+`OP-WL-007` existe la asignación, la liberación por salida y la liberación por fraude
+(`OP-WL-012`); el plazo y su recordatorio no están construidos.
+
+`OP-WL-011`, `OP-WL-012` y `OP-WL-016` son la revisión de la lista en el Backoffice
+(`HU-BO-035`, `TECH-302`, allfitone#263; `ADR-050`, decisión 11). Las lecturas no se
+registran. Marcar y quitar la marca piden un motivo y escriben en `waitlist.signup_events`,
+que se borra con su inscripción. Quien recupera la marca no recupera su número: toma el
+siguiente que quede libre. La respuesta lleva `has_space_account`, que es `false` hasta que
+`OP-WL-006` enlace la inscripción con su cuenta.
 
 El precio de fundador (`HU-SP-120`) no es una operación de este dominio: es un producto más de
 `OP-PAY-018` y `OP-PAY-019`, que se ofrece solo a quien tiene número de Founding Member.
