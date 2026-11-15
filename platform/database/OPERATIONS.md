@@ -2330,11 +2330,11 @@ sign-up as fraud and takes a mark back. The decisions are in `ADR-050`, decision
 **Who can open it.** Anybody with a live `manage_platform_commercial` duty. An Allfit One admin
 holds every duty (`ADR-046`).
 
-**Deploy order.**
+**Deploy order.** As it was done on 15 November 2026:
 
-1. Merging runs **Deploy AWS**.
+1. Merging runs **Deploy AWS** (run 43748529820).
 2. Dispatch **Deploy Database AWS** without `include_all`. The plan must list only
-   `20261201090000`.
+   `20261201090000` (run 43751474168).
 
 Between the two steps the screen cannot read the list and says so. Nothing else depends on the
 migration: joining, confirming and the emails work as before.
@@ -2377,8 +2377,10 @@ The record of its review goes with it.
 **«Con cuenta» says «No» for everybody.** Nothing links a sign-up to its Allfit Space account
 until `OP-WL-006` (`TECH-299`). The answer carries `has_space_account` as `false` until then.
 
-When this was written, on 15 November 2026, the pull request was open and nothing was deployed.
-The screen had been tested against a mocked API, and the API against a local database.
+On 15 November 2026 the plan listed that migration alone and the push applied it. The check
+above was not run that day, and the screen had not yet been opened in a browser against the
+production API: before the merge it was tested against a mocked API, and the API against a
+local database.
 
 Tests:
 
