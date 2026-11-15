@@ -6740,7 +6740,8 @@ rest is the design that follows from them, reviewed with this change. Nothing is
 stories are `E-SP-17` (`HU-SP-115` to `HU-SP-123`) and `E-BO-10` (`HU-BO-035` to `HU-BO-037`).<br>
 **Date:** 10 November 2026<br>
 **Changed:** 13 November 2026, decision 3: a shared connection is a signal for review, not a
-discard, after the launch strategy v1.2 tied rewards to active referrals.<br>
+discard, after the launch strategy v1.2 tied rewards to active referrals. 14 November 2026,
+decision 10: the founders hear of each confirmation in a private Slack channel (`TECH-338`).<br>
 **Source:** the internal document «Estrategia de lanzamiento de Allfit Space» v1.0 (7 November
 2026), the epic `TECH-290` and its tickets.
 
@@ -6918,6 +6919,28 @@ follow from it:
    language. Each one carries the private «Ver mis referidos» link and a link to leave the list.
    The launch email goes out in batches within the account's sending rate (`TECH-321`).
 
+10. **The founders hear of each confirmation** (`TECH-338`, allfitone#258). The owner decided it
+    on 14 November 2026.
+    - **When.** Confirming the email (`OP-WL-002`) writes `waitlist.signup_confirmed.v1` to the
+      outbox in the transaction that confirms, once per sign-up. Filling in the form writes
+      nothing: an address nobody opens is not news.
+    - **The event names nobody.** Its payload is the number of confirmed sign-ups, and nothing
+      else.
+    - **The notice names the person.** It carries the name and the email, the channel
+      (`utm_source`), the language, whether somebody invited them, and the confirmed total. The
+      worker reads them when it writes the notice, through `waitlist.prepare_team_notice`, which
+      only the worker actor may call. A person who left in between is answered `skipped` and is
+      never announced.
+    - **Where.** A private Slack channel that holds the five founders and nobody else. The
+      worker posts through a port, `TeamChannel` in `packages/notifications`, whose adapter is
+      a Slack incoming webhook.
+    - **The webhook address is a credential.** It lives in Secrets Manager as
+      `SLACK_FOUNDERS_WEBHOOK_URL`, named by its channel and not by this notice, and it is
+      never logged.
+    - **The channel never stops the emails.** Without the address, or with one that is not a
+      Slack webhook, the events wait unclaimed and every email is delivered as usual.
+    - **Delivery is at-least-once.** A repeated notice costs less than a missed one.
+
 ### Earlier decisions this changes
 
 - **The privacy policy on www.allfit.one** keeps waitlist data "until you ask us to delete it".
@@ -6947,6 +6970,11 @@ follow from it:
   they go from 234 to 306 months.
 - The response to a repeated email reveals that the email is on the list, and only that. This was
   decided on 9 November 2026 (`HU-SP-115`, criterion 5).
+- **A posted notice outlives the sign-up.** Decision 10 puts a name and an email in Slack.
+  Leaving the list and the 90-day sweep delete them from the database, not from the channel:
+  invariant 8 speaks of the database alone. How long the channel keeps messages is set in
+  Slack, and on 14 November 2026 it was not yet decided. Until it is, a notice is removed by
+  hand.
 
 ### Invariants
 
@@ -7024,3 +7052,6 @@ follow from it:
     pool leaves the reward pending and delivers it when codes arrive.
 11. The 90-day sweep deletes unlinked sign-ups and strips linked ones, and the daily totals stay.
 12. An unknown, used or voided token answers exactly like one that never existed.
+13. A confirmation enqueues one team-notice event whose payload names nobody, and a link used
+    twice enqueues nothing more. A person who leaves before the worker runs is never announced.
+    A missing or malformed channel address leaves the events unclaimed and delays no email.
