@@ -6741,7 +6741,9 @@ stories are `E-SP-17` (`HU-SP-115` to `HU-SP-123`) and `E-BO-10` (`HU-BO-035` to
 **Date:** 10 November 2026<br>
 **Changed:** 13 November 2026, decision 3: a shared connection is a signal for review, not a
 discard, after the launch strategy v1.2 tied rewards to active referrals. 14 November 2026,
-decision 10: the founders hear of each confirmation in a private Slack channel (`TECH-338`).<br>
+decision 10: the founders hear of each confirmation in a private Slack channel (`TECH-338`).
+14 November 2026, decision 5: the numbers are assigned and handed over as built in
+allfitone#261 (`TECH-298`); the deadline is not built.<br>
 **Source:** the internal document «Estrategia de lanzamiento de Allfit Space» v1.0 (7 November
 2026), the epic `TECH-290` and its tickets.
 
@@ -6877,6 +6879,28 @@ follow from it:
      `identity`'s own function, reached through its `index.ts`. From then on the number belongs to
      the person: it survives the waitlist's retention rule, it never moves again, and it is deleted
      with the account.
+   - **As built on 14 November 2026** (`TECH-298`, allfitone#261). Assignment and one of the
+     three hand-overs exist; the rest waits.
+     - **One rule.** `waitlist.fill_founding_numbers` gives each free number, lowest first, to
+       the earliest-confirmed sign-up that holds none and is not marked as fraud. Confirming
+       (`OP-WL-002`) calls it, and so does deleting a sign-up that held a number. While the
+       hundred fill up, the sign-up it finds is the one confirming.
+     - **Serialized.** The fill runs under one advisory lock, and a unique index on the number
+       is the invariant. Without the lock, two confirmations at once fail on the index instead
+       of taking the same number.
+     - **The event names nobody.** Each number given enqueues
+       `waitlist.founding_number_assigned.v1`, whose payload is the number alone.
+     - **The email.** The worker writes «Eres Founding Member #037» through
+       `waitlist.prepare_founding_email`, which only the worker actor may call. A person who
+       left, or whose number is no longer theirs, is answered `skipped` and gets no email. The
+       same email goes to whoever inherits a number, so it never says they were among the
+       first.
+     - **Where the person reads it.** Confirming and the private link (`OP-WL-004`) answer the
+       number. The founders' notice of decision 10 carries it too.
+     - **Not built.** The deadline, its reminder and the hand-over when it passes wait for the
+       launch date (`HU-BO-037`). Marking a sign-up as fraud (`OP-WL-012`) does not exist yet:
+       when it does, it must clear the number and fill again. Linking (`OP-WL-006`) is
+       `TECH-299`.
 
 6. **The referral levels add up.** The strategy's table said they do not, and the conditions
    drafted on `feat/space-waitlist` repeat it. The owner chose on 10 November 2026 that they do.
@@ -7055,3 +7079,8 @@ follow from it:
 13. A confirmation enqueues one team-notice event whose payload names nobody, and a link used
     twice enqueues nothing more. A person who leaves before the worker runs is never announced.
     A missing or malformed channel address leaves the events unclaimed and delays no email.
+14. The Founding Member email is never written for a sign-up that left, or that no longer holds
+    the number its event names.
+
+Scenario 8 is covered by `T-WL-INT-04` and `T-WL-INT-05`. Of scenario 9, leaving is covered by
+`T-WL-INT-04`; the deadline, fraud and linking wait for the code that builds them.
