@@ -5233,6 +5233,13 @@ y con el total de confirmadas como único dato. El worker lo convierte en un avi
 privado de los fundadores en Slack (`ADR-050`, decisión 10, `TECH-338`). El despliegue y la
 operación del aviso están en [OPERATIONS.md](../../OPERATIONS.md).
 
+`OP-WL-002` asigna además el número de Founding Member cuando quedan números libres, y
+`OP-WL-005` pasa el número de quien sale a la siguiente inscripción confirmada sin número. Cada
+asignación escribe `waitlist.founding_number_assigned.v1`, con el número como único dato, y el
+worker envía el correo «Eres Founding Member #037» (`ADR-050`, decisión 5, `TECH-298`). De
+`OP-WL-007` existe la asignación y la liberación por salida; el plazo, su recordatorio y la
+liberación por fraude no están construidos.
+
 El precio de fundador (`HU-SP-120`) no es una operación de este dominio: es un producto más de
 `OP-PAY-018` y `OP-PAY-019`, que se ofrece solo a quien tiene número de Founding Member.
 
@@ -5252,7 +5259,7 @@ Un evento se escribe en el outbox dentro de la transacción de su comando. Trans
 | Nutrición | `meal_recorded`, `meal_revised`, `meal_deleted`, `goal_version_proposed`, `goal_version_activated`, `goal_version_accepted`, `goal_version_rejected`, `goal_proposals_cancelled` As implemented (STUDIO-61..65): `goal_version_proposed` carries `goal_version_id`, `person_id`, `relationship_id` and `organization_id`, never targets or rationale. Ending a relationship writes no `goal_proposals_cancelled`. |
 | Pagos | `gateway_connected`, `gateway_revoked`, `plan_created`, `plan_version_published`, `plan_version_deprecated`, `subscription_started`, `subscription_suspended`, `subscription_reactivated`, `subscription_ended`, `payment_recorded`, `platform_plan_published`, `platform_plan_version_published`, `platform_subscription_started`, `platform_subscription_suspended`, `platform_subscription_reactivated`, `platform_subscription_ended`, `organization_premium_granted`, `organization_premium_revoked` |
 | Soporte | `platform_role_granted`, `platform_role_revoked` |
-| Lista de espera | `email_requested`, `signup_confirmed` |
+| Lista de espera | `email_requested`, `signup_confirmed`, `founding_number_assigned` |
 
 ## 9. Operaciones explícitamente fuera de V1
 

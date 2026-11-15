@@ -2223,3 +2223,87 @@ Tests:
 - Worker: `T-WRK-WL-07` to `T-WRK-WL-15`, in `waitlist-team-notices.test.ts` and
   `founders-channel.test.ts`. `delivery-coverage.test.ts` knows the new event.
 - `packages/notifications`: `team-channel.test.ts`.
+
+## The first hundred confirmed are Founding Members (TECH-298, allfitone#261)
+
+Confirming the email on the Allfit Space waitlist gives a sign-up a Founding Member number, from 1
+to 100, in confirmation order. The decision, and what is not built yet, are in `ADR-050`,
+decision 5.
+
+`20261130090000_the_first_hundred_confirmed_are_founding_members.sql` does this:
+
+- It adds `founding_number` and `founding_assigned_at` to `waitlist.signups`, with a unique index
+  on the number.
+- It creates `waitlist.fill_founding_numbers()`, not granted to the runtime role. Under one
+  advisory lock it gives each free number, lowest first, to the earliest-confirmed sign-up that
+  holds none and is not marked as fraud. It enqueues `waitlist.founding_number_assigned.v1` for
+  each, with the number as the only payload.
+- It redefines `waitlist.confirm`, which fills the numbers and answers the one the sign-up holds,
+  and `waitlist.forget_signup`, which fills again after deleting a sign-up that held a number.
+- `waitlist.read_my_link` and `waitlist.prepare_team_notice` answer the number too.
+- It creates `waitlist.prepare_founding_email(uuid)`, for the worker actor only. It answers what
+  the email needs, or `skipped` when the sign-up is gone or no longer holds that number.
+- It ends by filling the numbers for whoever had already confirmed.
+
+The worker sends «Eres Founding Member #037» in the language the person joined in. The
+confirmation page and the referrals page of space-web show the number.
+
+**Switches.** The email rides the waitlist's own switches: `STAFF_INVITATION_DELIVERY_ENABLED`
+and `WAITLIST_EMAIL_DELIVERY_ENABLED`, both `true`. With either off, the events wait in the
+outbox and the numbers are still assigned.
+
+**Deploy order.** No new setting and no Terraform. As it was done on 14 November 2026:
+
+1. Merging runs **Deploy AWS** (run 43662970201).
+2. Dispatch **Deploy Database AWS** without `include_all`. The plan must list only
+   `20261130090000` (run 43664153931).
+
+Either order is safe. The API and the worker read `founding_number` as optional, so the new code
+works before the migration. Before the new worker is up, the events wait unclaimed.
+
+**Deleting a test sign-up.** A number its holder gives up goes to the next sign-up in line, and
+that person gets the email. Fewer than a hundred confirmed sign-ups means nobody is waiting for a
+number, and a deleted test sign-up simply frees its own. Once the hundred are held, delete a test
+sign-up with `select waitlist.forget_signup('<id>')` as the owner role, never with a direct
+`delete`: the function is what hands the number on. It also counts the sign-up in
+`waitlist.departed_daily_totals`.
+
+**Check after the deploy.** Expected: one row, all `true`.
+
+```sql
+select to_regprocedure('waitlist.prepare_founding_email(uuid)') is not null as present,
+       has_function_privilege(
+         'allfit_api', 'waitlist.prepare_founding_email(uuid)', 'execute'
+       ) as granted,
+       not has_function_privilege(
+         'allfit_api', 'waitlist.fill_founding_numbers()', 'execute'
+       ) as fill_kept_internal;
+```
+
+Numbers held and emails that wait are counted as the owner role, because both tables are forced
+under RLS:
+
+```sql
+select (select count(*) from waitlist.signups where founding_number is not null) as held,
+       (select count(*) from system.outbox_events
+         where event_type = 'waitlist.founding_number_assigned.v1'
+           and published_at is null) as emails_waiting;
+```
+
+On 14 November 2026 the list held no sign-ups when the migration ran, so it gave no number. One
+test sign-up was then confirmed in production: it took number 1, the email and the founders'
+notice were published, and the sign-up was deleted afterwards.
+
+Tests:
+
+- pgTAP: `T-WL-INT-04`, new, and `T-WL-RLS-01`, which covers the new function's grant, its
+  worker-only guard and that the fill is not granted. `T-WL-INT-02` pinned the columns
+  `read_my_link` returns; the list now includes the person's own number.
+- Concurrency: `T-WL-INT-05`, in `packages/db/tests/waitlist-founding-concurrency.test.ts`. It was
+  watched failing on the unique index with the lock removed.
+- API: `T-WL-API-01`, for the number on both routes.
+- Worker: `T-WRK-WL-16` to `T-WRK-WL-21`, in `waitlist-founding-emails.test.ts`, and
+  `T-WRK-WL-22` for the founders' notice. `delivery-coverage.test.ts` knows the new event.
+- `packages/notifications`: the template, in both languages.
+- space-web: the two answers in `waitlist.test.ts`, and the link pages in
+  `e2e/waitlist-links.spec.ts`.
