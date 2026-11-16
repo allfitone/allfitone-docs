@@ -46,6 +46,12 @@ Este compromiso no afirma que las 86 HU estén implementadas. Una HU cuenta como
 > On 9 November 2026 `ADR-048` reopened `E-STUDIO-13`, `E-SP-13` and `E-SP-14`. Their thirteen
 > stories go back to `included_v1` with the priorities they had before 1 October 2026, and
 > `HU-STUDIO-088`, the payment link of a remote plan, is new.
+>
+> On 15 November 2026 `ADR-053` proposed the assistant. The stories of its first slice are
+> `HU-SP-124` to `HU-SP-128` and `HU-STUDIO-089` to `HU-STUDIO-091`, all `después` and
+> `deferred`: the capability is outside the V1 baseline and outside the ratified BETA scope,
+> and it enters through the gates of ADR-021. They are reclassified when the slice is approved
+> to build.
 
 ## 2. Reglas de clasificación
 
@@ -358,6 +364,14 @@ Lectura de columnas:
 | `HU-SP-121 — Recibir mis premios por referidos` | `imprescindible` | `included_v1` | `OP-WL-008` | `waitlist`: entregas por nivel y bolsa de códigos | PR pendiente (`TECH-301`); niveles que se suman, una entrega por nivel aunque el job corra dos veces, bolsa vacía | `TECH-304` verifica si una persona puede canjear un segundo código durante el primer periodo gratis. |
 | `HU-SP-122 — Enterarme de que Allfit Space abrió` | `imprescindible` | `included_v1` | `OP-WL-009` | `waitlist`: fecha de lanzamiento y marca de envío por inscripción | PR pendiente (`TECH-321`); una vez por inscripción, solo confirmadas, por tandas | |
 | `HU-SP-123 — Salir de la lista de espera` | `imprescindible` | `included_v1` | `OP-WL-005` + `OP-WL-010` | `waitlist`: borrado de la inscripción, sus tokens y huellas; totales diarios sin datos personales | PR pendiente (sin ticket); `GET` sin efecto, número que pasa a la siguiente persona, invitados que dejan de sumar, barrido a los 90 días | Historia nueva del 10 de noviembre de 2026 (Ley 1581). |
+| `HU-SP-124 — Autorizar que el asistente use mis datos` | `después` | `deferred` | `NEW-ITL-CONSENT-GIVE` | Sin objetos V1 | Not applicable while deferred | `ADR-053`, proposed on 15 November 2026. Deferred: no `intelligence` schema, table, function, permission or job until the slice passes the gates of ADR-021. |
+| `HU-SP-125 — Retirar mi autorización al asistente` | `después` | `deferred` | `NEW-ITL-CONSENT-WITHDRAW` | Sin objetos V1 | Not applicable while deferred | `ADR-053`, proposed on 15 November 2026. Deferred: no `intelligence` schema, table, function, permission or job until the slice passes the gates of ADR-021. |
+| `HU-SP-126 — Ver el resumen de mi semana` | `después` | `deferred` | `NEW-ITL-WEEKLY-SUMMARY` | Sin objetos V1 | Not applicable while deferred | `ADR-053`, proposed on 15 November 2026. Deferred: no `intelligence` schema, table, function, permission or job until the slice passes the gates of ADR-021. |
+| `HU-SP-127 — Ver y borrar mis resúmenes` | `después` | `deferred` | `NEW-ITL-WEEKLY-SUMMARY-LIST` | Sin objetos V1 | Not applicable while deferred | `ADR-053`, proposed on 15 November 2026. Deferred: no `intelligence` schema, table, function, permission or job until the slice passes the gates of ADR-021. |
+| `HU-SP-128 — Saber cuándo un profesional usó el asistente con mis datos` | `después` | `deferred` | `NEW-ITL-CLIENT-SUMMARY` + `OP-PRV-015` | Sin objetos V1 | Not applicable while deferred | `ADR-053`, proposed on 15 November 2026. Deferred: no `intelligence` schema, table, function, permission or job until the slice passes the gates of ADR-021. |
+| `HU-STUDIO-089 — Ver el resumen de un cliente antes de su sesión` | `después` | `deferred` | `NEW-ITL-CLIENT-SUMMARY` | Sin objetos V1 | Not applicable while deferred | `ADR-053`, proposed on 15 November 2026. Deferred: no `intelligence` schema, table, function, permission or job until the slice passes the gates of ADR-021. |
+| `HU-STUDIO-090 — Saber por qué el asistente no está disponible para un cliente` | `después` | `deferred` | `NEW-ITL-CLIENT-SUMMARY` | Sin objetos V1 | Not applicable while deferred | `ADR-053`, proposed on 15 November 2026. Deferred: no `intelligence` schema, table, function, permission or job until the slice passes the gates of ADR-021. |
+| `HU-STUDIO-091 — Saber si nuestro plan incluye el asistente` | `después` | `deferred` | `NEW-ITL-ENTITLEMENT` | Sin objetos V1 | Not applicable while deferred | `ADR-053`, proposed on 15 November 2026. Deferred: no `intelligence` schema, table, function, permission or job until the slice passes the gates of ADR-021. |
 
 ## 5. Brechas que la matriz hace visibles
 
