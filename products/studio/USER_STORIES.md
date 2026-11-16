@@ -103,7 +103,7 @@ vence por separado; decidir una no decide las demás.
 | CRM y pipeline comercial | Diferido |
 | Mensajería con clientes | Diferida |
 | Cambiar colores, logo o tipografía de la aplicación | Marca blanca diferida |
-| Copiloto de IA para el profesional | Diferido |
+| Que el asistente publique, asigne o actúe por su cuenta | Diferido. El asistente resume (`E-STUDIO-15`), fuera del alcance BETA |
 | Roles a medida o permisos por sede | Fuera de esta versión |
 | Menores de 18 años | Fuera de esta versión |
 
@@ -201,6 +201,9 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 | `HU-STUDIO-086` | `HU-STUDIO-001`, `HU-STUDIO-085` |
 | `HU-STUDIO-087` | `HU-STUDIO-023` |
 | `HU-STUDIO-088` | `HU-STUDIO-073`, `HU-STUDIO-075` |
+| `HU-STUDIO-089` | `HU-STUDIO-054`, `HU-STUDIO-083`, `HU-STUDIO-091` |
+| `HU-STUDIO-090` | `HU-STUDIO-089` |
+| `HU-STUDIO-091` | `HU-STUDIO-001` |
 
 ---
 
@@ -1745,6 +1748,84 @@ estado de pago de una persona no es un dato de entrenamiento.
 
 ---
 
+## E-STUDIO-15 · Asistente
+
+El asistente le resume al profesional lo que su cliente hizo, a partir de lo que esa persona
+ya le comparte. Su nombre comercial no está cerrado; aquí se llama «el asistente». Las
+decisiones de diseño están en `ADR-053`.
+
+Cinco reglas gobiernan la épica:
+
+1. **LA FÓRMULA no cambia.** El asistente lee lo que el profesional puede ver en pantalla en
+   ese momento, y nada más.
+2. **Además hace falta la autorización de IA de la persona.** Es suya y se la da a Allfit One
+   desde su aplicación; no es una categoría que el gimnasio solicite.
+3. **Nada derivado de un cliente se guarda para el gimnasio.**
+4. **El asistente no publica ni asigna.** Eso es siempre un acto del profesional.
+5. **Viene desde el plan Starter.** El plan Free no lo tiene.
+
+Esta épica cubre la primera entrega: el resumen del cliente. El borrador de programa o de
+ajuste se escribirá con su entrega. El aviso de clientes que dejaron de entrenar o de registrar
+no usa ningún modelo: es una lectura normal de Studio y se escribirá en `E-STUDIO-14`.
+
+> **Pendiente.** Estas historias no forman parte del alcance BETA ratificado. El número de usos
+> por plan no está decidido, y los planes de Studio (Free, Starter y superiores) vienen del
+> modelo de precios, que sigue en borrador. Nada está construido.
+
+### HU-STUDIO-089 — Ver el resumen de un cliente antes de su sesión
+
+**Como** coach con asignación vigente
+**quiero** un resumen de lo que hizo mi cliente
+**para** llegar a la sesión sabiendo qué mirar.
+
+`E-STUDIO-15` · después
+
+**Criterios**
+
+1. Lo pido desde la ficha de la persona. Cubre las últimas dos semanas y las compara con las dos anteriores.
+2. Solo usa las categorías que esa persona nos comparte y que yo puedo leer en ese momento. Sin la categoría de comidas no habla de comidas; sin la de cuerpo no habla de medidas.
+3. Quien no puede ver los datos de esa persona en pantalla tampoco puede pedir su resumen.
+4. Una sesión que la persona ocultó no aparece ni cambia el resumen, y nada indica que falte.
+5. Dice qué hizo la persona y qué conviene mirar. No diagnostica, no infiere condiciones médicas ni receta.
+6. Dice que fue generado y con qué categorías.
+7. Cada vez que lo pido queda una línea en el registro de accesos de la persona, antes de consultar al modelo. Si esa línea no se puede escribir, no se envía nada.
+8. Al modelo no va el nombre de la persona ni ningún dato que la identifique.
+9. No se guarda. Si lo quiero otra vez lo pido otra vez, y cuenta como otro uso.
+10. Si el asistente no responde, veo la ficha como siempre, sin resumen y sin un texto inventado.
+
+### HU-STUDIO-090 — Saber por qué el asistente no está disponible para un cliente
+
+**Como** coach que pidió un resumen
+**quiero** saber por qué no lo obtuve
+**para** no pensar que la aplicación está fallando.
+
+`E-STUDIO-15` · después
+
+**Criterios**
+
+1. Si la persona no ha autorizado el uso de IA, se me dice eso.
+2. Ese aviso no dice si la persona tiene datos, ni cuándo decidió, ni si retiró la autorización o nunca la dio.
+3. Studio no ofrece ninguna acción para pedirle la autorización: es decisión suya y la toma en su aplicación.
+4. Los demás motivos se distinguen: nuestro plan no incluye el asistente, llegué al límite de usos, o el asistente no responde ahora.
+5. Nada de esto cambia lo que ya puedo ver de esa persona en pantalla.
+
+### HU-STUDIO-091 — Saber si nuestro plan incluye el asistente
+
+**Como** owner o admin
+**quiero** ver si el plan del gimnasio incluye el asistente y cuánto se ha usado
+**para** decidir si nos sirve el plan que tenemos.
+
+`E-STUDIO-15` · después
+
+**Criterios**
+
+1. El asistente viene desde el plan Starter. En Free veo qué es y desde qué plan viene; no se envía nada.
+2. El límite de usos es por profesional. Cada uno ve los suyos.
+3. Como owner o admin veo los usos de todo el equipo, sin ver sobre qué clientes se hicieron.
+4. Bajar de plan no borra nada de lo que el gimnasio ya tiene.
+
+---
+
 ## Resumen
 
 | Épica | Historias | Imprescindibles |
@@ -1764,7 +1845,8 @@ estado de pago de una persona no es un dato de entrenamiento.
 | `E-STUDIO-12` Nutrición | `HU-STUDIO-068` – `HU-STUDIO-072` | 0 de 5 |
 | `E-STUDIO-13` Planes y cobro | `HU-STUDIO-073` – `HU-STUDIO-080`, `HU-STUDIO-088` | 5 de 9 |
 | `E-STUDIO-14` Resumen del día | `HU-STUDIO-081` – `HU-STUDIO-084` | 3 de 4 |
-| **Total** | **88 historias** | **45 imprescindibles** |
+| `E-STUDIO-15` Asistente | `HU-STUDIO-089` – `HU-STUDIO-091` | 0 de 3 |
+| **Total** | **91 historias** | **45 imprescindibles** |
 
 El camino mínimo para lanzar es: entrar, crear el gimnasio con su equipo,
 invitar a una persona dentro del cupo, armar un programa y asignárselo, y ver

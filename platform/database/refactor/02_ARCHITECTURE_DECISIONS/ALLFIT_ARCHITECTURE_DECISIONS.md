@@ -7570,7 +7570,7 @@ second slice. No table is created for a slice before that slice is built (ADR-02
 
 | Gate | State |
 | --- | --- |
-| 1. Scope, actors and use cases | Decision 1; the stories are not written |
+| 1. Scope, actors and use cases | Decision 1; the stories of the first slice are `E-SP-18` and `E-STUDIO-15` |
 | 2. Terms and counterexamples | Decision 2 |
 | 3. Ownership, provenance and lifecycle | Decisions 7 and 8 |
 | 4. Sensitive data, purposes and new scopes | Decisions 4, 5 and 6; the lawyer's review is pending |
@@ -7602,7 +7602,9 @@ Pending, and not a question: the lawyer's review of decision 4.
 ### What this decision does not do
 
 - It builds nothing and creates no table, route, scope or permission.
-- It does not write the stories or the texts a person reads; no consent text exists.
+- It does not write the texts a person reads; no consent text exists. The stories of the
+  first slice are `E-SP-18` (`HU-SP-124` to `HU-SP-128`) and `E-STUDIO-15` (`HU-STUDIO-089` to
+  `HU-STUDIO-091`); those of the other two slices are not written.
 - It does not choose a model for any capability. Only meal-photo recognition has an eval.
 - It does not bring the assistant to the Backoffice.
 - It does not settle the data processing agreements or the international transfer under Law

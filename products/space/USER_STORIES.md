@@ -73,7 +73,7 @@ movilidad no se organizan en series y repeticiones.
 | Mensajería con el entrenador | Diferida |
 | Leer datos del reloj: pulso, GPS, sueño | Diferido. Sí se **escriben** los entrenamientos hacia Apple Health y Health Connect |
 | Escanear una comida con IA para identificarla | Diferido. La persona sube la foto y escribe qué comió |
-| Copiloto de IA, planificación automática | Diferido |
+| Planificación automática y que el asistente actúe por su cuenta | Diferido. El asistente resume y propone (`E-SP-18`) |
 | Menores de 18 años | Fuera de esta versión |
 
 ---
@@ -2402,6 +2402,124 @@ la autorización.*
 
 ---
 
+## E-SP-18 · Asistente
+
+El asistente resume y propone a partir de los datos que la persona ya tiene en Allfit Space.
+Su nombre comercial no está cerrado; aquí se llama «el asistente». Las decisiones de diseño
+están en `ADR-053`.
+
+Cinco reglas gobiernan la épica:
+
+1. **Sin mi autorización, ningún dato mío llega a un modelo.** Una sola autorización cubre todo
+   lo que hace el asistente.
+2. **Al modelo nunca va quién soy:** ni nombre, ni correo, ni documento, ni teléfono, ni foto,
+   ni dirección.
+3. **El asistente no hace nada por mí.** Resume y propone; publicar, asignar o guardar es
+   siempre un acto mío.
+4. **Autorizar y retirar es gratis siempre.** Usar el asistente viene con Pro.
+5. **Lo generado se dice generado,** y no diagnostica, no infiere condiciones médicas ni receta.
+
+Esta épica cubre la primera entrega: la autorización y el resumen semanal. La sugerencia para
+la próxima sesión y las preguntas sobre mis datos se escribirán con sus entregas.
+
+> **Pendiente.** Un abogado revisa la autorización antes de escribir su texto. El número de
+> usos por plan no está decidido. Nada está construido, y la épica no forma parte del camino
+> mínimo para lanzar.
+
+### HU-SP-124 — Autorizar que el asistente use mis datos
+
+**Como** persona que usa Allfit Space
+**quiero** decidir si el asistente puede usar mis datos
+**para** saber qué sale de Allfit One antes de que salga.
+
+`E-SP-18` · después
+
+**Criterios**
+
+1. La primera vez que uso cualquier función del asistente veo un solo texto de autorización. Sin aceptarlo no se envía nada, y el resto de la aplicación funciona igual.
+2. El texto dice qué datos cubre: mi entrenamiento, mi nutrición, mis medidas corporales y mi contexto de salud. Dice a qué proveedor van y en qué país, que no se guardan allá y que no se usan para entrenar modelos.
+3. El texto dice que nunca se envía mi nombre, correo, documento, teléfono, foto ni dirección.
+4. El texto dice que los profesionales que me atienden sabrán si no he autorizado (`HU-STUDIO-090`).
+5. Se registran la fecha y la versión del texto que acepté.
+6. Una sola autorización sirve para todas las funciones del asistente: las mías en Space y las de un profesional que me atiende, sobre lo que yo le comparto. No se me pregunta de nuevo por función.
+7. Si cambia el proveedor o lo que cubre, es un texto nuevo y se me pregunta otra vez. Mientras no lo acepte, no se envía nada.
+8. Puedo autorizar desde «Mis datos» sin tener Pro.
+9. Esta autorización no le da a ningún gimnasio ni profesional acceso a algo que yo no le comparta ya.
+10. Quien tiene esta autorización no ve otra ventana al reconocer una comida con foto (`HU-SP-113`).
+
+> **Por definir con la entrega:** cómo pasa a esta autorización quien solo había aceptado el
+> texto de la foto de comida.
+
+### HU-SP-125 — Retirar mi autorización al asistente
+
+**Como** persona que autorizó al asistente
+**quiero** retirar mi autorización
+**para** que mis datos dejen de enviarse cuando yo lo decida.
+
+`E-SP-18` · después · HU-SP-124
+
+**Criterios**
+
+1. En «Mis datos» veo si tengo la autorización, desde cuándo y con qué versión del texto.
+2. La retiro cuando quiera, sin dar motivo y sin importar mi plan.
+3. Desde ese momento ninguna función del asistente envía datos míos, ni en Space ni para un profesional.
+4. Retirarla no borra nada: mis resúmenes ya generados siguen siendo míos hasta que yo los borre (`HU-SP-127`).
+5. Queda registrado cuándo la retiré.
+6. Puedo volver a autorizar después; acepto el texto vigente en ese momento.
+
+### HU-SP-126 — Ver el resumen de mi semana
+
+**Como** persona con Pro
+**quiero** un resumen de mi semana
+**para** entender cómo voy sin revisar cada sesión.
+
+`E-SP-18` · después · HU-SP-124, HU-SP-086
+
+**Criterios**
+
+1. Lo pido yo; no se genera solo.
+2. La semana va de lunes a domingo, en mi zona horaria. Puedo pedir el de la semana que acaba de terminar o el de la que va corriendo.
+3. Dice qué entrené, cómo comí y qué cambió frente a la semana anterior. Solo habla de lo que registré: si no registré comidas, no dice nada de nutrición.
+4. Si esa semana no registré nada, se me dice y no se envía nada a ningún modelo.
+5. Dice que fue generado, y a partir de cuáles de mis datos.
+6. No diagnostica, no infiere condiciones médicas ni receta.
+7. Se guarda uno por semana. Si lo pido de nuevo, reemplaza al anterior.
+8. Si el asistente no responde, veo mi semana como siempre, sin resumen y sin un texto inventado. Puedo intentarlo después.
+9. Sin Pro veo qué es y que viene con Pro (`HU-SP-084`); no se envía nada.
+10. Hay un límite de usos por plan. Al alcanzarlo se me dice cuándo vuelvo a tener, y no se envía nada.
+
+### HU-SP-127 — Ver y borrar mis resúmenes
+
+**Como** persona que ha pedido resúmenes
+**quiero** ver los anteriores y borrar los que no quiera
+**para** conservar solo lo que me sirve.
+
+`E-SP-18` · después · HU-SP-126
+
+**Criterios**
+
+1. Veo mis resúmenes del más reciente al más antiguo, cada uno con su semana y la fecha en que se generó.
+2. Borro cualquiera. Borrar un resumen no borra ningún entrenamiento ni comida.
+3. Los sigo viendo si bajo a gratis o si retiro mi autorización.
+4. Ningún gimnasio ni profesional los ve: son míos y no pertenecen a ninguna categoría que comparto.
+
+### HU-SP-128 — Saber cuándo un profesional usó el asistente con mis datos
+
+**Como** persona que comparte datos con un gimnasio
+**quiero** ver cuándo un profesional le pidió al asistente un resumen sobre mí
+**para** saber qué salió de Allfit One por cuenta suya.
+
+`E-SP-18` · después · HU-SP-124
+
+**Criterios**
+
+1. Cada vez que un profesional pide un resumen sobre mí queda una línea en mi registro de accesos, con su nombre, su organización, la fecha y las categorías que se usaron.
+2. Esa línea se distingue de cuando miró esos datos en pantalla.
+3. La línea existe aunque el asistente después no haya respondido.
+4. Si no tengo la autorización no hay lectura, y por eso no hay línea.
+
+---
+
 ## Resumen
 
 | Épica | Historias | Imprescindibles |
@@ -2424,7 +2542,8 @@ la autorización.*
 | `E-SP-15` Allfit Pro | `HU-SP-084` – `HU-SP-088` | 5 de 5 |
 | `E-SP-16` Hoy y navegación | `HU-SP-089` – `HU-SP-094`, `HU-SP-100` | 4 de 7 |
 | `E-SP-17` Lista de espera y lanzamiento | `HU-SP-115` – `HU-SP-123` | 9 de 9 |
-| **Total** | **108 historias** | **62 imprescindibles** |
+| `E-SP-18` Asistente | `HU-SP-124` – `HU-SP-128` | 0 de 5 |
+| **Total** | **113 historias** | **62 imprescindibles** |
 
 El camino mínimo para lanzar es: crear cuenta y entrar, activar el Fitness ID,
 ver qué toca hoy, entrenar y registrarlo aunque no haya señal, ver el historial,
