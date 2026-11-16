@@ -2286,13 +2286,14 @@ Los embajadores se escribirán como historias cuando se cierren sus reglas (`TEC
 
 **Criterios**
 
-1. El contador suma a quienes se unieron con mi código y confirmaron su correo, sin contar lo descartado.
-2. Los niveles son 5, 15, 30 y 100. Veo cuántos llevo y cuántos me faltan para el siguiente.
-3. Lo veo al unirme y en cada correo de la lista.
-4. Lo consulto cuando quiera en «mi link», una página a la que solo llego con el enlace privado «Ver mis referidos» de cada correo. No pide contraseña.
-5. Ese enlace es largo, aleatorio y solo mío. Sirve para ver mi código, mi link y mi contador, y para salir de la lista (`HU-SP-123`); para nada más.
-6. Nunca veo los nombres ni los correos de las personas que invité.
-7. Un enlace inválido responde igual que uno que no existe, y me ofrece pedir el correo de nuevo.
+1. El contador dice dos cifras: registrados y activos (`TECH-334`). Registrados son quienes se unieron con mi código y confirmaron su correo, sin contar lo descartado.
+2. Activos son los registrados que cuentan para los premios (`HU-SP-121`). Un referido pasa a activo una sola vez y no deja de serlo. Antes del lanzamiento nadie tiene activos.
+3. Los niveles son 5, 15, 30 y 100. Junto a los activos veo cuántos me faltan para el siguiente nivel y cuál es su premio; después del último, que alcancé todos. Los registrados no se muestran como avance hacia un nivel.
+4. Lo veo al unirme y en cada correo de la lista.
+5. Lo consulto cuando quiera en «mi link», una página a la que solo llego con el enlace privado «Ver mis referidos» de cada correo. No pide contraseña.
+6. Ese enlace es largo, aleatorio y solo mío. Sirve para ver mi código, mi link y mi contador, y para salir de la lista (`HU-SP-123`); para nada más.
+7. Nunca veo los nombres ni los correos de las personas que invité.
+8. Un enlace inválido responde igual que uno que no existe, y me ofrece pedir el correo de nuevo.
 
 ### HU-SP-118 — Ser Founding Member
 
@@ -2353,7 +2354,7 @@ Los embajadores se escribirán como historias cuando se cierren sus reglas (`TEC
 
 **Criterios**
 
-1. Para los premios solo cuentan los referidos que confirmaron su correo y crearon su cuenta de Allfit Space después del lanzamiento, con el mismo correo.
+1. Para los premios solo cuentan los referidos activos: confirmaron su correo, crearon su cuenta de Allfit Space después del lanzamiento, con el mismo correo, y registraron 3 entrenamientos o comidas en sus primeros 14 días (estrategia de lanzamiento v1.2).
 2. Niveles: 5 referidos dan 1 mes, 15 dan 2 meses, 30 dan 3 meses y 100 dan 1 año de Allfit Pro y merch de Allfit One.
 3. **Los niveles se suman:** recibo el premio de cada nivel que alcanzo. Con 30 referidos recibo 1 + 2 + 3 = 6 meses; con 100, 18 meses y el merch.
 4. Cada premio me llega por correo como un código de oferta de la tienda del teléfono en que creé mi cuenta, tomado de la bolsa que carga el equipo (`HU-BO-036`). Cada código se entrega una sola vez y queda registrado a quién.

@@ -6976,7 +6976,9 @@ allfitone#263 (`TECH-302`). 15 November 2026, decision 7: linking as built in al
 and allfitone#266 (`TECH-299`); the owner chose that a sign-up has its account when the
 person finishes the onboarding, and that the store of the phone is recorded then.
 15 November 2026, decisions 5 and 11: the owner chose that proven fraud takes the number
-from a person who already has her account, and that nobody inherits it (allfitone#268).<br>
+from a person who already has her account, and that nobody inherits it (allfitone#268).
+15 November 2026, decisions 3 and 6: the counter says two figures, registered and active,
+as built in allfitone#269 (`TECH-334`).<br>
 **Source:** the internal document «Estrategia de lanzamiento de Allfit Space» v1.0 (7 November
 2026), the epic `TECH-290` and its tickets.
 
@@ -7079,8 +7081,18 @@ follow from it:
    `20261128090000_a_shared_connection_counts_for_the_inviter.sql` drops it and counts again
    the sign-ups it had discarded, unless their device already counts for the same inviter.
 
-   The counter is the number of the inviter's sign-ups that are confirmed and count. It is computed
-   when it is read, never stored, so a fraud mark lowers it at once.
+   **The counter says two figures** (`TECH-334`, allfitone#269). *Registered* is the number
+   of the inviter's sign-ups that are confirmed and count. *Active* is the number of those
+   that the rewards count (decision 6). Both are computed when they are read, never stored,
+   so a fraud mark lowers them at once. Until then the page and the emails showed only the
+   registered beside the reward levels, which read as progress toward a reward; now the
+   next level is said beside the active.
+
+   What is stored is the fact: `waitlist.signups.active_at`, when a referral became active.
+   It is written once and stays, and only a sign-up linked to its account can carry it.
+   The rewards job writes it (`OP-WL-008`, `TECH-301`); until that is built, and before the
+   launch in any case, everybody has zero active. Joining, «mi link» and the emails answer
+   `active_referrals` beside `referrals`.
 
 4. **The public endpoints trust space-web, and only space-web.**
    - The waitlist's public operations live under `/space/v1/waitlist/*` as actor `A0`, like the
@@ -7156,8 +7168,10 @@ follow from it:
    drafted on `feat/space-waitlist` repeat it. The owner chose on 10 November 2026 that they do.
    - Each level reached is delivered once: 5 referrals give 1 month, 15 give 2, 30 give 3, and
      100 give 12 months and Allfit One merch. Thirty referrals are 1 + 2 + 3 = 6 months.
-   - A referral counts for the rewards when it is confirmed, it counts, and it is linked to a
-     person whose Space account was created after the launch.
+   - A referral counts for the rewards when it is active: it is confirmed, it counts, it is
+     linked to a person whose Space account was created after the launch, and that person
+     logged 3 workouts or meals in their first 14 days (launch strategy v1.2). It becomes
+     active once and stays so.
    - Rewards go to the inviter's person, so the inviter needs an account of their own. A level
      reached before that waits for the link.
    - A reward is an offer code for the platform recorded at linking, taken from the pool loaded in

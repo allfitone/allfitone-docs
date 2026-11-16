@@ -2413,3 +2413,37 @@ Tests:
 - API: `T-WL-API-02`, for the four routes against the contract.
 - Backoffice: `waitlist-review.test.ts` for what the screen says, and
   `e2e/waitlist-review.spec.ts` for the screen.
+
+## The referral counter says registered and active (TECH-334, allfitone#269)
+
+Migration `20261205090000_the_counter_says_registered_and_active`.
+
+- It adds `active_at` to `waitlist.signups`: when a referral became active for the rewards.
+  `ck_signups_active_linked` refuses it on a sign-up without an account.
+- `waitlist.active_referral_count` counts an inviter's sign-ups that are confirmed, not
+  discarded and active. The runtime role cannot call it; the four functions below do.
+- `waitlist.join`, `waitlist.read_my_link`, `waitlist.prepare_email_delivery` and
+  `waitlist.prepare_founding_email` answer `active_referrals` as their last column. Their
+  results change shape, so the migration drops them and creates them again, with the same
+  bodies and the same grants.
+
+**Nothing writes `active_at` yet.** The rewards job will (`OP-WL-008`, `TECH-301`). Until then
+every counter reads zero active, on the page and in the emails. Do not set it by hand: the
+page would promise a reward that nothing delivers.
+
+**Deploying it.** The API and the worker run before the migration. A row without the column
+reads as nobody active, so joining, «mi link» and the emails keep working in between. space-web
+reads an answer without `active_referrals` the same way.
+
+When this was written, on 15 November 2026, the pull request was open and nothing was deployed.
+The page had been tested against a mocked API, and the API against a local database.
+
+Tests:
+
+- pgTAP: `T-WL-INT-11` for both figures on joining, on «mi link» and on the two emails, a
+  discarded referral that is active for nobody, `active_at` refused without an account, and
+  the privileges. `T-WL-INT-01` and `T-WL-INT-02` follow the new result shape.
+- API: `handlers/space.test.ts`, for both routes against the contract.
+- Emails: `waitlist-emails.test.ts` in `packages/notifications`, for the line at each level.
+- space-web: `waitlist.test.ts` for the line and the parsers, `e2e/waitlist.spec.ts` and
+  `e2e/waitlist-links.spec.ts` for the form and the page.
