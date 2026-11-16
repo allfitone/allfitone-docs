@@ -5723,8 +5723,8 @@ que quedó sin movimiento.
 
 ## ADR-045 — AI models are used through one port, and each task picks its own with its eval
 
-**Status:** in review. The code is built (allfitone#187) and not merged: the recognition eval
-has to pass again first, because decision 8 changes what the model is asked.<br>
+**Status:** in review. The code is built (allfitone#187) and not merged. The recognition eval
+passed again on 15 November 2026 with what decision 8 changes.<br>
 **Date:** 6 November 2026, revised 15 November 2026<br>
 **Complements:** ADR-041, whose food recognition now asks its model through this port.
 
@@ -5831,7 +5831,9 @@ several types, and at most 12 optional properties in a schema, nested objects in
 It asked for 26 optional nutrient fields in each item's estimate, more than decision 6 allows.
 It now asks for a list of code and amount, and the recogniser turns it back into the estimate's
 own fields before the checks of ADR-041. What the API and the app receive does not change. What
-Gemini is asked does, so the eval of ADR-041 has to pass again before this reaches production.
+Gemini is asked does, so the eval of ADR-041 was run again: it passed on 15 November 2026, with
+99 % of the expected foods named over the 12 photos, no answer that was only the dish and no
+errors.
 
 **9. The packages log nothing.** The API logs only the closed value of the failure.
 
@@ -5873,7 +5875,7 @@ Gemini is asked does, so the eval of ADR-041 has to pass again before this reach
   adapter.
 - The lint rule, proved with files that break it and files that keep it.
 - The recognition eval, which now also measures Bedrock models (`bun run eval bedrock:<id>`) and
-  reports the tokens a photo cost each model. Neither Gemini after decision 8 nor any Bedrock
+  reports the tokens a photo cost each model. Gemini passed it after decision 8; no Bedrock
   model has been run through it yet.
 
 ---
