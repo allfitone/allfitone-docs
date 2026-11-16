@@ -5880,7 +5880,8 @@ errors.
 - The lint rule, proved with files that break it and files that keep it.
 - The recognition eval, which now also measures Bedrock models (`bun run eval bedrock:<id>`) and
   reports the tokens a photo cost each model. Gemini passed it after decision 8.
-- The first Bedrock measurements, on 15 November 2026. Two Bedrock models pass, Claude Sonnet 4.6 and Kimi K2.5:
+- The first Bedrock measurements, on 15 November 2026. Three Bedrock models pass, Claude Sonnet 4.6, Kimi K2.5 and Qwen3 VL, and only the first
+  inside the 15 s production allows:
 
 | Model | Foods named | Errors | Median | Tokens a photo (in / out) | Passes |
 | --- | --- | --- | --- | --- | --- |
@@ -5894,7 +5895,12 @@ errors.
 | Kimi K3.1, Bedrock, as it comes | 75 % | 3 | 30.8 s | 3,040 / 5,967 | no |
 | Claude Sonnet 4.6, Bedrock | 93 % | 0 | 6.1 s | 3,356 / 795 | yes |
 | Claude Haiku 4.5, Bedrock | 74 % | 0 | 3.7 s | 3,355 / 668 | no |
+| Qwen3 VL 235B, Bedrock | 93 % | 0 | 21.3 s | 2,020 / 1,174 | yes |
+| Gemma 3 27B, Bedrock | 84 % | 1 | 16.5 s | 1,040 / 903 | no |
+| Ministral 3 14B, Bedrock | 80 % | 0 | 6.6 s | 2,232 / 911 | no |
+| Mistral Large 3, Bedrock | 73 % | 0 | 3.9 s | 2,232 / 682 | no |
 
+  Qwen3 VL passes on what it names at a median of 21.3 s, past the 15 s production allows. Mistral Large 3 answered one photo with the dish alone. Magistral Small answered no photo in JSON, Pixtral Large takes neither structured output nor a forced tool, and the DeepSeek models on Bedrock take no images.
   Nova Pro's two errors are answers that left out an item's `detail` list; on the ten it answered
   in shape it named 96 %. Kimi K2.5 passes on what it names, but its median of 13.4 s a photo
   is close to the 15 s production allows, so it cannot replace Gemini without a longer deadline.
