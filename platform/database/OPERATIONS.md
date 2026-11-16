@@ -2369,13 +2369,33 @@ order by occurred_at;
 
 **What a mark does to the numbers.** A marked sign-up gives up its number, and the next
 confirmed sign-up in line gets it, with the Founding Member email. Taking the mark back does not
-return that number: the sign-up waits for the next one free.
+return that number: the sign-up waits for the next one free. A sign-up that already has its
+account keeps its number when it is marked: the number is the person's by then.
 
 **Deleting a test sign-up** is still `select waitlist.forget_signup('<id>')` as the owner role.
 The record of its review goes with it.
 
-**«Con cuenta» says «No» for everybody.** Nothing links a sign-up to its Allfit Space account
-until `OP-WL-006` (`TECH-299`). The answer carries `has_space_account` as `false` until then.
+**«Con cuenta»** says «Sí» once the sign-up is linked to its Allfit Space account
+(`OP-WL-006`, `TECH-299`, allfitone#265), and the totals count the linked ones.
+
+**How a sign-up gets its account.** When a person finishes the onboarding, `identity` writes
+`identity.person_activated.v1` and the worker links the sign-up with the same canonical email,
+in the same delivery job that sends the waitlist emails. Nothing turns it on or off: it sends
+nothing to anybody. A sign-up that never confirmed is confirmed by the link, so its founders'
+notice and its Founding Member email go out then. Somebody who was never on the list, a
+person activated in Studio and a second account of a linked mailbox link nothing, and their
+events are acknowledged all the same.
+
+**A linked number is settled.** `waitlist.settled_founding_numbers` holds every number that
+reached a person. A number in it is never given again, even after its sign-up is deleted. To
+free one by hand, which nothing in the product does, delete its row as the owner role and clear
+`identity.people.founding_member_number` in the same transaction.
+
+**Deploying it.** The migration is `20261202090000_a_signup_is_linked_to_its_space_account`.
+The API runs before it: the onboarding sends the store as a tenth argument only when the app
+names one, so completing works against a database that has not run it. Until it has,
+`GET /space/v1/me` answers without `founding_member_number` and the «Con cuenta» total reads
+empty.
 
 When this was written, on 15 November 2026, the pull request was open and nothing was deployed.
 The screen had been tested against a mocked API, and the API against a local database.

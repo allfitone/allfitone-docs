@@ -743,7 +743,7 @@ nunca se publica como ranking.
 7. Puedo quitar una marca de fraude, con un motivo. La inscripción vuelve a como estaba antes de la marca y vuelve a sumar a quien la invitó. Si había confirmado su correo, recibe el siguiente número de Founding Member que quede libre, no el que tenía.
 8. Una conexión compartida entre varios referidos se me muestra como señal para revisar. Nunca descarta una inscripción por sí sola.
 
-Mientras no exista el enlace con la cuenta de Allfit Space (`TECH-299`), «con cuenta» dice «no» en todas las inscripciones y el total con cuenta no se muestra.
+Una inscripción tiene cuenta cuando su persona termina el onboarding de Allfit Space con el mismo correo (`HU-SP-119`, `TECH-299`).
 
 ### HU-BO-036 — Cargar los códigos de oferta de las tiendas
 

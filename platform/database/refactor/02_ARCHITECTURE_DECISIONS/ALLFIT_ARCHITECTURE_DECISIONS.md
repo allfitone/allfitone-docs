@@ -6745,7 +6745,9 @@ decision 10: the founders hear of each confirmation in a private Slack channel (
 14 November 2026, decision 5: the numbers are assigned and handed over as built in
 allfitone#261 (`TECH-298`); the deadline is not built. 15 November 2026, decision 11: the
 team reviews the list in the Backoffice, marks fraud and takes a mark back, as built in
-allfitone#263 (`TECH-302`).<br>
+allfitone#263 (`TECH-302`). 15 November 2026, decision 7: linking as built in allfitone#265
+and allfitone#266 (`TECH-299`); the owner chose that a sign-up has its account when the
+person finishes the onboarding, and that the store of the phone is recorded then.<br>
 **Source:** the internal document «Estrategia de lanzamiento de Allfit Space» v1.0 (7 November
 2026), the epic `TECH-290` and its tickets.
 
@@ -6902,9 +6904,17 @@ follow from it:
        number. The founders' notice of decision 10 carries it too.
      - **Fraud.** Marking a sign-up as fraud (`OP-WL-012`) clears its number and fills
        again. Taking the mark back (`OP-WL-016`) puts the sign-up back in line, for the
-       next number free (decision 11).
+       next number free (decision 11). A sign-up that already has its account is the
+       exception: see decision 7 and the known limits.
+     - **Once linked, the number is settled.** Linking (decision 7) copies the number to
+       `identity.people.founding_member_number` through `identity`'s own function and
+       writes it in `waitlist.settled_founding_numbers`, a table that holds the number
+       and nothing about anybody. A settled number is never free again: not when the
+       sign-up leaves the list, not when the list is deleted, not when the account is.
+       A sign-up that is linked before it has a number settles it the moment the fill
+       gives it one.
      - **Not built.** The deadline, its reminder and the hand-over when it passes wait for the
-       launch date (`HU-BO-037`). Linking (`OP-WL-006`) is `TECH-299`.
+       launch date (`HU-BO-037`).
 
 6. **The referral levels add up.** The strategy's table said they do not, and the conditions
    drafted on `feat/space-waitlist` repeat it. The owner chose on 10 November 2026 that they do.
@@ -6919,15 +6929,37 @@ follow from it:
    - When the pool is empty, the reward stays pending, and it is delivered when codes are loaded.
    - A delivered reward is never taken back. Merch is handled by the team by hand.
 
-7. **Linking a sign-up to a Space account** happens in the worker, on the event that `identity`
-   writes when a person's Space account is created with a verified email. The worker calls the
-   waitlist's linking function with the person and that email. Neither domain writes the other's
-   tables.
+7. **Linking a sign-up to a Space account** (`OP-WL-006`, `TECH-299`, allfitone#265) happens
+   in the worker, on the event that `identity` writes when a person is activated. The worker
+   calls the waitlist's linking function with the person and her verified email. Neither
+   domain writes the other's tables.
+   - **When.** The owner chose on 15 November 2026 that a sign-up has its account when the
+     person **finishes the onboarding**, not when she gives her name: somebody who leaves
+     halfway has accepted nothing. `identity.activate_person` writes
+     `identity.person_activated.v1` in the transaction that activates her. Its payload is
+     the person's identifier alone.
+   - **Who joins the two domains.** The worker reads the person, her verified contact email
+     and her store through `identity.prepare_account_link`, and hands them to
+     `waitlist.link_signup`. Only the worker actor may call either, and both calls share
+     one transaction.
    - The function finds the sign-up with the same canonical email. If that sign-up never
-     confirmed, the verified email proves it, and it is confirmed at that moment.
-   - It records the person and the platform.
+     confirmed, the verified email proves it, and it is confirmed at that moment, with
+     everything a confirmation does: the founders' notice and the Founding Member number.
+   - It records the person, when it was linked and the store. **The store** is the one of
+     the phone the onboarding was completed on (`app_store` or `google_play`): the app
+     sends it with the completion, `identity` keeps it on the attempt, and a reward is an
+     offer code of that store. An account completed on the web has none.
    - It copies the Founding Member number, as in decision 5.
    - From that moment, the sign-up counts with an account for its inviter's rewards.
+   - **One sign-up, one person.** A second account whose address is the same mailbox does
+     not take a sign-up that is already linked, and a person who has one does not take
+     another. Linking is idempotent: the same event handed over twice changes nothing.
+   - **What is not linked.** An account whose email is not on the list; a person activated
+     in Studio, who has no contact email; and a second account of a linked mailbox. The
+     worker acknowledges all three.
+   - **Where the person reads it.** `GET /space/v1/me` answers `founding_member_number`,
+     and the app shows «Founding Member #037» on the profile and on the Fitness ID card
+     (`HU-SP-119`, allfitone#266).
 
 8. **The waitlist closes at the launch and forgets who never joins.**
    - **The launch** is a date the team marks once in the Backoffice (`HU-BO-037`). From then on
@@ -6995,10 +7027,9 @@ follow from it:
       what the sign-up was before the mark. **It is deleted with its sign-up**, when the
       person leaves and in the 90-day sweep, because the reason is free text about a
       person.
-    - **«Has an account» is always no for now.** The screen shows the column and the
-      answer carries `has_space_account`, which is false until linking (`OP-WL-006`,
-      `TECH-299`) sets it. The total of sign-ups with an account that `HU-BO-035` asks
-      for is not built: it waits for the same operation.
+    - **«Has an account».** The answer carries `has_space_account`, true once linking
+      (decision 7) has joined the sign-up to a person, and the totals count the linked
+      sign-ups (`HU-BO-035`, criterion 4; allfitone#265).
 
 ### Earlier decisions this changes
 
@@ -7034,6 +7065,19 @@ follow from it:
   invariant 8 speaks of the database alone. How long the channel keeps messages is set in
   Slack, and on 14 November 2026 it was not yet decided. Until it is, a notice is removed by
   hand.
+- **Fraud after an account exists is not decided.** As built, a fraud mark on a sign-up
+  that is already linked stops it counting for its inviter and leaves the number with the
+  person, because decision 5 says a settled number never moves. `HU-SP-118`, criterion 6,
+  says the person loses the number on proven fraud and nobody inherits it. The owner has
+  not chosen between the two. Taking the number away later is possible: it is settled, so
+  nobody else can hold it.
+- **Deleting a Space account does not exist yet.** The foreign key from the sign-up to the
+  person cascades, and the number stays settled, so the database already does what
+  decision 8 and `HU-SP-119`, criterion 4, ask for. Nothing calls it.
+- **An account that exists before the sign-up is never linked.** Linking fires when a
+  person is activated. Somebody who already uses Allfit Space and joins the list afterwards
+  has a sign-up without an account. It matters only after the launch, when the list is
+  closed.
 - **A marked sign-up that leaves comes back clean.** The record of a mark is deleted with
   the sign-up (decision 11), so the list does not remember a mark across leaving and joining
   again. The device rules of decision 3 still apply to the new sign-up.
