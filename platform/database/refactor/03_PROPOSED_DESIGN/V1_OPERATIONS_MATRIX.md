@@ -5245,7 +5245,10 @@ worker envía el correo «Eres Founding Member #037» (`ADR-050`, decisión 5, `
 (`HU-BO-035`, `TECH-302`, allfitone#263; `ADR-050`, decisión 11). Las lecturas no se
 registran. Marcar y quitar la marca piden un motivo y escriben en `waitlist.signup_events`,
 que se borra con su inscripción. Quien recupera la marca no recupera su número: toma el
-siguiente que quede libre. La respuesta lleva `has_space_account`, verdadero cuando
+siguiente que quede libre. Con cuenta es distinto (`HU-SP-118`, criterio 6; allfitone#268):
+la marca le quita el número a la inscripción y a la persona, nadie lo hereda, y quitar la
+marca devuelve ese mismo número, que el registro guarda en `withheld_founding_number`. La
+respuesta lleva `has_space_account`, verdadero cuando
 `OP-WL-006` ya enlazó la inscripción con su cuenta, y los totales cuentan las enlazadas.
 
 `OP-WL-006` es el enlace con la cuenta (`HU-SP-119`, `TECH-299`, allfitone#265; `ADR-050`,
