@@ -5137,6 +5137,11 @@ También muestra los entrenos del día en la misma línea, leídos de `OP-EXE-01
 **Reemplaza:** el punto 4 de ADR-027 en lo que toca al catálogo de alimentos, a los
 proveedores externos y a la IA nutricional. El resto de ADR-027 sigue vigente.
 
+> **Amended by [ADR-045](#adr-045-ai-models-are-used-through-one-port-and-each-task-picks-its-own-with-its-eval),
+> decision 10**, on 15 November 2026: recognition moves from Gemini through Vercel AI Gateway to
+> Claude Sonnet 4.6 on Amazon Bedrock, under a consent text of its own. It is built and not yet
+> applied; until it is, what this ADR says about the vendor still describes production.
+
 ### Contexto
 
 Registrar una comida a mano obliga a escribir las kcal y los macros de cada alimento.
@@ -5724,7 +5729,8 @@ que quedó sin movimiento.
 ## ADR-045 — AI models are used through one port, and each task picks its own with its eval
 
 **Status:** in review. The code is built (allfitone#187) and not merged. The recognition eval
-passed again on 15 November 2026 with what decision 8 changes.<br>
+passed again on 15 November 2026 with what decision 8 changes. Decision 10 is built
+(allfitone#267), not merged and not applied: production still answers through the Gateway.<br>
 **Date:** 6 November 2026, revised 15 November 2026<br>
 **Complements:** ADR-041, whose food recognition now asks its model through this port.
 
@@ -5793,7 +5799,8 @@ ESLint rejects, everywhere else in the repository:
 
 **5. Today's adapters:**
 
-- **Vercel AI Gateway, with the AI SDK.** It is the one in production. It asks for zero
+- **Vercel AI Gateway, with the AI SDK.** It is the one in production until decision 10 is
+  applied. It asks for zero
   retention on every request, always, and the task says which inference providers the request
   may go through: recognition, only through Vertex.
 - **Amazon Bedrock, with the Converse API of the AWS SDK.**
@@ -5807,9 +5814,9 @@ ESLint rejects, everywhere else in the repository:
   - It uses HTTP/1.1 and not the HTTP/2 the client defaults to, because nothing here uses
     bidirectional streams and Bun fails with that handler.
   - It has its own entry, `@allfitone/ai-provider/bedrock`, so a deployable that does not ask
-    Bedrock does not load its client. The API does not.
-  - Today only the recognition eval uses it, to measure Bedrock models with the credits. It has
-    no IAM grant and no variables in production.
+    Bedrock does not load its client.
+  - The recognition eval uses it to measure Bedrock models with the credits, and food
+    recognition answers through it once decision 10 is applied.
 - **Memory**, for tests.
 
 **6. A schema is only as portable as the strictest vendor's structured output.**
@@ -5822,8 +5829,9 @@ several types, and at most 12 optional properties in a schema, nested objects in
 - A task asks for a list of entries where it would have asked for many optional fields. A list
   has none, and one shape then serves every vendor.
 - Bedrock compiles a schema it has not seen before the first answer, which can take 90 seconds,
-  and keeps it for 24 hours. A task that asked Bedrock in production would need a deadline, or
-  a warm-up, that allows for it. Nothing does today.
+  and keeps it for 24 hours. A task that asks Bedrock in production needs a deadline that
+  allows for it. In a probe with Claude Sonnet 4.6, a schema not seen before took about 2 s
+  longer than the same schema seen; recognition's own schema was not measured cold.
 
 **7. The assistant's commercial name is never a technical name.**
 
@@ -5841,6 +5849,35 @@ errors.
 
 **9. The packages log nothing.** The API logs only the closed value of the failure.
 
+**10. Food recognition moves to Amazon Bedrock, with Claude Sonnet 4.6.**
+The owner decided it on 15 November 2026: there is no money for more Vercel credits, and the
+AWS credits pay for Bedrock. This amends ADR-041, which names Gemini through the Gateway.
+
+- **The model.** `us.anthropic.claude-sonnet-4-6` is the only Bedrock model that passed the
+  eval inside the time production allows: 93 %, 97 % and 95 % of the expected foods over three
+  runs, no errors, a median of 6.1 to 6.3 s and the slowest photo at 11.7 s. Its deadline on
+  Bedrock is 20 s; the Gateway keeps 15 s.
+- **The route is the first segment of `FOOD_RECOGNITION_MODEL`.** `bedrock/<inference profile>`
+  asks Bedrock with the task's own role. Anything else asks the Gateway. A meal records the
+  whole slug, `bedrock/us.anthropic.claude-sonnet-4-6`, which `nutrition.meals.recognized_by`
+  already takes.
+- **The consent follows the route.** A consent version is a text, and the text names where the
+  photo goes: `2026-10-04` names Google through Vercel, `2026-11-15` names Claude, a model of
+  Anthropic that runs on Amazon Web Services in the United States. Each route carries the
+  version of its own text and the API asks for that one. A photo therefore cannot reach a
+  vendor the person did not accept, whatever order code and configuration are released in.
+- **Only what the text names may answer under it.** On the Bedrock route the recogniser
+  refuses anything but a `us.anthropic.` profile in a `us-` region.
+- **The app accepts the text it showed.** It keeps the texts by version, shows the one for the
+  current version and accepts exactly that. A build that does not hold the text asks nothing.
+- **The API's role** may invoke that one model through its `us.` profile and nothing else. The
+  model is pinned in Terraform, where a change is reviewed, not in the secret.
+- **Merging moves nothing; applying Terraform is the switch.** The migration that publishes
+  `2026-11-15` and an app build that holds its text come first.
+- **The Gateway route stays** until the switch has proven itself. Going back to it after people
+  accepted the new text would ask them again without end, because the database answers the
+  latest version a person accepted. It fails closed.
+
 ### Invariants
 
 1. No code outside `packages/ai-provider` imports a model SDK.
@@ -5851,22 +5888,16 @@ errors.
 
 ### What this decision does not do
 
-- It does not change the model, the vendor or the consent of food recognition in production. It
-  stays on Gemini 3.5 Flash-Lite through the AI Gateway and Vertex.
 - It does not create the `intelligence` domain or schema, a chat, the `ai_context` scope
   (ADR-007) or stored AI runs.
   - The product layer goes through the gates of ADR-021 with an ADR of its own.
   - Three questions stay open: whether the assistant is a visible persona everywhere, whether it
     reaches the Backoffice, and whether there is one consent or one per capability.
-- It does not grant the API any Bedrock IAM permission or add variables to it.
 - It does not settle the DPAs or the international transfer under Law 1581, like ADR-041.
-- It does not make recognition ready to move to Bedrock in production. That would first need:
-  - a passing eval;
-  - a new consent version;
-  - a stored-model format that accepts Bedrock ids, because `nutrition.meals.recognized_by`
-    requires `vendor/model`;
-  - the IAM grant;
-  - a deadline or warm-up for Bedrock's first compile of the schema (decision 6).
+- It does not confirm that the AWS Activate credits cover Anthropic models on Bedrock, nor
+  what a photo costs there.
+- It does not validate the Terraform of decision 10: it was written without a `terraform`
+  binary at hand.
 - The eval scores the foods a model names, not the detail of its estimates. A model that named
   every food and guessed the nutrients badly would pass.
 
@@ -5877,6 +5908,10 @@ errors.
   request nor the answer, a schema Bedrock would not take, the answer asked through a tool, and a model's own fields.
 - `T-REC-UNIT-12..14`: recognition over the port, including its schema through the Bedrock
   adapter.
+- `T-REC-UNIT-15..16`, `T-NUT-API-UNIT-32`, `T-NUT-CONSENT-07` and `T-SPC-UNIT-340`: decision 10.
+  Each route answers under its own consent, a person who accepted another text is asked again
+  and her photo goes nowhere, the new version can be accepted, and the app asks only with a
+  text it holds.
 - The lint rule, proved with files that break it and files that keep it.
 - The recognition eval, which now also measures Bedrock models (`bun run eval bedrock:<id>`) and
   reports the tokens a photo cost each model. Gemini passed it after decision 8.
