@@ -7365,8 +7365,12 @@ and `T-WL-INT-08`.
 **Status:** proposed. The owner decided five things on 15 November 2026: the assistant works in
 Space and in Studio from its first delivery, it reaches the Backoffice later and not at first,
 one consent covers everything it does, its first capabilities are the six of decision 1, and
-nothing that identifies a person is sent to a model (decision 6). The rest is the design that
-follows from them, for review. Nothing is built.<br>
+nothing that identifies a person is sent to a model (decision 6). The same day the owner
+answered the five questions this ADR had left open: a lawyer reviews the consent before its
+text is written, the meal-photo consent becomes part of it (decision 4), a professional is told
+when a client has not agreed (decision 5), stored summaries stay with the person (decision 8),
+and the assistant comes with Allfit Pro in Space and from Starter in Studio (decision 10). The
+rest is the design that follows from them, for review. Nothing is built.<br>
 **Date:** 15 November 2026<br>
 **Complements:** ADR-045, whose port is how every capability here asks a model.<br>
 **Opens the gate of:** ADR-021, for «IA contextual, recomendaciones automáticas, agentes».
@@ -7450,6 +7454,11 @@ The last section says where each gate stands.
   scope of a grant. An organisation receives nothing new by it.
 - Each capability still sends only what it needs (decision 6). One consent is one question, not
   one bucket.
+- The meal-photo consent (ADR-041) becomes part of it when the first slice ships: who holds
+  the AI consent is not asked again for a photo. How those who accepted only the photo text are
+  carried over is settled with that slice.
+- A lawyer reviews it before its text is written. It is the broadest option over sensitive
+  data under Law 1581, and no text exists.
 
 **5. In Studio the assistant reads as the professional, and never more.**
 A run about a client needs two things, both checked in PostgreSQL at that moment:
@@ -7462,6 +7471,10 @@ A run about a client needs two things, both checked in PostgreSQL at that moment
 The read that builds the context is written to the access log in the same transaction, before
 the model is asked. If that write fails, nothing is sent. The client sees it in her access log
 like any other read.
+
+When the client does not hold the consent, the professional is told so: that this client has
+not agreed to the use of AI. It shows the professional a choice of the client; the owner
+decided it on 15 November 2026 with that cost stated.
 
 **6. Each capability declares what it sends, and identity never goes.**
 
@@ -7481,7 +7494,8 @@ and no answer. The context exists in memory for the run and is gone with it (ADR
 **8. What a capability produces, and whose it is.**
 
 - **The weekly summary is the person's.** One is kept for each week, with the exact model that
-  wrote it (ADR-018). Asking again replaces it, and she can delete it.
+  wrote it (ADR-018). Asking again replaces it, and she can delete it. Withdrawing the consent
+  stops new runs and deletes nothing: the summaries she has stay hers until she deletes them.
 - **The client summary is not kept.** It is produced when the professional asks and lives in the
   answer. Nothing derived from a client stays in a cache the organisation can read (ADR-020).
 - **A suggestion or a draft is a draft of `planning`.** The assistant calls planning's own draft
@@ -7497,8 +7511,12 @@ a medical condition or prescribes; its eval includes cases that must be refused.
 
 **10. A ceiling for every actor.**
 Runs are counted in PostgreSQL, per person and per professional. Over the ceiling a run is
-refused with a closed value, before any context is built. The numbers, and which plan includes
-the assistant, are set with pricing.
+refused with a closed value, before any context is built.
+
+- **In Space** the assistant comes with Allfit Pro (ADR-043) and with nothing else.
+- **In Studio** it comes from the Starter plan up; the Free plan does not have it.
+- The entitlement is resolved in PostgreSQL like any other, before the ceiling.
+- The numbers of the ceilings are set with pricing.
 
 **11. Models.**
 
@@ -7555,7 +7573,7 @@ second slice. No table is created for a slice before that slice is built (ADR-02
 | 1. Scope, actors and use cases | Decision 1; the stories are not written |
 | 2. Terms and counterexamples | Decision 2 |
 | 3. Ownership, provenance and lifecycle | Decisions 7 and 8 |
-| 4. Sensitive data, purposes and new scopes | Decisions 4, 5 and 6; the legal review is open |
+| 4. Sensitive data, purposes and new scopes | Decisions 4, 5 and 6; the lawyer's review is pending |
 | 5. Operations, authorisation and transactions | Decisions 5 and 10, in outline |
 | 6. ADR and logical model approved | This ADR, proposed |
 | 7. Migrations, RLS, contracts, tests, observability | Not started |
@@ -7565,24 +7583,21 @@ second slice. No table is created for a slice before that slice is built (ADR-02
 
 For the owner:
 
-1. **Legal review of one consent.** A single consent over training, nutrition, body and health
-   is the broadest option for sensitive data under Law 1581. It has not been reviewed.
-2. **The meal-photo consent.** It exists on its own (ADR-041). The proposal is that it becomes
-   part of the AI consent when the first slice ships, so a person is asked one thing.
-3. **Who gets the assistant, and how much.** Which Space and Studio plans include it, and the
-   ceilings of decision 10.
-4. **A client without the consent.** What the professional is told: that the assistant is not
-   available for this client, with or without the reason.
-5. **Stored summaries when the consent is withdrawn.** Whether they are deleted or stay hers
-   until she deletes them.
+1. **The ceilings.** How many runs each plan allows (decision 10).
 
 For the design, before the first slice:
 
-6. Whether a professional accepts something of their own, since their programmes and questions
+2. Whether a professional accepts something of their own, since their programmes and questions
    reach the model too.
-7. Whether the AI consent lives in `intelligence`, as the recognition consent lives in
+3. Whether the AI consent lives in `intelligence`, as the recognition consent lives in
    `nutrition`, or in `privacy`.
-8. The exact context contract of each summary.
+4. The exact context contract of each summary.
+5. Whether the consent screen tells the person that her professionals see when she has not
+   agreed (decision 5).
+6. How a person who accepted only the meal-photo text is carried into the AI consent
+   (decision 4).
+
+Pending, and not a question: the lawyer's review of decision 4.
 
 ### What this decision does not do
 
