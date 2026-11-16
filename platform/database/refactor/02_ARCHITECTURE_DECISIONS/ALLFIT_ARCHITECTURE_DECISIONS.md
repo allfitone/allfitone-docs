@@ -7362,10 +7362,11 @@ and `T-WL-INT-08`.
 
 ## ADR-053 — The assistant is one domain for Space and Studio, and a model sees only what its person agreed to
 
-**Status:** proposed. The owner decided four things on 15 November 2026: the assistant works in
+**Status:** proposed. The owner decided five things on 15 November 2026: the assistant works in
 Space and in Studio from its first delivery, it reaches the Backoffice later and not at first,
-one consent covers everything it does, and its first capabilities are the six of decision 1. The
-rest is the design that follows from them, for review. Nothing is built.<br>
+one consent covers everything it does, its first capabilities are the six of decision 1, and
+nothing that identifies a person is sent to a model (decision 6). The rest is the design that
+follows from them, for review. Nothing is built.<br>
 **Date:** 15 November 2026<br>
 **Complements:** ADR-045, whose port is how every capability here asks a model.<br>
 **Opens the gate of:** ADR-021, for «IA contextual, recomendaciones automáticas, agentes».
@@ -7467,7 +7468,9 @@ like any other read.
 - A capability has a versioned context contract: the fields it may send, in the manner of the
   field contracts of ADR-016. Nothing outside it reaches the model.
 - No context carries a name, an email, a document, a phone, a photo or a precise address. The
-  model is told about «the person».
+  model is told about «the person»; where an answer shows her name, the app puts it there.
+- What a person types into a question is hers to choose. The rule covers what Allfit One
+  builds and sends.
 - A run records the version of the contract it used.
 
 **7. A run is recorded; what it sent is not.**
