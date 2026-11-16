@@ -52,11 +52,13 @@
 | ADR-042 | Las fotos de comida viven en Cloudflare R2, en Estados Unidos |
 | ADR-043 | Allfit Pro: se paga con la compra integrada de cada tienda y se resuelve al leer |
 | ADR-044 | La persona trae su historial de otra app, y entra como entrenamiento suyo |
+| ADR-045 | AI models are used through one port, and each task picks its own with its eval |
 | ADR-046 | An Allfit admin acts with the full authority of the platform |
 | ADR-047 | A former professional learns why, for thirty days |
 | ADR-048 | A gym charges its clients through its own Mercado Pago account |
 | ADR-049 | Allfit One sends its email through Amazon SES |
 | ADR-050 | The Allfit Space waitlist is a domain of its own, and forgets who never joins |
+| ADR-053 | The assistant is one domain for Space and Studio, and a model sees only what its person agreed to |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -5136,6 +5138,11 @@ También muestra los entrenos del día en la misma línea, leídos de `OP-EXE-01
 **Reemplaza:** el punto 4 de ADR-027 en lo que toca al catálogo de alimentos, a los
 proveedores externos y a la IA nutricional. El resto de ADR-027 sigue vigente.
 
+> **Amended by [ADR-045](#adr-045-ai-models-are-used-through-one-port-and-each-task-picks-its-own-with-its-eval),
+> decision 10**, on 15 November 2026: recognition moves from Gemini through Vercel AI Gateway to
+> Claude Sonnet 4.6 on Amazon Bedrock, under a consent text of its own. It is built and not yet
+> applied; until it is, what this ADR says about the vendor still describes production.
+
 ### Contexto
 
 Registrar una comida a mano obliga a escribir las kcal y los macros de cada alimento.
@@ -5717,6 +5724,226 @@ que quedó sin movimiento.
 11. Otra persona no puede leer, confirmar ni deshacer una importación ajena.
 12. Repetir cualquier comando con la misma clave no crea otro efecto.
 13. Deshacer una importación a medias anula lo que entró y descarta lo que faltaba.
+
+---
+
+## ADR-045 — AI models are used through one port, and each task picks its own with its eval
+
+**Status:** in review. The code is built (allfitone#187) and not merged. The recognition eval
+passed again on 15 November 2026 with what decision 8 changes. Decision 10 is built
+(allfitone#267), not merged and not applied: production still answers through the Gateway.<br>
+**Date:** 6 November 2026, revised 15 November 2026<br>
+**Complements:** ADR-041, whose food recognition now asks its model through this port.
+
+### Context
+
+Allfit One plans an AI layer for the whole ecosystem: Space, Studio and what comes after. Its
+commercial name is not settled. There are two requirements:
+
+- not to depend on one model vendor;
+- to be able to use Amazon Bedrock, where Allfit One holds USD 10,000 in AWS Activate credits,
+  obtained through NVIDIA Inception.
+
+Today one package asks a model: `packages/food-recognition` (ADR-041), with the AI SDK through
+Vercel AI Gateway. A lint rule made that package the only one allowed to import the SDK.
+
+ADR-021 defers contextual AI, agents and recommendations, and does not admit an abstraction
+"only because it might be reused". So the port is born with a current use, food recognition, and
+covers only what that use needs.
+
+### Decision
+
+**1. Only `packages/ai-provider` talks to a model.**
+ESLint rejects, everywhere else in the repository:
+
+- the AI SDK (`ai`, `@ai-sdk/*`);
+- the Bedrock client (`@aws-sdk/client-bedrock*`);
+- the vendors' own SDKs and the frameworks over them: Anthropic, OpenAI, Google (GenAI, the older
+  Generative AI SDK and Vertex), Mistral, Cohere, Groq, Ollama and LangChain.
+
+**2. The port speaks Allfit One's language, not a vendor's.**
+
+- It asks a model, by its exact id, for an answer with a schema. The request carries text and
+  JPEG images, and one deadline that includes the retries.
+- It returns the answer already validated against the schema, and the input and output tokens
+  the vendor counted, which is what a task's eval compares between two models that both pass.
+- It does not return the model. There is one model per request and no fallback, so the model
+  that answered is the model the task asked for, and that is the id the task records (ADR-018).
+- It fails closed with three values:
+  - `unavailable`: the vendor did not answer in time, or could not; later may work;
+  - `invalid-answer`: it answered, but not in the shape asked for. An answer that is not JSON,
+    does not fit the schema or was cut short is this, on every adapter;
+  - `rejected`: it did not accept the request as sent (no access, no such model, a schema it
+    does not take); sending it again fails the same way.
+- A failure carries a reason and never a cause. A vendor's error holds the request that failed:
+  the AI SDK keeps the whole body, photo and text included, and a parse error quotes the answer.
+  The reason is the vendor error's name, its status and the first line of what it said, cut at
+  160 characters, or where the answer left the schema, by path and kind of issue and never by
+  value.
+- Tools, conversations of several turns and streaming are not there. Each joins with the first
+  task that uses it.
+
+**3. Each task owns its model.**
+
+- The task defines its prompt, its schema, its checks, its eval and its model.
+- Changing model or vendor is configuration, after the task's eval passes.
+- There is no automatic fallback between models (ADR-041 §2).
+
+**4. A vendor serves a task in production only if all of this holds:**
+
+- zero retention, and no training on the data;
+- a data processing agreement;
+- processing in the United States (ADR-042). On Bedrock that means `us.` inference profiles,
+  never `global.`;
+- the task's consent text names it, so changing vendor is a new consent version;
+- on Bedrock, model invocation logging stays off in the account.
+
+**5. Today's adapters:**
+
+- **Vercel AI Gateway, with the AI SDK.** It is the one in production until decision 10 is
+  applied. It asks for zero
+  retention on every request, always, and the task says which inference providers the request
+  may go through: recognition, only through Vertex.
+- **Amazon Bedrock, with the Converse API of the AWS SDK.**
+  - It uses the credentials of the default chain: in ECS, the task role, with no key in a
+    secret.
+  - It asks for Converse's structured output, and holds the answer to the schema again.
+  - A model without structured output, such as Amazon Nova, is asked for the same schema as the
+    input of one tool it must call. Nothing holds the model to the schema there but that check.
+  - A model's own request fields, such as `reasoning_effort`, are passed on as the task's
+    configuration gives them.
+  - It uses HTTP/1.1 and not the HTTP/2 the client defaults to, because nothing here uses
+    bidirectional streams and Bun fails with that handler.
+  - It has its own entry, `@allfitone/ai-provider/bedrock`, so a deployable that does not ask
+    Bedrock does not load its client.
+  - The recognition eval uses it to measure Bedrock models with the credits, and food
+    recognition answers through it once decision 10 is applied.
+- **Memory**, for tests.
+
+**6. A schema is only as portable as the strictest vendor's structured output.**
+Bedrock's takes no numeric or string bounds, at most 16 properties that may be null or one of
+several types, and at most 12 optional properties in a schema, nested objects included.
+
+- One optional property too many is answered only after up to 90 seconds, so the Bedrock
+  adapter counts them and rejects the request before sending it. It rejects a schema JSON
+  Schema cannot express too.
+- A task asks for a list of entries where it would have asked for many optional fields. A list
+  has none, and one shape then serves every vendor.
+- Bedrock compiles a schema it has not seen before the first answer, which can take 90 seconds,
+  and keeps it for 24 hours. A task that asks Bedrock in production needs a deadline that
+  allows for it. In a probe with Claude Sonnet 4.6, a schema not seen before took about 2 s
+  longer than the same schema seen; recognition's own schema was not measured cold.
+
+**7. The assistant's commercial name is never a technical name.**
+
+- It does not appear in code, packages, schemas, tables, values, routes, `operationId`s,
+  environment variables, telemetry events, AWS resources or consent codes.
+- What a model produced records the exact model (ADR-018), never a brand.
+
+**8. Food recognition asks the detail of an estimate as a list.**
+It asked for 26 optional nutrient fields in each item's estimate, more than decision 6 allows.
+It now asks for a list of code and amount, and the recogniser turns it back into the estimate's
+own fields before the checks of ADR-041. What the API and the app receive does not change. What
+Gemini is asked does, so the eval of ADR-041 was run again: it passed on 15 November 2026, with
+99 % of the expected foods named over the 12 photos, no answer that was only the dish and no
+errors.
+
+**9. The packages log nothing.** The API logs only the closed value of the failure.
+
+**10. Food recognition moves to Amazon Bedrock, with Claude Sonnet 4.6.**
+The owner decided it on 15 November 2026: there is no money for more Vercel credits, and the
+AWS credits pay for Bedrock. This amends ADR-041, which names Gemini through the Gateway.
+
+- **The model.** `us.anthropic.claude-sonnet-4-6` is the only Bedrock model that passed the
+  eval inside the time production allows: 93 %, 97 % and 95 % of the expected foods over three
+  runs, no errors, a median of 6.1 to 6.3 s and the slowest photo at 11.7 s. Its deadline on
+  Bedrock is 20 s; the Gateway keeps 15 s.
+- **The route is the first segment of `FOOD_RECOGNITION_MODEL`.** `bedrock/<inference profile>`
+  asks Bedrock with the task's own role. Anything else asks the Gateway. A meal records the
+  whole slug, `bedrock/us.anthropic.claude-sonnet-4-6`, which `nutrition.meals.recognized_by`
+  already takes.
+- **The consent follows the route.** A consent version is a text, and the text names where the
+  photo goes: `2026-10-04` names Google through Vercel, `2026-11-15` names Claude, a model of
+  Anthropic that runs on Amazon Web Services in the United States. Each route carries the
+  version of its own text and the API asks for that one. A photo therefore cannot reach a
+  vendor the person did not accept, whatever order code and configuration are released in.
+- **Only what the text names may answer under it.** On the Bedrock route the recogniser
+  refuses anything but a `us.anthropic.` profile in a `us-` region.
+- **The app accepts the text it showed.** It keeps the texts by version, shows the one for the
+  current version and accepts exactly that. A build that does not hold the text asks nothing.
+- **The API's role** may invoke that one model through its `us.` profile and nothing else. The
+  model is pinned in Terraform, where a change is reviewed, not in the secret.
+- **Merging moves nothing; applying Terraform is the switch.** The migration that publishes
+  `2026-11-15` and an app build that holds its text come first.
+- **The Gateway route stays** until the switch has proven itself. Going back to it after people
+  accepted the new text would ask them again without end, because the database answers the
+  latest version a person accepted. It fails closed.
+
+### Invariants
+
+1. No code outside `packages/ai-provider` imports a model SDK.
+2. An answer that does not fit its schema does not leave the port.
+3. A model serves a task only after passing that task's eval.
+4. No data goes to a vendor that the task's current consent does not name.
+5. A model error carries neither the request nor the answer.
+
+### What this decision does not do
+
+- It does not create the `intelligence` domain or schema, a chat, the `ai_context` scope
+  (ADR-007) or stored AI runs.
+  - The product layer goes through the gates of ADR-021 with an ADR of its own.
+  - Three questions stay open: whether the assistant is a visible persona everywhere, whether it
+    reaches the Backoffice, and whether there is one consent or one per capability.
+- It does not settle the DPAs or the international transfer under Law 1581, like ADR-041.
+- It does not confirm that the AWS Activate credits cover Anthropic models on Bedrock, nor
+  what a photo costs there.
+- It does not validate the Terraform of decision 10: it was written without a `terraform`
+  binary at hand.
+- The eval scores the foods a model names, not the detail of its estimates. A model that named
+  every food and guessed the nutrients badly would pass.
+
+### Tests
+
+- `T-AIP-UNIT-01..13`: the port and its adapters, against a fake Gateway and a fake Bedrock.
+  They cover a valid answer, the three failures, the deadline, an error that carries neither the
+  request nor the answer, a schema Bedrock would not take, the answer asked through a tool, and a model's own fields.
+- `T-REC-UNIT-12..14`: recognition over the port, including its schema through the Bedrock
+  adapter.
+- `T-REC-UNIT-15..16`, `T-NUT-API-UNIT-32`, `T-NUT-CONSENT-07` and `T-SPC-UNIT-340`: decision 10.
+  Each route answers under its own consent, a person who accepted another text is asked again
+  and her photo goes nowhere, the new version can be accepted, and the app asks only with a
+  text it holds.
+- The lint rule, proved with files that break it and files that keep it.
+- The recognition eval, which now also measures Bedrock models (`bun run eval bedrock:<id>`) and
+  reports the tokens a photo cost each model. Gemini passed it after decision 8.
+- The first Bedrock measurements, on 15 November 2026. Three Bedrock models pass, Claude Sonnet 4.6, Kimi K2.5 and Qwen3 VL, and only the first
+  inside the 15 s production allows:
+
+| Model | Foods named | Errors | Median | Tokens a photo (in / out) | Passes |
+| --- | --- | --- | --- | --- | --- |
+| Gemini 3.5 Flash-Lite, Gateway | 99 % | 0 | 3.4 s | 2,575 / 950 | yes |
+| Amazon Nova Pro, Bedrock | 80 % | 2 | 6.5 s | 3,389 / 594 | no |
+| Amazon Nova 2 Lite, Bedrock | 79 % | 0 | 3.4 s | 2,393 / 1,017 | no |
+| Amazon Nova Lite, Bedrock | 69 % | 0 | 7.0 s | 3,437 / 1,166 | no |
+| Kimi K2.5, Bedrock | 100 %, 99 %, 100 % (three runs) | 0 | 13.4 s | 2,470 / 1,000 | yes |
+| Kimi K3, Bedrock, reasoning off | 92 % | 1 | 14.1 s | 2,995 / 3,812 | no |
+| Kimi K3.1, Bedrock, reasoning off | 83 % | 2 | 5.6 s | 3,102 / 1,388 | no |
+| Kimi K3.1, Bedrock, as it comes | 75 % | 3 | 30.8 s | 3,040 / 5,967 | no |
+| Claude Sonnet 4.6, Bedrock | 93 % | 0 | 6.1 s | 3,356 / 795 | yes |
+| Claude Haiku 4.5, Bedrock | 74 % | 0 | 3.7 s | 3,355 / 668 | no |
+| Qwen3 VL 235B, Bedrock | 93 % | 0 | 21.3 s | 2,020 / 1,174 | yes |
+| Gemma 3 27B, Bedrock | 84 % | 1 | 16.5 s | 1,040 / 903 | no |
+| Ministral 3 14B, Bedrock | 80 % | 0 | 6.6 s | 2,232 / 911 | no |
+| Mistral Large 3, Bedrock | 73 % | 0 | 3.9 s | 2,232 / 682 | no |
+
+  Qwen3 VL passes on what it names at a median of 21.3 s, past the 15 s production allows. Mistral Large 3 answered one photo with the dish alone. Magistral Small answered no photo in JSON, Pixtral Large takes neither structured output nor a forced tool, and the DeepSeek models on Bedrock take no images.
+  Nova Pro's two errors are answers that left out an item's `detail` list; on the ten it answered
+  in shape it named 96 %. Kimi K2.5 passes on what it names, but its median of 13.4 s a photo
+  is close to the 15 s production allows, so it cannot replace Gemini without a longer deadline.
+  Kimi K3 and K3.1 reason before they answer and were asked with `reasoning_effort` set to
+  `none`. Claude Sonnet 4.6 passes at a median of 6.1 s, the slowest photo
+  11.7 s, inside that deadline. Claude Haiku 4.5 is as fast as Gemini and names 74 %. Claude 5.x
+  and the OpenAI models are not available to the account.
 
 ---
 
@@ -7184,3 +7411,266 @@ Scenario 8 is covered by `T-WL-INT-04` and `T-WL-INT-05`. Of scenario 9, leaving
 `T-WL-INT-04` and fraud by `T-WL-INT-06`; the deadline and linking wait for the code that
 builds them. Scenarios 15 and 16 are covered by `T-WL-RLS-02`, `T-WL-RLS-03`, `T-WL-INT-06`
 and `T-WL-INT-08`.
+
+---
+
+## ADR-053 — The assistant is one domain for Space and Studio, and a model sees only what its person agreed to
+
+**Status:** proposed. The owner decided five things on 15 November 2026: the assistant works in
+Space and in Studio from its first delivery, it reaches the Backoffice later and not at first,
+one consent covers everything it does, its first capabilities are the six of decision 1, and
+nothing that identifies a person is sent to a model (decision 6). The same day the owner
+answered the five questions this ADR had left open: a lawyer reviews the consent before its
+text is written, the meal-photo consent becomes part of it (decision 4), a professional is told
+when a client has not agreed (decision 5), stored summaries stay with the person (decision 8),
+and the assistant comes with Allfit Pro in Space and from Starter in Studio (decision 10). The
+rest is the design that follows from them, for review. Nothing is built.<br>
+**Date:** 15 November 2026<br>
+**Complements:** ADR-045, whose port is how every capability here asks a model.<br>
+**Opens the gate of:** ADR-021, for «IA contextual, recomendaciones automáticas, agentes».
+
+### Context
+
+Allfit One wants an assistant across its products. Its commercial name is not settled and is
+never a technical name (ADR-045, decision 7); here it is «the assistant», and its domain is
+`intelligence`.
+
+What exists today is the plumbing: one port to the model vendors (ADR-045) and one task over it,
+meal-photo recognition (ADR-041). There is no domain, no table, no route and no permission for
+an assistant.
+
+Earlier decisions already fence the ground:
+
+- No V1 scope or grant authorises AI context. `ai_context` stays apart from the seven scopes
+  (ADR-007, ADR-016).
+- A copy of data used as AI context is deleted when its run ends, and is never used to train a
+  model (ADR-012).
+- A process or a model may write a draft; publishing needs an authorised, auditable actor
+  (ADR-009, invariant 9).
+- A session a person hid from a relationship does not reach any AI context the organisation can
+  see (ADR-020).
+- What a model produced records the exact model (ADR-018).
+- Medical inference by AI is outside every scope (ADR-016), and nutrition is not clinical
+  (ADR-027).
+
+ADR-021 lets a deferred capability in only as a coherent vertical slice that passes eight gates.
+The last section says where each gate stands.
+
+### Decision
+
+**1. The first six capabilities, three in each product.**
+
+| Product | Capability | What comes out | Needs a model |
+| --- | --- | --- | --- |
+| Space | Weekly summary | What she trained, how she ate and what changed against the week before | yes |
+| Space | Suggestion for the next session | A draft session built from her last ones | yes |
+| Space | Questions about her own data | An answer, such as how much protein she ate this week | yes |
+| Studio | Client summary before a session | What the client did since the last one and what to look at | yes |
+| Studio | Draft of a programme or of an adjustment | A draft the professional reviews and publishes | yes |
+| Studio | Clients who stopped training or logging | A list | no |
+
+- The sixth is a query, not a model's work. It is an ordinary Studio read over what the
+  professional may already see, it sends nothing outside Allfit One, and it needs none of what
+  this ADR adds. The assistant's screen may show it; its story belongs to the domain it reads.
+- Out of scope: the Backoffice, for now; diagnosis and any medical inference; clinical nutrition;
+  anything the assistant would do on its own, such as publishing, assigning or messaging; and
+  training or tuning a model on anyone's data.
+
+**2. Words, and what they are not.**
+
+- A **capability** is one thing the assistant does, with its own prompt, context, checks, eval
+  and model (ADR-045, decision 3). It is not a feature flag.
+- A **run** is one time a capability asked a model for one actor. It is not a conversation log.
+- A **context** is the data a run sends to the model. It is not a copy kept anywhere.
+- The **AI consent** is a person's agreement that her data may be sent to a model. It is not a
+  grant to an organisation.
+- A **summary** is generated text about a period. It is not a professional observation, and it
+  is not part of the person's record of what she did.
+- A **draft** is content waiting for an actor. It is not a published version.
+
+**3. One domain, `intelligence`, for both products.**
+
+- It lives in `apps/api/src/domains/intelligence` and in the `intelligence` schema, and serves
+  `/space/v1` and `/studio/v1` with the same use cases. What differs between the two is the
+  projection, as everywhere else.
+- It reads other domains only through their public interface, with the actor's own identity,
+  and never their tables. It has no data of its own about training or nutrition.
+- Its operations are `OP-ITL-*` and its tests `T-ITL-*`.
+
+**4. One consent for everything the assistant does.**
+
+- It is the person's, given to Allfit One, and asked once: the first time she uses any
+  capability. It covers her training, her nutrition, her body measures and her health context.
+- It is a versioned text that names where the data goes, like the consent of ADR-045, decision
+  10. Another vendor is another text, and she is asked again.
+- Withdrawing it stops every capability for her at once, in Space and in Studio.
+- This is how `ai_context` enters: as a consent of the person to the platform, not as an eighth
+  scope of a grant. An organisation receives nothing new by it.
+- Each capability still sends only what it needs (decision 6). One consent is one question, not
+  one bucket.
+- The meal-photo consent (ADR-041) becomes part of it when the first slice ships: who holds
+  the AI consent is not asked again for a photo. How those who accepted only the photo text are
+  carried over is settled with that slice.
+- A lawyer reviews it before its text is written. It is the broadest option over sensitive
+  data under Law 1581, and no text exists.
+
+**5. In Studio the assistant reads as the professional, and never more.**
+A run about a client needs two things, both checked in PostgreSQL at that moment:
+
+- the professional may read that data now, under an active grant of the client to the
+  organisation, exactly as on screen. A hidden session is not there (ADR-020), and neither is
+  anything a frozen or revoked grant no longer shows;
+- the client holds the current AI consent.
+
+The read that builds the context is written to the access log in the same transaction, before
+the model is asked. If that write fails, nothing is sent. The client sees it in her access log
+like any other read.
+
+When the client does not hold the consent, the professional is told so: that this client has
+not agreed to the use of AI. It shows the professional a choice of the client; the owner
+decided it on 15 November 2026 with that cost stated.
+
+**6. Each capability declares what it sends, and identity never goes.**
+
+- A capability has a versioned context contract: the fields it may send, in the manner of the
+  field contracts of ADR-016. Nothing outside it reaches the model.
+- No context carries a name, an email, a document, a phone, a photo or a precise address. The
+  model is told about «the person»; where an answer shows her name, the app puts it there.
+- What a person types into a question is hers to choose. The rule covers what Allfit One
+  builds and sends.
+- A run records the version of the contract it used.
+
+**7. A run is recorded; what it sent is not.**
+`intelligence.runs` keeps who asked, about whom, which capability, which contract version, the
+exact model, the tokens in and out, the closed outcome and when. It keeps no context, no prompt
+and no answer. The context exists in memory for the run and is gone with it (ADR-012).
+
+**8. What a capability produces, and whose it is.**
+
+- **The weekly summary is the person's.** One is kept for each week, with the exact model that
+  wrote it (ADR-018). Asking again replaces it, and she can delete it. Withdrawing the consent
+  stops new runs and deletes nothing: the summaries she has stay hers until she deletes them.
+- **The client summary is not kept.** It is produced when the professional asks and lives in the
+  answer. Nothing derived from a client stays in a cache the organisation can read (ADR-020).
+- **A suggestion or a draft is a draft of `planning`.** The assistant calls planning's own draft
+  operations as the actor who asked, and the draft records that a model wrote it and which one.
+  Publishing or assigning is that actor's act (ADR-009). The assistant has no write path of its
+  own.
+- **An answer to a question** lives in its conversation. How long a conversation is kept is
+  decided with that capability (decision 12, third slice).
+
+**9. Generated, and not a doctor.**
+Every output says it was generated and from which of her data. No capability diagnoses, infers
+a medical condition or prescribes; its eval includes cases that must be refused.
+
+**10. A ceiling for every actor.**
+Runs are counted in PostgreSQL, per person and per professional. Over the ceiling a run is
+refused with a closed value, before any context is built.
+
+- **In Space** the assistant comes with Allfit Pro (ADR-043) and with nothing else.
+- **In Studio** it comes from the Starter plan up; the Free plan does not have it.
+- The entitlement is resolved in PostgreSQL like any other, before the ceiling.
+- The numbers of the ceilings are set with pricing.
+
+**11. Models.**
+
+- Every capability asks through `packages/ai-provider` (ADR-045), on Amazon Bedrock, with
+  processing in the United States.
+- Each capability has its eval and reaches production only with a model that passed it.
+- The port grows with the first capability that needs more: tools and several turns for the
+  questions, streaming if an answer is too slow without it. The first slice needs neither.
+
+**12. Three slices, in this order.**
+
+1. **Summaries.** The consent, runs and ceilings, with the weekly summary in Space and the
+   client summary in Studio. They share one mechanism, need no conversation, and the second
+   proves decision 5, which is the hard part.
+2. **Drafts.** The suggestion for the next session in Space and the draft of a programme or an
+   adjustment in Studio.
+3. **Questions.** Her questions about her own data in Space.
+
+The list of clients who stopped training or logging is not in this order: it needs no model and
+can ship as a Studio story at any time.
+
+**13. It fails closed, and the product works without it.**
+A run ends as `answered`, `unavailable`, `refused` or `over-ceiling`. A failure shows the screen
+without the assistant's part, never a made-up answer.
+
+### Minimal logical model
+
+| Entity | What it holds |
+| --- | --- |
+| `intelligence.consent_versions` | Each published text, by its date |
+| `intelligence.consents` | Who accepted which version and when, and who withdrew and when |
+| `intelligence.runs` | Decision 7 |
+| `intelligence.weekly_summaries` | Decision 8: one a person a week, its text and its model |
+
+Drafts stay in `planning`; how a draft records the model that wrote it is settled with the
+second slice. No table is created for a slice before that slice is built (ADR-021).
+
+### Invariants
+
+1. No data of a person reaches a model without her current AI consent.
+2. A run for a professional contains nothing that professional could not read at that moment.
+3. The read behind a run is in the access log before the model is asked.
+4. A hidden session neither appears in nor changes a run for the organisation.
+5. No context carries a field that identifies the person.
+6. Nothing the assistant produces is published, assigned or sent without an actor's own act.
+7. A run keeps no context, no prompt and no answer.
+8. Withdrawing the consent stops new runs for that person at once, in both products.
+9. A capability reaches production only with a model that passed its eval.
+
+### Where the gates of ADR-021 stand
+
+| Gate | State |
+| --- | --- |
+| 1. Scope, actors and use cases | Decision 1; the stories of the first slice are `E-SP-18` and `E-STUDIO-15` |
+| 2. Terms and counterexamples | Decision 2 |
+| 3. Ownership, provenance and lifecycle | Decisions 7 and 8 |
+| 4. Sensitive data, purposes and new scopes | Decisions 4, 5 and 6; the lawyer's review is pending |
+| 5. Operations, authorisation and transactions | Decisions 5 and 10, in outline |
+| 6. ADR and logical model approved | This ADR, proposed |
+| 7. Migrations, RLS, contracts, tests, observability | Not started |
+| 8. Exit criteria and disposition | Not started |
+
+### Open questions
+
+For the owner:
+
+1. **The ceilings.** How many runs each plan allows (decision 10).
+
+For the design, before the first slice:
+
+2. Whether a professional accepts something of their own, since their programmes and questions
+   reach the model too.
+3. Whether the AI consent lives in `intelligence`, as the recognition consent lives in
+   `nutrition`, or in `privacy`.
+4. The exact context contract of each summary.
+5. Whether the consent screen tells the person that her professionals see when she has not
+   agreed (decision 5).
+6. How a person who accepted only the meal-photo text is carried into the AI consent
+   (decision 4).
+
+Pending, and not a question: the lawyer's review of decision 4.
+
+### What this decision does not do
+
+- It builds nothing and creates no table, route, scope or permission.
+- It does not write the texts a person reads; no consent text exists. The stories of the
+  first slice are `E-SP-18` (`HU-SP-124` to `HU-SP-128`) and `E-STUDIO-15` (`HU-STUDIO-089` to
+  `HU-STUDIO-091`); those of the other two slices are not written.
+- It does not choose a model for any capability. Only meal-photo recognition has an eval.
+- It does not bring the assistant to the Backoffice.
+- It does not settle the data processing agreements or the international transfer under Law
+  1581, like ADR-041 and ADR-045.
+
+### Tests
+
+Named when each slice is built. By class, the first slice owes at least:
+
+- `RLS`: a person reads and gives only her own consent; a run about a client is refused without
+  an active grant, and refused without the client's consent, each seen to succeed first.
+- `INT`: invariants 2, 3, 4 and 7.
+- `IDEM`: giving and withdrawing the consent.
+- `API`: each route against the contract, with every closed failure.
+- An eval for each summary, with cases a capability must refuse.
