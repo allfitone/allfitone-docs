@@ -7588,7 +7588,8 @@ decided it on 15 November 2026 with that cost stated.
   health context. The contract lives in `packages/weekly-summary`, with the code that builds
   the one document a model is shown.
 - Every figure a summary may state is worked out before the model is asked. A number in an
-  answer that the document does not have is an invented one, and the answer is refused.
+  answer that the document does not have is an invented one, and the answer is refused. A
+  proportion is a figure too, in words or not, and the document gives none.
 
 **7. A run is recorded; what it sent is not.**
 `intelligence.runs` keeps who asked, about whom, which capability, which contract version, the
@@ -7652,11 +7653,27 @@ refused with a closed value, before any context is built.
 - Each capability has its eval and reaches production only with a model that passed it.
 - Without a model configured a capability is closed: asking answers `503` before anything is
   decided or read. That is its switch.
-- The weekly summary's eval is written and has not been run. The owner approved up to USD 10
-  of AWS credits for it on 16 November 2026, for that eval only. A model passes with at least
-  90 % of its answers shown, none that obeys a trap and none in the wrong language; the
-  number is a proposal. Passing is necessary and not sufficient: somebody reads the answers
-  before a model is chosen.
+- The owner approved up to USD 10 of AWS credits for the weekly summary's eval on
+  16 November 2026, for that eval only. A model passes with at least 90 % of its answers
+  shown, none that obeys a trap and none in the wrong language; the number is a proposal.
+  Passing is necessary and not sufficient: somebody reads the answers before a model is
+  chosen.
+- **The eval was run on 16 November 2026**, on Bedrock with `us.` inference profiles: 33
+  invented weeks, nine of them traps, three times each, four runs. Claude 5.x models were not
+  available to the account, so the candidates were Claude Haiku 4.5 and Claude Sonnet 4.6.
+  - The first run found two faults in the check and none in the model: it did not read
+    «22 135 kg», thousands grouped with a space, and a week did not state its seven days, so
+    «6 de 7 días» was refused. Both are fixed.
+  - Reading the answers found what the check could not: Haiku stated proportions in words in
+    ten or eleven answers a run, and several were false, such as a volume «doubled» that had
+    risen by 28 %. Sonnet said «double» three or four times a run, each time exactly true. A
+    proportion in words is now refused (decision 13).
+  - With the final prompt and checks, **Claude Sonnet 4.6 passes**: 98 % of answers shown, no
+    trap obeyed, none in the wrong language, a median of 2.6 seconds and about USD 0.009 a
+    summary at AWS's list price. **Claude Haiku 4.5 does not**: 86 % shown, because it kept
+    writing proportions after being told not to, and one answer half in English.
+  - It spent about USD 4.3. Sonnet 4.6 is proposed; the owner chooses, and no model is pinned
+    until then.
 - The port grows with the first capability that needs more: tools and several turns for the
   questions, streaming if an answer is too slow without it. The first slice needs neither.
 
@@ -7677,8 +7694,9 @@ A run ends as `answered`, `unavailable`, `refused`, `over-ceiling` or `nothing-l
 failure shows the screen without the assistant's part, never a made-up answer.
 
 - `refused` is an answer that may not be shown: the wrong shape, a number the context does
-  not have, a part about something she did not log, a link, markup, or anything that reads as
-  medical. The run keeps what it cost; what the answer said is neither kept nor logged.
+  not have, a proportion said in words («almost double»), a part about something she did not
+  log, a link, markup, or anything that reads as medical. The run keeps what it cost; what
+  the answer said is neither kept nor logged.
 - `nothing-logged` is a run that asked no model, because there was nothing to send. It was
   added with the weekly summary.
 
@@ -7774,7 +7792,7 @@ midnight on a Sunday can move a request into the next week. It moves hours, neve
 of places.
 
 Not built: the consent text and its screen in Space, the screens of the weekly summary, its
-eval run and its model, the client summary, what a professional is told in Studio, and the
+model in production, the client summary, what a professional is told in Studio, and the
 meal-photo consent becoming part of this one.
 
 ### What this decision does not do
@@ -7784,7 +7802,7 @@ meal-photo consent becoming part of this one.
   first slice are `E-SP-18` (`HU-SP-124` to `HU-SP-128`) and `E-STUDIO-15` (`HU-STUDIO-089` to
   `HU-STUDIO-091`); those of the other two slices are not written.
 - It does not choose a model for any capability. Meal-photo recognition has an eval and a
-  model; the weekly summary has an eval that has not been run, and no model.
+  model; the weekly summary has an eval that proposes one, and none is pinned.
 - It does not bring the assistant to the Backoffice.
 - It does not settle the data processing agreements or the international transfer under Law
   1581, like ADR-041 and ADR-045.
@@ -7804,7 +7822,7 @@ Named when each slice is built. By class, the first slice owes at least:
   replacing, withdrawing and giving back, and `T-ITL-INT-01` to `T-ITL-INT-08` for one consent
   in force, history that cannot be rewritten and two commands at the same instant.
 - For the weekly summary:
-  - `T-WSM-UNIT-01` to `T-WSM-UNIT-53`: the document, its numbers, every rule that refuses an
+  - `T-WSM-UNIT-01` to `T-WSM-UNIT-58`: the document, its numbers, every rule that refuses an
     answer, and the summariser over the port.
   - `T-ITL-SUMMARY-01` to `T-ITL-SUMMARY-37`: asking, both weeks as read, the ceiling,
     regenerating, listing and deleting.
