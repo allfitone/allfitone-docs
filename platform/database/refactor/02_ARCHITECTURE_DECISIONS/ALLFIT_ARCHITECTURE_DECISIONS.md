@@ -35,7 +35,7 @@
 | ADR-025 | Idempotencia durable independiente del replay HTTP |
 | ADR-026 | Gobernanza cerrada de verificadores y acceso break-glass |
 | ADR-027 | Nutrición personal y guía profesional no clínica en V1 |
-| ADR-028 | Backoffice con rol base, deberes temporales y separación break-glass |
+| ADR-028 | Backoffice con rol base, deberes temporales y separación break-glass (partially superseded by ADR-046) |
 | ADR-029 | Monorepo de implementación con deployables independientes |
 | ADR-030 | Detalle por serie y superseries en la planificación de fuerza |
 | ADR-031 | La portada de una rutina la pone su programa, y sale del catálogo |
@@ -53,6 +53,11 @@
 | ADR-043 | Allfit Pro: se paga con la compra integrada de cada tienda y se resuelve al leer |
 | ADR-044 | La persona trae su historial de otra app, y entra como entrenamiento suyo |
 | ADR-045 | Los modelos de IA se usan por un solo puerto, y cada tarea elige el suyo con su set de prueba |
+| ADR-046 | An Allfit admin acts with the full authority of the platform |
+| ADR-047 | A former professional learns why, for thirty days |
+| ADR-048 | A gym charges its clients through its own Mercado Pago account |
+| ADR-049 | Allfit One sends its email through Amazon SES |
+| ADR-050 | The Allfit Space waitlist is a domain of its own, and forgets who never joins |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -837,6 +842,7 @@ La persona necesita continuidad de su historial y la organización necesita pres
 - Un grant `frozen` no habilita operación, escritura, contribuciones, correcciones, observaciones, asignaciones, recordatorios ni datos creados después de `T`.
 - La organización conserva únicamente lectura histórica sobre el conjunto que estaba autorizado por el grant, su versión de scope, su nivel y las restricciones aplicables, siempre acotada a filas con instante de negocio `<= T`.
 - La lectura histórica usa la superficie y el predicado separados definidos por ADR-023: caso acotado, actor humano, propósito cerrado, MFA y auditoría por lectura.
+  - **As implemented (STUDIO-54/55/56):** the stronger authentication is a Studio sign-in less than ten minutes old, not MFA, by the owner's decision of 8 November 2026. ADR-023, section *As implemented (STUDIO-54/55/56)*, records it.
 - Un grant `revoked` no habilita lectura en vivo ni histórica. La terminación no cambia por sí sola un grant a `revoked`.
 - La persona conserva en su Fitness ID el perfil, las versiones asignadas, sesiones planificadas, ejecuciones, resultados y registros compartidos que le correspondan.
 - La organización conserva sus activos propios —programas maestros, metodología, oferta y configuración—, la ventana histórica congelada y los registros bilaterales necesarios según finalidad y plazo.
@@ -2923,6 +2929,12 @@ Una capacidad no entra parcialmente mediante una columna o permiso aislado. Su p
 **Recertificación:** 26 de julio de 2026<br>
 **Enmendada:** 20 de septiembre de 2026 — «todas las sesiones» se estrecha a los programas que terminan, y sigue sin haber job de calendario (`ADR-032`)
 
+> **Decision 3 is partially superseded by [ADR-046](#adr-046-an-allfit-admin-acts-with-the-full-authority-of-the-platform)**
+> on 7 November 2026, and built (PR 2): an administrator opens their own break-glass window,
+> and support search shows names and contact. Invariant 8 and scenarios 9, 10, 11 and 15
+> follow. Only the requester exercises a window, every exercise
+> is visible to the person, and break-glass never writes.
+
 ### Contexto
 
 El mapa de dominios difirió explícitamente a la Fase 3 un conjunto de decisiones operativas: el catálogo exacto de roles organizacionales (§4.14), la autoridad de terminación y la concurrencia de profesionales en una relación (§5.15), el catálogo de `access_level` y el alcance de la auditoría de lectura (§6.18), la autoridad de publicación del catálogo (§7.18), la materialización del calendario (§8.21) y las ventanas de corrección de ejecuciones (§9.22).
@@ -3094,6 +3106,16 @@ El 26 de julio de 2026 se recorrieron de nuevo el mapa de ownership, el ERD conc
 **Estado:** aceptada para V1<br>
 **Fecha:** 23 de julio de 2026
 
+> **As implemented (STUDIO-54/55/56), with deviations.** Migration
+> `20261116090000_a_case_opens_the_frozen_history.sql` builds this decision (code branch
+> `feat/historical-access-case`; its pull request and database deploy are pending). Five
+> things differ from the text below: the stronger authentication of item 3 is a sign-in less
+> than ten minutes old, not MFA (the owner's decision of 8 November 2026); a case authorizes
+> only the opener or the professional who held the relationship at the cut, never another
+> admin; in V1 a case reads only executed sessions and structured body measurements; expiry
+> is derived, with no worker; and the case has no `capability_code` column. The section
+> *As implemented (STUDIO-54/55/56)* at the end of this ADR records each decision and why.
+
 ### Contexto
 
 ADR-005 conserva para la organización una ventana histórica sobre grants `frozen`, pero la fórmula profesional normal exige relación y asignación vigentes. Reutilizar esa fórmula haría imposible la lectura histórica; omitirla permitiría que cualquier miembro administrativo navegara el Fitness ID de antiguos clientes.
@@ -3130,6 +3152,11 @@ La petición identifica el caso mediante `X-Historical-Access-Case`. Puede consu
 - no habilita exportaciones masivas en V1;
 - no permite observaciones, correcciones, asignaciones, reprogramación o cualquier escritura;
 - no revela si existe una relación ante un actor que no supera el predicado completo.
+
+> **Narrowed by ADR-047 (STUDIO-77).** Outside this surface, the client card (`OP-REL-019`)
+> tells a coach who attended a person through his current membership why he stopped, for
+> thirty days, when he asks for her by the id he already holds. It lists and searches nobody,
+> reads no frozen data and tells nobody else that a relationship existed.
 
 #### 3. Propósito cerrado, caso vigente y MFA
 
@@ -3259,6 +3286,59 @@ Un derivado sobrevive únicamente si estaba materializado en `T`, su regla está
 12. `health_context`, fotos, EXIF, perfil actual y datos posteriores a `T` nunca aparecen.
 13. Un derivado con un input denegado o no histórico queda excluido.
 14. Cerrar la cuenta anonimiza también lo que antes devolvía la superficie histórica.
+
+### As implemented (STUDIO-54/55/56)
+
+Migration `20261116090000_a_case_opens_the_frozen_history.sql` builds this decision for `HU-STUDIO-061`, `HU-STUDIO-062` and `HU-STUDIO-063` (code branch `feat/historical-access-case`; its pull request and database deploy are pending). The Studio API serves it under the OpenAPI tag *Studio Historical Access*, and no Studio screen calls it yet. Each item says where the build departs from the decision above, who decided and why.
+
+1. **The stronger authentication is a recent sign-in, not AAL2/MFA.** This departs from item 3, from the first line of the predicate in item 4 and from scenario 7. The owner decided it on 8 November 2026, because Studio has no MFA.
+   - WorkOS access tokens carry `auth_time`, the instant the person last actively authenticated; a refresh never advances it. It travels as `VerifiedToken.authenticatedAt` in `packages/auth-provider`. That is a bounded exception to «from the token use only `sub` and `sid`», documented in the monorepo's `AGENTS.md` §6: it is authentication, never authorization.
+   - Every Studio sign-in stores it in the new column `identity.access_sessions.authenticated_at`, which `ck_access_sessions_authenticated` admits only on the `studio` surface. `identity.create_access_session` gained a seventh parameter, `p_authenticated_at timestamptz default null`, and refuses an instant more than one minute in the future (`22023`). `identity.rotate_access_session` never touches the column.
+   - `identity.recent_authentication_window()` returns ten minutes and is the only place the window is written. `identity.load_access_session` returns `recent_authentication_expires_at` (`authenticated_at` plus the window), and `GET /studio/v1/session` exposes it, null when the token did not say.
+   - `identity.require_recent_studio_authentication(session_id)` raises `AF401` unless that live Studio session belongs to the actor and authenticated within the window. The API maps it to `403 reauthentication-required`; the client then signs in again through `GET /studio/v1/auth/start?reauthenticate=true`, which asks WorkOS for `max_age=0`.
+   - It is required to **open** a case (`OP-PRV-018`) and to **read** through one (`OP-PRV-020`). It is not required to close or list cases (`OP-PRV-019`, `OP-PRV-025`): ending access is never harder than granting it.
+2. **What a case reads narrows item 8.** Only what the frozen scope version marks `historical_readable` and does not exclude. With the V1 rules in `packages/db/scripts/v1-scope-rules.ts` that is:
+   - executed sessions, list and detail, with their recorded results: those of this relationship under `relationship_training`, and those she trained on her own under `prior_training_history`. The detail carries no coach observations and no planned session;
+   - structured body measurements under `body_progress`, field by field as the version's historical rules allow. A field they do not keep reads as null.
+
+   Programs and coach observations are shared at `contribute`, which carries no history, so item 8's «programas entregados» and «notas bilaterales» are not readable in V1. Derived progress, photos, health context and the profile have no historical read either.
+3. **Whom a case may authorize narrows item 1.** Either the opener herself, while she holds a current `owner` or `admin` role, or the professional who held the relationship at the cut (the `holder` assignment with `valid_to = cut_at`), while his membership keeps a current `owner`, `admin` or `coach` role. Never staff, never another admin, never a coach with no part in the relationship. Item 1 also allowed «otro `owner`/`admin`»; `HU-STUDIO-061` criterion 5 («yo mismo, o el antiguo profesional responsable») is narrower, and the build follows the story. The opener needs `manage_historical_access`, which owner and admin hold since migration `20260812130000_studio_team_directory_and_role_catalog.sql`.
+4. **Expiry is derived.** No worker sweeps cases, and there is no `privacy.historical_access_case_expired.v1`. An open case past `expires_at` reads as `expired` and cannot be exercised. It is closed as `expired`, with `closed_at = expires_at`, when an equivalent case is opened or when someone closes it; any closing writes `closed_at = least(now, expires_at)`.
+5. **There is no `capability_code` column.** Item 1 ties the case to the protected capability `read_frozen_relationship_history`. A column with an FK to `organizations.organization_capabilities` would need that capability in the catalogue, where Studio's role catalogue would show it although no role may hold it. The value is fixed, so the table does not store it.
+6. **Listing cases is a new operation, `OP-PRV-025`.** `GET /studio/v1/organizations/{organizationId}/historical-access-cases`: a member with `manage_historical_access` sees every case of the organization, and any other member sees only the cases that authorize him. Newest first, keyset on `opened_at` to the millisecond, then `id`, both descending.
+7. **The cut is strict (items 4 and 6).** The case stores the person and the cut (`cut_at`), checked against the relationship's `ended_at` when it opens, so no read needs the ended relationship.
+   - A session counts only if `ended_at <= cut_at` and no `execution.execution_revisions` row for it was created after the cut.
+   - An autonomous session is read under `prior_training_history` and is left out if it was hidden from that relationship then or since: a denial that is `active`, or has `frozen_denied_at`. One hidden and restored before the cut is readable.
+   - A body record counts only if `created_at <= cut_at`, whatever `measured_on` it claims.
+8. **A case closes on its own (item 7).** Revoking a frozen grant closes every open case of the relationship with `grant_revoked` (trigger `trg_data_grants_after_update_historical_cases`). A membership leaving `active`, or a role ending, closes the cases whose authorized membership no longer qualifies with `membership_ineligible` (triggers `trg_organization_memberships_after_update_historical_cases` and `trg_membership_roles_after_update_historical_cases`). Reads re-check eligibility on their own, so they fail closed even where no trigger closed the case. A case also stops reading once she closes her account.
+9. **The table as built (`IX-09`, `IX-10`).**
+   - `privacy.historical_access_cases` stores `person_id` and `cut_at` besides the columns item 1 lists, plus `closed_reason` (`closed_by_manager`, `expired`, `grant_revoked`, `membership_ineligible`) and `closed_by_membership_id`. Its status enum has only `open` and `closed`.
+   - `IX-09` is composite FKs: `(relationship_id, person_id, organization_id)` to the relationship, and `(membership_id, organization_id)` for the authorized, opening and closing memberships.
+   - `IX-10` is the constraint trigger `trg_historical_access_cases_after_insert_eligible` (`privacy.enforce_historical_case_eligibility_ct`) at insert, plus the closing triggers of item 8. There are no deferrable constraint triggers on membership, role and assignment.
+   - `trg_historical_access_cases_before_update_keep` lets an open case become closed, once, with its closing fields and nothing else. No case is deleted or truncated.
+   - `uidx_historical_access_cases_open` keeps one open case per relationship, authorized membership and purpose.
+10. **Concurrency.** Opening locks the terminated relationship and its frozen grants `FOR SHARE`. A revocation racing it either waits and then closes the new case, or commits first, and the opening finds nothing frozen (`P0004`, answered `409`).
+11. **Audit (item 5).** Every frozen read writes `privacy.access_events` with `access_mode = 'frozen'` and `historical_access_case_id`: once per frozen category it used (`allowed`), or once `denied`. `app.purpose` is `frozen_history_review`, and the case's own purpose is reached through its id. A case the caller cannot use answers like one that does not exist (`404`), and the attempt is recorded as `denied` against the person whenever the case or the relationship belongs to the organization. The read opens the contract scope `frozen_history` with the case id, which the new policies read, rather than an `app.historical_access_case_id` setting.
+12. **Events.** `privacy.historical_access_case_opened.v1` carries `case_id`, `organization_id`, `relationship_id`, `authorized_membership_id`, `opened_by_membership_id`, `purpose`, `opened_at` and `expires_at`. `privacy.historical_access_case_closed.v1` carries `case_id`, `organization_id`, `relationship_id`, `authorized_membership_id`, `purpose`, `closed_reason` and `closed_at`. Neither carries the justification or the case reference, and no worker consumes them yet.
+
+**The predicate as built (item 4).** `access_control.can_read_frozen(case_id, scope_code, resource)` takes the case instead of `(relationship_id, scope_code, resource, field, occurred_at)`. It holds when `access_control.historical_case_exercisable(case_id)` holds and `privacy.frozen_category` finds a `frozen` grant of the case's relationship whose version keeps the resource readable. The case is exercisable when it names the membership the request acts as, in the organization it acts in, is open and inside its hours, its membership still qualifies, and her account is not closed. The field comes from `privacy.scope_reads_frozen`, and the instant from the cut of item 7. There is no retention condition of its own: the read works on the canonical rows, so what disposition deleted or anonymized is not there to read. `allfit_api` cannot execute the predicate.
+
+**Invariants and scenarios.** Invariants 1 to 10 hold as built. The mandatory scenarios are covered by `T-PRV-HIST-01` (58 assertions), `T-PRV-HIST-02` (40), `historical-access-case-concurrency.test.ts` (2) and the API's `studio-historical-access.test.ts` (18):
+
+1. `T-PRV-HIST-RLS-11` and `-API-27`.
+2. `T-PRV-HIST-RLS-17`, `-API-19` and `-API-25`.
+3. `T-PRV-HIST-RLS-11`.
+4. `T-PRV-HIST-RLS-12/13` and `-API-01..16`.
+5. `T-PRV-HIST-VAL-08`, `-VAL-10`, `-AUTH-05` and `-LIST-04`.
+6. `T-PRV-HIST-RLS-16`, `-API-22..26` and `-CLOSE-02`.
+7. A recent sign-in instead of MFA: `T-PRV-HIST-AUTH-01..03` to open and `-AUTH-11/12` to read.
+8. No write or export route exists; `T-PRV-HIST-INT-12` shows the runtime role cannot call the predicate.
+9. `T-PRV-HIST-API-05`, `-API-12`, `-API-16`, `-API-20`, `-API-23` and `-INT-11`. The record is written by `privacy.log_access_event` in the read's own transaction.
+10. `T-PRV-HIST-RLS-12` and `-API-11`.
+11. `T-PRV-HIST-AUTO-04..06`, `-API-28` and the concurrency test.
+12. `T-PRV-HIST-API-02`, `-API-04`, `-API-10`, `-API-13..15`, `-API-17` and `-INT-13`.
+13. Nothing to test: no derived value is readable through a case.
+14. `access_control.historical_case_exercisable` refuses a person whose account is closed. No test covers it yet, and the anonymization itself is ADR-005's.
 
 ---
 
@@ -3394,6 +3474,15 @@ Un `PUT` convergente reduce duplicados, pero no evita que un draft antiguo sobre
 **Estado:** aceptada para V1<br>
 **Fecha:** 26 de julio de 2026
 
+> **Partially superseded by [ADR-046](#adr-046-an-allfit-admin-acts-with-the-full-authority-of-the-platform)**
+> on 7 November 2026. For administrators, item 6 (duties last at most 90 days and are
+> recertified) no longer applies; this is built. The break-glass quorum and durations, the
+> approver rules and the pending request (items 8 and 10, the first sentence of item 11,
+> invariants 4 and 5, the approval half of invariant 7, scenarios 5, 7 and 8, and the
+> rejected or expired request of scenario 6) are replaced by self-approved 60-minute windows;
+> this is built too (PR 2). Review by someone who did not request the window (item 12)
+> stays.
+
 ### Contexto
 
 ADR-018 separó una afirmación de su verificación y ADR-022 separó soporte solicitante (`A10`) de aprobación/auditoría (`A12`). Faltaba cerrar quién puede verificar, qué evidencia puede usar, cómo se recertifican esos deberes, cuántas aprobaciones exige una lectura excepcional y qué ocurre ante conflicto o abuso.
@@ -3466,6 +3555,21 @@ Dejar esas decisiones a un claim, role o permission de WorkOS, un procedimiento 
 **Estado:** aceptada para V1<br>
 **Fecha:** 28 de julio de 2026
 
+> **As implemented (STUDIO-61..65), with deviations.** Migration
+> `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql` builds the professional
+> half of this decision (pull request allfitone#203; its merge and database deploy are
+> pending). Six things differ from the text below:
+>
+> - reading nutrition needs no capability and no credential; only proposing does (the
+>   owner's decision of 8 November 2026);
+> - the credential is a new catalogue type, `nutrition_professional`;
+> - Studio's goal history masks her active goal when another relationship proposed it;
+> - the frozen read asks for a sign-in less than ten minutes old, not AAL2;
+> - a meal tells Studio only whether it has a photo, never a link;
+> - `IX-31` is enforced by a policy and function checks, not a deferrable constraint trigger.
+>
+> The section *As implemented (STUDIO-61..65)* at the end of this ADR records each decision and why.
+
 ### Contexto
 
 La baseline aprobada difería nutrición para evitar esconder ingestas, macros o planes dentro de `health_context`. Antes de comenzar la Fase 5, producto decidió incorporar una rebanada nutricional completa, manteniendo el sistema greenfield y sin reutilizar datos, identificadores, contratos o migraciones de Factory Fitness.
@@ -3518,6 +3622,94 @@ El dominio se materializa en ocho tablas: `nutrient_definitions`, `meals`, `meal
 9. Tras terminar la relación, un caso histórico válido solo ve guía emitida hasta `T`.
 10. El esquema se reconstruye sin ningún artefacto, dato o dependencia de Factory Fitness.
 
+### As implemented (STUDIO-61..65)
+
+Migration `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql` builds `OP-NUT-009..013` for `HU-STUDIO-068..072` (pull request allfitone#203; its merge and database deploy are pending).
+
+- **Routes:** the Studio API serves them under `/studio/v1/organizations/{organizationId}/clients/{personId}/nutrition`, plus one frozen read under `historical-relationships`.
+- **Screens:** no Studio screen calls them yet.
+
+Each item says where the build departs from the decision above, who decided and why.
+
+1. **Reading needs no capability and no credential.** This departs from item 6, and from scenario 3 for reads. The owner decided it on 8 November 2026: following what she eats is like following what she trains or her body, which need the assignment and her grant and nothing else.
+   - **What a read checks:**
+     - the organization of the route and an active relationship;
+     - the coach's live membership and effective assignment: `holder`, or a cover she accepted;
+     - her grant: `nutrition_intake` for meals and daily summaries, `nutrition_media` as well for the photo, `nutrition_guidance` for goals.
+   - **Proposing** still needs everything item 6 lists:
+     - `guide_nutrition`, which only the `coach` role holds;
+     - a verified `nutrition_professional` credential in force;
+     - `nutrition_guidance` at `contribute`.
+   - **Scenario 2 holds:** admin, owner and staff get nothing by membership, and neither does a coach who does not attend her.
+2. **The credential is a new type in the catalogue.** `catalog.professional_credential_types` gains `nutrition_professional` («Profesional en nutrición», `published`, display order 40). Studio declares it and Backoffice verifies it like any other type, with no screen changes.
+   - **When it counts as in force:** `identity.effective_credential_verification(person, type)` returns a verification only when all three hold, the same rule the professional profile already shows:
+     - the credential is `active`;
+     - its `expires_on` is null or not yet past;
+     - its **latest** verification, by `decided_at` then `id`, is `verified` with `valid_from <= now < valid_to`.
+   - **Without it,** proposing raises `AF431`. The API answers `403 credential-required`, so the coach learns why.
+   - **The version records it:** it stores the `credential_verification_id` it was proposed under (invariant 4).
+3. **`IX-31` is enforced by the row's policy and by the command, not by a deferrable constraint trigger.**
+   - **The policy:** `goal_versions_insert_proposal` admits a professional version only when all of these hold:
+     - its author is the actor, writing through his own membership;
+     - `access_control.can_access(origin_relationship_id, 'nutrition_guidance', 'contribute')` is true;
+     - `identity.credential_verification_is_effective` accepts the cited verification for that author and type.
+   - **The command:** `nutrition.propose_goal_version` checks the same things first, then reads the assignment and the grant again under the locks.
+   - **Later changes:** losing the credential, the assignment or the grant after a proposal cancels nothing, and she can still decide it. Only ending the relationship cancels (item 9).
+4. **Studio's goal history (`OP-NUT-011` live)** shows the proposals this relationship made, in every status, newest first, each with her decision when there is one. The owner chose this over showing only our proposals, or everything.
+   - **Her active goal** comes alongside, with its targets only. When another relationship, or she herself, set it, it carries no id (`goal_version_id` is null), says `from_this_relationship: false`, and has no author, rationale or origin.
+   - **Never shown:**
+     - a version number, which would count her own goals;
+     - a decision on a goal this relationship did not propose: a decision on her active goal would say it came from a professional.
+   - **The author** is reduced to `author.kind` and `author.person_id` (invariant 4).
+5. **Each relationship has one proposal waiting at most (`IX-33`).**
+   - **A new proposal** replaces the one this relationship still has waiting, which becomes `superseded`. The existing partial index `uidx_goal_versions_pending (goal_set_id, origin_relationship_id) where status = 'proposed'` backs this.
+   - **Ending the relationship** cancels what it has waiting, at the same instant `T`. This is item 9, not built until now.
+     - `relationships.close_relationship` calls `nutrition.cancel_relationship_goal_proposals`, which writes `cancelled_at = greatest(T, created_at)`.
+     - Her ending it, the gym ending it and the organization closing all come through there.
+   - **Revoking the grant** cancels nothing.
+6. **The frozen read (item 9, scenario 9)** follows ADR-023 as built (STUDIO-54..56).
+   - **Authentication:** a Studio sign-in less than ten minutes old, not AAL2. Each read also needs a case, the purpose `frozen_history_review`, and an access record in `frozen` mode.
+   - **The route:** `GET /studio/v1/organizations/{organizationId}/historical-relationships/{relationshipId}/nutrition/goal-versions`, with the case in `X-Historical-Access-Case`. The live `/clients` route no longer accepts that header.
+   - **What it shows:**
+     - only professional versions of this relationship with `created_at <= cut_at`, each with its `status_at_cut`;
+     - her decision only if she took it by the cut;
+     - only the fields the frozen version keeps `historical_readable`.
+   - **A v1 grant** on `nutrition_guidance` kept nothing historical, so its case answers `scope-required`.
+7. **The photo (item 11, scenarios 5 and 8).** A meal carries no link object, contrary to scenario 5.
+   - **What the meal says:** only `has_photo`, and only when she also shares `nutrition_media`, together with the version that said so (`photo_scope`). Studio then asks for the photo at `…/meals/{mealId}/photo`.
+   - **The photo route** re-checks both grants on every request and records each view, allowed or denied, under `nutrition_media`.
+     - It streams the sanitized object as `image/jpeg` only, because the sanitizer always writes JPEG, and never redirects.
+     - Any failure answers the same `404` with no bytes, a refused grant included.
+   - **Revoking** either category makes the very next request answer `404` (scenario 8).
+8. **Daily summaries are computed at read time (item 11).** A range covers one to thirty-one days. For each day the summary gives:
+   - `meal_count`, which is null when her version does not share `local_date`;
+   - `nutrient_totals`, which is null when her version does not share nutrient values.
+
+   They add up only the rows the policy admits. There is no streak and no count of hidden days.
+9. **No plan window.** Studio reads do not apply the history window of her Space plan: that window is a commercial benefit of hers, not a privacy limit.
+10. **No menu or clinical indication, by structure only (item 4).** Targets are typed rows per nutrient, and the DTO is closed. The rationale is free text, 1 to 2000 characters, and nothing checks its content by machine.
+11. **`nutrition_guidance` v2 is a precondition.**
+    - **The two versions:** v1 is read-only. v2 offers goal sets, versions and targets up to `contribute`, and keeps her decisions and the fields of a proposal historical.
+    - **Publishing:** a curator publishes v2 from Backoffice `/permissions` after the deploy. Existing grants stay at their version (ADR-007).
+    - **Invitations:** Studio-web still invites at `read`, so proposing works only once an invitation asks for `contribute`. That is front work (STUDIO-136).
+12. **Every read is recorded first, in its own transaction.**
+    - `identity.open_client_category(…, 'studio_nutrition_review')` writes the access event, allowed or denied, before any row is read.
+    - Rows then come only through policies under the contract scope `nutrition_review`, which only these functions open.
+    - When the meal list reveals `has_photo`, it writes a second event under `nutrition_media`.
+
+**Tests by scenario:**
+
+| Scenario | Tests |
+| --- | --- |
+| 2 | `T-NUT-RLS-06/07` |
+| 3 (for proposing) | `T-NUT-RLS-18/19` and the credential cases of `T-NUT-STUDIO-02` |
+| 4 | `T-NUT-RLS-09`, `-11`, `-12` |
+| 5 | `T-NUT-RLS-13` |
+| 6 | `T-NUT-RLS-19` |
+| 7 | `goal-proposal-concurrency.test.ts` and the existing decision tests |
+| 8 | `T-NUT-RLS-15/16` |
+| 9 | `T-NUT-HIST-01` |
+
 ---
 
 ## ADR-028 — Backoffice con rol base, deberes temporales y separación break-glass
@@ -3526,6 +3718,17 @@ El dominio se materializa en ocho tablas: `nutrient_definitions`, `meals`, `meal
 **Fecha:** 3 de agosto de 2026<br>
 **Supersede:** la consolidación informal `DT-019` que absorbía `A11/A12` en `A10`<br>
 **Ratifica:** ADR-022 y ADR-026
+
+> **Partially superseded by [ADR-046](#adr-046-an-allfit-admin-acts-with-the-full-authority-of-the-platform)**
+> on 7 November 2026. Superseded: items 2, 5 (for administrators), 6, 7, 9 (its ban on
+> self-approval) and 19 (the session limits); items 1, 8 and 16 in part; invariants 5 and 6
+> and the second half of invariant 3; scenarios 1, 5 and 6, and scenario 7 for approvers.
+> Built: an administrator holds all thirteen duties for as long as the role lasts, and the
+> session lasts 60 idle minutes and 12 hours (PR 1); self-approved break-glass, partial
+> person search and the optional case reference are built too (PR 2), so items 6, 7 and 9
+> below, and item 8 except its forbidden categories, no longer describe what runs. Items 16
+> and 23 describe bootstrap and recovery workflows that do not exist; ADR-046 records the
+> real ceremony. The rest stays in force.
 
 ### Contexto
 
@@ -4836,6 +5039,37 @@ cerrada, 422).
   el proveedor de identidad.
 - No sirve fotos a Studio: el proxy autenticado de `OP-NUT-013` llega con Studio.
 
+### As built: the worker sweeps the queue
+
+Point 5 left the worker's sweep of `nutrition.media_disposals` deferred. Two paths made it
+necessary:
+
+- **A meal the worker deletes.** Since allfitone#163 the worker deletes a meal once a legal
+  hold over it ends, and queues its photo with no API request around it to remove it.
+- **A refused removal.** A removal the store refused stayed pending with nothing to retry
+  it.
+
+In both cases the photo stayed in the store for good. The same applies to body photos
+(`identity.body_photo_disposals`).
+
+Migration `20261122150000_the_worker_sweeps_photo_disposals.sql` and the worker's
+`media_disposal` job sweep both queues (code branch `feat/backoffice-last-gaps`, merge and
+deploy pending):
+
+- **Waiting.** The worker claims only what has waited five minutes, so it does not race the
+  API's own removal. Removing twice is harmless, because the store answers a missing key as
+  removed.
+- **Backoff.** Each claim counts an attempt and pushes the next one further, doubling from a
+  minute up to a day. A photo the store keeps refusing therefore costs no call every minute
+  and does not hold up newer ones.
+- **Order.** The worker removes the file and then seals the row. A store error leaves the
+  row for the next attempt; any other error fails the job.
+- **Last in the batch.** The job runs last, and builds its store client only when something
+  is due. A worker without the store keys therefore still runs every other job.
+- **What it learns.** The claim hands over the object key, never the person.
+
+The data dictionary §4.7.3 and §10A.12 hold the physical form.
+
 ## ADR-040 — Alcance V1 de nutrición en Space
 
 **Estado:** aceptada para V1<br>
@@ -5162,6 +5396,9 @@ El plan de pago de Allfit para personas se llamaba **Premium** y desde el 12 de 
   `E-STUDIO-13` quedan diferidas);
 - a Pro se llega **pagándoselo a Allfit** o **entrando invitado por un gimnasio activo**, y
   un gimnasio activo es uno que le está pagando a Allfit.
+
+> **Reopened by `ADR-048`** (9 November 2026): the gyms charge their clients through their own
+> Mercado Pago account. Every decision below still stands.
 
 El catálogo de planes (`HU-BO-025`, `HU-BO-026`) ya está construido en
 `20260927050000_platform_plan_catalogue.sql`. Dejó sin decidir, a propósito, de dónde sale
@@ -5597,3 +5834,1416 @@ ESLint rechaza en el resto del repositorio:
 - La regla de lint, probada con archivos que la violan y archivos que la cumplen.
 - El set de prueba del reconocimiento, que ahora mide también modelos de Bedrock
   (`bun run eval bedrock:<id>`).
+
+---
+
+## ADR-046 — An Allfit admin acts with the full authority of the platform
+
+**Status:** accepted for V1. Decisions 1 and 3 are built (PR 1); decisions 2, 4 and 5 are
+built (PR 2, code branch `feat/backoffice-self-approved-break-glass`), with its code pull
+request and its database deploy pending.<br>
+**Date:** 7 November 2026<br>
+**Supersedes:** in `ADR-028`, items 2, 5 (for administrators), 6, 7, 9 (only its ban on
+self-approval) and 19 (only the session limits); items 1, 8 and 16 in part; invariants 5 and 6
+and the second half of invariant 3; mandatory scenarios 1, 5 and 6, and scenario 7 for
+approvers. The same rules restated in `ADR-022` decision 3 and `ADR-026` are listed below,
+under *Earlier decisions this changes*.<br>
+**Ratifies:** every other item of `ADR-028`, and the guarantees listed under *What stays*.
+
+### Context
+
+`ADR-028` was written for a team that separates duties: one person asks for support access,
+another approves it and a third audits it. The Allfit One Backoffice is run by two
+administrators. Under `ADR-028`:
+
+- **The base role granted nothing.** Each of the thirteen duties of `ADR-028` item 4 had to
+  be granted by the other administrator, for at most 90 days, and recertified. A lapsed duty
+  turned its screens into `403`. `manage_platform_access`, the duty that grants the rest, was
+  held by both administrators with the same end date: had it lapsed for both, nobody could
+  grant any duty from Backoffice again.
+- **Break-glass could not open.** A restricted window (body, health, nutrition intake) needs
+  two approvers besides the requester, which two administrators never have. A standard window
+  needs the other administrator to approve it. Windows lasted 15 or 30 minutes.
+- **The session ended after 15 idle minutes or 8 hours.**
+- **Person search matched only an exact email, phone or identifier**, always with a case
+  reference, and showed a masked contact and no name.
+
+The controls that protect the person whose data is read do not depend on how many
+administrators there are: the read is logged before content leaves, the person sees it,
+break-glass never writes and some categories are never reachable. The controls that split
+authority among staff do depend on it, and with two administrators they produced dead ends
+instead of protection.
+
+### Decision
+
+**1. `allfit_admin` holds all thirteen duties for as long as the person holds the role.**
+Granting the role brings every duty. An administrator receives no per-duty grant, and their
+duties have no 90-day end and no recertification. Withdrawing the role still revokes every
+duty, closes the person's break-glass windows and ends their sessions.
+
+- The duties stay rows of `support.platform_duty_assignments`, with `basis = 'admin_role'`.
+  Break-glass, invitations, recovery, plans and suspensions record the exact assignment a
+  command acted under, so the role writes thirteen assignments instead of being read as a
+  wildcard.
+- A Backoffice session without an active `allfit_admin` role holds no duty.
+- **Implementation: built** in PR 1 (code branch `feat/backoffice-admin-standing-duties`),
+  migration `20261114090000_an_admin_holds_every_duty.sql`.
+
+**2. Break-glass is self-approved.** An administrator opens a window by requesting it with
+one of the closed purposes; nobody else approves it.
+
+- Every window lasts 60 minutes, whatever its tier, body, health and nutrition included.
+- Every read is still logged before content is returned, and the person still sees it.
+- The other administrator reviews each exercised window afterwards. The reviewer is still
+  never the requester or the subject.
+- **Implementation: built** in PR 2 (code branch `feat/backoffice-self-approved-break-glass`),
+  migration `20261115090000_an_admin_opens_their_own_break_glass_window.sql`.
+  `support.break_glass_required_approvals(tier)` returns 0 and
+  `support.break_glass_duration_minutes(tier)` returns 60 for both tiers.
+  `support.request_break_glass` inserts the request already `approved`, with the window
+  starting at the request and ending 60 minutes later, and emits
+  `support.break_glass_requested.v1` and `support.break_glass_window_opened.v1`. The closed
+  purpose, the traceable case reference, the forbidden categories and the refusal over one's
+  own data are unchanged. `support.decide_break_glass` is dropped and `OP-SUP-002` is
+  retired with its route; `support.break_glass_approvals` keeps its rows and nothing writes
+  it. `ck_break_glass_requests_derived` accepts the new shape (0 approvals, 60 minutes) and
+  the two shapes asked for before (standard 1/30, restricted 2/15), so old files stay valid.
+
+**3. A Backoffice session lasts 60 idle minutes and 12 hours.** Password plus TOTP (AAL2)
+still opens it. Withdrawing the role, recovering the factor or resetting the password still
+ends it.
+
+- **Implementation: built** in PR 1. PostgreSQL enforces both limits through
+  `access_control.backoffice_idle_limit()` and `access_control.backoffice_session_lifetime()`.
+  The API keeps matching constants, `BACKOFFICE_IDLE_LIMIT_MS` and
+  `BACKOFFICE_SESSION_LIFETIME_SECONDS`, which only set the cookie's `Max-Age=43200` and the
+  idle deadline it reports.
+
+**4. Person search matches part of a name, an email or a phone.** Administrators see the
+person's full name and contact. Every search is logged, with one access event for each
+person it returns.
+
+- **Implementation: built** in PR 2, migration
+  `20261115100000_an_admin_finds_a_person_by_name.sql`. `support.search_people` takes a term
+  of at least two characters and matches part of the lowered name, email or phone, with `\`,
+  `%` and `_` escaped, or the exact person identifier. It answers up to 25 people in name
+  order, each with `display_name`, `contact_email`, `contact_phone` and `account_status`, plus
+  `has_more`. Each search writes one `support.metadata_queries` row (`lookup_kind = 'text'`)
+  and one `privacy.access_events` row per person returned (`resource =
+  'support.person_search'`). The person file adds the name and the full contact. The API is
+  `GET /backoffice/v1/support/people?q=&case_reference=&limit=`.
+
+**5. A case reference is optional for support reads**: the person search, the person file,
+payments, billing follow-up and the recovery read. Account-recovery commands still require
+one.
+
+- **Implementation: built** in PR 2, in the same migration. `support.search_people`,
+  `support.person_metadata`, `support.person_payments`, `support.billing_follow_up` and
+  `identity.read_account_recovery` accept a null or empty case reference; one that is given
+  must still be a traceable code (`^[A-Z][A-Z0-9_-]{2,63}$`), and free text is refused with
+  `22023` (`400 invalid-request` at the API). Starting, resending and cancelling an account
+  recovery still require one, because each opens a case.
+
+### What stays
+
+- Every read of personal data is logged before content is returned. If the log cannot be
+  written, the read does not happen.
+- Password plus TOTP (AAL2) opens every Backoffice session.
+- The platform never acts as the person, and Backoffice never writes through break-glass.
+- Authentication secrets and the forbidden categories — meal photos, documents and private
+  notes — stay unreachable.
+- History is append-only.
+- Nobody grants themselves the base role, and the last active administrator cannot be
+  withdrawn.
+- The break-glass reviewer is independent of the requester and of the subject.
+- Whoever requested or approved a read of a person cannot place a legal hold on that person
+  (`privacy.asked_to_read_this_person`).
+
+### What changes in ADR-028
+
+| `ADR-028` | What it said | What changes | Status |
+| --- | --- | --- | --- |
+| Item 1 | Separation of duties and break-glass are mandatory | Duties are no longer split among administrators. Break-glass stays mandatory for content | Built for duties |
+| Item 2 | `allfit_admin` only lets a person sign in | The role brings every duty (decision 1) | Built |
+| Item 5 | Every duty lasts at most 90 days and is recertified | Not for a duty the role brings. A duty granted on its own (`basis = 'granted'`) keeps every rule of item 5 | Built |
+| Item 6 | Exact search, case reference, masked contact, no name | Decisions 4 and 5 | Built |
+| Item 7 | One approver and 30 minutes, or two approvers and 15 minutes | Decision 2: self-approved, 60 minutes for every tier | Built |
+| Item 8 | Forbidden break-glass categories; identity and billing cases use minimized operations | The categories stay forbidden. Search and the person file show the full name and contact (decision 4) | Built |
+| Item 9 | Nobody self-approves | Decision 2. Exercising someone else's window, reviewing one's own request and writing through break-glass stay forbidden | Built |
+| Item 16 | The ceremony inserts two roles and their crossed `manage_platform_access` duties | It inserts only the two crossed roles; the roles bring the duties. See also *A stale ceremony* below | Built |
+| Item 19 | Eight hours and fifteen idle minutes | Twelve hours and sixty idle minutes (decision 3). The rest of the item stays | Built |
+| Invariant 3 | Without an independent actor, a sensitive function fails closed | Not for approving break-glass (decision 2). Review still needs an independent reviewer | Built |
+| Invariant 5 | The ordinary view returns no names or full contacts | Names and contacts, by decision 4. Personal content stays out | Built |
+| Invariant 6 | A partial approval, a rejection or an expired request never opens a window | The request itself opens the window (decision 2) | Built |
+| Scenario 1 | An admin without a duty signs in but runs nothing | A Backoffice session without an active admin role holds nothing | Built |
+| Scenario 5 | Search has no name lookup and masks the contact | Decision 4 | Built |
+| Scenario 6 | One independent approver, or two for a restricted window | Decision 2 | Built |
+| Scenario 7 | A requester, approver or reviewer with a conflict is refused | Only for requester and reviewer: there is no separate approver | Built |
+
+Every other item, invariant and scenario of `ADR-028` stays. In particular:
+
+- the closed catalogue of thirteen duties (item 4);
+- the modes `A10`, `A11` and `A12`, still derived from the duty exercised (item 3), although
+  one administrator now acts in all three;
+- the five `support` tables (item 10) and the closed operations (item 11);
+- logging before content (item 12);
+- withdrawing the role revokes the session and every duty (item 13);
+- no runtime owner, superuser or `BYPASSRLS` (item 14);
+- the WorkOS Application, password plus TOTP, the session materialized in PostgreSQL, one
+  TOTP per account and the hosted password reset (items 15, 17, 18 and 20 to 22);
+- invariant 1 as a check: every operation still requires an active role and an active duty
+  in its own transaction, and for an administrator the first brings the second;
+- invariants 2, 4, 7 and 8, and scenarios 2 to 4 and 8 to 11.
+
+### A stale ceremony
+
+**`ADR-028` items 16 and 23 describe workflows that do not exist.** The code repository has
+no `backoffice-bootstrap.yml`, no `backoffice-totp-recovery.yml` and no protected GitHub
+environment for them; its workflows are `ci.yml`, `deploy-aws.yml` and
+`deploy-database-aws.yml`.
+
+- **The real bootstrap** is `infra/docker/migrator.sh bootstrap`, run as a one-off task of
+  the migrator task definition on ECS with `SUBJECT_A`, `SUBJECT_B` and `CEREMONY_REFERENCE`.
+  It connects with the database master credential, finds both people through their WorkOS
+  accounts, which must already have a person (each administrator signed in to Studio once),
+  and calls `support.bootstrap_backoffice_administrators` as `allfit_migrator` in one
+  transaction. Since this decision it no longer takes
+  `DUTY_DAYS`.
+- **TOTP factor recovery** has a function, `identity.recover_backoffice_totp_factor`, but no
+  migrator command or workflow runs it. It requires two administrators other than the
+  subject, both holding `manage_platform_access`, which a team of two administrators cannot
+  provide.
+
+This decision changes neither ceremony beyond `DUTY_DAYS`. The gaps are recorded so that
+nobody follows items 16 and 23 as written.
+
+### Earlier decisions this changes
+
+- **`ADR-026`:** item 6 (duties last at most 90 days and are recertified) no longer applies
+  to administrators, and this is built. Replaced by decision 2, also built: the quorum and
+  durations of item 8, the approver rules of item 10, the 30-minute pending request of
+  item 11, invariants 4 and 5, the approval half of invariant 7, the costs that follow from
+  them, and scenarios 5, 7 and 8 and the rejected or expired request of scenario 6. Item 12
+  stays: a window is reviewed by someone who did not request it.
+- **`ADR-022` decision 3:** the approval by an `A12` other than the requester, and the rule
+  that a single-person shift never self-approves, are replaced by decision 2; support
+  metadata «sin nombres» is replaced by decision 4. Both are built, and invariant 8 and
+  scenarios 9, 10, 11 and 15 follow them. Only the requester exercises a window, every
+  exercise is visible to the person, and break-glass never writes.
+
+### Invariants
+
+1. A person holds a duty through the role only while the role is active. Withdrawing the
+   role revokes every duty in the same transaction.
+2. A duty held through the role never lapses, and it is never suspended, revoked or
+   recertified on its own. Its `basis` never changes.
+3. A duty granted on its own lasts at most 90 days.
+4. A person holds at most one current assignment of each duty in each basis.
+5. A Backoffice session without an active `allfit_admin` holds no duty and no role.
+6. The role is never self-granted, and the last active administrator is never withdrawn.
+7. Every read of personal data is logged before content is returned.
+
+### Consequences
+
+- `support.platform_duty_assignments` gains `basis` (`granted` or `admin_role`). The window
+  check depends on it, and the current-assignment unique index moves to
+  `(person_id, duty_code, basis)`. A temporary duty granted before this decision lives beside
+  the one the role brings and lapses on its own date; nothing is rewritten and nobody is
+  recorded as having revoked it.
+- A duty the role brings ends on `9999-12-31 00:00:00+00` rather than `infinity`, because the
+  API's driver turns `infinity` into an invalid date and the contract declares a date-time.
+  Clients show it as permanent, not as a date.
+- Granting the role (`OP-SUP-007`) now brings the thirteen duties. Granting an administrator a
+  duty (`OP-SUP-010`) converges on the one the role brought. Suspending, revoking or
+  recertifying it is refused with `409 conflict`. Backoffice no longer offers a duty form,
+  because every duty requires the role, and the role already brings it.
+- Every duty requires `allfit_admin`, which brings all of them. A narrower staff profile
+  would need a new role and a new decision.
+- One administrator requests, opens and exercises a window alone. The safeguards move after
+  the fact: the person sees every read, and the other administrator reviews it. The separate
+  approval (`OP-SUP-002`) is retired: `support.decide_break_glass` is dropped, and the route
+  `POST /backoffice/v1/break-glass/requests/{requestId}/decisions`, the OpenAPI operation
+  `decideBackofficeBreakGlass` and the schema `BreakGlassDecision` are removed. Past
+  approvals stay as append-only history, and a request asked for before that never opened
+  simply expires.
+- The `approve_break_glass` duty no longer approves anything; it only still grants reading
+  the whole break-glass tray. Whether to retire or rename it is an open owner decision.
+- `request_expires_at` is still written for a new window, 30 minutes after the request, but
+  no longer gates anything.
+- The person search has no trigram index and scans `identity.people`. That is acceptable at
+  the current volume; `pg_trgm` is the option to revisit if it grows.
+- The person file keeps its masked contact fields beside the full ones for the screens that
+  still read them; they can be removed once none does.
+- A session left open in a browser stays usable for up to an hour of inactivity instead of
+  fifteen minutes.
+
+### Alternatives considered
+
+- **Keep `ADR-028` and renew duties by hand.** This is the stopgap until PR 1 is deployed.
+  It cannot open a restricted window at all, and every lapse is a `403` in front of the next
+  operator.
+- **Read the role as a wildcard, with no duty rows.** Rejected: the commands that record the
+  assignment they acted under would have nothing to point at.
+- **End standing duties at `infinity`.** Rejected for the driver and contract reason above.
+- **Rewrite or revoke the temporary duties already in production.** Rejected: the index
+  gains `basis`, so they coexist and lapse without anyone editing history.
+
+### Mandatory test scenarios
+
+1. The bootstrap ceremony and a role granted in Backoffice each bring exactly the thirteen
+   duties, granted by whoever granted the role, never lapsing (`T-SUP-STANDING-01`,
+   `T-IDN-BACKOFFICE-CEREMONIES-01`).
+2. A Backoffice session without the role holds no duty and no role.
+3. Granting an administrator a duty they hold through the role answers that duty and adds no
+   row.
+4. Suspending, revoking or recertifying a duty held through the role fails, and so does
+   rewriting its `basis`.
+5. A temporary duty from before lives beside the standing one; two temporary ones of the same
+   duty never do; a granted duty still lasts at most 90 days.
+6. A session idle for 59 minutes still carries its role and duties; one idle for 61 minutes
+   does not, and the sweep revokes it, as it revokes one past 12 hours
+   (`T-IDN-BACKOFFICE-SWEEP-01`).
+7. Withdrawing the role revokes the thirteen duties.
+8. A request with a closed purpose opens a 60-minute window at once; a request without one,
+   for a forbidden category, over one's own data or with a free-text case is refused; the
+   requester never reviews the window, and the other administrator does; files asked for
+   before keep their 1/30 and 2/15 shapes (`T-SUP-BG-SELF-01`).
+9. A partial name or contact finds the person, and every returned person gets an access
+   event; a wildcard never lists everybody (`T-SUP-SEARCH-02`, `T-SUP-RLS-03`).
+10. Support reads work without a case reference, and starting an account recovery still
+    refuses one that is missing (`T-SUP-SEARCH-02`, `T-IDN-RECOVERY-API-10`).
+
+---
+
+## ADR-047 — A former professional learns why, for thirty days
+
+**Status:** accepted for V1 and built (STUDIO-74..77, pull request allfitone#204, merged and deployed on 9 November 2026).<br>
+**Date:** 8 November 2026<br>
+**Builds:** `HU-STUDIO-081..084` and `OP-PRV-015`, through migrations
+`20261118090000_a_member_finds_a_client_by_name.sql`,
+`20261118100000_a_coach_opens_the_card_of_a_client.sql`,
+`20261118110000_a_person_reads_who_read_her_data.sql` and
+`20261118120000_a_studio_member_sees_what_needs_attention_today.sql`.<br>
+**Departs from:** `ADR-023` item 2, in part; `V1_OPERATIONS_MATRIX.md` §5.7, for one actor;
+`V1_RLS_MATRIX.md` `T-PERSON-3`, in its letter; and the view and self policy that
+`V1_DATA_DICTIONARY.md` §7.9 and `T-ACCESS-10` name for the access log. Each is under
+*Deviations* below.
+
+### Context
+
+`E-STUDIO-14` has four stories, and none had a backend:
+
+- **Today (`HU-STUDIO-081`)** had no canonical operation (`NEW-Studio-TODAY`).
+- **Search (`HU-STUDIO-082`)** belonged to `OP-REL-010`, which did not filter by name.
+- **The client card (`HU-STUDIO-083`)** had no operation (`NEW-Studio-CLIENT-DETAIL`). Its
+  criterion 3 says every read is recorded and the person sees it, but only the Backoffice
+  auditors could read access events (`OP-SUP-009`); `OP-PRV-015` was not built.
+- **Why I stopped seeing something (`HU-STUDIO-084`)** had no operation
+  (`NEW-AUTH-DENIAL-REASON`). A coach who stopped attending someone got the same `404` as
+  for someone who never existed, which §5.7, `T-PERSON-3` and `ADR-023` all ask for. The
+  story asks the opposite: that he be told why, and that «I was removed» and «she left» read
+  differently.
+
+One leak contradicted criterion 4 of `HU-STUDIO-084`: a coach's correction proposals
+(`OP-EXE-020`) said `session_hidden` when she hid the session from his organization.
+
+### Decision
+
+The owner decided four things on 8 November 2026:
+
+1. **The reason is given when the card is opened.** A coach who no longer attends the
+   person gets the reason instead of the `404`: she left the organization
+   (`relationship_ended`), his attendance ended while the link went on (`assignment_ended`),
+   or his cover ran out (`substitution_ended`). Only for thirty days and only to whoever
+   attended her; anyone else gets today's `404`. It never says who ended the link or why.
+   What she withdrew is told on the live card.
+2. **The Space access log is part of this work** (`OP-PRV-015`,
+   `GET /space/v1/access-events`).
+3. **Unlogged sessions are measured over the last closed week** (`ADR-032`). On a Monday
+   the coach reads «Ana: 2 of 4 sessions of last week not logged».
+4. **One code pull request**, and one documentation pull request.
+
+The design choices that follow from them, as built:
+
+1. **The card is an index, not a copy of her data (`OP-REL-019`).**
+   `GET /studio/v1/organizations/{organizationId}/clients/{personId}`,
+   `relationships.read_client_card(person, organization, subject)`.
+   - **Who opens it:** the holder, or a cover she accepted whose `ends_on` has not passed,
+     with an active assignment in effect; the predicate of
+     `relationships.actor_is_assigned`, holder first. No capability is checked: an owner or
+     an administrator who does not attend her gets the `404`.
+   - **What it says:** `kind: attending`, her `display_name`, the relationship (`id`,
+     `started_at`), the attendance (`role` holder or substitute, and `ends_on` for a
+     cover), `sections` and `withdrawn`.
+   - **`sections`:** each category she shares now, in the order of `ScopeCode`, with the
+     version she accepted, the level and `granted_at`. The API adds `reads`, the operations
+     that read the category (`CARD_READS` in `apps/api/src/domains/relationships/handlers/client-card.ts`).
+     `nutrition_media` appears only while `nutrition_intake` is active too: a photo shows
+     nothing on its own.
+   - **`withdrawn`:** each category she revoked and has not shared again, with the latest
+     `revoked_at` as `withdrawn_at`. A category withdrawn and shared again is a section.
+   - **Never shown:** a category she never shared, or refused, appears nowhere, not as empty
+     and not as locked (criterion 2). The card carries no counts, so it never says whether
+     there is anything behind a category (`HU-STUDIO-084` criterion 3).
+   - **No access event.** Opening the card reads no fitness data, like
+     `relationships.read_relationship_state` (`OP-REL-011`) and the authorized scopes
+     (`OP-PRV-023`). Each section is read through its existing audited operation, which
+     records its own access (criterion 3).
+2. **The former card.** When the caller does not attend her,
+   `relationships.former_attendance(membership, organization, subject)` decides whether to
+   answer `{kind: former, person_id, reason, lost_at}`.
+   - **Whose attendance counts:** only the assignments of the caller's **current**
+     membership with that person in that organization, `active` or `ended`. A holder counts
+     from `valid_from` to `valid_to`. A cover counts only once she accepted it, from the
+     later of `valid_from` and `accepted_by_person_at` to the earlier of `valid_to` and the
+     start of the day after `ends_on`, so a cover that ran out by its date has ended though
+     nothing was written. A cover proposed, refused or never answered was never attendance.
+   - **Which one decides:** the last attendance that took effect and has ended: the latest
+     end, holder first on a tie.
+   - **The reason:** `relationship_ended` at the relationship's `ended_at` when the link is
+     terminated and that attendance was still in effect when it ended; otherwise
+     `assignment_ended` for a holder or `substitution_ended` for a cover, at the end of that
+     attendance.
+   - **Thirty days:** it answers only while `lost_at` is less than thirty days old.
+     Everyone else, and the same coach afterwards, gets the same `P0002 client not found`
+     as for somebody who does not exist.
+   - **Nothing of hers:** no name, no relationship, no grants. `person_id` is the id he
+     sent. The answer depends only on facts up to `lost_at`, so if she later comes back to
+     the organization with another coach, the answer does not change.
+3. **One row he no longer sees, through a contract scope.** Reading how the link ended
+   needs the relationship row, which the row policy hides from a coach who no longer
+   attends her. The policy `service_relationships_select_former_attendance`
+   (`for select to allfit_owner using (id::text = (select
+   access_control.contract_scope('former_attendance')))`) admits exactly that row while the
+   contract scope `former_attendance` is open. Only `relationships.former_attendance` opens
+   it, for one relationship, reads `status` and `ended_at`, and closes it. `allfit_api`
+   cannot execute that function or `relationships.client_card_grants`.
+4. **A hidden session leaves no trace in Studio (`HU-STUDIO-084` criterion 4).**
+   `execution.proposal_for_proposer`, the projection behind `OP-EXE-020` in Studio, now
+   says `session_unavailable` for both `session_hidden` and `session_annulled`. The stored
+   `cancel_reason` does not change, and Space (`execution.proposal_for_person`) still shows
+   her the real reason. The contract gives Studio's `ProposedCorrection.cancel_reason` its
+   own enum, `ProposedCorrectionCancelReason` (`target_changed`, `session_unavailable`,
+   `relationship_terminated`); Space keeps `CorrectionCancelReason`.
+5. **Search narrows the directory and never widens it (`OP-REL-010`, `HU-STUDIO-082`).**
+   - **`q`:** 2 to 80 characters once surrounding and repeated spaces are removed. It
+     matches names only, without accents (`relationships.fold_name`, an explicit
+     `translate`, because `unaccent` is not installed) or case, with `%` and `_` matched as
+     characters.
+   - **Invitations:** with `q`, no invitation appears, because an unanswered invitation has
+     no name, only a masked contact. `q` with `status=invited` is refused with `422` rather
+     than answered with an empty page that would mislead.
+   - **Who is found** is still the row policy's decision: a coach finds only the people
+     assigned to him (criterion 2). An owner who asks for `terminated` searches the former
+     clients the directory already lists.
+   - **No match** is an empty `data` with `has_more: false` (criterion 4). A search writes
+     no access event: a match carries identity and the state of the link, never fitness
+     data (criterion 3).
+   - **The cursor** (version 3) is bound to the status filter and to a short digest of `q`,
+     so it never resumes another search. A version 2 cursor still resumes an unsearched
+     page.
+   - **The deploy gap:** the seven-argument `relationships.list_organization_clients`
+     stays, as a `security invoker` wrapper over the new eight-argument function. The API
+     calls it when there is no `q`, so the directory keeps working while the API is ahead of
+     the migration. allfitone#205 (`20261119090000_the_directory_keeps_one_signature.sql`) removed it on
+     9 November 2026, once that API was live.
+6. **Today is built from what the caller's roles resolve (`OP-REL-020`, `HU-STUDIO-081`).**
+   `GET /studio/v1/organizations/{organizationId}/today`,
+   `relationships.read_studio_today(person, organization)`. A notice the caller cannot act
+   on is absent, not empty (criterion 4).
+
+   | Notice | Capability | What it counts |
+   | --- | --- | --- |
+   | `client_invitations` | `invite_clients` | Client invitations awaiting an answer, or lapsed in the last seven days; only the caller's own without `view_directory`; masked contact |
+   | `unassigned_relationships` | `assign_professionals` | Live relationships with no holder in effect; a cover does not count |
+   | `termination_requests` | `terminate_relationships` | Pending requests |
+   | `team_invitations` | `invite` | Team invitations awaiting an answer, or lapsed in the last seven days, with the proposed role |
+   | `team` | `manage_memberships` | Members with a role in force, by role |
+   | `new_relationships` | `view_directory` | Live relationships begun in the last seven days |
+   | `training` | `observe_training` | See below |
+
+   - **Each notice** counts everything it covers, lists at most five, and carries a link to
+     the operation that resolves it (`TODAY_LINKS` in `client-card.ts`; criterion 5).
+     `empty` is true when no notice other than `team`, which is a state, has a count
+     (criterion 6). Failed charges join when `E-STUDIO-13` exists.
+   - **With the V1 roles:** an owner or administrator gets every notice but `training`; a
+     coach gets his own client invitations and `training`; staff get client and team
+     invitations and new relationships, never training (criterion 4).
+   - **`training`** looks at each client the caller attends who shares
+     `relationship_training` with this relationship: her last closed week, Monday to Sunday
+     in the timezone of each planned session (`ADR-032`), with the sessions planned and not
+     logged, cancelled and paused ones excluded and an annulled one counted as not logged;
+     and what she finished inside the relationship in the last 48 hours, never an
+     autonomous session. She is listed when something is unlogged or recent, the most
+     unlogged first.
+   - **Recorded per client evaluated.** Each client evaluated leaves one access event,
+     whether she is listed or not, because not being listed tells him something too:
+     resource `relationships.studio_today`, purpose `studio_attention_today`, `live`,
+     `allowed`, under her `relationship_training` grant. A client without an active
+     `relationship_training` grant is neither evaluated nor recorded, so a refused or
+     revoked category never surfaces here (criterion 7).
+   - **Refusals:** a caller with none of the seven capabilities gets `42501` (`403`); the
+     training part needs a request id (`22023` otherwise), which the API always sends.
+7. **She sees who read her data (`OP-PRV-015`, `HU-STUDIO-083` criterion 3).**
+   `GET /space/v1/access-events`, `privacy.list_my_access_events(person, scope_code, limit,
+   before_occurred_at, before_id)`.
+   - **Who read:** the real human actor by name and the organization they read for, from
+     the reader's membership or else from the relationship. `actor.kind` is `allfit_team`
+     for `break_glass` and `support_metadata` reads, and `professional` otherwise. A
+     coach's read says whether he was her holder or a cover at that moment.
+   - **What is listed:** allowed and denied reads alike, for twenty-four months, newest
+     first, ties broken by id, optionally one `scope_code`. Her own reads are not listed.
+   - **The page:** keyset on `(occurred_at, id)` descending; the cursor keeps the instant
+     to the microsecond and is bound to `scope_code`. `private, no-store`, and reading the
+     log is not itself recorded.
+   - **How it is served:** a closed `security definer` function. There is no view and no
+     table privilege for `allfit_api`, which keeps `privacy.access_events` unreadable by
+     the runtime role, like every other projection. It reuses
+     `idx_access_events_target_occurred` (subject, `occurred_at desc`, id); building a new
+     index on the partitioned table now would block the audit writes every read needs.
+
+### Deviations
+
+- **`ADR-023` item 2 («no lista ni busca antiguos clientes»).** The former card answers a
+  lookup by an id the coach already holds; it lists and searches nobody and reads no frozen
+  data. The directory's `terminated` group already listed former clients to whoever reads
+  the whole directory; `q` only narrows it.
+- **`V1_OPERATIONS_MATRIX.md` §5.7 (the same answer for «does not exist» and «not
+  allowed»).** Kept for everyone except a coach who attended her through his current
+  membership, within thirty days of losing her.
+- **`T-PERSON-3` (a coach without an effective assignment gets no client row).** The former
+  card returns no personal data: the id he sent, a reason code and an instant. No row of
+  `identity.people` reaches him.
+- **`V1_DATA_DICTIONARY.md` §7.9 and `T-ACCESS-10` (`privacy.v_my_access_events` and a self
+  `SELECT` policy).** Neither exists. The closed function replaces both, and `allfit_api`
+  has no privilege on the table.
+- **`OP-PRV-015` «cacheable para presentación».** It answers `private, no-store`.
+
+### Known limits
+
+- **A coach who returns under a different membership** gets no reason: only the caller's
+  current membership is looked at.
+- **Name folding covers Latin accents only** (`ÁÀÂÄÃ`, `ÉÈÊË`, `ÍÌÎÏ`, `ÓÒÔÖÕ`, `ÚÙÛÜ`,
+  `Ñ`, `Ç` and their lower case).
+- **The seven-argument directory wrapper** is gone: allfitone#205 removed it on
+  9 November 2026, once no deployed API called it.
+- **Every opening of today** adds one line per evaluated client to that client's access
+  log. A coach who opens it often fills his clients' logs.
+- **`training` counts the planned sessions that exist.** `ADR-032` plants the week of a
+  program without an end when she reads it, so a week she never opened may hold no planned
+  session, and then nothing in it counts as unlogged.
+- **No screen calls any of this yet:** the Studio screens are front work (STUDIO-146..149),
+  and so is the Space screen for the access log.
+
+### Invariants
+
+1. The card and the former card write no access event, and every section is read through an
+   operation that records its own.
+2. A category she never shared or refused appears in no card, and no card carries a count.
+3. A former card carries no name, no relationship and no grant, and depends only on facts up
+   to `lost_at`.
+4. Only `relationships.former_attendance` opens `former_attendance`, for one relationship,
+   and closes it before returning.
+5. Studio never tells a hidden session from an annulled one; what is stored, and what she
+   sees, is unchanged.
+6. A search never widens the directory the caller already reads, and never returns an
+   invitation.
+7. Today writes exactly one access event per client whose training it evaluates, and none
+   for a client without an active `relationship_training` grant.
+8. A person reads only her own access log, and `allfit_api` cannot select from
+   `privacy.access_events`.
+
+### Alternatives considered
+
+- **Record only the clients today lists.** Rejected: not being listed says that she logged
+  everything, which is a read of her training.
+- **Serve the access log through the view and self policy of the data dictionary.**
+  Rejected: it would give `allfit_api` `SELECT` on the audit table, which the build keeps
+  unreadable by the runtime role; only closed functions read it.
+- **Fold names with `unaccent`.** Not installed; an explicit `translate`, as
+  `execution.fold_text` already does, needs no extension.
+- **Add an index for the access log.** Rejected for now: building it on the partitioned
+  table would block the audit writes; the existing subject index serves the read.
+
+### Mandatory test scenarios
+
+| Scenario | Tests |
+| --- | --- |
+| The live card: sections, order, version, level, `nutrition_media` only with intake, withdrawn, refused nowhere, no event | `T-REL-CARD-01` (19), `T-REL-CARD-API-01`, `-03` |
+| Owner, admin, staff and another coach get the same not-found; a non-member is refused | `T-REL-CARD-01`, `T-REL-CARD-02`, `T-REL-CARD-API-04` |
+| Each reason, its instant, the last attendance deciding, covers by date and by acceptance, thirty days, her return changing nothing, no name | `T-REL-CARD-02` (22), `T-REL-CARD-API-02` |
+| The `former_attendance` policy reads only for `allfit_owner`, and the scope closes | `T-REL-CARD-02` |
+| Studio says `session_unavailable`; she still reads the real reason | `T-EXE-PROPOSAL-CANCEL-LIST-03/04`, `T-EXE-PROPOSAL-API-09` |
+| Search: accents, case, spaces, `%` and `_`, no invitations, keyset, a coach's narrowing, the limits, no event, one signature (allfitone#205) | `T-REL-DIRECTORY-03` (19), the search tests of `relationships/handlers/studio.test.ts`, `directory.test.ts` |
+| Today per role, counts and five items, `empty`, refusals | `T-REL-TODAY-01` (24), `T-REL-TODAY-API-01..03` |
+| Training: the closed week in her timezone, cancelled, paused and annulled sessions, 48 hours, one event per client evaluated, none without the grant, the request id | `T-REL-TODAY-02` (17), `card-and-today.test.ts` |
+| The access log: who, organization, holder or cover, denied, break-glass and support, horizon, her own excluded, scope, keyset, no table privilege | `T-PRV-ACCESSLOG-01` (21), `T-PRV-API-SPACE-19..22`, `my-access-log.test.ts` |
+
+---
+
+## ADR-048 — A gym charges its clients through its own Mercado Pago account
+
+**Status:** accepted for V1; not built.<br>
+**Date:** 9 November 2026<br>
+**Reopens:** `E-STUDIO-13`, `E-SP-13` and `E-SP-14`, deferred on 1 October 2026 together with
+`ADR-043`, and adds `HU-STUDIO-088`.<br>
+**Departs from:** the context of `ADR-043`, where the gyms do not charge their clients through
+Allfit One; `HU-STUDIO-073`, which named Wompi; and `OP-PAY-001`, `OP-PAY-010`, `OP-PAY-012`,
+`OP-PAY-015` and `OP-PAY-016` of `V1_OPERATIONS_MATRIX.md`, in the points listed under
+*Earlier decisions this changes*.
+
+### Context
+
+`ADR-043` deferred the three epics in which a gym charges its clients. In the first version the
+gym paid Allfit One outside the platform, and everybody it invited got Pro. The database half was
+built anyway in October:
+
+- **`20261012130000_a_person_subscribes_to_a_gym.sql`:** gateway connections (`mercado_pago` or
+  `wompi`) whose credentials exist only as a reference (`credential_secret_ref`); plans whose
+  published versions never change, billed monthly or yearly; and subscriptions that freeze the
+  version she accepted.
+- **`20261012140000_a_subscription_has_a_life.sql`:** suspension through
+  `planning.service_access_blocks`, which never touches grants, relationships, assignments or
+  sessions, and a table check that lets only a person or a professional end a subscription.
+
+Nothing talks to a gateway. `POST /space/v1/subscriptions` returns the price and the provider but
+no checkout, no route receives a gateway's notifications, and no code connects an account.
+
+Two outside rules bound the design:
+
+- **The App Store.** Guideline 3.1.1 requires in-app purchase for digital content. 3.1.3(e) lets
+  an app sell services consumed outside the app by other means, and 3.1.3(d) does the same for
+  real-time one-to-one services. A program followed remotely is neither. In Colombia an app may
+  not link to a purchase made outside it (`ADR-043`).
+- **The gateways.** A Mercado Pago Colombia subscription (`preapproval`) charges every period by
+  itself. Wompi Colombia's documentation describes no subscription engine: the merchant fires each
+  charge with a saved payment source (*Fuentes de pago*), which would make Allfit One the one
+  charging.
+
+### Decision
+
+The owner decided eight things on 9 November 2026:
+
+1. **All of it enters V1 now:** connecting the gym's account, plans and versions, and real
+   charging. The three epics get back the priorities they had before the deferral.
+2. **A plan is in-person or remote.**
+   - An in-person plan is paid inside Space, with Mercado Pago (3.1.3(e)).
+   - A remote plan is paid outside Space, through a link that Studio produces and the gym sends by
+     WhatsApp or email. Space shows a remote plan once it is active, with no pay button and no
+     link.
+3. **No commission.** The charge goes whole to the gym. Allfit One earns from the platform plan the
+   gym pays it, which this decision does not change.
+4. **Pro does not change (`ADR-043`).** A client has Pro while she has an active relationship with
+   an active gym, whatever the state of her subscription with that gym.
+5. **Mercado Pago only, at launch.** Wompi comes later, once it can charge each period by itself.
+6. **The owner connects the account with OAuth.** The tokens live in AWS Secrets Manager, and the
+   database keeps only their reference.
+7. **A subscription is suspended only once Mercado Pago stops retrying a charge**, never at the
+   first rejection. The gym can still suspend by hand (`HU-STUDIO-079`).
+8. **A cancellation made in Mercado Pago:**
+   - if Mercado Pago says she cancelled it, the subscription ends as her decision, as with
+     `OP-PAY-015`;
+   - if Mercado Pago cancelled it for lack of payment, or nobody can tell who did, the
+     subscription is only suspended and the gym decides.
+
+The design choices that follow from them:
+
+1. **The connection (`OP-PAY-001`, `HU-STUDIO-073`).**
+   - Allfit One is registered as an application in Mercado Pago, with PKCE required. The owner
+     taps «Conectar con Mercado Pago», authorizes on Mercado Pago and comes back to Studio.
+   - The `state` of the flow is single use, short lived, and bound to the owner's membership and
+     organization. The callback exchanges the code, stores the access and refresh tokens in one
+     Secrets Manager secret per connection, and writes `gateway_connections` with
+     `external_account_ref` (the gym's Mercado Pago user id) and the secret's reference.
+   - The access token lasts 180 days. A worker renews it well before then, with the
+     `offline_access` scope, and stores the new refresh token every time. The documentation
+     contradicts itself on whether a refresh token can be reused, so it is treated as single use.
+   - When the gym revokes access (`mp-connect`, `application.deauthorized`) or a renewal fails, the
+     connection becomes `revoked`, no subscription can start, and Studio asks the owner to connect
+     again.
+   - Only `mercado_pago` can be connected, and `wompi` leaves `ck_gateway_connections_provider`.
+2. **A version says how the plan is delivered.** Each published version carries `in_person` or
+   `remote` next to its price and period, so what she bought never changes under her.
+   `HU-STUDIO-075` gains that field.
+3. **She subscribes on Mercado Pago's own page.**
+   - Allfit One creates, with the gym's token, a subscription without an associated plan: a
+     `preapproval` with status `pending`. It carries the amount, `COP`, a frequency of 1 month or
+     12 months, her email as `payer_email`, the Allfit One subscription id as
+     `external_reference`, and a return address.
+   - Mercado Pago answers with `init_point`, its own page, where she enters her card. Neither her
+     card nor a card token ever reaches Allfit One.
+   - Mercado Pago rejects the payment when the email she types differs from `payer_email`, so the
+     page that sends her there tells her which email to use.
+4. **A subscription is `pending` until Mercado Pago authorizes it.** `payments.subscription_status`
+   gains `pending`. A pending subscription counts as live, so asking again returns the same page
+   instead of a second subscription. She can cancel it and the gym can end it, like any other;
+   nothing ends it on its own.
+5. **An in-person plan, from Space (`OP-PAY-011`, `OP-PAY-012`).** Space lists only the published
+   in-person versions of gyms she has a relationship with, and opens `init_point` in the system
+   browser. A remote plan is never listed, priced or linked in Space.
+6. **A remote plan, through a link (`HU-STUDIO-088`).**
+   - An owner or an administrator picks a client and a published remote version. Studio gives a
+     link to an Allfit One web page, not to Mercado Pago. The link works only for that person.
+   - She opens it, signs in with her Allfit One account, sees the gym, the plan and the price, and
+     taps pay. Only then does Allfit One create the subscription, through the same `OP-PAY-012`
+     with her as the actor, and send her to `init_point`.
+7. **Notifications are hints (`OP-PAY-016`).**
+   - Mercado Pago signs each notification (`x-signature`, HMAC-SHA256 with the application's
+     secret). The worker verifies it, reads the agreement or the charge back from Mercado Pago with
+     that gym's token, and records what it read, never what the notification body says.
+   - The topics are `subscription_preapproval`, `subscription_authorized_payment`, `payment` and
+     `mp-connect`.
+   - A daily reconciliation reads every live subscription back, for the notifications that never
+     arrived.
+   - Each charge is recorded once (`UNIQUE (organization_id, external_payment_ref)`).
+8. **When she is suspended.**
+   - Mercado Pago retries a rejected charge up to four times within ten days. When the charge ends
+     `processed` with a rejected payment, the worker suspends the subscription with the cause
+     `charge_failed`.
+   - A later approved charge closes only that block. A block the gym opened by hand stays open.
+   - For an in-person plan, Space opens `init_point` again so she can change her card. For a
+     remote plan, the gym sends the link again.
+9. **When the agreement is cancelled.**
+   - **Mercado Pago cancels an agreement by itself** after three rejected charges, and its
+     `canceled` state is final.
+   - **From Space or Studio (`OP-PAY-015`, `OP-PAY-010`):** Allfit One cancels the agreement in
+     Mercado Pago first, and ends the subscription only once Mercado Pago confirms it, so she is
+     never charged for a subscription Allfit One shows as ended. The `canceled` notification that
+     follows changes nothing.
+   - **From anywhere else, Mercado Pago does not say who cancelled.** The agreement has a status
+     and no reason, and a gym can also cancel from its own Mercado Pago panel. Until the sandbox
+     shows a signal that tells her cancellation apart, every such cancellation takes the second
+     branch of decision 8. The subscription is suspended with the cause `gateway_cancelled`; the
+     gym reads «cancelada en Mercado Pago», not «debe»; and she can end it herself from Space.
+   - **A cancelled agreement cannot be reactivated**, by hand or otherwise, because nothing would
+     charge it. Coming back is a new subscription, as it already is.
+10. **No commission, by construction.** No `marketplace_fee` or application fee is ever sent.
+    Mercado Pago does not offer its split payments for subscriptions anyway.
+
+### What the sandbox must confirm before the charge is built
+
+The research of 9 November 2026 read the Mercado Pago Colombia developer documentation, and these
+points are not written there. Each one is a test in the sandbox, with a test seller connected by
+OAuth:
+
+1. A subscription created with the gym's token charges into the gym's account (`collector_id`).
+2. The application's webhook receives the notifications of agreements created with a connected
+   gym's token. If it does not, reconciliation becomes the only source and runs more often.
+3. A yearly plan is `frequency: 12` with `frequency_type: months`.
+4. Whether `payer_email` is required, since the two versions of the reference disagree, and whether
+   the page fills it in.
+5. Whether an `init_point` expires.
+6. What happens to running agreements when a gym revokes access.
+7. Whether any signal tells her cancellation apart from the gym's or Mercado Pago's. If one exists,
+   the first branch of decision 8 applies without a new decision.
+8. Which authorization host Colombia uses, and whether the `ts` of `x-signature` is in seconds or
+   milliseconds.
+
+The plans (`HU-STUDIO-074..077`) depend on none of them.
+
+### Earlier decisions this changes
+
+- **`ADR-043`, its context only.** Its decisions stand: Pro is still bought through the stores and
+  resolved on read, and the gyms still pay Allfit One through Backoffice.
+- **The deferral notes** of `E-STUDIO-13`, `E-SP-13` and `E-SP-14`, and the `después` priorities
+  they set.
+- **`HU-STUDIO-073`:** «Mercado Pago o Wompi» becomes Mercado Pago.
+- **`OP-PAY-001`:** connected through OAuth, not by posting credentials; the closed catalogue holds
+  only `mercado_pago`.
+- **`OP-PAY-010` and `OP-PAY-015`:** the agreement is cancelled in Mercado Pago before the
+  subscription ends.
+- **`OP-PAY-012`:** the subscription starts `pending`, and the answer carries Mercado Pago's page.
+- **`OP-PAY-016`:** a failed charge suspends only once Mercado Pago stops retrying it.
+
+### Known limits
+
+- Colombia and `COP` only.
+- She pays with the email of her Allfit One account, or Mercado Pago rejects the payment.
+- A gym that connects a different Mercado Pago account cannot read the agreements of the old one,
+  so its clients subscribe again.
+- No proration, change of plan, trial or coupon.
+- Whether Apple accepts in-person plans paid with Mercado Pago inside Space is known only at
+  Space's review.
+
+### Invariants
+
+- No card number, card token or reusable payment method ever reaches Allfit One.
+- No Mercado Pago token is stored in the database or written to a log; the database holds only the
+  secret's reference.
+- Every charge goes to the gym's own account, and Allfit One takes nothing from it.
+- Nothing automatic ends a subscription (`ck_plan_subscriptions_ended_actor`).
+- A notification changes nothing until its signature checks out and Mercado Pago, read back with
+  that gym's token, confirms it.
+- The same charge or notification, delivered twice, is recorded once.
+- A remote plan is never listed, priced or linked inside Space.
+- A subscription ended from Space or Studio ends only after Mercado Pago confirms the cancellation.
+- Paying grants no data and cancelling revokes none. The coach and staff never see payment state.
+- No state of a gym subscription enters the resolution of Pro.
+
+### Alternatives considered
+
+- **Wompi at launch.** Rejected: with no subscription engine, Allfit One would fire each monthly
+  charge with her saved payment source, which makes it the one charging.
+- **The gym pastes its access token into Studio.** Rejected: every gym would handle API keys, and
+  one mistake exposes its account.
+- **Suspend at the first rejection.** Rejected: a card declined for a day would pause her coach
+  until a retry succeeds.
+- **Every cancellation made in Mercado Pago only suspends.** Rejected by the owner, because it
+  shows her as owing when she cancelled. It stays as the fallback until a signal exists.
+- **Subscriptions with an associated plan.** Rejected: Mercado Pago creates them only with a
+  `card_token_id`, which means tokenizing her card on a page Allfit One serves.
+- **The remote link straight to Mercado Pago's page.** Rejected: the gym would create a
+  subscription she never asked for, her account email would reach the gym's Mercado Pago account
+  before she did anything, and nobody knows whether the page expires.
+
+### Consequences
+
+- The build goes in this order. Each step has its own pull request, which updates the operations
+  matrix, the data dictionary and the contracts:
+  1. plans and versions with how they are delivered (`HU-STUDIO-074..077`);
+  2. the connection (`HU-STUDIO-073`), once Allfit One is registered as an application in Mercado
+     Pago;
+  3. subscribing from Space, the notification worker and the reconciliation (`HU-SP-079..083`,
+     `OP-PAY-016`), once the sandbox checks pass;
+  4. the remote link and its web page (`HU-STUDIO-088`).
+- Allfit One needs its own Mercado Pago account and application, with the webhook and its secret.
+
+### Mandatory test scenarios
+
+1. Only the owner connects, and the database ends with a reference, never a token.
+2. A callback with an unknown, used or expired `state`, or one from another membership, connects
+   nothing.
+3. A revocation from Mercado Pago leaves the connection `revoked`, and no subscription can start.
+4. How a version is delivered cannot change after it is published.
+5. Space never lists a remote version.
+6. Subscribing creates one `pending` subscription, and asking again returns the same page.
+7. A notification with a bad signature, or one whose resource Mercado Pago does not confirm,
+   changes nothing.
+8. The same charge delivered twice is recorded once.
+9. A rejected charge still being retried leaves her active. One that exhausted its retries suspends
+   her, and a later approved charge reactivates her.
+10. An approved charge does not close a block the gym opened by hand.
+11. A cancellation from Space reaches Mercado Pago before anything ends, and a failure there ends
+    nothing.
+12. A cancellation made in Mercado Pago suspends with `gateway_cancelled` and ends nothing.
+13. A subscription whose agreement was cancelled cannot be reactivated.
+14. The remote link creates nothing until she signs in and taps pay, and refuses anybody else.
+15. A coach or a staff member never reads payment state.
+16. A suspended subscription does not touch her Pro.
+
+---
+
+## ADR-049 — Allfit One sends its email through Amazon SES
+
+**Status:** accepted for V1. The SES account is set up, out of the sandbox and managed by
+Terraform; the code is built (allfitone#210) and production has not switched yet.<br>
+**Date:** 9 November 2026<br>
+**Replaces:** Resend as the email provider. No earlier ADR chose it; it is named in
+`V1_DEGRADATION_AND_RECOVERY_MATRIX.md` and the deployment steps of `OPERATIONS.md`.
+
+### Context
+
+Every email Allfit One sends leaves the same way:
+
+1. A database function writes the change and, in the same transaction, an event in
+   `system.outbox_events`.
+2. The worker (`apps/worker`), a long-lived container on ECS, claims the events through the
+   PostgreSQL queue (`@allfitone/queue`: up to 5 attempts, a 120 s visibility timeout), prepares
+   each delivery with a database function, renders the email with `@allfitone/notifications`,
+   sends it, and only then acknowledges the event.
+3. Sending is one port, `EmailSender` (`packages/notifications/src/index.ts`). Its only adapter,
+   `createResendEmailSender`, posts to the Resend API with `RESEND_API_KEY` and the sender
+   `RESEND_FROM_EMAIL`. Each message carries an idempotency key built from the event id
+   (`staff-invitation/<event id>`), so Resend drops a second send of the same event. Network
+   failures, `429` and `5xx` are retried; any other rejection is not.
+4. `STAFF_INVITATION_DELIVERY_ENABLED` turns every email off, not only the staff invitations.
+   `CLIENT_INVITATION_DELIVERY_ENABLED` and `ACCOUNT_RECOVERY_DELIVERY_ENABLED` narrow it further.
+
+Ten templates exist: the team, ownership and client invitations, reassignments, substitutions,
+correction proposals, resignations and the three subscription notices. All are in Spanish only.
+
+Everything else runs in AWS `us-east-1`: ECS, the database, Secrets Manager and the static sites
+behind CloudFront. Resend is the one outside provider on the email path, with its own account, key
+and bill.
+
+The Allfit Space waitlist (`TECH-290`) changes the volume. Each person who joins gets a
+confirmation email, and the referral levels (5, 15, 30 and 100) make people invite others in
+bursts. One launch day can send thousands of emails, where today a gym sends a few invitations a
+week.
+
+Two facts of the infrastructure bound the design:
+
+- The DNS for `allfit.one` lives in GoDaddy, outside Terraform. `infra/modules/certificate`
+  already outputs its validation records for someone to add there by hand.
+- The ECS services have an execution role, which reads the secret, and no task role: no container
+  calls AWS with an identity of its own today.
+
+Production, checked read-only on 9 November 2026:
+
+- **No email leaves it.** `STAFF_INVITATION_DELIVERY_ENABLED`, `CLIENT_INVITATION_DELIVERY_ENABLED`
+  and `ACCOUNT_RECOVERY_DELIVERY_ENABLED` are `false`, and so are both `*_ISSUANCE_ENABLED`
+  switches. Nothing depends on Resend yet.
+- `RESEND_API_KEY` is set, and the sender is `Allfit One <invites@allfit.one>`. Resend has
+  `allfit.one` verified since 11 August 2026, in its `sa-east-1` region, and its log lists no
+  email.
+- **Resend itself sends through Amazon SES** in São Paulo: the MX of `send.allfit.one`, its
+  bounce domain, is `feedback-smtp.sa-east-1.amazonses.com`. DKIM is `resend._domainkey`.
+- `allfit.one` already publishes DMARC (`p=quarantine`, relaxed DKIM and SPF alignment). Its
+  inboxes are in Google Workspace.
+- The SES account in `us-east-1` is in the sandbox (200 emails a day, one a second) and has no
+  identity.
+
+### Decision
+
+The owner decided on 9 November 2026 that Allfit One sends its email through Amazon SES, in
+`us-east-1`, instead of Resend.
+
+The design choices that follow from it:
+
+1. **A second adapter behind the same port.** `packages/notifications` gains
+   `createSesEmailSender`, which calls the SES v2 `SendEmail` operation through
+   `@aws-sdk/client-sesv2`. The templates, the outbox, the queue, the processors and their tests do
+   not change.
+2. **No key.** The worker gets an ECS task role allowed `ses:SendEmail` only on the `allfit.one`
+   identity and its configuration set, and only from the configured sender (`ses:FromAddress`).
+   No other container gets a role. `RESEND_FROM_EMAIL` becomes `EMAIL_FROM`. Its value moved on
+   9 November 2026 from `invites@allfit.one`, which has no mailbox, to `hello@allfit.one`, which
+   has one in Google Workspace, so a reply reaches someone instead of bouncing.
+   `EMAIL_FROM` and `EMAIL_PROVIDER` are plain environment of the worker, set in Terraform beside
+   the role, so the address the role allows and the address the worker sends from are written in
+   one place (`infra/production/main.tf`). `RESEND_API_KEY` leaves the secret with Resend.
+3. **The domain is verified with Easy DKIM**, with a custom MAIL FROM subdomain so that SPF aligns
+   with `allfit.one`. The subdomain is not `send`, which Resend holds while both exist; `mail` is
+   free. The DMARC record `allfit.one` already publishes stays, and DKIM on `allfit.one` aligns
+   with it. Terraform manages the identity (`infra/modules/email`) and outputs the records, which
+   are kept by hand in GoDaddy, like the certificate's. The identity was created in the SES console
+   and imported, so its DKIM tokens never change, and Terraform refuses to destroy it.
+4. **Production access is requested first.** A new SES account sends only to verified addresses,
+   200 a day. AWS granted it on 9 November 2026, minutes after the request (case
+   `179426258400350`): 50,000 emails a day, 14 a second, in `us-east-1`.
+5. **Bounces and complaints.** The account-level suppression list is on for both, so SES itself
+   stops sending to an address that bounced or complained. Every email goes through the
+   configuration set `allfitone`, the identity's default, which suppresses the same two reasons
+   and keeps reputation metrics.
+   - **Two CloudWatch alarms watch the account's reputation**, which SES publishes on its own:
+     the bounce rate above 2% and the complaint rate above 0.05%, against the 5% and 0.1% at which
+     AWS reviews the account. Terraform refuses a threshold at or above AWS's. They notify the SNS
+     topic `allfitone-email-alerts`, subscribed by the people who receive the budget alerts; each
+     address confirms its subscription once, or the alarm reaches nobody.
+   - **No event destination in V1.** No code consumes the sending events, and one message can be
+     followed without them: Virtual Deliverability Manager keeps each message's send, delivery,
+     bounce and complaint events, found by its SES message id (`GetMessageInsights`).
+   - **Open and click tracking is off.** It would route every link, the private tokens of the
+     waitlist included, through an Amazon tracking domain, and the privacy policy does not cover
+     measuring who opens an email. What the launch needs (who joined, who confirmed, who came
+     through whose link) is already exact in the database.
+   - **Automatic address validation is off.** It drops an email to an address it doubts without
+     telling anybody, so a person could join and never get the confirmation. It can be turned on
+     once the bounce rate is known.
+   - **Virtual Deliverability Manager is on**, with its optimized shared delivery. It is included
+     in the Essentials plan and shows what was delivered, bounced or complained about.
+6. **A rare duplicate is accepted.** SES has no idempotency key. The worker keeps sending before it
+   acknowledges: if it stops between the two, the event comes back after the visibility timeout
+   and the email goes out twice. Marking the event as sent before sending would instead risk a
+   confirmation that never arrives, which is worse. The SES message id goes into the worker's
+   operational log.
+7. **Errors keep the existing codes of `NotificationDeliveryError`.** Network failures, `5xx`,
+   `TooManyRequestsException` and `LimitExceededException` are retried. `MessageRejected`,
+   `MailFromDomainNotVerifiedException`, `AccountSuspendedException` and `SendingPausedException`
+   are not.
+8. **The switch.** While both adapters exist, `EMAIL_PROVIDER` (`resend` or `ses`) chooses one, and
+   an unknown value stops the worker at start. Unset keeps Resend, so a task definition from before
+   the switch still starts after the code deploys. Production moves to `ses` once access is granted and
+   an email sent from production reaches a team address; since production sends nothing today, it
+   can move before any delivery switch is turned on. The Resend adapter, its secret, its account
+   and its DNS records (`resend._domainkey` and the MX and SPF of `send.allfit.one`) go once SES
+   has carried production email for two weeks without incident.
+9. **The waitlist emails are built on SES**, and they are the first templates in two languages
+   (`TECH-293`).
+
+### Earlier decisions this changes
+
+- `V1_DEGRADATION_AND_RECOVERY_MATRIX.md` named Resend as the email provider, `OPERATIONS.md`
+  listed it among the deployment steps of the staff invitations, and HU-BO-003 said the Backoffice
+  password reset does not use it. All three now name SES. `CURRENT_ARCHITECTURE_DIAGRAM.md` also
+  names Resend, but it describes Factory Fitness, the earlier system, as historical evidence, so it
+  stays as it is.
+- The privacy policy on www.allfit.one names no email provider, only cloud providers that may host
+  data outside Colombia, so it does not change. SES runs in the same region as the database: no new
+  country receives the addresses.
+
+### Known limits
+
+- An email can arrive twice (decision 6).
+- Virtual Deliverability Manager shows delivery, bounces and complaints, but without open and
+  click tracking it cannot say whether anybody read an email. To follow one email, support takes
+  its SES message id from the worker's log and looks it up in Virtual Deliverability Manager.
+- **Outlook does not trust the domain yet.** On 9 November 2026 a test message reached the Gmail
+  inbox and went to Junk at Outlook.com, with SPF, DKIM, DMARC and Microsoft's composite
+  authentication passing in both (spam score SCL 5, not classed as bulk). That is the verdict for a
+  domain with no sending history at Microsoft, on a message that read like a test. No setting
+  changes it: reputation there grows with real emails that people asked for, such as the waitlist
+  confirmation.
+- Allfit One sends from SES's shared addresses, so its reputation depends on its own bounce and
+  complaint rates. A dedicated address is not needed at this volume.
+
+### Invariants
+
+1. No email leaves Allfit One except through `EmailSender`.
+2. No container holds a long-lived AWS key to send email; the worker sends with its task role.
+3. Only the worker can send, and only from the configured sender on `allfit.one`.
+4. An address on the suppression list receives nothing.
+
+### Alternatives considered
+
+- **Keep Resend.** Its idempotency key prevents duplicates, and its dashboard is better. Rejected
+  by the owner to keep the infrastructure with one provider, with no key to store, at a price that
+  fits the waitlist's volume. Resend already sends through SES, so dropping it removes a layer
+  rather than changing the service that delivers the email.
+- **The SES SMTP interface.** Rejected: it needs SMTP credentials, which is the kind of key this
+  decision removes.
+- **A consumer for the bounce and complaint events.** Deferred: the suppression list already stops
+  sending to those addresses, and nothing in V1 shows a bounce in a product.
+
+### Consequences
+
+- **Done on 9 November 2026, first by hand in the SES console** (`TECH-318`):
+  - the Essentials plan;
+  - the `allfit.one` identity with Easy DKIM (RSA 2048) and the MAIL FROM `mail.allfit.one`, which
+    falls back to the default when its MX fails;
+  - its five records in GoDaddy, the identity verified, and `admin@allfit.one` verified for tests;
+  - the account suppression list for bounces and complaints, and decision 5's settings;
+  - the configuration set `my-first-configuration-set`, which the setup made the identity's
+    default;
+  - production access.
+
+- **Then in Terraform, the same day** (`TECH-318`, allfitone#208, applied to production):
+  - the identity and its MAIL FROM, imported unchanged;
+  - the configuration set `allfitone`, now the default of both identities;
+    `my-first-configuration-set` was deleted once nothing used it;
+  - the account suppression list and Virtual Deliverability Manager settings;
+  - the two alarms and their SNS topic;
+  - an inbox check from SES: Gmail delivered to the inbox with SPF, DKIM and DMARC passing.
+- **The code** (`TECH-319`, allfitone#210): the SES adapter behind `EmailSender`, at its own entry
+  point so the API never loads the AWS SDK; `EMAIL_PROVIDER` and `EMAIL_FROM`; the worker's task
+  role; and a lint rule that keeps `@aws-sdk/client-sesv2` inside `packages/notifications`. The
+  compiled adapter sent the real team-invitation template through SES before the pull request
+  opened. Every mandatory scenario below has a test.
+- **What remains:**
+  1. switching production (`TECH-319`): apply the worker's role and task definition, deploy, send
+     one email from production through the role, and repeat the Outlook inbox check with a real
+     template, to an address that has not marked the sender as safe;
+  2. the waitlist emails (`TECH-292`, `TECH-293`, `TECH-294`), on SES;
+  3. after two weeks of production email on SES, removing Resend (decision 8).
+
+### Mandatory test scenarios
+
+1. The SES adapter sends the subject, both bodies and the sender it was given, to the one recipient
+   it was given.
+2. Throttling, `5xx` and network failures are retried; a rejection is not.
+3. `EMAIL_PROVIDER=resend` sends through Resend and `ses` through SES; any other value stops the
+   worker at start.
+4. The task role cannot send from another address or another domain (Terraform test, like those in
+   `infra/modules/*/tests`).
+5. An event delivered again after its email was sent is sent and acknowledged again, without an
+   error.
+
+---
+
+## ADR-050 — The Allfit Space waitlist is a domain of its own, and forgets who never joins
+
+**Status:** proposed for V1. The owner decided its four open questions on 10 November 2026; the
+rest is the design that follows from them, reviewed with this change. Nothing is built yet: the
+stories are `E-SP-17` (`HU-SP-115` to `HU-SP-123`) and `E-BO-10` (`HU-BO-035` to `HU-BO-037`).<br>
+**Date:** 10 November 2026<br>
+**Changed:** 13 November 2026, decision 3: a shared connection is a signal for review, not a
+discard, after the launch strategy v1.2 tied rewards to active referrals. 14 November 2026,
+decision 10: the founders hear of each confirmation in a private Slack channel (`TECH-338`).
+14 November 2026, decision 5: the numbers are assigned and handed over as built in
+allfitone#261 (`TECH-298`); the deadline is not built. 15 November 2026, decision 11: the
+team reviews the list in the Backoffice, marks fraud and takes a mark back, as built in
+allfitone#263 (`TECH-302`).<br>
+**Source:** the internal document «Estrategia de lanzamiento de Allfit Space» v1.0 (7 November
+2026), the epic `TECH-290` and its tickets.
+
+### Context
+
+Allfit Space launches with a waitlist. People join before the app is in the stores, and three
+things come with joining:
+
+- **Founding Members.** The first 100 people who join and confirm their email get a number, #001
+  to #100, in confirmation order. They keep it by creating their Space account within 7 days of
+  the launch. The number is a permanent badge on their profile, and it unlocks Allfit Pro at
+  COP 19.900 a month for as long as the subscription stays active.
+- **Referrals.** Each person gets a code and a link. A referral counts toward the counter once it
+  confirms its email, and toward the rewards once it creates a Space account after the launch.
+  The levels are 5, 15, 30 and 100 referrals, rewarded with Allfit Pro months delivered as
+  App Store or Google Play offer codes.
+- **Ambassadors**, after the launch (`TECH-305`). Their rules are not closed, and this ADR does
+  not decide them.
+
+Some of it already exists:
+
+- The form, the `/{lang}/waitlist` page and the share panel are in `apps/space-web`, on the
+  branch `feat/space-waitlist`. The owner moved the waitlist from www.allfit.one to
+  space.allfit.one on 8 November 2026. The browser posts to `POST /api/waitlist` on space-web,
+  which answers `501` until it can forward the request to the API from the server (`TECH-295`,
+  `TECH-296`).
+- The confirmation and link emails, in Spanish and English, are in `packages/notifications`
+  (allfitone#214). The worker sends them through Amazon SES (`ADR-049`).
+
+Four facts bound the design:
+
+1. **A sign-up is not a person.** It has no WorkOS account and no `PERSON`. It arrives through a
+   public endpoint, as actor `A0`. The ten domains hold persons, organizations and what they do.
+   None of them owns people who have not joined yet.
+2. **Law 1581 of 2012.** Processing needs the person's prior authorization, and the data may be
+   kept only while it serves the purpose it was collected for. The privacy policy published on
+   www.allfit.one says today that waitlist data is kept "until you ask us to delete it", with no
+   end.
+3. **Shared addresses.** Colombian mobile carriers put many subscribers behind one public
+   address. Five friends on mobile data can share an IP without being the same person.
+4. **Mail scanners open links.** Outlook's Safe Links and similar filters fetch every link in an
+   email before the person sees it. A link that changes something when opened is triggered by a
+   machine.
+
+### Decision
+
+The owner decided on 10 November 2026 where the waitlist lives, how long it keeps data, how
+repeated sign-ups are discarded, and that the referral levels add up. The design choices that
+follow from it:
+
+1. **A new domain, `waitlist`.** It gets its own PostgreSQL schema, `waitlist`, and its own module,
+   `domains/waitlist`, added to `DOMAINS` in `eslint.config.js`. Nothing in `identity` changes
+   shape to hold people without an account. The whole schema can be swept by its retention rule
+   without touching a person's data.
+
+2. **What a sign-up keeps, and nothing else.**
+
+   | Kept | Why |
+   | --- | --- |
+   | The name and the email, as typed | To greet the person and write to them |
+   | The canonical email: lower case, without a `+tag`, and without dots for `gmail.com` and `googlemail.com` | One sign-up per mailbox: `ana.ruiz+x@gmail.com` and `anaruiz@gmail.com` are the same |
+   | The language, `es` or `en` | Every email goes in the language the person joined in |
+   | The authorization: when, and which version of the privacy policy | Law 1581 asks for proof of the authorization |
+   | The person's own code: 4 to 16 letters and digits, without `0`, `O`, `1`, `I` or `L` | It is read aloud and typed by hand |
+   | Who invited them, as a reference to the inviter's sign-up | The counter and the rewards |
+   | The channel: `utm_source`, `utm_medium` and `utm_campaign` from the link, each up to 64 characters | The strategy measures demand by channel |
+   | When the person joined and when they confirmed | Confirmation order makes the Founding Members |
+   | The Founding Member number, when it was assigned, and its deadline | `HU-SP-118` |
+   | The person it was linked to, when, and the platform of the device | The badge, the rewards, and which store's code to send |
+   | Whether it counts for its inviter, and the reason when it does not | `self_referral`, `same_device` or `fraud` |
+   | A keyed hash (HMAC-SHA-256) of the connection and of the device | Discarding repeats from one device, and showing the team sign-ups that share a connection, without keeping either |
+   | Hashes of the confirmation token and of the private-link tokens | Never the tokens themselves |
+
+   - **The connection** is the visitor's IPv4 address, or the `/64` prefix of an IPv6 address.
+   - **The device** is a random identifier that space-web keeps in a first-party cookie. It is not
+     a fingerprint of the browser.
+   - **The key** of both hashes lives in Secrets Manager, so a copy of the database alone cannot
+     turn a hash back into an address.
+   - **Never kept:** the raw address, the user agent, the city, a phone number, or anything about
+     health or training.
+   - **A sign-up with a disposable address is refused** before anything is written. The disposable
+     domains are a list kept in the repository as data, not a dependency, and updated by hand.
+
+3. **What does not count.** A discarded sign-up is still a sign-up: it has its own code, its own
+   counter, and it can become a Founding Member. It only stops counting for the person who invited
+   it. The owner chose the device as the signal, and not a rule per IP, because one public
+   address holds a whole gym's wifi or a carrier's customers.
+   - **Self-referral:** the device is the inviter's own device.
+   - **Same device:** the device already counts for the same inviter.
+   - **Fraud:** the team marks it in the Backoffice, with a reason (`HU-BO-035`), and can
+     take the mark back (decision 11).
+
+   **A shared connection is a signal, not a discard** (changed on 13 November 2026). Every
+   sign-up keeps its connection hash, and the Backoffice shows an inviter whose sign-ups share
+   one, for the team to review (`TECH-302`). Until then, a fourth sign-up for one inviter from
+   one connection within 24 hours did not count. The launch strategy v1.2 pays rewards only
+   for active referrals: an account after launch and 3 workouts or meals in the first 14 days
+   (`TECH-301`). Addresses typed by somebody else never get there, so the ceiling no longer
+   protected the rewards, and it discarded friends who joined together. Migration
+   `20261128090000_a_shared_connection_counts_for_the_inviter.sql` drops it and counts again
+   the sign-ups it had discarded, unless their device already counts for the same inviter.
+
+   The counter is the number of the inviter's sign-ups that are confirmed and count. It is computed
+   when it is read, never stored, so a fraud mark lowers it at once.
+
+4. **The public endpoints trust space-web, and only space-web.**
+   - The waitlist's public operations live under `/space/v1/waitlist/*` as actor `A0`, like the
+     headless sign-in under `/space/v1/auth/*`.
+   - space-web calls them from its server with a secret kept in Secrets Manager, and passes the
+     visitor's address and device in headers. The API reads those headers only when the secret
+     matches; without it, the route does not exist. A visitor who calls the API directly cannot
+     choose the address that the attempt limits count.
+   - Joining, asking for the email again, reading «mi link» and leaving each have their own limit
+     per connection.
+   - **No `GET` changes anything.** Confirming the email and leaving the list are a `POST` from a
+     page with a button. A scanner that opens the link only loads the page.
+   - **Private links.** Every email carries a new private-link token. Each one opens «mi link» and
+     lets the person leave the list, and each lasts as long as the sign-up does.
+   - **The confirmation token** is single use. It expires after 7 days, and sending a new one voids
+     the previous one.
+   - An unknown, used or voided token gets the same answer as one that never existed.
+
+5. **Founding Members.**
+   - **Assignment.** A number is assigned when a sign-up confirms and fewer than 100 numbers are
+     held. The assignment is serialized, so two confirmations at the same instant cannot take the
+     same number.
+   - **Before the deadline**, a number moves to the earliest-confirmed sign-up that has none and is
+     not marked as fraud. It moves when its holder leaves the list or is marked as fraud, or when
+     the holder's deadline passes without an account. The next holder gets the same number, with a
+     deadline 7 days from that moment.
+   - **The deadline** is the launch plus 7 days for numbers held at the launch. A reminder goes out
+     2 days before it.
+   - **Linking.** When the holder links an account, the number is copied to the person through
+     `identity`'s own function, reached through its `index.ts`. From then on the number belongs to
+     the person: it survives the waitlist's retention rule, it never moves again, and it is deleted
+     with the account.
+   - **As built on 14 November 2026** (`TECH-298`, allfitone#261). Assignment and one of the
+     three hand-overs exist; the rest waits.
+     - **One rule.** `waitlist.fill_founding_numbers` gives each free number, lowest first, to
+       the earliest-confirmed sign-up that holds none and is not marked as fraud. Confirming
+       (`OP-WL-002`) calls it, and so does deleting a sign-up that held a number. While the
+       hundred fill up, the sign-up it finds is the one confirming.
+     - **Serialized.** The fill runs under one advisory lock, and a unique index on the number
+       is the invariant. Without the lock, two confirmations at once fail on the index instead
+       of taking the same number.
+     - **The event names nobody.** Each number given enqueues
+       `waitlist.founding_number_assigned.v1`, whose payload is the number alone.
+     - **The email.** The worker writes «Eres Founding Member #037» through
+       `waitlist.prepare_founding_email`, which only the worker actor may call. A person who
+       left, or whose number is no longer theirs, is answered `skipped` and gets no email. The
+       same email goes to whoever inherits a number, so it never says they were among the
+       first.
+     - **Where the person reads it.** Confirming and the private link (`OP-WL-004`) answer the
+       number. The founders' notice of decision 10 carries it too.
+     - **Fraud.** Marking a sign-up as fraud (`OP-WL-012`) clears its number and fills
+       again. Taking the mark back (`OP-WL-016`) puts the sign-up back in line, for the
+       next number free (decision 11).
+     - **Not built.** The deadline, its reminder and the hand-over when it passes wait for the
+       launch date (`HU-BO-037`). Linking (`OP-WL-006`) is `TECH-299`.
+
+6. **The referral levels add up.** The strategy's table said they do not, and the conditions
+   drafted on `feat/space-waitlist` repeat it. The owner chose on 10 November 2026 that they do.
+   - Each level reached is delivered once: 5 referrals give 1 month, 15 give 2, 30 give 3, and
+     100 give 12 months and Allfit One merch. Thirty referrals are 1 + 2 + 3 = 6 months.
+   - A referral counts for the rewards when it is confirmed, it counts, and it is linked to a
+     person whose Space account was created after the launch.
+   - Rewards go to the inviter's person, so the inviter needs an account of their own. A level
+     reached before that waits for the link.
+   - A reward is an offer code for the platform recorded at linking, taken from the pool loaded in
+     the Backoffice (`HU-BO-036`) and sent by email.
+   - When the pool is empty, the reward stays pending, and it is delivered when codes are loaded.
+   - A delivered reward is never taken back. Merch is handled by the team by hand.
+
+7. **Linking a sign-up to a Space account** happens in the worker, on the event that `identity`
+   writes when a person's Space account is created with a verified email. The worker calls the
+   waitlist's linking function with the person and that email. Neither domain writes the other's
+   tables.
+   - The function finds the sign-up with the same canonical email. If that sign-up never
+     confirmed, the verified email proves it, and it is confirmed at that moment.
+   - It records the person and the platform.
+   - It copies the Founding Member number, as in decision 5.
+   - From that moment, the sign-up counts with an account for its inviter's rewards.
+
+8. **The waitlist closes at the launch and forgets who never joins.**
+   - **The launch** is a date the team marks once in the Backoffice (`HU-BO-037`). From then on
+     space.allfit.one leads to the stores and accepts no more sign-ups.
+   - **90 days after the launch**, a worker job deletes every sign-up that never linked to a
+     person, with its tokens, hashes and reward marks. It also strips the linked sign-ups down to
+     what the badge and the rewards need: the person, the code, the inviter, the number and the
+     deliveries. Their name, email, hashes and tokens go.
+   - **What survives the 90 days** is a table of daily totals with no personal data: sign-ups,
+     confirmations and links, by channel and language.
+   - **A person can leave at any time** (`HU-SP-123`). Leaving deletes the sign-up at once, and the
+     people they invited stop counting for anyone.
+   - **Deleting a Space account** deletes the linked sign-up and its reward deliveries with the
+     rest of the person's data.
+
+9. **Every waitlist email goes through the outbox and the worker**, on SES, in the sign-up's
+   language. Each one carries the private «Ver mis referidos» link and a link to leave the list.
+   The launch email goes out in batches within the account's sending rate (`TECH-321`).
+
+10. **The founders hear of each confirmation** (`TECH-338`, allfitone#258). The owner decided it
+    on 14 November 2026.
+    - **When.** Confirming the email (`OP-WL-002`) writes `waitlist.signup_confirmed.v1` to the
+      outbox in the transaction that confirms, once per sign-up. Filling in the form writes
+      nothing: an address nobody opens is not news.
+    - **The event names nobody.** Its payload is the number of confirmed sign-ups, and nothing
+      else.
+    - **The notice names the person.** It carries the name and the email, the channel
+      (`utm_source`), the language, whether somebody invited them, and the confirmed total. The
+      worker reads them when it writes the notice, through `waitlist.prepare_team_notice`, which
+      only the worker actor may call. A person who left in between is answered `skipped` and is
+      never announced.
+    - **Where.** A private Slack channel that holds the five founders and nobody else. The
+      worker posts through a port, `TeamChannel` in `packages/notifications`, whose adapter is
+      a Slack incoming webhook.
+    - **The webhook address is a credential.** It lives in Secrets Manager as
+      `SLACK_FOUNDERS_WEBHOOK_URL`, named by its channel and not by this notice, and it is
+      never logged.
+    - **The channel never stops the emails.** Without the address, or with one that is not a
+      Slack webhook, the events wait unclaimed and every email is delivered as usual.
+    - **Delivery is at-least-once.** A repeated notice costs less than a missed one.
+
+11. **The team reviews the list, marks fraud and takes a mark back** (`TECH-302`,
+    allfitone#263, `HU-BO-035`). The owner decided the points below on 15 November 2026.
+    - **Who.** A person of the team with `manage_platform_commercial`, in a Backoffice
+      session at AAL2. Reading is `OP-WL-011`, marking is `OP-WL-012`, and taking a mark
+      back is `OP-WL-016`. PostgreSQL checks the duty in every function.
+    - **What they read.** Each sign-up with its name, email, code and channel, when it
+      joined and confirmed, its number, who invited it, how many of its referrals count,
+      and why it does not count when it was discarded. The hashes never leave the
+      database: the answer says only how many of a sign-up's referrals share a connection
+      (decision 3).
+    - **Reads are not logged.** The list holds a name, an email and a channel, and
+      reviewing it is the team's ordinary work. Marking and taking a mark back are
+      recorded.
+    - **A mark.** The sign-up stops counting for whoever invited it and gives up its
+      number, which goes to the next sign-up in line (decision 5). It needs a one-line
+      reason.
+    - **A mark can be taken back**, with a reason, because a mark can be a mistake. The
+      sign-up returns to what it was before the mark, with two limits. The number it gave
+      up is somebody else's by then, so it waits in line for the next one free. And if
+      its device came to count for the same inviter in the meantime, it returns as a
+      repeated device instead of counting twice. It can be marked again.
+    - **The record.** `waitlist.signup_events` is append-only. Each row keeps who acted,
+      the duty assignment they acted under, when, the reason, the number released and
+      what the sign-up was before the mark. **It is deleted with its sign-up**, when the
+      person leaves and in the 90-day sweep, because the reason is free text about a
+      person.
+    - **«Has an account» is always no for now.** The screen shows the column and the
+      answer carries `has_space_account`, which is false until linking (`OP-WL-006`,
+      `TECH-299`) sets it. The total of sign-ups with an account that `HU-BO-035` asks
+      for is not built: it waits for the same operation.
+
+### Earlier decisions this changes
+
+- **The privacy policy on www.allfit.one** keeps waitlist data "until you ask us to delete it".
+  It must say 90 days after the launch for those who never create an account, and name the
+  device cookie. The lines that name the inviter's code, the connection and the device are already
+  drafted on `feat/waitlist-on-space`.
+- **The conditions on space.allfit.one/waitlist**, drafted on `feat/space-waitlist`, say that
+  levels do not add up and that the highest one is the reward. Both languages change before the
+  list opens.
+- **`TECH-301`** said, in criterion 3, that levels do not add up, pending a decision. They do.
+- **`TECH-294`** said that a private token "invalid or expired" answers like one that does not
+  exist. Private links do not expire on a clock: they end with the sign-up (decision 4).
+
+### Known limits
+
+- **The 90 days need a launch date.** Until the team marks one, sign-ups are kept, and leaving the
+  list is the only way out. If the launch slips past a year from the first sign-up, this ADR is
+  revisited.
+- **One person with two devices and two mailboxes is two sign-ups.** Neither counts for rewards
+  unless both become active, and the Backoffice can mark them. Nothing stronger is proportionate
+  to a reward of a few months of Pro.
+- **Several offer codes per person are not verified.** It is not known whether App Store and
+  Google Play let one subscriber redeem a second offer code while the first free period runs.
+  `TECH-304` checks it before the first reward goes out. If they do not, the next code waits until
+  the current period ends.
+- **Cost.** Adding the levels up raises the months given away. In the strategy's base scenario
+  they go from 234 to 306 months.
+- The response to a repeated email reveals that the email is on the list, and only that. This was
+  decided on 9 November 2026 (`HU-SP-115`, criterion 5).
+- **A posted notice outlives the sign-up.** Decision 10 puts a name and an email in Slack.
+  Leaving the list and the 90-day sweep delete them from the database, not from the channel:
+  invariant 8 speaks of the database alone. How long the channel keeps messages is set in
+  Slack, and on 14 November 2026 it was not yet decided. Until it is, a notice is removed by
+  hand.
+- **A marked sign-up that leaves comes back clean.** The record of a mark is deleted with
+  the sign-up (decision 11), so the list does not remember a mark across leaving and joining
+  again. The device rules of decision 3 still apply to the new sign-up.
+
+### Invariants
+
+1. No sign-up exists without its authorization, its date and the version of the policy.
+2. One sign-up per canonical email.
+3. Neither the visitor's address nor the device identifier is ever stored in clear.
+4. A sign-up's code, link and counter are read only with one of its own private tokens, or from
+   the Backoffice with `manage_platform_commercial`.
+5. At most 100 Founding Member numbers are held at a time, and each number has at most one
+   holder.
+6. A discarded sign-up never counts for its inviter.
+7. Each level is delivered at most once per person, and each offer code at most once.
+8. 90 days after the launch, no sign-up without a person keeps a name, an email, a token or a
+   hash.
+9. No `GET` on the waitlist changes state.
+10. The record of a review is never rewritten, and it does not outlive its sign-up.
+
+### Alternatives considered
+
+- **Inside `identity`.** Rejected by the owner: it mixes people without an account with the
+  accounts, and the retention sweep would run inside the domain that holds every person.
+- **A strict rule per IP.** Rejected by the owner: a carrier's shared address would discard real
+  referrals.
+- **The device alone.** Rejected by the owner on 10 November 2026: several browsers or a private
+  window inflate it freely. Since rewards need active referrals, a second browser earns nothing,
+  so the device now decides alone what is discarded, and a shared connection is reviewed.
+- **A ceiling per connection.** Built first, as three counting sign-ups per inviter and
+  connection in 24 hours, and dropped on 13 November 2026: it discarded real friends on a
+  shared address and protected nothing once rewards needed active referrals.
+- **Keep the data until the person asks.** Rejected by the owner: it has no end, and Law 1581 asks
+  that data be kept only while it serves its purpose.
+- **Rewards by the highest level only.** It was the strategy's table, and the owner chose to add
+  the levels up instead.
+- **A hosted waitlist service.** Rejected: it would put names, emails and referral graphs in a
+  third party's hands, outside the authorization and the deletion this ADR controls, for a feature
+  that is a few tables and a public endpoint.
+
+### Consequences
+
+- **Documentation, in this change:**
+  - the stories `E-SP-17` and `E-BO-10`;
+  - the `waitlist` row in `DOMAIN_OWNERSHIP_MAP.md`;
+  - section 7.12 and the `WL` prefix in `V1_OPERATIONS_MATRIX.md`;
+  - the new rows in `V1_HU_DATABASE_TRACEABILITY_MATRIX.md`.
+
+  The full sheet of each operation, the data dictionary, the RLS matrix and the OpenAPI contract
+  are written by the pull request that builds each operation.
+- **Code:**
+  - the `waitlist` schema and its functions, and the module with its place in `DOMAINS`;
+  - the routes under `/space/v1/waitlist/*` and `/backoffice/v1/waitlist/*`;
+  - the worker jobs: the Founding Member deadlines, the rewards, the launch email and the 90-day
+    sweep;
+  - the emails not yet templated: «Eres Founding Member #037», the deadline reminder, a reward,
+    the launch email and the confirmation of leaving the list;
+  - the shared secret between space-web and the API, and the device cookie in space-web.
+- **Jira:** `HU-SP-123` (leaving the list) has no ticket yet. `HU-BO-037` is criterion 1 of
+  `TECH-321`.
+
+### Mandatory test scenarios
+
+1. Joining without authorization writes nothing.
+2. Two sign-ups whose emails differ only by case, a `+tag` or Gmail's dots: the second gets the
+   repeated-email answer, without code or counter, and the private link goes out by email.
+3. A disposable domain is refused, and nothing is written.
+4. A sign-up from the inviter's own device, or from a device that already counts for the inviter,
+   is kept and does not count.
+5. Any number of sign-ups for the same inviter from one connection count, and each keeps its
+   connection hash for review.
+6. The API ignores the address and device headers without space-web's secret.
+7. Opening a confirmation or leave link with `GET` changes nothing; the `POST` does, once.
+8. Two confirmations at the same instant never take the same Founding Member number, and the 101st
+   confirmation gets none.
+9. A holder who misses the deadline, leaves or is marked as fraud before linking hands the same
+   number to the earliest-confirmed sign-up without one; after linking, the number never moves.
+10. Reaching 5, 15 and 30 delivers three rewards once each, even when the job runs twice; an empty
+    pool leaves the reward pending and delivers it when codes arrive.
+11. The 90-day sweep deletes unlinked sign-ups and strips linked ones, and the daily totals stay.
+12. An unknown, used or voided token answers exactly like one that never existed.
+13. A confirmation enqueues one team-notice event whose payload names nobody, and a link used
+    twice enqueues nothing more. A person who leaves before the worker runs is never announced.
+    A missing or malformed channel address leaves the events unclaimed and delays no email.
+14. The Founding Member email is never written for a sign-up that left, or that no longer holds
+    the number its event names.
+15. Without `manage_platform_commercial` at AAL2 nobody reads the list, marks a sign-up or
+    takes a mark back, and what the team reads holds no hash.
+16. A mark lowers the inviter's counter and hands the number on. Taking it back returns the
+    sign-up to what it was and gives it the next number free, never the one it gave up. The
+    record of both is deleted with the sign-up.
+
+Scenario 8 is covered by `T-WL-INT-04` and `T-WL-INT-05`. Of scenario 9, leaving is covered by
+`T-WL-INT-04` and fraud by `T-WL-INT-06`; the deadline and linking wait for the code that
+builds them. Scenarios 15 and 16 are covered by `T-WL-RLS-02`, `T-WL-RLS-03`, `T-WL-INT-06`
+and `T-WL-INT-08`.

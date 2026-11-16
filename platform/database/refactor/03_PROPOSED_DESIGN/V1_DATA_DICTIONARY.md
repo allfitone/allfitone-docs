@@ -38,14 +38,14 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 
 | Schema | Tablas | Sección |
 | --- | --- | --- |
-| `identity` | 21 | §4 |
-| `organizations` | 11 | §5 |
+| `identity` | 22 | §4 |
+| `organizations` | 12 | §5 |
 | `relationships` | 6 | §6 |
-| `privacy` | 17 | §7 |
+| `privacy` | 18 | §7 |
 | `catalog` | 18 | §8 |
 | `planning` | 22 | §9 |
 | `execution` | 14 | §10 |
-| `nutrition` | 8 | §10A |
+| `nutrition` | 9 | §10A |
 | `system` | 4 | §11 |
 | `payments` | 12 | §13 |
 | `support` | 5 | §12 |
@@ -100,11 +100,16 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Uniques y checks:** `UNIQUE (surface, provider_session_id)`; `UNIQUE token_hash`; hash de 32 bytes; versión positiva; ciphertext versionado. Toda fila Backoffice exige AAL2, `password_totp`, evidencia, actividad y vencimiento absoluto; Studio conserva AAL1 compatible. La cookie sin hash y los tokens en texto plano están prohibidos.
 - **Actores:** ninguna lectura o escritura directa desde runtime. Solo funciones `SECURITY DEFINER` estrechas concedidas a `allfit_api` crean, cargan, rotan por compare-and-swap y revocan.
 - **RLS:** habilitada y forzada, sin policies de acceso directo para runtime.
-- **Consultas:** por `token_hash + surface`; reemplazo por `surface + provider_session_id`; sesiones activas por cuenta. La carga Backoffice revalida persona, rol, AAL2, quince minutos de inactividad y ocho horas absolutas, y actualiza actividad dentro de la función cerrada.
+- **Consultas:** por `token_hash + surface`; reemplazo por `surface + provider_session_id`; sesiones activas por cuenta. Loading a Backoffice session revalidates person, role and AAL2, 60 idle minutes and 12 absolute hours, and updates activity inside the closed function. Since ADR-046 (migration `20261114090000_an_admin_holds_every_duty.sql`) both limits come from `access_control.backoffice_idle_limit()` and `access_control.backoffice_session_lifetime()`, used by the load, the creation, the worker's sweep `identity.expire_backoffice_sessions` and the duty and role checks.
 - **Índices:** uniques anteriores; `(access_account_id)`; parcial `(access_account_id, surface) WHERE revoked_at IS NULL`.
 - **Panel de negocio (`HU-BO-004`):** es la única actividad que la plataforma registra. `support.read_business_panel` cuenta personas distintas con una sesión `studio` activa en los últimos siete días, y la etiqueta como profesionales trabajando en Studio. Space no persiste sesiones aquí, así que «personas activas esta semana» no tiene señal y se devuelve `not_modelled` con razón `space_sessions_not_recorded`, nunca cero ni el conteo de Studio en su lugar.
 - **Retención:** hasta revocación y purga operativa; cambiar `SESSION_ENCRYPTION_KEY` invalida los ciphertext existentes y fuerza reautenticación.
 - **Eventos:** ninguno de dominio.
+- **As implemented, `authenticated_at` (STUDIO-54..56, migration `20261116090000_a_case_opens_the_frozen_history.sql`).** A new nullable column, `authenticated_at timestamptz`: when the person last actively authenticated, from the verified token's `auth_time` (`VerifiedToken.authenticatedAt`). It is authentication, never authorization, and the only claim besides `sub` and `sid` that the platform keeps (monorepo `AGENTS.md` §6).
+  - **Check:** `ck_access_sessions_authenticated` admits it only on the `studio` surface; Backoffice rows keep it null. Studio stays AAL1: a recent sign-in is not a second factor.
+  - **Writes:** `identity.create_access_session` gained a seventh parameter, `p_authenticated_at timestamptz default null`, and refuses an instant more than one minute in the future (`22023`). Replacing the session of the same `sid` overwrites it. `identity.rotate_access_session` does not touch it, so a refresh never advances it. A six-argument call, the API before this release, still works and stores null.
+  - **Reads:** `identity.recent_authentication_window()` returns ten minutes and is the only place the window is written. `identity.load_access_session` adds `recent_authentication_expires_at` (`authenticated_at` plus the window, null when it is null). `identity.require_recent_studio_authentication(session_id)` raises `AF401` unless that session is a live Studio session of the actor whose sign-in is within the window. Neither of these two helpers is executable by `allfit_api`; the historical access case functions call the second (`§7.8`).
+  - **Backfill:** none. Every session created before the migration has no instant, so its holder signs in again before opening or reading a case.
 
 ### 4.2.2 `identity.password_reset_receipts`
 
@@ -327,6 +332,27 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Retención:** permanente; una medida referenciada no se elimina.
 - **Eventos:** ninguno.
 
+### 4.7.3 `identity.body_photo_disposals`
+
+Built in migration `20261103030400_pro_measures_the_body.sql`; the sweep columns come with
+migration `20261122150000_the_worker_sweeps_photo_disposals.sql` (code branch
+`feat/backoffice-last-gaps`, merge and deploy pending).
+
+- **Purpose:** the queue of body photos to remove from the object store. A photo leaves the store only after the commit that disposes of it, so the row is written in that transaction and sealed once the store confirms.
+- **Domain / source of truth:** Identity. The object store holds the file.
+- **Classification:** `body`: the row names the object key of a person's body photo.
+- **Columns:** `id uuid` · `person_id uuid` · `media_ref text` · `requested_at timestamptz` (default `clock_timestamp()`) · `sealed_at timestamptz` (nullable) · `purge_attempts integer` (default `0`) · `next_attempt_at timestamptz` (nullable).
+- **FKs and deletion:** `person_id → identity.people(id) RESTRICT`.
+- **Uniques and checks:** `ck_body_photo_disposals_ref` (`media_ref` starts with `body/`); `ck_body_photo_disposals_purge_attempts` (`purge_attempts >= 0`).
+- **Actors:**
+  - **The person's deletion** inserts the row.
+  - **The API** removes the photo right after the commit and seals the row with `identity.seal_body_photo_disposal`.
+  - **The worker's `media_disposal` job** sweeps what that step missed. `identity.claim_body_photo_disposals(limit)` returns the rows that have waited five minutes, or whose `next_attempt_at` has passed; it counts an attempt and pushes `next_attempt_at` further each time, doubling from one minute up to a day. `identity.seal_swept_body_photo_disposal(id)` seals one. Both are worker-only (`42501`); a claim takes 1 to 500 rows (`22023`).
+- **RLS:** forced. `body_photo_disposals_all_self` for the person. `body_photo_disposals_select_worker_sweep` lets the worker read the queue. `body_photo_disposals_update_worker_sweep` lets it change only unsealed rows. `allfit_api` has no privilege on the table.
+- **Queries and indexes:** `idx_body_photo_disposals_pending (requested_at) WHERE sealed_at IS NULL`; `idx_body_photo_disposals_person (person_id)`. The claim locks with `for update skip locked`, so two sweeps never take the same row.
+- **Retention:** a sealed row stays as evidence that the file was removed.
+- **Events:** none. The claim hands over the row's identifier, the object key and the attempt count, never the person, so the worker never learns whose photo it removes.
+
 ### 4.8 `identity.health_context_claims`
 
 - **Propósito:** dolor, limitación o recuperación declarados; salud fitness minimizada.
@@ -415,11 +441,12 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** cola de trabajo de verificación: una solicitud por versión exacta de credencial. Cierra la brecha técnica de `HU-BO-021` que PRE_PHASE_5 §6 dejaba como `NEW-IDN-VERIFY-REQUEST`.
 - **Dominio / fuente de verdad:** Identidad.
 - **Clasificación:** `identity_pii` (enlaza a la persona y a su credencial).
-- **Columnas:** `id uuid` · `professional_credential_id uuid` · `requested_by_person_id uuid` · `kind text` (`initial`, `renewal`) · `status text` (`pending`, `resolved`, `cancelled`) · `supersedes_request_id uuid` (nullable) · `created_at timestamptz` · `resolved_at timestamptz` (nullable) · `cancelled_at timestamptz` (nullable).
+- **Columnas:** `id uuid` · `professional_credential_id uuid` · `requested_by_person_id uuid` · `kind text` (`initial`, `renewal`, and `name_change` once migration `20261122110000` is deployed) · `status text` (`pending`, `resolved`, `cancelled`) · `supersedes_request_id uuid` (nullable) · `created_at timestamptz` · `resolved_at timestamptz` (nullable) · `cancelled_at timestamptz` (nullable).
 - **Divergencia con PRE_PHASE_5 §6.2, deliberada:** el boceto incluía `verified`, `rejected`, `unverifiable`, `expired`, `appealed` e `in_review` entre los estados de la solicitud. Eso guardaría el resultado dos veces —aquí y en la verificación— y dos copias se desincronizan. **La solicitud no lleva resultado**: sólo `pending`, `resolved` o `cancelled`, y lo decidido vive únicamente en `professional_credential_verifications`. Tampoco se modelaron verificador asignado, `due_at` ni `in_review`: ningún criterio los exige y la concurrencia la resuelve el bloqueo de la fila al decidir.
 - **FKs y borrado:** credencial, solicitante y `supersedes_request_id` con `RESTRICT`. Clave portadora `UNIQUE (id, professional_credential_id)` para la verificación.
 - **Uniques y checks:** forma exacta de timestamps por estado; `UNIQUE (professional_credential_id) WHERE status = 'pending'` (una revisión vigente por versión, §6.3); sin auto-referencia. `identity.guard_credential_verification_request_transition` impide salir de un estado terminal o reescribir campos. **El borrado no se guarda**: el runtime no tiene DML sobre la tabla, y una solicitud decidida no puede borrarse porque su verificación la referencia.
 - **Actores:** los triggers de `professional_credentials` abren y cancelan; `A11/verify_professional_credentials` lee, decide y abre renovaciones mediante funciones cerradas.
+- **A new name reopens the review (code branch `feat/backoffice-last-gaps`, `HU-BO-021` c7).** Migration `20261122110000_a_new_name_reopens_a_verified_credential.sql` adds the trigger `trg_people_open_name_change_review` on `identity.people` (`identity.open_name_change_review_tg`). When her name changes, it opens a `name_change` request for each active credential whose latest verification is `verified` and in force, superseding the request that verified it. The verification stays in force until the reviewer decides. A lapsed verification is renewed, not reopened; a credential with a pending request gets no second one; a change that leaves the name as it was opens nothing.
 - **RLS:** sin DML de runtime; `force row level security` y política sólo para el dueño.
 - **Consultas:** `identity.list_credential_verification_requests` (cola pendiente; `viewer_can_decide` es pista para la pantalla, nunca autoridad) · `identity.list_due_credential_renewals` · `identity.open_credential_verification_renewal`. Las dos lecturas **escriben un `privacy.access_events` por titular devuelto** antes de devolverlo, porque muestran nombre, número de registro y dónde consultarlo.
 - **Renovación (criterio 4):** nadie corre en el instante en que una verificación vence, así que vencer no puede abrir una solicitud. La lista de renovaciones se calcula —credenciales activas cuya última verificación es `verified` y termina en menos de **30 días**— y un verificador abre la renovación, que es una solicitud nueva enlazada a la anterior y nunca extiende la verificación vieja. **Los 30 días son un número inventado**: ninguna fuente normativa fija esa ventana.
@@ -498,16 +525,18 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Propósito:** frontera estable de operación, autoría y permisos; conserva su `id` al crecer a equipo.
 - **Dominio / fuente de verdad:** Organizaciones.
 - **Clasificación:** `operational`; `legal_name` puede ser `identity_pii` y el JSON `responsible_party` contiene identidad/contacto restringido.
-- **Columnas:** `id uuid` · `type_code text` · `legal_name text` (nullable) · `display_name text` · `status organizations.organization_status` (`unclaimed`, `active`, `closed`, `cancelled`) · `responsible_party_schema_version smallint` (`1`) · `responsible_party jsonb` · `revision_number bigint` (`0`) · `claimed_at timestamptz` (nullable; default `clock_timestamp()`) · `cancelled_at timestamptz` (nullable) · `created_at timestamptz` · `updated_at timestamptz`.
+- **Columnas:** `id uuid` · `type_code text` · `legal_name text` (nullable) · `display_name text` · `status organizations.organization_status` (`unclaimed`, `active`, `suspended`, `closed`, `cancelled`) · `responsible_party_schema_version smallint` (`1`) · `responsible_party jsonb` · `revision_number bigint` (`0`) · `claimed_at timestamptz` (nullable; default `clock_timestamp()`) · `cancelled_at timestamptz` (nullable) · `suspended_at timestamptz` (nullable) · `guest_quota_seats integer` (nullable; `null` is no limit) · `guest_quota_agreement_reference text` (nullable) · `created_at timestamptz` · `updated_at timestamptz`.
 - **FKs y borrado:** `type_code → organization_types(code) RESTRICT`.
-- **Uniques y checks:** `ck_organizations_lifecycle_shape`: `unclaimed` sin `claimed_at` ni `cancelled_at`; `active` con `claimed_at` y sin `cancelled_at`; `cancelled` con `cancelled_at` y nunca `claimed_at`; `closed` sin `cancelled_at` (su forma queda abierta hasta que exista el flujo de cierre). `ck_organizations_responsible_party` exige `party_kind`, `purpose = 'studio_operations'` y un `party_name` no vacío, salvo en una organización `unclaimed` o `cancelled` de persona natural, que no lo lleva: Allfit nunca escribe el nombre de una persona, y se toma de su propia identidad cuando acepta (`HU-BO-014`). La versión anterior del check aceptaba cualquier organización sin `party_name`, porque una clave ausente evaluaba a null y un check en null pasa. `revision_number >= 0`. El cambio de `type_code` exige una transición activa en `organization_type_transitions`. El trigger `trg_organization_memberships_before_insert_claimed` sobre `organization_memberships` rechaza (`55000`) cualquier membresía de una organización `unclaimed` o `cancelled`: reclamar pasa la organización a `active` antes de insertar al dueño, en la misma transacción. Las organizaciones existentes antes de `20260913150100` recibieron `claimed_at = created_at`, porque hasta entonces solo su dueño podía crearlas.
+- **Uniques y checks:** `ck_organizations_lifecycle_shape`: `unclaimed` sin `claimed_at` ni `cancelled_at`; `active` con `claimed_at` y sin `cancelled_at`; `cancelled` con `cancelled_at` y nunca `claimed_at`; `closed` sin `cancelled_at`. Its owner closes it through `OP-ORG-012` since migration `20261103014500_close_organizations.sql`; there is no `closed_at` column, and the instant lives on `organization.closed.v1`. Since migration `20261018130000` (`HU-BO-016`), `suspended` has `claimed_at` and `suspended_at` and no `cancelled_at`, and every other state has no `suspended_at`. `ck_organizations_responsible_party` exige `party_kind`, `purpose = 'studio_operations'` y un `party_name` no vacío, salvo en una organización `unclaimed` o `cancelled` de persona natural, que no lo lleva: Allfit nunca escribe el nombre de una persona, y se toma de su propia identidad cuando acepta (`HU-BO-014`). La versión anterior del check aceptaba cualquier organización sin `party_name`, porque una clave ausente evaluaba a null y un check en null pasa. `revision_number >= 0`. El cambio de `type_code` exige una transición activa en `organization_type_transitions`. El trigger `trg_organization_memberships_before_insert_claimed` sobre `organization_memberships` rechaza (`55000`) cualquier membresía de una organización `unclaimed` o `cancelled`: reclamar pasa la organización a `active` antes de insertar al dueño, en la misma transacción. Las organizaciones existentes antes de `20260913150100` recibieron `claimed_at = created_at`, porque hasta entonces solo su dueño podía crearlas.
 - **Actores:** miembros leen una proyección cerrada; admin/owner llaman `organizations.update_organization` para modificar por autoservicio solo `display_name`, `legal_name` y `type_code`. `responsible_party`, su `purpose`/schema version, `id`, `status` y timestamps no son editables por `OP-ORG-002`. El equipo de Allfit (`allfit_admin` con `diagnose_support_metadata` o `manage_organization_lifecycle`, `HU-BO-012`, `NEW-SUP-ORG-SEARCH`) lee el directorio por `organizations.list_backoffice_organizations`: nombre visible, tipo, estado, `created_at`, `claimed_at`, `cancelled_at`, membresías activas y sedes activas. Nunca recibe `legal_name` ni `responsible_party`. `people_served` es null hasta que exista `relationships`: un cero afirmaría que la organización no atiende a nadie. La ficha de Backoffice (`HU-BO-013`, `NEW-SUP-ORG-DETAIL`) se lee por `organizations.read_backoffice_organization` con el mismo par de deberes: organización, dueño y equipo por identificador y rol, y sedes; nunca nombres, contactos ni `responsible_party`, y la dirección de la sede de una persona natural se reserva porque puede ser su casa. Cada miembro activo que devuelve queda en `privacy.access_events` (`support_metadata`) antes de responder; un exmiembro se cuenta y no se lista.
 - **RLS:** la función `organizations.read_organization` aplica `access_control.has_membership(id)` y devuelve columnas cerradas. `allfit_api` no recibe `SELECT` ni DML sobre la tabla base y escribe únicamente por funciones cerradas. El directorio de Backoffice exige el deber dentro de la función (`42501`) y no escribe `privacy.access_events`, porque no alcanza datos de ninguna persona.
 - **Consultas:** por `id`; por membresía del actor; directorio de Backoffice por `display_name` (búsqueda literal, desde 2 caracteres, sin tocar `legal_name`) y por estado, paginado por `(lower(display_name), id)`.
 - **Índices:** PK; `idx_organizations_directory (lower(display_name), id)`; `idx_organizations_status_created (status, created_at)`.
 - **Panel de negocio (`HU-BO-004`):** `support.read_business_panel` cuenta todas las organizaciones, las `unclaimed` y las que **operan**: `active` con al menos una membresía `active`. Una organización no es una persona, así que estos conteos no se someten al umbral mínimo.
+- **Guest quota (`HU-BO-034`, `OP-ORG-023`, as built):** `guest_quota_seats` is how many people the gym was sold, from 1 to 1,000,000 (`ck_organizations_guest_quota_seats`). It is `null` when the gym has no limit, which is every gym created before migration `20261015120000`. `guest_quota_agreement_reference` names the commercial agreement it was sold under, because Allfit bills the gym outside the platform: one trimmed line of 1 to 120 characters with no control characters (`ck_organizations_guest_quota_agreement_reference`, migration `20261108090000`). Only `organizations.set_organization_guest_quota` writes them, under `manage_platform_commercial`. `organizations.organization_guest_occupancy` counts live relationships and unanswered client invitations; `organizations.guest_quota_projection` returns the number, the agreement, the occupancy, the places left, whether the gym is over its quota, and the history. Reading occupancy needs the policy `service_relationships_select_guest_quota`, because `service_relationships` forces row security and without it the count would come back zero.
+- **Suspension (`HU-BO-016`, `OP-ORG-024` and `OP-ORG-025`, as built):** the status answers whether the gym may act: the functions that ask `status = 'active'` refuse a suspended gym without being edited, and `payments.resolve_pro` stops giving its clients Pro. Who suspended it, why and for how long lives in `organization_suspensions` (§5.11); what stops being effective for each person lives in `planning.service_access_blocks` (§9.17). Only `organizations.suspend_organization` and `reactivate_organization` change it, under `manage_organization_lifecycle`. A suspended gym appears in the Backoffice directory (allfitone#159) and cannot gain a client by an invitation accepted while it lasts.
 - **Retención:** el cierre termina relaciones y abre disposición; conserva activos propios.
-- **Eventos:** `organization.created.v1`, `organization.updated.v1`, `organization.ownership_transferred.v1`, `organization.closed.v1`.
+- **Eventos:** `organization.created.v1`, `organization.updated.v1`, `organization.ownership_transferred.v1`, `organization.closed.v1`, `organization.suspended.v1` and `organization.reactivated.v1`. `organization.guest_quota_set.v1` is recorded only in `organization_events`, with the previous seats and agreement.
 
 ### 5.2 `organizations.organization_types`
 
@@ -598,6 +627,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** único `code`.
 - **Retención:** permanente.
 - **Eventos:** ninguno.
+- **As implemented.** The table has no `id`: its key is `code`, which `role_capabilities` references. Since migration `20261113090000_a_gym_names_its_own_movements.sql` (STUDIO-57..60) it holds 23 capabilities. The new one, `archive_movements` («Archivar movimientos propios»), lets owner and admin archive the organization's movements; coaches hold `manage_content` but do not retire content (`T-ORG-TEAM-DIRECTORY-01`).
 
 ### 5.7 `organizations.role_capabilities`
 
@@ -613,6 +643,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** único compuesto.
 - **Retención:** permanente.
 - **Eventos:** ninguno.
+- **As implemented.** No `id` either: the key is `(role_code, capability_code)`. With `archive_movements` granted to owner and admin there are 43 grants: 17 for owner, 15 for admin, 8 for coach and 3 for staff (STUDIO-57..60).
 
 ### 5.8 `organizations.membership_roles`
 
@@ -636,7 +667,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Clasificación:** `audit`; snapshots de `legal_name` o `address` domiciliaria heredan además tratamiento `identity_pii`.
 - **Columnas:** `id` · `organization_id uuid` · `event_type text` · `snapshot_schema_version smallint` (`1`) · `before jsonb` (nullable) · `after jsonb` (nullable) · `actor_membership_id uuid` (nullable) · `actor_person_id uuid` (nullable) · `actor_duty_assignment_id uuid` (nullable).
 - **FKs y borrado:** `organization_id → organizations(id) ON DELETE CASCADE`; FK compuesta opcional `(actor_membership_id, organization_id) → organization_memberships(id, organization_id) RESTRICT` (`IX-25`); `actor_person_id → identity.people(id) RESTRICT`; `actor_duty_assignment_id → support.platform_duty_assignments(id) RESTRICT`.
-- **Uniques y checks:** append-only: `INSERT` directo, `UPDATE` y `DELETE` revocados al runtime. El snapshot v1 admite datos organizacionales, sede (`site_id`, `name`, `address`, `status`, `revision_number`), transferencia (`previous_owner_membership_id`, `owner_membership_id`) o reclamo (`owner_membership_id`) según `event_type`; claves adicionales o combinaciones ajenas se rechazan. `ck_organization_events_platform_actor`: la persona y la asignación de deber de Allfit van juntas, nunca con una membresía; `organization.created_unclaimed.v1` y `organization.cancelled.v1` exigen actor de Allfit, y `organization.claimed.v1` exige la membresía del nuevo dueño (`HU-BO-014`, `HU-BO-015`). Una membresía ausente nunca representa "lo hizo Allfit".
+- **Uniques y checks:** append-only: `INSERT` directo, `UPDATE` y `DELETE` revocados al runtime. El snapshot v1 admite datos organizacionales, sede (`site_id`, `name`, `address`, `status`, `revision_number`), transferencia (`previous_owner_membership_id`, `owner_membership_id`) o reclamo (`owner_membership_id`) según `event_type`; claves adicionales o combinaciones ajenas se rechazan. `ck_organization_events_platform_actor`: la persona y la asignación de deber de Allfit van juntas, nunca con una membresía; `organization.created_unclaimed.v1` y `organization.cancelled.v1` exigen actor de Allfit, y `organization.claimed.v1` exige la membresía del nuevo dueño (`HU-BO-014`, `HU-BO-015`). Una membresía ausente nunca representa "lo hizo Allfit". `organization.suspended.v1` and `organization.reactivated.v1` (`HU-BO-016`) require an Allfit actor too. `organization.guest_quota_set.v1` (`HU-BO-034`) also requires an Allfit actor, so a gym never sets its own quota, and carries a before and an after snapshot. The snapshot holds `guest_quota_seats`, `agreement_reference` and `revision_number`; a change recorded before migration `20261108090000` has no `agreement_reference`, and that shape is still accepted.
 - **Actores:** las funciones cerradas del agregado insertan; admin/owner leen. Allfit inserta la creación no reclamada, su sede y su cancelación por `create_unclaimed_organization` y `cancel_unclaimed_organization`; el dueño inserta el reclamo al aceptar.
 - **RLS:** hereda de la organización.
 - **Consultas:** `(organization_id, created_at desc)`.
@@ -659,6 +690,23 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Retención:** auditoría.
 - **Eventos:** ninguno propio.
 
+### 5.11 `organizations.organization_suspensions`
+
+Built in migration `20261018130000_suspending_a_gym_without_destroying_it.sql` (`HU-BO-016`).
+PRE_PHASE_5 §9.2 proposed it; this is its physical form.
+
+- **Purpose:** who suspended a gym, why and for how long. A status column cannot keep that once the gym is `active` again, and criterion 8 asks for it.
+- **Domain / source of truth:** Organizations.
+- **Classification:** `audit`.
+- **Columns:** `id uuid` · `organization_id uuid` · `reason_code text` (`nonpayment`, `terms_breach`, `security_incident`, `legal_requirement`) · `started_at timestamptz` (default `clock_timestamp()`) · `started_by_person_id uuid` · `started_by_duty_assignment_id uuid` · `started_event_id uuid` · `ended_at timestamptz` (nullable) · `ended_by_person_id uuid` (nullable) · `ended_by_duty_assignment_id uuid` (nullable) · `ended_event_id uuid` (nullable).
+- **FKs and deletion:** every reference is `RESTRICT`: `organization_id → organizations(id)`; both people → `identity.people(id)`; both duty assignments → `support.platform_duty_assignments(id)`; both events → `organization_events(id)`.
+- **Uniques and checks:** `ck_organization_suspensions_reason` closes the reason list. `ck_organization_suspensions_ended`: the four `ended_*` columns are all null or all set, with `ended_at >= started_at`. `uidx_organization_suspensions_open` allows one open period per organization, which makes suspending idempotent and reactivating unambiguous. The trigger `trg_organization_suspensions_guard` (`organizations.prevent_organization_suspension_rewrite`) refuses a delete, a change of reason and reopening an ended period.
+- **Actors:** only `organizations.suspend_organization` opens a period and only `organizations.reactivate_organization` ends it. `organizations.organization_suspension_projection` returns the current state with the history to the Backoffice.
+- **RLS:** forced; `organization_suspensions_all_owner` for `allfit_owner` only. `allfit_api` has no privilege on the table.
+- **Queries and indexes:** `idx_organization_suspensions_organization_started (organization_id, started_at desc)` and the partial unique index.
+- **Retention:** audit evidence of the stopped period.
+- **Events:** none of its own; the period points at `organization.suspended.v1` and `organization.reactivated.v1`.
+
 ---
 
 ## 6. Schema `relationships`
@@ -673,6 +721,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Uniques y checks:** `UNIQUE parcial (person_id, organization_id) WHERE status='active'`; claves portadoras `UNIQUE (id, person_id)`, `UNIQUE (id, organization_id)` y `UNIQUE (id, person_id, organization_id)`. `CHECK (ended_at is null or ended_at >= started_at)`.
 - **Actores:** la persona (termina); admin/owner (crean vía aceptación, terminan); coach asignado lee.
 - **RLS:** `person_id = access_control.person()` **OR** (`organization_id = access_control.org()` **AND** (capacidad de clientes **OR** asignación efectiva)).
+  - **As built (STUDIO-77, migration `20261118100000_a_coach_opens_the_card_of_a_client.sql`):** one more policy, `service_relationships_select_former_attendance`, `for select to allfit_owner`, admits the row whose id is the open contract scope `former_attendance`. Only `relationships.former_attendance` opens it, to read `status` and `ended_at` of the relationship a former attendant last attended, and closes it before returning, so the client card can tell him why he stopped seeing her (ADR-047).
 - **Consultas:** `(person_id, status)`, `(organization_id, status)`.
 - **Índices:** ambos compuestos + parcial de activa.
 - **Retención:** conserva historial; el motivo lo ve solo quien lo declaró.
@@ -803,6 +852,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **RLS:** lectura abierta de versiones publicadas.
 - **Implementado:** `privacy.access_level` es un enum (`read`, `contribute`), no texto con `CHECK`. Las reglas se insertan sólo dentro de `privacy.publish_scope_definition`, y `privacy.prevent_published_scope_rule_mutation` las congela con la versión. El duplicado de `(resource, field)` dentro de una misma publicación se rechaza en un trigger `before insert` y no en un `CHECK`: PostgreSQL no admite subconsultas en un `CHECK`, así que la comprobación que compara el arreglo contra su propio conjunto distinto no es expresable ahí.
 - **Applied (STUDIO-44..46, migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql`).** `privacy.scope_allows(scope_definition_id, resource, field)` is the first reader of these rules: a non-excluded rule for the field or for `'*'` shares it, and an exclusion of either wins. It is closed to `allfit_api`. The reads of `OP-IDN-018`, `-019`, `-020`, `-059` and `-060` project each field through it, so a field the frozen version leaves out reads as `null`, and a row whose ordering key is not shared is not listed.
+- **Applied, `historical_readable` (STUDIO-54..56, migration `20261116090000_a_case_opens_the_frozen_history.sql`).** The first readers of the column. `privacy.frozen_category(case_id, scope_code, resource)` finds the `frozen` grant of the case's relationship whose version has a non-excluded historical rule for the resource and no exclusion of all of it (`field = '*'`). `privacy.scope_reads_frozen(scope_definition_id, resource, field)` is `privacy.scope_allows` plus a non-excluded historical rule for the field or `'*'`. With the V1 rules (`packages/db/scripts/v1-scope-rules.ts`, since 5 November 2026) only executed sessions and their results, under `relationship_training` and `prior_training_history` at `read`, and the six structured fields of `identity.body_progress_records` under `body_progress` are historical. A version published from earlier rules may have no historical rule, and then a case reads nothing under it.
 - **Consultas:** por `scope_definition_id`.
 - **Índices:** único compuesto.
 - **Retención:** con la versión.
@@ -861,6 +911,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** único parcial `(relationship_id, scope_code) WHERE status IN ('active','frozen')`; `(person_id, status)`; `(organization_id, status)`; parcial `(relationship_id, scope_code, frozen_at) WHERE status='frozen'`.
 - **Retención:** conserva; congelar y revocar cierran sin borrar.
 - **Eventos:** `privacy.grant_created.v1`, `privacy.grant_frozen.v1`, `privacy.grant_revoked.v1`, `privacy.grant_review_due.v1`.
+- **As implemented, revoking a frozen grant closes cases (STUDIO-54..56, migration `20261116090000_a_case_opens_the_frozen_history.sql`).** The trigger `trg_data_grants_after_update_historical_cases` (`after update of status`, only when a `frozen` grant becomes `revoked`) runs `privacy.close_cases_of_revoked_grant_tg`. It closes every open case of the relationship with `grant_revoked`, or `expired` if its hours had run out, inside the contract scope `historical_case_settlement`. The frozen reads take their grant from `privacy.frozen_category`, not from `access_control.frozen_grant_of`.
 
 ### 7.7 `privacy.session_visibility_denials`
 
@@ -876,6 +927,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** único de par + `(relationship_id, status)`.
 - **Retención:** con la persona.
 - **Eventos:** `privacy.session_visibility_denied.v1`, `privacy.session_visibility_restored.v1`.
+- **A break-glass window reads them (code branch `feat/backoffice-last-gaps`, migration `20261122100000`, `HU-BO-008` c4).** The policy `session_visibility_denials_select_break_glass` lets the reader of a live window over her training see her active denials, so the window can say which sessions she hid and from which gym. `support.break_glass_hidden_sessions` returns them beside the sessions; no organization reads them, and `execution.session_projection` still never says a session was hidden.
 - **As implemented (STUDIO-47/48, migration `20261107090000_a_coach_reviews_what_a_client_trained.sql`).** Constraints:
   - `pk_session_visibility_denials`;
   - `uq_session_visibility_denials_pair`;
@@ -890,6 +942,7 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
   - `IX-36` is `trg_session_visibility_denials_after_insert_own_relationship`, a deferrable constraint trigger that also refuses a session it cannot see.
 
   `allfit_api` has no privilege on the table; it writes through `privacy.hide_session` and `privacy.restore_session`. **RLS deviation:** see `V1_RLS_MATRIX.md` § `SESSION_VISIBILITY_DENIAL`.
+- **As implemented, a frozen reader (STUDIO-55, migration `20261116090000_a_case_opens_the_frozen_history.sql`).** «Ninguna organización la lee» no longer holds literally. `session_visibility_denials_select_frozen` lets the denials of the case's relationship be seen inside the contract scope `frozen_history`, while that case is exercisable. It exists only so the frozen session policy can leave out a session hidden from that relationship, then or since (`status = 'active'` or `frozen_denied_at` set). No read returns a denial, and none says that one exists.
 
 ### 7.8 `privacy.historical_access_cases`
 
@@ -905,6 +958,43 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** compuestos anteriores + parcial de casos abiertos.
 - **Retención:** 24 meses después de cerrar/expirar, alineada con `access_events`; una política posterior puede exigir más por disputa u obligación.
 - **Eventos:** `privacy.historical_access_case_opened.v1`, `privacy.historical_access_case_closed.v1`, `privacy.historical_access_case_expired.v1`.
+- **As implemented (STUDIO-54..56, migration `20261116090000_a_case_opens_the_frozen_history.sql`).** ADR-023, section *As implemented*, records the decisions; this block records the objects.
+  - **Columns:** `id uuid` (UUIDv7) · `organization_id` · `relationship_id` · `person_id` · `cut_at timestamptz` · `authorized_membership_id` · `opened_by_membership_id` · `purpose privacy.historical_access_purpose` · `case_reference text` · `justification text` · `status privacy.historical_case_status` (default `open`) · `opened_at` (default `clock_timestamp()`) · `expires_at` · `closed_at` (nullable) · `closed_reason text` (nullable) · `closed_by_membership_id` (nullable).
+  - **Deviations from the columns above:**
+    - `person_id` and `cut_at` are new. The trigger checks them against the relationship when the case opens, so no read through the case needs the ended relationship.
+    - `closed_reason` and `closed_by_membership_id` are new and record how the case ended.
+    - There is no `capability_code`: the capability that opens a case, `manage_historical_access`, is checked in the function and the policies, and the case authorizes reading by itself.
+  - **Enums:** `privacy.historical_access_purpose` is `service_dispute`, `legal_or_regulatory_obligation`, `customer_support_request`, `security_investigation` and `authorized_quality_review`. `privacy.historical_case_status` is only `open` and `closed`. `expired` is derived: an open case past `expires_at` reads as `expired` in `privacy.historical_case_document` and exercises nothing.
+  - **Keys (`IX-09`, composite):**
+    - `pk_historical_access_cases`;
+    - `fk_historical_access_cases_relationship`: `(relationship_id, person_id, organization_id) → relationships.service_relationships`;
+    - `fk_historical_access_cases_authorized`, `fk_historical_access_cases_opened_by` and `fk_historical_access_cases_closed_by`: `(membership_id, organization_id) → organizations.organization_memberships`.
+
+    All four foreign keys are `ON DELETE RESTRICT`.
+  - **Checks:**
+    - `ck_historical_access_cases_window`: `expires_at > opened_at` and `expires_at <= opened_at + 24 hours`;
+    - `ck_historical_access_cases_cut`: `cut_at <= opened_at`;
+    - `ck_historical_access_cases_reference`: trimmed, 1 to 120 characters;
+    - `ck_historical_access_cases_justification`: trimmed, 1 to 2000 characters;
+    - `ck_historical_access_cases_closed`: `closed_at` is set exactly when the case is `closed`, and `closed_reason` exactly when `closed_at` is;
+    - `ck_historical_access_cases_closed_reason`: `closed_by_manager`, `expired`, `grant_revoked` or `membership_ineligible`;
+    - `ck_historical_access_cases_closed_by`: a closer is named exactly when the reason is `closed_by_manager`;
+    - `ck_historical_access_cases_closed_after`: `closed_at >= opened_at`.
+  - **`IX-10`, deviation:**
+    - The eligibility check is `trg_historical_access_cases_after_insert_eligible`, a constraint trigger `after insert`, **not deferrable**, running `privacy.enforce_historical_case_eligibility_ct`. It checks four things: the relationship is `terminated` and its `ended_at` is `cut_at`; the opener holds a current `owner` or `admin` role; the authorized membership qualifies (`privacy.historical_case_member_qualifies`: an active membership in an active organization with a current `owner`, `admin` or `coach` role); and, when the authorized member is not the opener, he held the relationship at the cut (a `holder` assignment with `valid_to = cut_at`). A third admin, staff, or a coach who never held it is refused.
+    - Membership and role changes do not wait for a deferred check: three triggers close the open cases the same transaction makes ineligible. They are `trg_organization_memberships_after_update_historical_cases` (the membership stops being `active`), `trg_membership_roles_after_update_historical_cases` (a role's `valid_to` is set) and `trg_data_grants_after_update_historical_cases` (a frozen grant is revoked). Each closes with `membership_ineligible` or `grant_revoked`, or `expired` if the case had run out.
+  - **Immutable:** `trg_historical_access_cases_before_update_keep` and `trg_historical_access_cases_before_truncate_keep` (`privacy.keep_historical_access_case_tg`) allow one change only, `open → closed`, touching only `status`, `closed_at`, `closed_reason` and `closed_by_membership_id`. Delete and truncate are refused (`23514`).
+  - **Indexes:**
+    - `uidx_historical_access_cases_open` on `(relationship_id, authorized_membership_id, purpose)` where `status = 'open'`;
+    - `idx_historical_access_cases_organization_opened` on `(organization_id, opened_at desc, id desc)`, for the list;
+    - `idx_historical_access_cases_relationship` on `(relationship_id, person_id, organization_id)`;
+    - `idx_historical_access_cases_authorized` and `idx_historical_access_cases_opened_by` on `(membership_id, organization_id)`;
+    - `idx_historical_access_cases_closed_by`, partial where a closer is named.
+
+    There is no index on `case_reference`, because no operation searches by it.
+  - **Access:** RLS is enabled and forced, and `allfit_api` has no privilege on the table. It opens, closes and lists through `privacy.open_historical_access_case`, `privacy.close_historical_access_case` and `privacy.list_historical_access_cases`, and reads through the four frozen read functions (`OP-PRV-020`). The policies are in `V1_RLS_MATRIX.md` § `HISTORICAL_ACCESS_CASE`. Opening and reading require a Studio sign-in less than ten minutes old (`identity.require_recent_studio_authentication`, §4.2.1) instead of MFA; closing and listing do not.
+  - **Events:** `privacy.historical_access_case_opened.v1` and `privacy.historical_access_case_closed.v1`, with identifiers, purpose and instants and never the justification or the reference. There is no `privacy.historical_access_case_expired.v1`, because no worker watches the clock. No worker consumes either event yet.
+  - **Retention, not implemented:** the 24 months above are not enforced. No job purges cases, and the immutability trigger refuses deletes until a disposition path is built.
 
 ### 7.9 `privacy.access_events`
 
@@ -915,14 +1005,27 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **FKs y borrado:** `subject_person_id` y `actor_person_id` → `identity.people(id) RESTRICT`; `subject_organization_id → organizations.organizations(id) RESTRICT`. Las referencias de alto volumen a relación, grant y caso se validan en la entrada cerrada, no con FK dura sobre cada partición.
 - **Uniques y checks:** PK `(id,occurred_at)`; `CHECK (num_nonnulls(subject_person_id,subject_organization_id)=1)`; rango mensual; `access_events_id_partition_time_chk` exige UUIDv7 y `occurred_at=extensions.uuid_v7_timestamp(id)`. Actor humano obligatorio. La rama personal conserva sus reglas live/frozen/break-glass. La rama organización exige `access_mode='organization_operational'`, `actor_membership_id` activo del mismo tenant y de `actor_person_id`, `resource='organizations.organization_context'` y relación/grant/caso/scope/version nulos. `privacy.log_access_event` es la única entrada y `privacy.enforce_access_event_context_tg` valida `IX-23`.
 - **Actores:** la persona consulta las suyas mediante `privacy.v_my_access_events`; `A12` audita metadatos break-glass mediante `support.list_break_glass_audit_events`; `A10` consulta sus ejercicios en `support.break_glass_events`, no esta tabla. `privacy.log_access_event` inserta en la misma transacción de la lectura.
-- **Implementado (`HU-BO-030`, `OP-SUP-009`):** `privacy.list_access_events` y `privacy.count_withheld_access_events`. La autoridad —`audit_platform_access` sobre el rol base— la resuelve `privacy.require_access_log_auditor`, invocado con `perform` dentro de `plpgsql`: invocado como elemento del `FROM` en una función `language sql` devuelve `void`, el planificador puede eliminarlo y la comprobación no se ejecuta. Ese error se cometió primero y `T-PRV-AUD-01` lo detectó.
+- **Implementado (`HU-BO-030`, `OP-SUP-009`):** `privacy.list_access_events` y `privacy.count_withheld_access_events`. La autoridad —`audit_platform_access` sobre el rol base— la resuelve `privacy.require_access_log_auditor`, invocado con `perform` dentro de `plpgsql`: invocado como elemento del `FROM` en una función `language sql` devuelve `void`, el planificador puede eliminarlo y la comprobación no se ejecuta. Ese error se cometió primero y `T-PRV-AUD-01` lo detectó. Since allfitone#159 (`20261104100400`) the log is read with the paged `privacy.page_access_events`; the code branch `feat/backoffice-last-gaps` drops `privacy.list_access_events` (`20261122120000`), which nothing called any more.
   - **Append-only real desde `20260911030000`.** Antes de esa migración `UPDATE` y `DELETE` sobre esta tabla funcionaban: lo único que los impedía era que `allfit_api` no tiene permisos, lo que protege las rutas y no la tabla. `privacy.reject_access_event_rewrite` los rechaza con `55000`, también para el dueño. Soltar una partición mensual es DDL y un trigger de fila no la ve, así que la retención no se afecta.
   - **Separación de deberes por caso, no global.** Un auditor que pidió o aprobó una ventana break-glass no audita *esa* ventana y sigue auditando todas las demás. La versión global es más fácil de escribir y dejaría el registro sin auditor posible para cualquiera que haya aprobado algo alguna vez.
   - **Lo retenido se cuenta en su propia consulta**, para que sobreviva a una lista vacía: sin ese número, un auditor que filtra hasta su propia ventana lee «nadie accedió» cuando accedió él. Las dos consultas comparten un único predicado, `privacy.is_own_break_glass_case`, para que el conteo nunca describa un conjunto distinto del que se retiró, y la API las lee en una sola transacción.
   - La proyección lleva el registro del acceso y nada de lo leído. `T-PRV-AUD-01` lo asegura contra el tipo de resultado declarado, así que una columna de contenido añadida después rompe la prueba en vez de filtrarse.
   - Las lecturas de la cola de verificación (`HU-BO-021`) escriben aquí con `purpose = 'professional_credential_verification'` y `access_mode = 'support_metadata'`: quien verifica lee bajo un deber de plataforma, no bajo un permiso de la persona. La primera versión (`20260913120000`) escribía `live` y afirmaba que el enum no tenía un valor de plataforma, cuando `support_metadata` existía desde `20260910130000`; `20260913140000` lo corrige. Registrada como `live`, la lectura le habría dicho a un auditor que la persona consintió.
+  - **The person search writes here too (ADR-046 decision 4, migration `20261115100000_an_admin_finds_a_person_by_name.sql`).** `support.search_people` writes one row per person it returns, with `resource = 'support.person_search'`, `purpose = 'support_diagnosis'` and `access_mode = 'support_metadata'`, before the answer travels, so each person sees the search in her own history. The person file keeps writing one row with `resource = 'support.v_support_metadata'`. Tests: `T-SUP-SEARCH-02`.
+  - **The first `frozen` rows (STUDIO-55, migration `20261116090000_a_case_opens_the_frozen_history.sql`).** Every read through a historical access case writes here before answering, with `access_mode = 'frozen'`, `purpose = 'frozen_history_review'`, the authorized membership as actor, the relationship and `historical_access_case_id`. The rows are:
+    - one `allowed` row per frozen category used, with its grant, `scope_code` and `scope_version`: `relationship_training` or `prior_training_history` on `execution.executed_sessions`, and `body_progress` on `identity.body_progress_records`;
+    - one `allowed` row with no grant or scope for the relationship header (`relationships.service_relationships`);
+    - one `denied` row when no category stayed readable, when a session is not visible, or when the case cannot be exercised. The last is written against the person whenever the case or the relationship belongs to the organization, so she sees the attempt.
+
+    The table itself enforces no frozen-specific rule: `privacy.log_access_event` is the only way in, and only the frozen read functions call it with `frozen`. Tests: `T-PRV-HIST-API-05`, `-API-12`, `-API-16`, `-API-20`, `-API-23` and `-INT-11` (no frozen read is recorded without its case).
+  - **As built, her access log (STUDIO-76, migration `20261118110000_a_person_reads_who_read_her_data.sql`, `OP-PRV-015`).** There is no `privacy.v_my_access_events` and no self `SELECT` policy. She reads her events through `privacy.list_my_access_events(person, scope_code, limit, before_occurred_at, before_id)`, a `security definer` function, and `allfit_api` still has no privilege on this table (ADR-047).
+    - **Filter:** `subject_person_id` is her, `actor_person_id` is somebody else, `occurred_at` within 24 months, optionally one `scope_code`; `occurred_at desc, id desc`, keyset on both.
+    - **What each row says:** the actor's name, `allfit_team` for `break_glass` and `support_metadata` and `professional` otherwise; the organization from `actor_membership_id`, or else from the relationship; whether the actor was holder or cover at that instant; and `access_mode`, `scope_code`, `scope_version`, `resource` and `result`.
+    - **Index:** it reuses `idx_access_events_target_occurred`; the 24-month horizon is held in a variable so the monthly partitions prune.
+    - Tests: `T-PRV-ACCESSLOG-01`.
+  - **Studio's today writes here (STUDIO-74, migration `20261118120000_a_studio_member_sees_what_needs_attention_today.sql`, `OP-REL-020`).** `relationships.today_training` writes one row per client whose training it evaluates, listed or not, with `resource = 'relationships.studio_today'`, `purpose = 'studio_attention_today'`, `access_mode = 'live'`, `result = 'allowed'`, the relationship, her `relationship_training` grant and its version, and the request id the API generates. A client without an active grant is not evaluated and leaves no row. Tests: `T-REL-TODAY-02`.
 - **Pendiente:** `support.list_break_glass_audit_events` **no existe todavía**. `support.exercise_break_glass` inserta aquí directamente, en la misma transacción que su propia evidencia, y desde `20260910170000` una FK exige que la fila exista — sin ella la evidencia del operador podía apuntar a una auditoría que nunca se escribió, y la persona no habría visto nunca el intento registrado en su contra. La revisión específica de `A12/audit_break_glass` sobre un expediente sigue pendiente, junto con la revisión posterior de `12.3`; la consulta general del registro ya existe y se describe arriba.
-- **RLS:** en la tabla base, `SELECT` solo cuando `subject_person_id = access_control.person()`; `privacy.v_my_access_events` nunca incluye sujetos organización. `INSERT` directo revocado. Ninguna organización, `A10` o `A12` recibe `SELECT` directo.
+- **RLS:** en la tabla base, `SELECT` solo cuando `subject_person_id = access_control.person()`; `privacy.v_my_access_events` nunca incluye sujetos organización. `INSERT` directo revocado. Ninguna organización, `A10` o `A12` recibe `SELECT` directo. As built (STUDIO-76): the only policy is `access_events_all_owner`; neither the self `SELECT` nor the view exists, and the person reads through `privacy.list_my_access_events` (above).
 - **Consultas:** `(subject_person_id, occurred_at desc)` para la persona; `(subject_organization_id, occurred_at desc)` solo para investigación restringida de plataforma.
 - **Índices:** ambos compuestos anteriores por partición.
 - **Retención:** **24 meses** para ambas ramas; la purga es `DROP` de partición. La dirección potencialmente `identity_pii` nunca se copia al evento: solo se registra el código de recurso cerrado.
@@ -1030,6 +1133,35 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
   `tax_or_accounting_obligation`), que es lo que pide el criterio 5. Suma `case_reference` (la
   orden o requerimiento que sustenta el hold) y `released_by_person_id`. Un trigger impide
   borrar la fila: un hold es evidencia.
+- **As built since allfitone#163 (migration `20261104140000`):** a hold names a person and
+  kinds of their data, and no hold is indefinite.
+  - **New columns.** `subject_person_id uuid` (nullable, only for holds filed before, which
+    named dispositions and not a person; `→ identity.people(id) RESTRICT`) and
+    `lapsed_at timestamptz` (nullable).
+  - **Statuses.** `status` gains `lapsed` (`ck_legal_holds_status`), and
+    `ck_legal_holds_lapsed` makes `lapsed` and `lapsed_at` go together. A hold is released by
+    somebody or lapses on its own date, never both.
+  - **Index.** `idx_legal_holds_subject (subject_person_id, status, valid_to)`.
+  - **Ownership.** The table moved to `allfit_owner`, which owns the deletions that now
+    read it.
+  - **Who changes it.** Only `privacy.lapse_legal_holds`, run by the privacy worker, sets
+    `lapsed`.
+
+### 7.15.1 `privacy.legal_hold_categories`
+
+Built in migration `20261104140000_a_legal_hold_keeps_what_it_names.sql` (`HU-BO-033`).
+
+- **Purpose:** the kinds of a person's data a hold keeps.
+- **Domain / source of truth:** Privacy.
+- **Classification:** `audit`.
+- **Columns:** `legal_hold_id uuid` · `data_classification_code text`.
+- **FKs and deletion:** `legal_hold_id → legal_holds(id) RESTRICT`; `data_classification_code → data_classifications(code) RESTRICT`.
+- **Uniques and checks:** primary key `(legal_hold_id, data_classification_code)`. The trigger `trg_legal_hold_categories_immutable` (`privacy.reject_hold_category_rewrite_tg`) refuses any change after the hold is applied (`55000`, «what a hold covers is fixed when it is applied»). `privacy.apply_legal_hold` accepts only kinds that a published retention policy disposes of on request.
+- **Actors:** `privacy.apply_legal_hold` inserts; the person's deletions and the privacy worker read it.
+- **RLS:** forced; `legal_hold_categories_all_owner` for `allfit_owner` only.
+- **Queries and indexes:** by hold through the primary key; `idx_legal_hold_categories_classification (data_classification_code)`.
+- **Retention:** audit, with its hold.
+- **Events:** none of its own.
 
 ### 7.16 `privacy.hold_applications`
 
@@ -1049,6 +1181,13 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
   hold vigente por ítem, porque dos harían ambigua la liberación. Suma `released_at`. Liberar
   devuelve el ítem a `pending` y a nada más: ejecutar la eliminación de alguien no es decisión
   de quien revisa.
+- **As built since allfitone#163:** the person's own deletion opens an application when a
+  live hold covers the kind of data she deletes, and her record stays. Releasing or lapsing
+  a hold hands each item to another live hold over the same data, or back to `pending`.
+  Then the privacy worker's `privacy.execute_due_dispositions` executes what is pending and
+  due: the release still decides nothing by itself. A disposition's hold on its target is
+  now a key checked at commit (deferrable `no action`) instead of `restrict`, so the worker
+  can delete the row while its disposition still names it.
 
 ---
 
@@ -1119,10 +1258,17 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **FKs y borrado:** `discipline_code → disciplines(code) RESTRICT`; `owner_organization_id → organizations.organizations(id) RESTRICT`; `owner_person_id → identity.people(id) RESTRICT`; `successor_movement_id → movements(id) RESTRICT`.
 - **Uniques y checks:** `CHECK` de un solo owner según `content_scope`; `UNIQUE parcial (owner_organization_id, normalized_name) WHERE content_scope='organization'`; `uidx_movements_global_name`, único parcial sobre `normalized_name WHERE content_scope='global'`: dos movimientos globales con el mismo nombre son el mismo escrito dos veces (`HU-BO-022`).
 - **Actores:** lectura autenticada de globales publicados; owner personal u organización con membresía vigente leen/escriben su contenido; la plataforma publica y archiva globales (`OP-CAT-004`, `OP-CAT-005`), y `trg_movements_before_delete_global` rechaza (`55000`) borrar uno.
-- **RLS:** `global` abierto; `organization` solo a su organización con membresía; `person` solo a su dueño. `movements_all_platform` añade la curaduría: actor `support` y `content_scope = 'global'` sin dueño.
+- **RLS:** `global` abierto; `organization` solo a su organización con membresía; `person` solo a su dueño. `movements_all_platform` añade la curaduría: actor `support` y `content_scope = 'global'` sin dueño. A person or a gym read a global movement only while it was `published`, so archiving one emptied its name where it had been used. The code branch `feat/backoffice-last-gaps` adds `movements_select_offered_global` (`20261122130000`, `HU-BO-022` c3): a read-only policy for a global movement that was ever offered (`published`, `deprecated` or `archived`); a `draft` stays out of reach. It sits beside `movements_all_actor_access` rather than widening it, because that `for all` policy would also let a function update an archived movement and accept it back. Search and new content still filter `published` themselves.
 - **Consultas / índices:** `(content_scope, owner_organization_id, status)`; `(content_scope, discipline_code, status)`; índice sobre `normalized_name`.
 - **Retención:** archivado, no borrado, si está referenciado.
 - **Eventos:** `catalog.private_movement_created.v1`, `catalog.private_movement_updated.v1`, `catalog.private_movement_archived.v1`.
+- **As implemented for an organization's movements (STUDIO-57..60, migration `20261113090000_a_gym_names_its_own_movements.sql`).**
+  - **New columns:** `revision_number integer not null default 1` (`ck_movements_revision`, above 0), which each edit and the archive move up by one; and `created_by_membership_id uuid` (nullable), the membership that created the movement, with `fk_movements_created_by_membership → organizations.organization_memberships(id) ON DELETE RESTRICT`. `ck_movements_organization_author` requires it on every `organization` row; global and personal rows leave it null.
+  - **The meaning freezes once used.** The `BEFORE UPDATE` trigger `trg_movements_before_update_meaning` runs `catalog.keep_organization_movement_meaning` on every `organization` row. It refuses a change of scope, owner or author (`23514`) and bringing an archived movement back (`55000 movement-archived`), and it recomputes `normalized_name` from `name`. Once `catalog.movement_in_use` is true, that is, once a row of `planning.planned_steps` names the movement, it refuses a new discipline or a new `normalized_name` (`55000 movement-in-use`). Case and spacing still change. `OP-CAT-002` records the product decision.
+  - **Indexes:** `idx_movements_created_by_membership`, partial where the author is set. The freeze and the person's policies look movements up from the referencing side, so the migration also adds partial indexes on `movement_id` to `planning.planned_steps`, `execution.session_exercises`, `execution.strength_sets` and `execution.mobility_results`.
+  - **Access:** `allfit_api` has no privilege on the table. It reaches an organization's movements only through `catalog.create_organization_movement`, `update_organization_movement`, `archive_organization_movement`, `search_organization_movements` and `read_organization_movement`. They require a live membership in an active organization and `manage_content`, or `archive_movements` to archive.
+  - **RLS, added:** `movements_select_planned` and `movements_select_executed` let a person read an `organization` movement only when it is in a step of a version planned for her, or in an exercise, a strength set or a mobility result of a session she trained. Nothing else of the gym's library opens to her (`V1_RLS_MATRIX.md` § `MOVEMENT`).
+  - **Events:** each carries `movement_id` and `organization_id`, and the update and the archive add `revision`. Creating writes no revision, and archiving an archived movement writes no event.
 
 ### 8.5 `catalog.movement_aliases`
 
@@ -1137,6 +1283,7 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Consultas / índices:** por `movement_id`.
 - **Retención:** se elimina con el movimiento padre.
 - **Eventos:** ninguno.
+- **As implemented (STUDIO-57..60).** `movement_aliases_all_organization` lets a member with `manage_content` write the other names of the organization's own movements. The commands replace the whole `es` list: at most ten, none blank, longer than 120 characters, repeated once normalized, or equal to the movement's own name. Staff and other organizations are refused (`T-CAT-MOVEMENT-RLS-17..19`).
 
 ### 8.6 `catalog.movement_variants`
 
@@ -1151,6 +1298,7 @@ Salvo indicación, todas las tablas de catálogo tienen **clasificación `operat
 - **Consultas / índices:** por `base_movement_id`.
 - **Retención:** permanece mientras cualquiera de los movimientos esté referenciado; se elimina solo al retirar ambos sin referencias.
 - **Eventos:** ninguno.
+- **As implemented (STUDIO-57..60).** `movement_variants_all_organization` lets a member with `manage_content` link one of the organization's movements to a **published global** base, and to nothing else: a gym's movement is never a variant of another of its own (`T-CAT-MOVEMENT-RLS-22/23`). `relation` is `variant`, `regression` or `progression` (`ck_movement_variants_relation`), and the commands take a note of up to 200 characters. A gym's movement has at most one base; the commands replace it whole, and `variant: null` removes it.
 
 `relation` dice **qué tipo** de relación es; `note` dice **por qué le importa a quien
 lee**, en una frase — «más pectoral superior», «menos técnica». Son cosas distintas y
@@ -1183,6 +1331,7 @@ por eso son dos columnas: un código no se muestra y una frase no se consulta.
 - **Consultas / índices:** por `movement_id`.
 - **Retención:** se elimina con el movimiento padre; una referencia histórica publicada conserva el movimiento y, por tanto, la asociación.
 - **Eventos:** ninguno.
+- **As implemented (STUDIO-57..60).** `movement_equipment_all_organization` lets a member with `manage_content` write the equipment of the organization's own movements, and only **published global** equipment: no command creates organization equipment (`T-CAT-MOVEMENT-RLS-20/21`). The commands take up to sixteen distinct codes and replace the whole list; `requirement` keeps its default, `required`.
 
 ### 8.9 `catalog.units`
 
@@ -1268,6 +1417,7 @@ por eso son dos columnas: un código no se muestra y una frase no se consulta.
 - **Consultas / índices:** `(status, display_order, code)`.
 - **Retención:** permanente; deprecar evita nuevas declaraciones y conserva referencias existentes.
 - **Eventos:** ninguno.
+- **As built (STUDIO-61..65):** migration `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql` adds `nutrition_professional` («Profesional en nutrición», `published`, display order 40), the credential `OP-NUT-012` requires. A credential of that type is in force when it is `active`, not past `expires_on`, and its latest verification is `verified` inside `valid_from <= now < valid_to` (`identity.effective_credential_verification`).
 
 ### 8.15 `catalog.muscles`
 
@@ -1375,6 +1525,20 @@ por la revisión del cambio.
 
 Un movimiento sin fila aquí no es un error: es el estado normal de un catálogo que
 crece, y el producto dibuja la figura del cuerpo en su lugar.
+
+### 8.19 `catalog.movement_revisions`
+
+- **Purpose:** what each edit or archive changed in one of an organization's movements, and who made it (STUDIO-57..60, migration `20261113090000_a_gym_names_its_own_movements.sql`).
+- **Domain / source of truth:** Catalogue. The movement holds its current state; this table holds its history.
+- **Classification:** `operational`. It names a membership, not anybody's personal data.
+- **Columns:** `id` (the `Command-Id`) · `movement_id uuid` · `organization_id uuid` · `revision_from integer` · `revision_to integer` · `actor_membership_id uuid` · `before jsonb` · `after jsonb` · `created_at timestamptz`. `before` and `after` hold the name, discipline, status, other names, equipment and variant.
+- **FKs and deletion:** `movement_id → movements(id)`, `organization_id → organizations.organizations(id)` and `actor_membership_id → organizations.organization_memberships(id)`, all `RESTRICT`.
+- **Uniques and checks:** `uq_movement_revisions_step (movement_id, revision_to)`; `ck_movement_revisions_step` (`revision_from > 0` and `revision_to = revision_from + 1`); `ck_movement_revisions_documents` (both documents are objects).
+- **Actors:** written only by `catalog.update_organization_movement` and `catalog.archive_organization_movement`. Creating a movement writes no revision.
+- **RLS:** `FORCE ROW LEVEL SECURITY`. `movement_revisions_select_member` reads the rows of `access_control.org()`, which already requires a live membership. `movement_revisions_insert_author` inserts only as the acting membership (`app.actor_membership_id` and `access_control.owns_membership`), with `manage_content` or `archive_movements`. There is no update or delete policy, and `trg_movement_revisions_before_change` refuses both (`42501`). `allfit_api` has no privilege on the table, and no read function serves it yet.
+- **Queries / indexes:** `idx_movement_revisions_organization (organization_id, movement_id)` and `idx_movement_revisions_actor (actor_membership_id)`.
+- **Retention:** permanent, like the movement.
+- **Events:** none of its own; see `catalog.private_movement_updated.v1` and `catalog.private_movement_archived.v1`.
 
 ---
 
@@ -1844,6 +2008,10 @@ administraba desde una relación, y `ended` lo escribe la persona sobre lo suyo.
 - **Consultas / índices:** `(person_id, ended_at)`, `(organization_id, ended_at)`, `(relationship_id, ended_at)` y el unique parcial de fuente abierta.
 - **Retención:** se conserva como evidencia del periodo bloqueado junto con el evento causal; su cierre no altera ni revive grants, relaciones, membresías, asignaciones o sesiones.
 - **Eventos:** ninguno propio; la transición causal emite el evento de suscripción u organización correspondiente.
+- **As built for a gym's suspension (`HU-BO-016`):**
+  - **Opening and closing.** `organizations.suspend_organization` opens one row per person with a live relationship with the gym, with `source_kind = 'organization_suspension'`, both flags true and `created_by_kind = 'support'`. `organizations.reactivate_organization` closes the rows of that suspension's event.
+  - **Who reads.** The policy `service_access_blocks_select_lifecycle` lets `manage_organization_lifecycle` read organization blocks, so the Backoffice can count the people affected.
+  - **What reads them.** Migration `20261105101000` made the program a suspended gym assigned show paused and refuse to start. Migration `20261105101100` (allfitone#165) extended that hold to any open block that `blocks_future_sessions`, an unpaid plan included. `planning.session_hold_of` derives it at read time, as `{state, cause}`. `access_control.has_service_block` answers a coach only whether a block is open, through the policy `service_access_blocks_select_service_block`. `access_control.can_access(..., 'contribute')` refuses while one is open, and `planning.require_training_grant` says why with `AF424`. Nothing is written to a session: a day missed while it lasted stays missed.
 
 ### 9.18 `planning.program_version_goals`
 
@@ -2163,6 +2331,7 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
   - **Classification:** `training`, the strength set's. `relationship_training` declares the table at `contribute` in `packages/db/scripts/v1-scope-rules.ts`.
   - **Access:** `allfit_api` has no privilege on the table. It writes through `execution.propose_correction` and `execution.decide_correction_proposal`, reads through `execution.list_proposed_corrections` and `execution.list_my_correction_proposals`, and the worker expires through `execution.expire_correction_proposals`. RLS: see `V1_RLS_MATRIX.md` § `CORRECTION_PROPOSAL`.
   - **Deviation, RLS:** not «proponente con asignación efectiva». The proposer reads by membership (`owns_membership`), because a proposal a termination cancelled must stay visible to him. What he sees of her session, `target`, is null once he no longer attends her or she stops sharing her training.
+  - **What Studio reads of `cancel_reason` (STUDIO-77, migration `20261118100000_a_coach_opens_the_card_of_a_client.sql`).** `execution.proposal_for_proposer` returns `session_unavailable` for both `session_hidden` and `session_annulled`, so he never learns that she hid a session from his organization (`HU-STUDIO-084` criterion 4). The stored value is unchanged, and `execution.proposal_for_person` still shows her which.
   - **Events:** `execution.correction_proposed.v1` carries the proposal id, her address and name, the proposer's and the organization's names and `expires_at`, never a value. `execution.correction_decided.v1` (proposal, person, relationship, decision) and `execution.correction_expired.v1` (proposal, person, relationship) carry ids only. A cancellation enqueues nothing.
 - **`execution.execution_revisions.correction_proposal_id` (STUDIO-52).** Nullable, with `uq_execution_revisions_correction_proposal` (one revision per accepted proposal) and `fk_execution_revisions_correction_proposal → execution.correction_proposals(id) ON DELETE RESTRICT`. Only an accepted proposal sets it; her own correction leaves it null.
 
@@ -2315,6 +2484,19 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Índices:** únicos anteriores + `(person_id,status)` + `(goal_set_id,created_at DESC,id DESC)` + `(origin_relationship_id,created_at DESC,id DESC)`.
 - **Retención:** mientras cuenta activa o hasta borrado; frozen consulta el mismo dato, sin snapshot.
 - **Eventos:** `nutrition.goal_version_proposed.v1`, `nutrition.goal_version_activated.v1`, `nutrition.goal_proposals_cancelled.v1`.
+- **As built (STUDIO-61..65):** migration `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql`.
+  - **Professional rows:** a professional version stores the `credential_verification_id` it was proposed under, and `goal_versions_insert_proposal` admits it only with that verification in force for its author (`IX-31`).
+  - **Statuses:** a newer proposal of the same relationship moves the waiting one to `superseded`. Ending the relationship moves it to `cancelled`, with `cancelled_at`.
+  - **Studio reads** go through policies under contract scopes, not through views:
+    - `nutrition_review` admits this relationship's versions and her active one;
+    - `nutrition_goal_proposal` admits the rows the command writes;
+    - `relationship_detachment` admits the cancellation;
+    - `frozen_history` admits what a case reads.
+  - **Events:** `nutrition.goal_proposals_cancelled.v1` is not written.
+  - **Scope rules:** `nutrition_guidance` v2 (`packages/db/scripts/v1-scope-rules.ts`) offers `goal_sets`, `goal_versions` and `goal_targets` up to `contribute`. It keeps `goal_decisions` and these fields historical:
+    - on versions: `version_number`, `origin`, `status`, `rationale`, `author_person_id`, `origin_relationship_id`, `created_at`, `activated_at` and `cancelled_at`;
+    - on targets: every target field.
+  - **Publishing v2:** a curator publishes it from Backoffice; v1 grants stay read-only.
 
 ### 10A.7 `nutrition.goal_targets`
 
@@ -2407,6 +2589,28 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Retención:** permanente; referenciado por `meal_items.product_id`.
 - **Eventos:** ninguno.
 
+### 10A.12 `nutrition.media_disposals`
+
+Built in migration `20261007100000_what_a_person_eats_is_theirs.sql` (ADR-039); the sweep
+columns come with migration `20261122150000_the_worker_sweeps_photo_disposals.sql` (code
+branch `feat/backoffice-last-gaps`, merge and deploy pending).
+
+- **Purpose:** the queue of meal photos to remove from the object store: the photo a revision replaced, or the one of a deleted meal.
+- **Domain / source of truth:** Nutrition. The object store holds the file.
+- **Classification:** `nutrition`: the row names the object key of a person's meal photo.
+- **Columns:** `id uuid` · `person_id uuid` · `media_ref text` · `requested_at timestamptz` (default `clock_timestamp()`) · `sealed_at timestamptz` (nullable) · `purge_attempts integer` (default `0`) · `next_attempt_at timestamptz` (nullable).
+- **FKs and deletion:** `person_id → identity.people(id) RESTRICT`.
+- **Uniques and checks:** `ck_media_disposals_ref` (`media_ref` starts with `nutrition/`); `ck_media_disposals_purge_attempts` (`purge_attempts >= 0`).
+- **Actors:**
+  - **The person's revision or deletion** inserts the row.
+  - **The privacy worker** inserts it when it deletes a meal after a legal hold ends (`media_disposals_insert_worker_disposal`, allfitone#163).
+  - **The API** removes the photo right after the commit and seals the row with `nutrition.seal_media_disposal`.
+  - **The worker's `media_disposal` job** sweeps the rows nobody removed. That covers the meal the worker deleted, with no API request around it, and a removal the store refused. `nutrition.claim_media_disposals(limit)` and `nutrition.seal_swept_media_disposal(id)` behave as their `identity` twins in §4.7.3.
+- **RLS:** forced. `media_disposals_all_self` for the person, the worker's insert policy, `media_disposals_select_worker_sweep`, and `media_disposals_update_worker_sweep`, which changes only unsealed rows. `allfit_api` has no privilege on the table.
+- **Queries and indexes:** `idx_media_disposals_pending (requested_at) WHERE sealed_at IS NULL`; the claim locks with `for update skip locked`.
+- **Retention:** a sealed row stays as evidence that the file was removed.
+- **Events:** none of its own; a meal deleted by the worker announces its deletion through the meal.
+
 ## 11. Schema `system`
 
 ### 11.1 `system.outbox_events`
@@ -2490,7 +2694,7 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 
 ### 12.1 `support.platform_role_assignments`
 
-- **Propósito:** quién del equipo de Allfit puede iniciar sesión en Backoffice. Es un control necesario, pero **no concede ninguna operación ni categoría de datos** sin deber vigente.
+- **Purpose (ADR-046):** who on the Allfit One team can sign in to Backoffice. Since ADR-046 an active role brings all thirteen duties of `support.platform_duty_assignments` and they last as long as it does. Without an active role, a Backoffice session holds no duty.
 - **Dominio / fuente de verdad:** Soporte.
 - **Clasificación:** `restricted`.
 - **Columnas:** `id` · `person_id uuid` · `platform_role text` (`allfit_admin`) · `status text` (`active`, `revoked`) · `granted_by_person_id uuid` · `granted_at timestamptz` · `revoked_by_person_id uuid` (nullable) · `revoked_at timestamptz` (nullable).
@@ -2501,35 +2705,43 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Consultas / índices:** `(person_id, status)`, `(platform_role, status)`. El inventario se lee por `support.list_platform_role_assignments`, cerrada tras `support.require_platform_access_reader`, que acepta `manage_platform_access` **o** `audit_platform_access`. Leer el inventario no concede autoridad: cada operación revalida su deber en su propia transacción.
 - **Retención:** **append-only sobre el historial**: retirar un rol cierra la fila, no la borra. `allfit_api` no tiene `DELETE` sobre esta tabla y **ningún rol lo tiene en runtime**. Sin eso, quien tuviera el rol podría borrar la evidencia de habérselo dado.
 - **Eventos:** `support.platform_role_granted.v1`, `support.platform_role_revoked.v1`.
+- **Triggers (ADR-046):** `trg_platform_role_assignments_insert_grant_duties` (`AFTER INSERT`) runs `support.grant_standing_platform_duties()`, which inserts the thirteen standing duties for an active role, with the role's grantor as their grantor. Withdrawing the role still runs `support.close_revoked_platform_access()`, which revokes every duty, closes the person's break-glass windows and revokes their Backoffice sessions.
 
 ### 12.2 `support.platform_duty_assignments`
 
-- **Propósito:** autoridad temporal y auditable para ejecutar una función concreta de Backoffice; determina el modo `A10`, `A11` o `A12` de la operación.
+- **Purpose (ADR-046):** auditable authority to run one Backoffice function; it determines the `A10`, `A11` or `A12` mode of the operation. A duty is either granted on its own for at most 90 days (`basis = 'granted'`) or brought by the `allfit_admin` role for as long as the role lasts (`basis = 'admin_role'`).
 - **Dominio / fuente de verdad:** Soporte.
 - **Clasificación:** `restricted`.
-- **Columnas:** `id` · `person_id uuid` · `duty_code text` · `actor_mode text` (`A10`, `A11`, `A12`) · `status text` (`scheduled`, `active`, `suspended`, `expired`, `revoked`) · `valid_from timestamptz` · `valid_to timestamptz` · `required_aal smallint default 2` · `granted_by_person_id uuid` · `recertified_by_person_id uuid` (nullable) · `recertified_at timestamptz` (nullable) · `suspended_by_person_id uuid` (nullable) · `suspended_at timestamptz` (nullable) · `revoked_by_person_id uuid` (nullable) · `revoked_at timestamptz` (nullable) · `reason_code text`.
+- **Columnas:** `id` · `person_id uuid` · `duty_code text` · `actor_mode text` (`A10`, `A11`, `A12`) · `status text` (`scheduled`, `active`, `suspended`, `expired`, `revoked`) · `valid_from timestamptz` · `valid_to timestamptz` · `required_aal smallint default 2` · `granted_by_person_id uuid` · `recertified_by_person_id uuid` (nullable) · `recertified_at timestamptz` (nullable) · `suspended_by_person_id uuid` (nullable) · `suspended_at timestamptz` (nullable) · `revoked_by_person_id uuid` (nullable) · `revoked_at timestamptz` (nullable) · `reason_code text` · `basis text not null default 'granted'` (`granted`, `admin_role`; ADR-046).
 - **FKs y borrado:** todas las referencias de persona → `identity.people(id) RESTRICT`; `person_id` debe tener `platform_role_assignments` activo al entrar en vigencia, validado por trigger diferido.
-- **Uniques y checks:** unique parcial `(person_id,duty_code) WHERE status IN ('scheduled','active','suspended')`; catálogo cerrado de ADR-028 y `actor_mode` derivado del código; `valid_to > valid_from` y `valid_to <= valid_from + interval '90 days'`; `required_aal = 2`; otorgante/recertificador/suspensor/revocador distintos de `person_id`; forma temporal exacta por estado.
+- **Uniques and checks (as built, ADR-046):** partial unique `uidx_platform_duty_assignments_current` on `(person_id, duty_code, basis) WHERE status IN ('scheduled','active','suspended')`, so a temporary duty granted before ADR-046 lives beside the standing one and lapses on its own date, while two current duties of the same basis never coexist; `ck_platform_duty_assignments_basis` (`basis in ('granted','admin_role')`); ADR-028's closed catalogue with `actor_mode` derived from the code; `ck_platform_duty_assignments_window`: `valid_to > valid_from` and, by basis, `granted` lasts at most `interval '90 days'` while `admin_role` has `valid_to = timestamptz '9999-12-31 00:00:00+00'` and `reason_code = 'admin_role'`; `required_aal = 2`; grantor, recertifier, suspender and revoker differ from `person_id`; exact temporal shape per status. The far date stands in for `infinity`, which the API's driver turns into an invalid date while the contract declares a date-time.
 - **Actores:** sólo `A12/manage_platform_access` administra a otra persona; `A12/manage_platform_access` o `audit_platform_access` consulta.
 - **RLS:** tabla base sin acceso directo de cliente; funciones `support.assign_platform_duty`, `suspend_platform_duty` y `revoke_platform_duty` revalidan rol, deber, AAL2 y actor en la transacción. `access_control.has_platform_duty` es `SECURITY DEFINER`, `STABLE`, fail-closed y no acepta el código desde contexto no confiable.
 - **Consultas:** autoridad exacta por `(person_id,duty_code,status,valid_from,valid_to)` e inventario interno por estado/vencimiento, expuesto por `support.list_platform_duty_assignments`. El estado leído lo deriva `support.effective_platform_duty_status(status, valid_to)`: un deber vencido nunca se presenta como activo aunque la fila conserve `active`.
 - **Índices:** unique parcial anterior; `(person_id,status,valid_to)`; `(duty_code,status,valid_to)`; `(status,valid_to)`.
 - **Retención:** historial append-only lógico; no hay `DELETE` en runtime. Usa la clase `platform_security_authority`; la purga queda bloqueada hasta cerrar `DB-P5-015`.
 - **Eventos:** `support.platform_duty_granted.v1`, `support.platform_duty_suspended.v1`, `support.platform_duty_revoked.v1`, `support.platform_duty_expired.v1`, `support.platform_duty_recertified.v1`.
+- **As built (ADR-046, migration `20261114090000_an_admin_holds_every_duty.sql`):**
+  - **The role brings the duties.** `support.standing_platform_duties()` returns the thirteen codes with their mode. On every new active role, `support.grant_standing_platform_duties()` inserts them as `admin_role`, valid from the insert, with the role's grantor as `granted_by_person_id`, and queues one `support.platform_duty_granted.v1` per duty. The migration backfilled the same rows for every active administrator, with the grantor of their role; the backfill queued no event.
+  - **A duty held through the role follows the role.** `support.preserve_platform_duty_history` makes `basis` immutable and refuses to suspend, expire or recertify an `admin_role` duty, or to revoke it while the person's role is active: `23514 a duty held through the admin role follows the role`. So `support.suspend_platform_duty`, `support.revoke_platform_duty` and `support.recertify_platform_duty` fail on it with `409 conflict`. Withdrawing the role revokes it.
+  - **Granting converges.** `support.assign_platform_duty` (`OP-SUP-010`) answers the duty a person already holds in any basis, preferring `admin_role`, and adds no row. Its 90-day window and its requirement of an active base role are unchanged.
+  - **Projection.** `support.platform_duty_assignment_projection` returns `basis`; the contract's `PlatformDutyAssignment` requires it.
+  - **Bootstrap.** `support.bootstrap_backoffice_administrators` keeps its seven arguments but inserts only the two crossed roles; the trigger brings the duties and `p_valid_to` is ignored.
+  - Tests: `T-SUP-STANDING-01` (30), `T-IDN-BACKOFFICE-CEREMONIES-01`, `T-SUP-RECERT-01`, `T-SUP-RLS-01` and `T-SUP-RLS-02`.
 
 ### 12.3 `support.break_glass_requests`
 
-- **Propósito:** expediente inmutable que solicita y, si completa quorum, delimita una ventana excepcional para una persona, propósito, caso y categorías exactos.
+- **Purpose (ADR-046):** immutable file that, the moment it is requested, opens a 60-minute exceptional window over one person, purpose, case and exact categories. Files requested before ADR-046 kept a quorum and opened only when it was complete.
 - **Dominio / fuente de verdad:** Soporte.
 - **Clasificación:** `highly_sensitive`.
 - **Columnas:** `id` · `requester_person_id uuid` · `requester_duty_assignment_id uuid` · `subject_person_id uuid` · `policy_code text default 'break_glass.v1'` · `categories text[]` · `purpose text` · `case_reference text` · `sensitivity_tier text` (`standard`, `restricted`) · `required_approvals smallint` · `requested_duration_minutes smallint` · `requested_at timestamptz` · `request_expires_at timestamptz` · `status text` (`requested`, `approved`, `rejected`, `closed`, `expired`) · `window_starts_at timestamptz` (nullable) · `window_ends_at timestamptz` (nullable) · `closed_at timestamptz` (nullable) · `reviewed_at timestamptz` (nullable) · `reviewed_by_person_id uuid` (nullable) · `reviewed_by_duty_assignment_id uuid` (nullable) · `review_outcome text` (nullable).
 - **FKs y borrado:** requester/subject/reviewer → `identity.people(id) RESTRICT`; duty FKs → `platform_duty_assignments(id) RESTRICT`; unique portadora `(id,requester_person_id,subject_person_id,requester_duty_assignment_id)` para eventos; sin cascadas.
-- **Uniques y checks:** requester ≠ subject; `request_expires_at = requested_at + interval '30 minutes'`; categorías no vacías, sin duplicados y del catálogo aprobable; tier/quorum/duración calculados (estándar 1/30, restringido 2/15); propósito cerrado y `case_reference` opaca/no vacía; forma exacta de ventana, cierre y revisión por estado; sujeto, alcance y propósito inmutables.
-- **Actores:** `A10/request_break_glass` crea y cierra sólo la propia; `A12` con deber compatible decide o revisa sin ejercer; la persona no consulta el expediente.
-- **RLS:** sin DML directo; `support.request_break_glass`, `decide_break_glass`, `close_break_glass` y `review_break_glass` revalidan rol base, deber exacto, AAL2, conflicto, quorum y timestamp. La falta de autoridad o de auditoría falla cerrada.
-- **Implementado:** `support.request_break_glass`, `decide_break_glass`, `exercise_break_glass`, `close_break_glass`, `list_break_glass_requests` y `break_glass_request_projection`. Derivan del alcance: `break_glass_category_tier`, `break_glass_scope_tier`, `break_glass_required_approvals`, `break_glass_duration_minutes`. La autoridad la comprueba `support.require_break_glass_duty`, sobre la que `allfit_api` **no** tiene `execute`: el runtime ejecuta las operaciones, nunca el guardia.
+- **Uniques y checks:** requester ≠ subject; `request_expires_at = requested_at + interval '30 minutes'`; categorías no vacías, sin duplicados y del catálogo aprobable; tier/quorum/duración calculados, as built by ADR-046 in `ck_break_glass_requests_derived`: 0 approvals and 60 minutes for both tiers, or one of the shapes asked for before (standard 1/30, restricted 2/15), never a mix such as 0/15 or 0/90; propósito cerrado y `case_reference` opaca/no vacía; forma exacta de ventana, cierre y revisión por estado; sujeto, alcance y propósito inmutables.
+- **Actores:** `A10/request_break_glass` crea y cierra sólo la propia; `A12` con deber compatible revisa sin ejercer (since ADR-046 nobody decides a window); la persona no consulta el expediente.
+- **RLS:** sin DML directo; `support.request_break_glass`, `close_break_glass` y `review_break_glass` revalidan rol base, deber exacto, AAL2, conflicto y timestamp (`decide_break_glass` was dropped by ADR-046). La falta de autoridad o de auditoría falla cerrada.
+- **Implementado:** `support.request_break_glass`, `exercise_break_glass`, `close_break_glass`, `review_break_glass`, `list_break_glass_requests` y `break_glass_request_projection` (`decide_break_glass` existed until ADR-046). Derivan del alcance: `break_glass_category_tier`, `break_glass_scope_tier`, `break_glass_required_approvals`, `break_glass_duration_minutes`. La autoridad la comprueba `support.require_break_glass_duty`, sobre la que `allfit_api` **no** tiene `execute`: el runtime ejecuta las operaciones, nunca el guardia.
 - **Divergencias con el diseño, verificadas:**
-  - **`review_break_glass` no existe.** La revisión posterior por `A12` no está implementada, y las columnas `reviewed_by_person_id`, `reviewed_by_duty_assignment_id` y `review_outcome` sí existen: hoy las escribe la decisión, no una revisión aparte. La revisión sigue pendiente.
+  - **`review_break_glass` no existe.** La revisión posterior por `A12` no está implementada, y las columnas `reviewed_by_person_id`, `reviewed_by_duty_assignment_id` y `review_outcome` sí existen: hoy las escribe la decisión, no una revisión aparte. La revisión sigue pendiente. **Corrected:** this divergence is out of date. `support.review_break_glass` exists since migration `20261017120000_who_checks_the_break_glass.sql` (`OP-SUP-006`, `T-SUP-BGR-01`), and since ADR-046 no decision writes these columns, because `decide_break_glass` is dropped.
   - **`status` nunca almacena `expired`.** El vencimiento no es una transición: nadie corre en el instante en que la ventana se cierra. `support.effective_break_glass_status(status, request_expires_at, window_ends_at)` lo **calcula** en cada lectura, así que una ventana pasada de hora y una solicitud que nadie decidió a tiempo leen `expired` sin que ningún proceso las haya tocado. Una lectura que confiara en la columna vería una ventana abierta que ya venció.
   - `purpose` y `sensitivity_tier` son enums (`support.break_glass_purpose` con cinco propósitos, `support.break_glass_tier`), no texto con `CHECK`.
   - Una **categoría prohibida no es un nivel más estricto: no tiene nivel**. `break_glass_scope_tier` lanza `42501` al encontrarla, así que no existe alcance ni precio que la conceda.
@@ -2539,11 +2751,18 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Índices:** `(requester_person_id,status,request_expires_at)`; `(subject_person_id,requested_at desc)`; `(status,request_expires_at)`; `(status,window_ends_at)`; `(reviewed_at) WHERE status IN ('closed','expired')`.
 - **Retención:** clase `platform_security_access`; expediente e historia no se borran en runtime y su purga queda bloqueada por `DB-P5-015`.
 - **Eventos diseñados:** `support.break_glass_requested.v1`, `support.break_glass_window_opened.v1`, `support.break_glass_closed.v1`, `support.break_glass_expired.v1`, `support.break_glass_reviewed.v1`.
-- **Eventos emitidos:** `support.break_glass_requested.v1`, `support.break_glass_decided.v1`, `support.break_glass_window_opened.v1`, `support.break_glass_closed.v1`. `break_glass_decided.v1` no estaba en el diseño y hace falta: un rechazo también es una decisión que alguien tiene que ver. **`break_glass_expired.v1` no se emite** porque el vencimiento se calcula y nadie corre en ese instante para emitirlo; si se quiere una notificación al vencer, hace falta un job que la produzca. `break_glass_reviewed.v1` espera a que exista la revisión.
+- **Eventos emitidos:** `support.break_glass_requested.v1`, `support.break_glass_decided.v1`, `support.break_glass_window_opened.v1`, `support.break_glass_closed.v1`. `break_glass_decided.v1` no estaba en el diseño y hace falta: un rechazo también es una decisión que alguien tiene que ver. **`break_glass_expired.v1` no se emite** porque el vencimiento se calcula y nadie corre en ese instante para emitirlo; si se quiere una notificación al vencer, hace falta un job que la produzca. `break_glass_reviewed.v1` espera a que exista la revisión. Since ADR-046 `support.break_glass_decided.v1` is no longer emitted, because nothing decides, and `support.break_glass_window_opened.v1` is emitted by the request itself.
+- **As built (ADR-046, migration `20261115090000_an_admin_opens_their_own_break_glass_window.sql`):**
+  - **Asking opens the window.** `support.break_glass_required_approvals(tier)` returns 0 and `support.break_glass_duration_minutes(tier)` returns 60 for both tiers. `support.request_break_glass` inserts the request with `status = 'approved'`, `window_starts_at` at the request and `window_ends_at` 60 minutes later, and emits `support.break_glass_requested.v1` and `support.break_glass_window_opened.v1` (`request_id`, `window_starts_at`, `window_ends_at`). It still writes `request_expires_at` 30 minutes after the request, which no longer gates anything for a new window.
+  - **What protected the person stays.** The closed purpose (`support.break_glass_purpose`) is required; forbidden categories are refused before anything is written; the requester is never the subject (`42501`); the case reference is required and must be a traceable code. Exercising, closing, the review and the legal-hold rule are unchanged.
+  - **Files from before stay valid.** `ck_break_glass_requests_derived` accepts 0/60 and the historical standard 1/30 and restricted 2/15 shapes, so rows asked for before keep their quorum and length. One still pending can no longer be approved and expires 30 minutes after it was asked.
+  - **Projection.** `support.break_glass_viewer_projection` no longer returns `viewer_can_decide`; it keeps `viewer_is_requester` and `viewer_can_exercise`. In the contract, `BreakGlassRequest.required_approvals` has minimum 0 and `requested_duration_minutes` maximum 60.
+  - Tests: `T-SUP-BG-SELF-01` (25), and `T-SUP-BG-01`, `T-SUP-BG-03`, `T-SUP-BGR-01`, `T-SUP-BG-TRAIN-01`, `T-PRV-AUD-01`, `T-SUP-RECERT-01`, `T-IDN-BODY-01`, `T-IDN-HEALTH-01` and `T-NUT-DISP-01` rewritten for windows that open on request.
 
 ### 12.4 `support.break_glass_approvals`
 
 - **Propósito:** decisión append-only de cada aprobador que aporta quorum o rechaza una solicitud.
+- **As built (ADR-046, migration `20261115090000_an_admin_opens_their_own_break_glass_window.sql`):** a historical record. `support.decide_break_glass` is dropped and `OP-SUP-002` is retired, so nothing writes this table any more. It keeps the approvals recorded before ADR-046 and stays append-only, and `support.review_break_glass` still keeps those approvers out of the review of their case. The actor, RLS and implementation notes below describe how the rows were written.
 - **Dominio / fuente de verdad:** Soporte.
 - **Clasificación:** `highly_sensitive`.
 - **Columnas:** `id` · `request_id uuid` · `approver_person_id uuid` · `approver_duty_assignment_id uuid` · `decision text` (`approved`, `rejected`) · `reason_code text` · `decided_at timestamptz`.
@@ -2551,7 +2770,7 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Uniques y checks:** `UNIQUE(request_id,approver_person_id)`; aprobador distinto de solicitante/sujeto y de todo aprobador previo, comprobado por trigger; decisión y columnas inmutables; un rechazo es terminal y una aprobación parcial no cambia la ventana.
 - **Actores:** sólo `A12/approve_break_glass` ajeno y sin conflicto inserta mediante función; auditor y A10 no insertan.
 - **RLS:** tabla base sin DML directo; lectura sólo por proyección de expediente para A12 autorizado. `support.decide_break_glass` serializa la solicitud y abre ventana únicamente al completar quorum.
-- **Implementado:** `support.enforce_break_glass_approver_independence` es el trigger que sostiene la separación de deberes, y `reject_break_glass_approval_rewrite` impide reescribir una decisión. La independencia vive ahí y **no se rederiva en la API ni en la pantalla**: `support.break_glass_viewer_projection` responde `viewer_is_requester`, `viewer_can_decide` y `viewer_can_exercise` para que el cliente no tenga una segunda copia de la regla que se desincronice. Son pistas, no autoridad: cada comando revalida por su cuenta. La sesión de Backoffice lleva `sub` y `sid` y ningún identificador de persona de dominio, así que sin esos tres campos el cliente no tendría forma de saberlo.
+- **Implementado:** `support.enforce_break_glass_approver_independence` es el trigger que sostiene la separación de deberes, y `reject_break_glass_approval_rewrite` impide reescribir una decisión. La independencia vive ahí y **no se rederiva en la API ni en la pantalla**: `support.break_glass_viewer_projection` responde `viewer_is_requester`, `viewer_can_decide` (removed by ADR-046) y `viewer_can_exercise` para que el cliente no tenga una segunda copia de la regla que se desincronice. Son pistas, no autoridad: cada comando revalida por su cuenta. La sesión de Backoffice lleva `sub` y `sid` y ningún identificador de persona de dominio, así que sin esos tres campos el cliente no tendría forma de saberlo.
 - **Consultas:** quorum por solicitud y cola de solicitudes pendientes.
 - **Índices:** unique anterior; `(request_id,decision)`; `(approver_person_id,decided_at desc)`.
 - **Retención:** misma clase y plazo que la solicitud; sin `UPDATE`/`DELETE` runtime; purga bloqueada por `DB-P5-015`.
@@ -2575,6 +2794,15 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Índices:** `(request_id,occurred_at)`; `(requester_person_id,occurred_at desc)`; `(subject_person_id,occurred_at desc)`; `(result,occurred_at desc)`.
 - **Retención:** misma clase y plazo que solicitud/aprobaciones; sin `UPDATE`/`DELETE` runtime; purga bloqueada por `DB-P5-015`.
 - **Eventos:** ninguno adicional; la fila y `privacy.access_events` son la evidencia.
+
+### Support metadata objects changed by ADR-046
+
+`support.metadata_queries` and the view `support.v_support_metadata` have no entry of their own in this dictionary and stay out of the table count. Migration `20261115100000_an_admin_finds_a_person_by_name.sql` (ADR-046 decisions 4 and 5) changes them as follows:
+
+- **`support.metadata_queries`** keeps one row per person search: `actor_person_id`, `actor_session_id`, `case_reference`, `lookup_kind`, `lookup_hash` (sha256, never the term in clear), `result_count` and `occurred_at`. `case_reference` is now nullable, and `ck_metadata_queries_case_reference` accepts null or a code matching `^[A-Z][A-Z0-9_-]{2,63}$`. `ck_metadata_queries_lookup_kind` adds `text` to `identifier`, `email` and `phone`: every search since writes `lookup_kind = 'text'`, the hash of the lowered, trimmed term and how many people it answered, whether or not it matched. Rows written before keep their kind and case.
+- **`support.v_support_metadata`** appends `display_name`, `contact_email` and `contact_phone` (full) to its columns, so `support.person_metadata` returns them in the person file. Its masked `contact_email_masked` and `contact_phone_masked` stay for the screens that still read them; it never carries the provider subject or separate given and family names.
+- **`support.search_people`** now has the signature `(p_actor_person_id uuid, p_actor_session_id uuid, p_case_reference text, p_query text, p_limit integer) returns jsonb` and answers `{ matches: [{ person_id, display_name, contact_email, contact_phone, account_status }], has_more }`; the overload that took a lookup kind is dropped. The full contract is in `OP-SUP-005` of the [operations matrix](V1_OPERATIONS_MATRIX.md).
+- Tests: `T-SUP-SEARCH-02` (27), `T-SUP-RLS-03` (35).
 
 ---
 
@@ -2606,27 +2834,27 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 - **Columnas:** `id` · `organization_id uuid` · `name text` · `status catalog.publication_status` · `created_at timestamptz`.
 - **FKs y borrado:** `organization_id → organizations.organizations(id) RESTRICT`; clave portadora `UNIQUE (id, organization_id)`.
 - **Uniques y checks:** `UNIQUE (organization_id, lower(name))`.
-- **Actores:** `admin` y `owner` escriben; el resto de la organización lee.
+- **Actores:** `admin` y `owner` escriben; el resto de la organización lee. Un plan publicado también se renombra.
 - **RLS:** `access_control.has_membership(organization_id)`; la escritura exige `manage_billing`.
 - **Consultas / índices:** `(organization_id, status)`.
 - **Retención:** con la organización.
-- **Eventos:** `payments.plan_created.v1`.
+- **Eventos:** ninguno se emite todavía; `payments.plan_created.v1` queda reservado.
 
 ---
 
 ### 13.3 `payments.plan_versions`
 
-- **Propósito:** versión publicada e **inmutable** de un plan: precio, moneda y periodo. Una suscripción congela una de estas y nunca cambia bajo los pies de la persona.
+- **Propósito:** versión publicada e **inmutable** de un plan: precio, moneda, periodo y modalidad. Una suscripción congela una de estas y nunca cambia bajo los pies de la persona.
 - **Dominio / fuente de verdad:** Pagos.
 - **Clasificación:** `operational`.
-- **Columnas:** `id` · `plan_id uuid` · `organization_id uuid` · `version_number integer` · `amount_minor bigint` · `currency_code text` (ISO 4217) · `billing_period text` (`month`, `year`) · `status catalog.publication_status` · `published_at timestamptz` · `deprecated_at timestamptz` (nullable).
+- **Columnas:** `id` · `plan_id uuid` · `organization_id uuid` · `version_number integer` · `amount_minor bigint` · `currency_code text` (ISO 4217) · `billing_period text` (`month`, `year`) · `delivery_mode text` (`in_person`, `remote`; default `in_person`) · `status catalog.publication_status` · `published_at timestamptz` · `deprecated_at timestamptz` (nullable).
 - **FKs y borrado:** `(plan_id, organization_id) → organization_plans(id, organization_id) RESTRICT`; clave portadora `UNIQUE (id, organization_id)`.
-- **Uniques y checks:** `UNIQUE (plan_id, version_number)`; `CHECK (billing_period in ('month','year'))`; `CHECK (amount_minor > 0)`. Sin `UPDATE` en runtime salvo la marca de deprecación: una versión publicada no se edita jamás.
+- **Uniques y checks:** `UNIQUE (plan_id, version_number)`; `uidx_plan_versions_live`, único parcial sobre `(plan_id) WHERE status = 'published'`: **un solo precio en venta por plan**; `CHECK (billing_period in ('month','year'))`; `ck_plan_versions_delivery_mode`; `CHECK (amount_minor > 0)`. Sin `UPDATE` en runtime salvo la marca de deprecación: `plan_version_guard_tg` congela también `delivery_mode`. Publicar acepta solo `COP` en pesos enteros; la columna sigue admitiendo cualquier ISO 4217.
 - **Actores:** `admin` y `owner` publican; nadie edita.
 - **RLS:** vía el plan; una organización nunca ve versiones de otra.
 - **Consultas / índices:** `(plan_id, status)`.
 - **Retención:** se conserva mientras exista una suscripción que la referencie.
-- **Eventos:** `payments.plan_version_published.v1`, `payments.plan_version_deprecated.v1`.
+- **Eventos:** ninguno se emite todavía; `payments.plan_version_published.v1` y `payments.plan_version_deprecated.v1` quedan reservados.
 
 ---
 
@@ -2795,18 +3023,18 @@ Dominio incorporado por DT-017. Regla que lo gobierna: **Allfit refleja el estad
 
 | Schema | Tablas fichadas |
 | --- | --- |
-| `identity` | 21 |
-| `organizations` | 11 |
+| `identity` | 22 |
+| `organizations` | 12 |
 | `relationships` | 6 |
-| `privacy` | 17 |
+| `privacy` | 18 |
 | `catalog` | 18 |
 | `planning` | 23 |
 | `execution` | 14 |
-| `nutrition` | 8 |
+| `nutrition` | 9 |
 | `payments` | 12 |
 | `system` | 4 |
 | `support` | 5 |
-| **Total** | **139** |
+| **Total** | **143** |
 
 ### 14.2 Invariantes transversales confirmadas por el diccionario
 

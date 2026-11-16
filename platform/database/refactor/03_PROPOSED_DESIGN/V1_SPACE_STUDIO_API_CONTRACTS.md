@@ -84,6 +84,7 @@ Las rutas personales `GET /studio/v1/me`, `GET /studio/v1/me/memberships` y `GET
 - Los claims `org_id`, `role` y `permissions` que WorkOS pueda transportar se ignoran para autorización de negocio. Organizaciones, roles, relaciones, consentimientos y deberes de plataforma viven en PostgreSQL (ADR-002 y ADR-028).
 - Space usa Authorization Code con PKCE como cliente público y nunca contiene una API key o client secret de WorkOS.
 - `auth_time` permite comprobar frescura de reautenticación, pero no basta para establecer AAL2. Sin evidencia verificable de MFA/step-up, cualquier operación AAL2 falla cerrada.
+  - **As implemented (STUDIO-54..56, migration `20261116090000_a_case_opens_the_frozen_history.sql`):** the historical access case is the first operation that uses `auth_time`. By the owner's decision of 8 November 2026 it asks for that freshness, not AAL2: a Studio sign-in less than ten minutes old, stored as `identity.access_sessions.authenticated_at` and renewed through `GET /studio/v1/auth/start?reauthenticate=true` (WorkOS `max_age=0`). Studio stays AAL1, and the AAL2 rule above still holds for every operation that asks for AAL2.
 
 ### 3.2 Formato
 
@@ -243,7 +244,7 @@ Sujeto implícito: la persona autenticada. Ningún endpoint recibe un `person_id
 | `GET` | `/visibility-denials` | `OP-PRV-017` | Her active denials, newest first, with the gym and the session. Implemented in STUDIO-47/48 |
 | `PUT` | `/executions/{id}/visibility` | `OP-PRV-006` | Ocultar por relación. Body `{relationship_id}`; never from the relationship the session was produced in. Implemented in STUDIO-47/48 |
 | `DELETE` | `/executions/{id}/visibility/{relId}` | `OP-PRV-007` | Shares it again from now on; never reopens a frozen window. Implemented in STUDIO-47/48 |
-| `GET` | `/access-events` | `OP-PRV-015` | Quién leyó qué y cuándo |
+| `GET` | `/access-events` | `OP-PRV-015` | Quién leyó qué y cuándo. Implemented in STUDIO-76: every read of her data by somebody else, allowed or denied, for 24 months, newest first, with the reader's name, organization and whether they were her holder or a cover; `allfit_team` for the Allfit One team's reads. Query `limit`, `cursor`, `scope_code`; `private, no-store`. Through `privacy.list_my_access_events`, never a view (ADR-047) |
 | `POST` | `/erasure-requests` | `OP-PRV-008` | |
 | `GET` | `/erasure-requests/{id}` | `OP-PRV-016` | Resolución por categoría |
 
@@ -537,7 +538,9 @@ expiración.
 
 | Método | Ruta | Operación | Scope exigido |
 | --- | --- | --- | --- |
-| `GET` | `/organizations/{orgId}/clients` | `OP-REL-010` | **Ninguno** — directorio sin datos fitness |
+| `GET` | `/organizations/{orgId}/clients` | `OP-REL-010` | **Ninguno** — directorio sin datos fitness. Since STUDIO-75, `q` finds by name (2 to 80 characters, without accents or case), never invitations and never beyond what the caller already lists |
+| `GET` | `/organizations/{orgId}/clients/{personId}` | `OP-REL-019` | None: the card says which categories she shares, never their content, and writes no `ACCESS_EVENT`. Only whoever attends her; a former attendant reads why for thirty days (STUDIO-76/77, ADR-047) |
+| `GET` | `/organizations/{orgId}/today` | `OP-REL-020` | None to open; each notice needs its capability, and `training` reads under her `relationship_training` grant, one `ACCESS_EVENT` per client evaluated (STUDIO-74) |
 | `POST` | `/organizations/{orgId}/client-invitations` | `OP-REL-001` | Ninguno — ofrecer no es conceder. An optional `program` needs `assign_programs` and a request for `relationship_training` at `contribute` (STUDIO-16) |
 | `GET` | `/organizations/{orgId}/relationships/{id}` | `OP-REL-011` | Ninguno — estado, no contenido |
 | `GET` | `/organizations/{orgId}/relationships/{id}/events` | `OP-REL-014` | Ninguno |
@@ -551,8 +554,11 @@ expiración.
 | `GET` | `/organizations/{orgId}/grants` | `OP-PRV-014` | Ninguno — estado del consentimiento |
 | `POST` | `/organizations/{orgId}/historical-access-cases` | `OP-PRV-018` | `manage_historical_access`; no concede lectura |
 | `POST` | `/organizations/{orgId}/historical-access-cases/{caseId}/closure` | `OP-PRV-019` | `manage_historical_access`; no concede lectura |
+| `GET` | `/organizations/{orgId}/historical-access-cases` | `OP-PRV-025` | None; a manager sees every case of the organization, and any other member only the cases that name them. Grants no read |
 
 Que ninguna de estas operaciones exija scope es deliberado: **gestionar la relación no es acceder a los datos.** Un `admin` administra clientes sin ver un solo registro fitness.
+
+**Historical access cases (STUDIO-54/56, migration `20261116090000_a_case_opens_the_frozen_history.sql`).** The three case routes are built as listed, under `/studio/v1`, with `cookieAuth`. Opening also requires a Studio sign-in less than ten minutes old (`403 reauthentication-required`); closing and listing do not. A case authorizes the opener or the professional who held the relationship at the cut, never another admin. Every answer is a `HistoricalAccessCase`, or a `HistoricalAccessCasePage` for the list, whose `status` reads `expired` once the case's hours run out. `V1_OPERATIONS_MATRIX.md` (`OP-PRV-018`, `-019`, `-025`) and `V1_OPENAPI_CONTRACT.md` §2 have the details.
 
 **Termination requests (STUDIO-26).** A request answers as `RelationshipTerminationRequest {request_id, relationship_id, status, reason, resolution, requested_by, resolved_by, created_at, resolved_at}`, with `status` one of `pending`, `withdrawn`, `rejected`, `resolved`, `superseded`. `OP-REL-009` answers `201`; `OP-REL-017` and `OP-REL-018` answer `200`. `OP-REL-011` carries the latest request as `termination_request`, or null: only the coach who asked and an owner or administrator ever receive one. Errors: `403` for an actor who could end the relationship herself, who is not the holder, or who may not withdraw or refuse; `404` for a relationship or request the actor cannot see; `409` for a second pending request or a request already settled; `422` for a blank reason or resolution.
 
@@ -573,7 +579,7 @@ Todas exigen la fórmula completa y escriben `ACCESS_EVENT`.
 | `POST` | `.../clients/{personId}/observations` | `OP-EXE-010` | Scope del contenido · `contribute`: `relationship_training` for training, `health_context` for pain or a limitation. Only on a session of this relationship (STUDIO-50) |
 | `POST` | `.../observations/{id}/revisions` | `OP-EXE-011` | `contribute` + autoría propia. Made over `expected_revision`, otherwise `409 stale-draft`; a reason is required (STUDIO-51) |
 | `POST` | `.../clients/{personId}/correction-proposals` | `OP-EXE-012` | `contribute`: `relationship_training`, with the `propose_corrections` capability. One field of one set she declared and he can see, her own history under `prior_training_history` included; one pending proposal per field. It writes no `ACCESS_EVENT` (STUDIO-52) |
-| `GET` | `/organizations/{orgId}/correction-proposals` | `OP-EXE-020` | `contribute`. **As implemented, no scope:** any live member lists only what they proposed there, never her value, and writes no `ACCESS_EVENT`. `target` appears only while the proposer still attends her and she shares her training (STUDIO-53) |
+| `GET` | `/organizations/{orgId}/correction-proposals` | `OP-EXE-020` | `contribute`. **As implemented, no scope:** any live member lists only what they proposed there, never her value, and writes no `ACCESS_EVENT`. `target` appears only while the proposer still attends her and she shares her training (STUDIO-53). A session she hid or annulled reads as `session_unavailable` (STUDIO-77) |
 
 ### 5.8 Planes y pagos
 
@@ -632,6 +638,17 @@ El header `X-Historical-Access-Case` contiene un UUID opaco. El backend lo valid
 
 `data` se construye desde proyecciones históricas por recurso. La ausencia de una fila o campo no distingue entre no capturado, denegado, no histórico, revocado o inexistente.
 
+**As implemented (STUDIO-55, migration `20261116090000_a_case_opens_the_frozen_history.sql`). Deviation.** The four routes exist under `/studio/v1`, with `cookieAuth`, `private, no-store`, and the header `X-Historical-Access-Case` required on each.
+
+- **Requirements.** A Studio sign-in less than ten minutes old replaces «MFA/AAL2» (`403 reauthentication-required`). The case is checked against the organization, the relationship, the membership the request acts as, its state and its hours, but not against a purpose: the request carries none. A case that cannot be exercised answers `404`, like one that does not exist, and the attempt is recorded against the person.
+- **No shared envelope.** The JSON above is not built. Each route has its own shape:
+  - `HistoricalRelationship` gives the relationship, the case (with its purpose) and the frozen categories that stayed readable, with `frozen_at`;
+  - `FrozenExecutionPage` and `FrozenExecution` give each session's `applied_scope`;
+  - `FrozenBodyProgressPage` gives one `applied_scope` for the page.
+- **«No distingue» holds for rows, not for categories.** A session that is not visible is `404`, whatever the reason. But when no category stayed readable, the session detail and body progress answer `403 scope-required` naming it, as the live reads do. The session list answers an empty page instead.
+- **The cut.** Sessions count when completed, not annulled, `ended_at <= cut_at`, with no correction after the cut and not hidden from the relationship then or since. Measurements count when `created_at <= cut_at`. No count or total is returned.
+- **Readable afterwards.** Only executed sessions and structured body measurements carry historical rules in V1. The detail has no observations, planned session or capture source.
+
 ### 5.6 Contenido y asignación
 
 | Método | Ruta | Operación |
@@ -650,10 +667,13 @@ El header `X-Historical-Access-Case` contiene un UUID opaco. El backend lo valid
 | `PATCH` | `/organizations/{orgId}/planned-sessions/{id}` | `OP-PLN-012` |
 | `POST` | `/organizations/{orgId}/assignments/{id}/prescription-revisions` | `OP-PLN-013` |
 | `POST` | `/organizations/{orgId}/assignments/{id}/cancellation` | `OP-PLN-014` |
+| `GET` · `POST` | `/organizations/{orgId}/movements` | `OP-CAT-009` · `OP-CAT-001` |
+| `GET` · `PATCH` | `.../movements/{id}` | `OP-CAT-010` · `OP-CAT-002` |
+| `POST` | `.../movements/{id}/archival` | `OP-CAT-003` |
 
 **As implemented (STUDIO-41..43).** `PATCH …/planned-sessions/{plannedSessionId}` takes `PlannedSessionReschedule` `{scheduled_on, expected_revision}` and returns the session as `RelationshipAssignmentSession`; the optimistic version is `expected_revision` in the body rather than `If-Match`, and a stale one answers `409 stale-draft` with `current_state`. `POST …/prescription-revisions` takes `PrescriptionRevisionCreate` `{planned_step_id, kind, value, unit_code}` and answers `201` with `PrescriptionRevision`. `POST …/cancellation` takes an empty body and answers `200` with `AssignmentCancellation`. All three are commands with `Idempotency-Key`, `cookieAuth`, `no-store`; a missing grant is `403 scope-required` naming `relationship_training:contribute`, and an assignment the organization no longer manages is `409 conflict`. Planning's CORS now allows `PATCH`.
-| `POST` · `PATCH` | `/organizations/{orgId}/movements[/{id}]` | `OP-CAT-001` · `OP-CAT-002` |
-| `POST` | `.../movements/{id}/archival` | `OP-CAT-003` |
+
+**As implemented (STUDIO-57..60).** All five use `cookieAuth`, require the exact Studio `Origin` and answer `private, no-store`. The search and the read need `manage_content`, like creating and editing, so staff get `403`; archiving needs `archive_movements`, which only owner and admin hold. `GET …/movements` takes `q`, `discipline`, `include_archived`, `limit` and `cursor` and answers `StudioMovementPage`: published global movements plus this organization's, each with `scope` and `archived`. `PATCH …/movements/{id}` takes `OrganizationMovementUpdate` `{expected_revision, …}`. The optimistic version travels in the body rather than in `If-Match`, and an old one answers `409 stale-draft`. Once a published version uses the movement, a new discipline, or a name that differs in more than case and spacing, answers `409 conflict` with `errors[0].code = movement-in-use`; `name_locked` says so beforehand. A taken name is `409` with `name-taken`, and an archived movement `409` with `movement-archived`. The archival takes no body and converges. A global movement or another organization's is `404` to every command.
 
 ### 5.7 Plataforma y soporte
 
@@ -671,6 +691,8 @@ El backend resuelve deber, vigencia y AAL2 desde la autorización interna; el cl
 
 El request break-glass declara propósito cerrado, `case_reference`, sujeto, categorías y duración. `relationship_training`/`prior_training_history`/`nutrition_guidance` son estándar: un A12 y máximo 30 minutos. `body_progress`/`health_context`/`nutrition_intake` son restringidas: dos A12 distintos y máximo 15 minutos. Una solicitud mixta con intake hereda el nivel restringido; `nutrition_media`, identidad, contacto, secretos, pagos, raw, documentos y notas privadas no son aprobables. El ejercicio usa proyecciones cerradas, revalida la categoría en cada lectura y registra `break_glass_event` y `ACCESS_EVENT` antes de devolver contenido. Nunca concede DML, exportación ni acceso a `OP-NUT-013`, storage, `media_ref`, URLs o bytes.
 
+**As built (ADR-046).** Since migration `20261115090000_an_admin_opens_their_own_break_glass_window.sql`, `POST /backoffice/v1/break-glass/requests` opens the window at once for 60 minutes, whatever the tier, with 0 required approvals; nobody approves it, and `A12/audit_break_glass` still reviews it afterwards when it did not request it. `OP-SUP-002` is retired: `POST /backoffice/v1/break-glass/requests/{requestId}/decisions` answers `404` and `decideBackofficeBreakGlass` and `BreakGlassDecision` are gone from the contract. The quorum and durations above describe only files asked for before. Since migration `20261115100000_an_admin_finds_a_person_by_name.sql`, `GET /backoffice/v1/support/people` takes `q`, an optional `case_reference` and `limit`, and the search and the person file answer the full name and contact (`OP-SUP-005`).
+
 ### 5.8 Nutrición
 
 | Método | Ruta | Operación | Scope · nivel |
@@ -683,6 +705,14 @@ El request break-glass declara propósito cerrado, `case_reference`, sujeto, cat
 
 Las cinco operaciones Studio exigen además relación/asignación/membresía efectivas y organización coincidente. Ninguna permite escribir comidas, decidir propuestas o devolver `media_ref`. OP-NUT-013 registra un `ACCESS_EVENT`, transmite el objeto saneado desde el backend, nunca redirige a storage y devuelve el mismo `404` sin bytes ante inexistencia o autorización no efectiva.
 
+**As implemented (STUDIO-61..65), migration `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql`.**
+
+- **Who reads:** the four reads need the attending assignment and the grant, with no capability and no credential (the owner's decision of 8 November 2026).
+- **Who proposes:** `POST` alone needs `guide_nutrition`, a `nutrition_professional` credential in force (`403 credential-required`) and `nutrition_guidance` at `contribute`.
+- **Frozen guidance** is not a projection of this route. It is `GET /studio/v1/organizations/{organizationId}/historical-relationships/{relationshipId}/nutrition/goal-versions`, with a case and a recent sign-in.
+- **Live history:** the live goal history masks her active goal when another relationship set it.
+- **The photo** is `image/jpeg` only.
+
 ## 6. Contrato de Catálogo
 
 | Método | Ruta | Operación | Cacheable |
@@ -691,13 +721,17 @@ Las cinco operaciones Studio exigen además relación/asignación/membresía efe
 | `GET` | `/studio/v1/professional-specialties` | `OP-CAT-013` | Sí, con `ETag` |
 | `GET` | `/studio/v1/professional-credential-types` | `OP-CAT-014` | Sí, con `ETag` |
 | `GET` | `/activity-types` | `OP-CAT-008` | Sí |
+| `GET` | `/studio/v1/catalog/disciplines` | `OP-CAT-007` | No: `private, no-store` |
+| `GET` | `/studio/v1/catalog/activity-types` | `OP-CAT-008` | No: `private, no-store` |
 | `GET` | `/activity-types/{id}/result-contracts` | `OP-CAT-012` | Sí |
 | `GET` | `/movements?discipline=&q=` | `OP-CAT-009` | Solo el subconjunto global |
 | `GET` | `/movements/{id}` | `OP-CAT-010` | Sí |
 | `GET` | `/equipment` | `OP-CAT-011` | Sí |
 | `GET` | `/scope-definitions` | `OP-PRV-012` | Sí, inmutable |
 
-Space precarga disciplinas, tipos de actividad, contratos y el subconjunto global de movimientos: sin ellos no puede validar localmente un borrador antes de sincronizar. Los movimientos **privados** de una organización nunca se sirven desde `/catalog`; se piden a `/studio/v1/organizations/{orgId}/movements`.
+Space precarga disciplinas, tipos de actividad, contratos y el subconjunto global de movimientos: sin ellos no puede validar localmente un borrador antes de sincronizar. Los movimientos **privados** de una organización nunca se sirven desde `/catalog`; se piden a `/studio/v1/organizations/{orgId}/movements`. As implemented (STUDIO-57..60), a person still reads the name of a gym's movement inside what she was planned or trained, through `movements_select_planned` and `movements_select_executed`; the Space search and `/catalog/v1/movements/{id}` stay global.
+
+As implemented (STUDIO-164), Studio reads the global disciplines and activity types under `/studio/v1/catalog`, where its session cookie travels, to pick the discipline a session template names and the activity type of its draft. Both answer an empty list until Backoffice publishes the first entries, and never a gym's own activity types.
 
 ## 7. Field-sets y versión de scope por proyección
 
@@ -713,11 +747,11 @@ Cada proyección de Studio declara qué `SCOPE_DEFINITION` consume y en qué ver
 | `identity.v_client_health_context` | `health_context` · `read` | Dolor, limitación y recuperación declarados, minimizados | Historia clínica, diagnósticos, laboratorios, documentos médicos, biometría continua, inferencias médicas |
 | `execution.v_client_executions` | `relationship_training` para lo producido en la relación; `prior_training_history` para lo autónomo o previo | Envelope, segmentos, resultados tipados de la familia, contrato y versión congelados, nivel alcanzado | Campos de otras categorías dentro de la misma fila; sesiones con denegación aplicable; muestras de sensor |
 | `execution.v_client_progress` | El más restrictivo de los inputs del derivado | Métrica, periodo, valor, algoritmo, versión, vigencia | Todo derivado cuyos inputs no sean íntegramente accesibles |
-| `nutrition.v_client_meals_live` | `nutrition_intake` · `read`; foto requiere también `nutrition_media` · `read` | Comida, ítems, cantidades, seis nutrientes; enlace autenticado a OP-NUT-013 solo con intersección | `media_ref`, URL de storage, EXIF, galería, guía, clínica e inferencias |
+| `nutrition.v_client_meals_live` | `nutrition_intake` · `read`; foto requiere también `nutrition_media` · `read` | Comida, ítems, cantidades, seis nutrientes; enlace autenticado a OP-NUT-013 solo con intersección | `media_ref`, URL de storage, EXIF, galería, guía, clínica e inferencias As built (STUDIO-61): no view. `nutrition.list_client_meals` reads through review policies under the contract scope `nutrition_review`. |
 | `nutrition.v_client_daily_summaries_live` | `nutrition_intake` · `read` | Fecha local y sumas de valores capturados, agregadas después de filtrar | Fotos, notas no autorizadas, `NULL` convertido en cero |
 | `nutrition.v_client_guidance_live` | `nutrition_guidance` · `read` | Versiones, targets, origen, racional, autor mínimo (`kind`, `person_id`) y decisiones | Nombre del autor, membresía/asignación/verificación, ingestas, medios, clínica, activación por profesional |
 | `nutrition.v_client_guidance_frozen` | `nutrition_guidance` frozen + caso/AAL2 | Solo versiones profesionales originadas en la relación, autor mínimo congelado y targets/decisiones `<=T` | Nombre/contexto interno del autor, comidas, fotos, resúmenes, metas personales, otras relaciones y post-corte |
-| `support.v_support_metadata` | Ninguno; rol `allfit_support` | Identificadores, estados, marcas de tiempo, errores, contadores | Todo contenido: nombres, contactos, perfil, ejecuciones, medidas, salud |
+| `support.v_support_metadata` | Ninguno; rol `allfit_support` | Identificadores, estados, marcas de tiempo, errores, contadores; since ADR-046 also `display_name`, `contact_email` and `contact_phone` | Todo contenido: perfil, ejecuciones, medidas, salud (names and contacts are shown since ADR-046) |
 
 Reglas de aplicación:
 
@@ -927,8 +961,15 @@ Comandos con varias escrituras que deben ser atómicas. La API los invoca dentro
 | `relationships.terminate_relationship(rel_id)` | `OP-REL-007/008` | **La más crítica:** toma el actor del contexto y usa un instante `T` único; **congela** grants (`frozen`, `frozen_at = T`), cierra asignaciones y suplencias, cierra periodos de gestión, desacopla asignaciones, pausa sesiones futuras, cancela correcciones y propuestas nutricionales de esa relación, invalida read models |
 | `open_historical_access_case(rel_id, membership_id, purpose, reference, expires_at)` | `OP-PRV-018` | Valida relación terminada, actor elegible, capacidad de gestión, MFA y ventana `<=24h`; crea un caso exacto |
 | `close_historical_access_case(case_id)` | `OP-PRV-019` | Cierra el caso e invalida cualquier contexto asociado |
-| `privacy.revoke_grant(grant_id)` | `OP-PRV-005` | Acepta `active` o `frozen`, fija `revoked_at`, cierra casos históricos abiertos e invalida proyecciones y cachés antes de confirmar. Implementada como `privacy.revoke_my_grant` (migración `20261022120000`): todavía no hay casos históricos ni proyecciones que tocar |
+| As built (STUDIO-54..56, migration `20261116090000_a_case_opens_the_frozen_history.sql`): `privacy.open_historical_access_case(person, session, organization, relationship, authorized_membership, purpose, case_reference, justification, duration_hours, idempotency_key, command_id, request_hash)` | `OP-PRV-018` | A recent sign-in on that session instead of MFA; `manage_historical_access`; purpose from the enum; 1 to 24 hours; a terminated relationship that still holds a frozen grant, locked `for share`; the opener or the holder at the cut (`IX-10`); one open case per relationship, membership and purpose. It closes an equivalent expired case first, enqueues `privacy.historical_access_case_opened.v1`, and returns `(document, replayed)` |
+| As built: `privacy.close_historical_access_case(person, organization, case, idempotency_key, command_id, request_hash)` | `OP-PRV-019` | `manage_historical_access`, no recent sign-in; converges on a closed case; `closed_by_manager`, or `expired` when past its hours; enqueues `privacy.historical_access_case_closed.v1`. There is no context to invalidate: every read checks the case again |
+| As built: `privacy.list_historical_access_cases(person, organization, relationship, limit, cursor_opened_at, cursor_id)` | `OP-PRV-025` | The policies decide which cases; keyset on `opened_at` and `id`, newest first |
+| As built: `privacy.read_historical_relationship`, `execution.list_frozen_executions`, `execution.read_frozen_execution` and `identity.list_frozen_body_progress`, each with `(person, session, organization, relationship, case, …)` | `OP-PRV-020` | `privacy.open_frozen_read` checks the recent sign-in, the request id and the membership, sets `app.purpose = 'frozen_history_review'`, checks the case and opens the contract scope `frozen_history`. Each read records `privacy.access_events` in `frozen` mode before answering |
+| `privacy.revoke_grant(grant_id)` | `OP-PRV-005` | Acepta `active` o `frozen`, fija `revoked_at`, cierra casos históricos abiertos e invalida proyecciones y cachés antes de confirmar. Implementada como `privacy.revoke_my_grant` (migración `20261022120000`): todavía no hay casos históricos ni proyecciones que tocar. As implemented (STUDIO-54..56): the historical cases now exist, and the trigger `trg_data_grants_after_update_historical_cases` closes the open ones of the relationship when a frozen grant is revoked, in the same transaction |
 | `privacy.log_access_event(subject_person_id, subject_organization_id, relationship_id, data_grant_id, historical_access_case_id, scope_code, scope_version, access_mode, resource, result)` | `OP-PRV-015`, `OP-ORG-013` y toda lectura amparada | Exige exactamente un sujeto; la rama organización valida membership activo/tenant, modo/recurso cerrados y contexto personal nulo; toma actor, membresía, propósito, request y tiempo del contexto y falla la lectura si no puede registrar |
+| As built: `privacy.list_my_access_events(person, scope_code, limit, before_occurred_at, before_id)` | `OP-PRV-015` | Her events read by somebody else, allowed or denied, for 24 months, with the reader's name, organization and attendance; keyset on `occurred_at` and `id`, newest first; writes nothing (STUDIO-76) |
+| As built: `relationships.read_client_card(person, organization, subject)` | `OP-REL-019` | The card of a client the caller attends, or the reason a former attendant stopped seeing her for thirty days through `relationships.former_attendance` and the contract scope `former_attendance`; writes nothing (STUDIO-76/77) |
+| As built: `relationships.read_studio_today(person, organization)` | `OP-REL-020` | The notices the caller's capabilities resolve; for `training`, one `privacy.log_access_event` per client evaluated, in the same transaction as the read (STUDIO-74) |
 | `create_assignment(rel_id, program_version_id, starts_on, tz)` | `OP-PLN-010` | Asignación + periodo de gestión + materialización de sesiones: **completa** si la versión tiene fecha de fin, **la semana de la asignación** si no la tiene. En ningún caso queda pendiente de un job de calendario |
 | `resolve_detached_assignment(asg_id, choice)` | `OP-PLN-015` | Reutiliza la misma asignación o cancela solo sesiones futuras no iniciadas |
 | `start_attempt(planned_session_id)` | `OP-EXE-001` | `attempt_number` único y monotónico bajo concurrencia |
@@ -941,8 +982,8 @@ Comandos con varias escrituras que deben ser atómicas. La API los invoca dentro
 | `nutrition.delete_meal(meal_id)` | `OP-NUT-004` | Disposición unitaria de estructura, proyecciones y medio |
 | `nutrition.publish_self_goal_version(...)` | `OP-NUT-007` | Versión/targets inmutables y única activa |
 | `nutrition.decide_goal_version(version_id, decision)` | `OP-NUT-008` | Una decisión; aceptación supersede/activa atómicamente |
-| `nutrition.propose_goal_version(person_id,...)` | `OP-NUT-012` | Comprueba contexto profesional/credencial/grant y supersede pendiente de la relación |
-| Proxy autenticado de foto nutricional | `OP-NUT-013` | Reevalúa contexto profesional y ambos scopes, registra acceso y transmite el objeto saneado sin redirect |
+| `nutrition.propose_goal_version(person_id,...)` | `OP-NUT-012` | Comprueba contexto profesional/credencial/grant y supersede pendiente de la relación As built (STUDIO-64): `nutrition.propose_goal_version(person, organization, subject, rationale, targets, idempotency_key, command_id, request_hash)`; credential `nutrition_professional`, `AF431` when missing. |
+| Proxy autenticado de foto nutricional | `OP-NUT-013` | Reevalúa contexto profesional y ambos scopes, registra acceso y transmite el objeto saneado sin redirect As built (STUDIO-65): `nutrition.open_client_meal_photo` plus the API stream. |
 
 Las funciones que actúan como entrada cerrada sobre tablas sin DML directo —`activate_person`, las funciones `identity.*staff_invitation`, todas las entradas `organizations.*` anteriores, `privacy.revoke_grant`, `relationships.terminate_relationship` y `privacy.log_access_event`— son `SECURITY DEFINER`, fijan `search_path = pg_catalog`, califican cada objeto y toman el actor del contexto transaccional cuando corresponde. `EXECUTE` está revocado a `PUBLIC`; `allfit_api` recibe solo las entradas HTTP de Organizaciones que consume y ningún DML directo sobre agregados o eventos protegidos.
 
@@ -975,18 +1016,18 @@ Los lookups `access_control.grant_of(relationship_id,scope_code)` y `access_cont
 | --- | --- | --- |
 | `identity.v_client_identity` | Studio · directorio | Sin datos fitness |
 | `identity.v_client_profile` | Studio | Field-set de la versión congelada |
-| `privacy.v_frozen_relationship_history` | Studio histórico | Solo campos `historical_readable`, filas `<= frozen_at`, denegaciones monotónicas y caso exacto |
+| `privacy.v_frozen_relationship_history` | Studio histórico | Solo campos `historical_readable`, filas `<= frozen_at`, denegaciones monotónicas y caso exacto. As built (STUDIO-55): not built; the four `OP-PRV-020` functions in §9 take its place, with frozen policies on `execution.executed_sessions`, `execution.execution_revisions` and `privacy.session_visibility_denials` |
 | `identity.v_client_body_progress` | Studio | URLs firmadas por petición |
 | `identity.v_client_health_context` | Studio | Minimizada |
 | `execution.v_client_executions` | Studio | Denegaciones **antes** de proyectar y contar |
 | `execution.v_client_progress` | Studio | Herencia de clasificación |
 | `planning.v_person_agenda` | Space | Resuelta en la zona horaria de la persona |
 | `privacy.v_person_consents` | Space | Grants, versión, actores que pueden ejercerlos |
-| `privacy.v_my_access_events` | Space | Solo `subject_person_id = access_control.person()`; excluye siempre eventos con sujeto organización |
-| `support.v_support_metadata` | Soporte | Solo metadatos operativos |
+| `privacy.v_my_access_events` | Space | Solo `subject_person_id = access_control.person()`; excluye siempre eventos con sujeto organización. As built (STUDIO-76): not a view; see `privacy.list_my_access_events` in §9, so `allfit_api` never reads `privacy.access_events` (ADR-047) |
+| `support.v_support_metadata` | Soporte | Solo metadatos operativos; since ADR-046 also the person's name and full contact |
 | `nutrition.v_my_meals` | Space | Comidas propias; URL firmada si existe medio |
 | `nutrition.v_my_daily_summaries` | Space | Agregado reproducible por fecha local |
-| `nutrition.v_client_meals_live` | Studio | Intake live; serializa únicamente un enlace autenticado a OP-NUT-013 cuando ambos scopes coinciden |
+| `nutrition.v_client_meals_live` | Studio | Intake live; serializa únicamente un enlace autenticado a OP-NUT-013 cuando ambos scopes coinciden As built: not a view; see `nutrition.list_client_meals`. A meal carries `has_photo`, not a link. |
 | `nutrition.v_client_daily_summaries_live` | Studio | Filtra antes de agregar |
 | `nutrition.v_client_guidance_live` | Studio | Guía live autorizada |
 | `nutrition.v_client_guidance_frozen` | Studio histórico | Solo guía profesional de la relación con `goal_versions.created_at<=T` |

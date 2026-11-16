@@ -37,6 +37,7 @@ Space y Studio no son dueños ni dominios de datos. Son consumidores de los mism
 | Ejecución | Sesiones, intentos, segmentos y resultados tipados | Desarrollado en este documento |
 | Soporte de plataforma | Diagnóstico por metadatos y expedientes break-glass excepcionales | Desarrollado y recertificado en este documento |
 | Nutrición | Ingestas manuales, nutrientes, fotos elegidas, resúmenes y objetivos versionados | Desarrollado y recertificado en este documento |
+| Lista de espera | Inscripciones previas a la cuenta de Allfit Space: autorización, código y referidos, Founding Members, premios y su borrado a los 90 días del lanzamiento | Decidido en `ADR-050`; se desarrolla con `TECH-292` |
 
 ## 3. Dominio de Identidad
 

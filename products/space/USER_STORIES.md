@@ -231,6 +231,7 @@ movilidad no se organizan en series y repeticiones.
 2. Veo todas las disciplinas que Allfit va a cubrir, no solo las que ya están listas, y en cada una reconozco lo que practico por lo que la disciplina contiene.
 3. **Solo puedo elegir una que esté disponible.** Las demás se ven y se leen, y dicen sin rodeos que todavía no se pueden elegir.
 4. Puedo cambiarla cuando quiera desde mi perfil.
+5. **Mientras haya una sola disponible, no se me pregunta**: entreno esa, y la aplicación no me pide elegir entre una opción.
 
 **Por qué una y no varias.** `HU-SP-012` preguntaba «una o varias disciplinas» junto
 con la experiencia. Con varias no habría **de cuál** puede depender el objetivo, que es
@@ -245,6 +246,17 @@ criterio 3 es lo que impide que eso se convierta en una promesa falsa: no se dej
 elegir, y **no se ofrece ningún aviso**, porque no se registra el interés de nadie. El
 catálogo de atributos guarda las seis desde el principio; lo que el contrato ofrece es
 una, igual que hace con `improve_performance` en `HU-SP-010`.
+
+**Fuerza por defecto.** Decidido el 9 de noviembre de 2026: con una sola disciplina
+disponible, la pantalla preguntaba algo que tenía una única respuesta posible. **El
+onboarding deja de mostrarla y todo el mundo entrena fuerza**, y el perfil tampoco la
+muestra. Rige el criterio 5; los criterios 1 a 4 vuelven cuando haya una segunda
+disciplina disponible, y con ellos la pantalla.
+
+**No se escribe ninguna afirmación en su lugar.** Una disciplina que la aplicación
+declarara por su cuenta se leería «declarada por ti» para una respuesta que la persona
+nunca dio, y la procedencia es parte de la promesa del Fitness ID. Sin afirmación, la
+disciplina efectiva es fuerza; quien ya la declaró conserva su afirmación intacta.
 
 ### HU-SP-010 — Decirle a Allfit qué quiero lograr
 
@@ -273,6 +285,10 @@ cinco tiene ese problema.
 disponible en el lanzamiento inicial— la lista pierde **correr una carrera**: es el
 único de los cinco que el entrenamiento de fuerza no persigue, y ofrecerlo sería
 prometer un plan que esa disciplina no va a escribir. Quedan cuatro.
+
+Desde el 9 de noviembre de 2026 la disciplina ya no se pregunta (`HU-SP-101`, criterio
+5), y el criterio 2 se resuelve con **fuerza**: sin disciplina declarada, la lista es la
+de fuerza, nunca la completa. Correr una carrera sigue fuera.
 
 El mapa vive en el cliente y no en PostgreSQL, a propósito. No es un invariante ni una
 frontera de seguridad —nada se rompe si conviven fuerza y correr una carrera— y es una
@@ -1822,11 +1838,10 @@ bloque 4 ya introduce.
 
 ## E-SP-13 · Mi plan con el gimnasio
 
-> **Diferida de V1** (1 de octubre de 2026). En la primera versión la aplicación
-> **no procesa pagos de gimnasios**. Allfit crea cada gimnasio, el gimnasio le paga
-> a Allfit por fuera de la aplicación, y quien entra invitado por un gimnasio activo
-> recibe Pro (`E-SP-15`). Estas historias se conservan para cuando se abra esa
-> puerta; su prioridad pasa a `después`.
+> **Reabierta para V1** el 9 de noviembre de 2026 (`ADR-048`), junto con `E-SP-14`. Un plan
+> presencial se paga aquí, en la página de Mercado Pago. Uno remoto se paga por fuera de la
+> aplicación, con el link que manda el gimnasio, y la aplicación lo muestra cuando está activo.
+> Pro sigue llegando por un gimnasio activo (`E-SP-15`).
 
 Lo que la persona le paga a un gimnasio es un **plan comercial**, nunca una
 "membresía": esa palabra significa trabajar en la organización.
@@ -1841,13 +1856,18 @@ ninguno.
 **quiero** ver los planes que ofrece y su precio
 **para** elegir cuál me sirve.
 
-`E-SP-13` · después
+`E-SP-13` · imprescindible
 
 **Criterios**
 
 1. Solo veo planes de gimnasios con los que **ya tengo relación**. Esto no es un buscador de gimnasios: descubrir gimnasios no existe todavía.
 2. Veo el precio, la moneda y si el cobro es mensual o anual.
 3. No veo planes retirados ni borradores.
+4. Solo veo planes **presenciales**. Un plan remoto no se ofrece en la aplicación.
+
+> **Criterion 4 implemented (TECH-130, backend).** Migration `20261120100000_space_offers_only_in_person_plans.sql` filters
+> `GET /space/v1/organizations/{organizationId}/plans` and `POST /space/v1/subscriptions` to
+> `delivery_mode = 'in_person'`. A remote version is refused like one not on offer.
 
 ### HU-SP-080 — Suscribirme a un plan
 
@@ -1855,16 +1875,19 @@ ninguno.
 **quiero** suscribirme a uno de sus planes
 **para** empezar a usar su servicio.
 
-`E-SP-13` · después
+`E-SP-13` · imprescindible
 
 **Criterios**
 
 1. El precio que veo al suscribirme **queda congelado**. Si el gimnasio sube el precio después, a mí no me sube: eso exige un plan nuevo.
-2. Mis datos de tarjeta van **directo a la pasarela del gimnasio**. Allfit nunca los ve ni los guarda.
+2. Pago en la página de Mercado Pago, que se abre desde la aplicación. Mis datos de tarjeta van **directo a la cuenta del gimnasio**, y Allfit One nunca los ve ni los guarda.
 3. **Suscribirme no comparte ninguno de mis datos.** El permiso sigue siendo una decisión aparte.
 4. Suscribirme tampoco crea la relación con el gimnasio: eso ya existía antes.
 5. Solo puedo tener un plan vivo a la vez con el mismo gimnasio.
 6. Si el gimnasio no tiene su medio de cobro configurado, se me dice claramente en lugar de dejarme a medias.
+7. Mercado Pago me pide el correo de mi cuenta de Allfit One, y la aplicación me dice cuál es antes de abrirlo.
+8. Mi plan queda **pendiente** hasta que Mercado Pago confirme el pago. Si vuelvo a intentarlo, retomo el mismo pago en lugar de crear otro.
+9. Un plan remoto no se compra en la aplicación. Lo pago con el link que me manda mi gimnasio, que abre una página de Allfit One en el navegador.
 
 ### HU-SP-081 — Ver mi plan y mis pagos
 
@@ -1872,13 +1895,14 @@ ninguno.
 **quiero** ver en qué estado está mi plan y qué he pagado
 **para** saber si estoy al día.
 
-`E-SP-13` · después
+`E-SP-13` · imprescindible
 
 **Criterios**
 
 1. Veo si estoy activa o suspendida, qué plan tengo, cuánto pago y cuándo es el próximo cobro.
 2. Veo cada cobro con su resultado, incluidos los que fallaron.
 3. Nunca veo un dato de tarjeta, porque Allfit no lo tiene.
+4. Un plan remoto lo veo igual, pero sin botón de pago ni link.
 
 ### HU-SP-082 — Cancelar mi plan
 
@@ -1886,21 +1910,22 @@ ninguno.
 **quiero** cancelar mi plan cuando quiera
 **para** dejar de pagar.
 
-`E-SP-13` · después
+`E-SP-13` · imprescindible
 
 **Criterios**
 
 1. Cancelar el pago **no termina mi relación** con el gimnasio ni revoca ningún permiso. Si además quiero cortar el acceso a mis datos, eso lo decido por separado.
 2. Mi Fitness ID y todo mi historial quedan intactos.
 3. Nadie del gimnasio puede cancelar por mí ni yo por nadie.
+4. Cancelar desde la aplicación también cancela el cobro en Mercado Pago. Si Mercado Pago no lo confirma, no se cancela nada y se me dice.
+5. Si cancelo desde mi cuenta de Mercado Pago, la aplicación lo muestra como cancelado en Mercado Pago, con los efectos de un plan suspendido, y puedo terminarlo desde aquí.
 
 ---
 
 ## E-SP-14 · Qué pasa si no pago
 
-> **Diferida de V1** junto con `E-SP-13`: sin pagos a gimnasios no hay cobro que
-> pueda fallar. En V1 lo equivalente es que termine la relación con el gimnasio, y
-> eso lo describe `HU-SP-088`.
+> **Reabierta para V1** junto con `E-SP-13` (`ADR-048`). Un cobro fallido suspende el plan solo
+> cuando Mercado Pago deja de reintentarlo.
 
 ### HU-SP-083 — Entender qué pierdo si mi pago falla
 
@@ -1908,11 +1933,11 @@ ninguno.
 **quiero** saber exactamente qué se me suspende y qué conservo
 **para** no asustarme y poder arreglarlo.
 
-`E-SP-14` · después
+`E-SP-14` · importante
 
 **Criterios**
 
-1. Si un cobro falla, mi plan queda **suspendido**, y se me avisa con claridad.
+1. Si un cobro falla, Mercado Pago lo reintenta durante unos días y mi plan sigue activo. Si todos los reintentos fallan, queda **suspendido**, y se me avisa con claridad.
 2. **Nada se termina solo, nunca.** Mi relación con el gimnasio sigue viva y mis permisos siguen intactos.
 3. **Conservo todo lo mío:** mi historial completo, mi entrenamiento por mi cuenta y mi registro de comidas siguen funcionando igual.
 4. Lo único que se pausa son las **sesiones futuras** del programa que me asignó ese gimnasio. Lo que ya entrené no se toca.
@@ -1921,6 +1946,7 @@ ninguno.
 7. Al pagar se quita **solo el bloqueo de esa suscripción** y se vuelve a calcular qué puedo usar con el estado actual; no se restaura una copia anterior.
 8. No tengo que volver a dar un permiso que siga vigente, pero un permiso revocado, una relación terminada, una asignación cambiada o una sesión cancelada, iniciada o pasada **no revive** por pagar.
 9. Si queda otro bloqueo activo, lo afectado sigue pausado. Solo vuelven las sesiones futuras, no iniciadas y no canceladas que todavía correspondan a una relación y asignación vigentes.
+10. Para un plan presencial puedo cambiar mi tarjeta desde la aplicación. Para uno remoto, mi gimnasio me manda el link otra vez.
 
 ---
 
@@ -2189,6 +2215,193 @@ presenta con la tarjeta de Hoy, que es además lo que va a ver cada mañana si a
 
 ---
 
+## E-SP-17 · Lista de espera y lanzamiento
+
+Antes de que Allfit Space esté en las tiendas, la persona se une a una lista de espera en
+`space.allfit.one`, desde la web y sin cuenta. Es la única épica que ocurre fuera de la
+aplicación. La fuente es el documento interno «Estrategia de lanzamiento de Allfit Space»
+v1.0, y las decisiones de diseño están en `ADR-050`.
+
+Cuatro reglas gobiernan la épica:
+
+1. **Sin autorización no se guarda nada** (Ley 1581 de 2012).
+2. **Las primeras 100 personas que confirman su correo son Founding Members**, numeradas del #001
+   al #100 en el orden en que confirman.
+3. **Un referido cuenta en tres momentos.** Suma al contador cuando confirma su correo, a los
+   premios cuando crea su cuenta de Allfit Space después del lanzamiento, y al bono de un
+   embajador cuando paga su primer mes de Pro. Lo que se descarta no suma a nadie.
+4. **Nada se sortea.** Los lugares van por orden y los premios por número de referidos: un sorteo
+   exige autorización de Coljuegos.
+
+**El lanzamiento** es la fecha que alguien del equipo marca en el Backoffice cuando Allfit Space
+ya está publicado en App Store y Google Play (`HU-BO-037`). Desde ella corren los 7 días de los
+Founding Members y los 90 días tras los cuales se borran los datos de quien nunca creó su cuenta.
+
+Los embajadores se escribirán como historias cuando se cierren sus reglas (`TECH-305`).
+
+### HU-SP-115 — Unirme a la lista de espera
+
+**Como** persona interesada en Allfit Space
+**quiero** unirme a la lista de espera desde `space.allfit.one`
+**para** enterarme cuando abra y tener mi link para invitar.
+
+`E-SP-17` · imprescindible
+
+**Criterios**
+
+1. Doy mi nombre, mi correo y mi autorización de datos. Si llegué con el link o el código de alguien, mi inscripción guarda quién me invitó. El idioma es el de la página en que me uní.
+2. Sin autorización no se guarda nada. Se registran la fecha y la versión de la política que acepté.
+3. Recibo un código propio de 4 a 16 letras y números, fácil de dictar, y un link con ese código.
+4. Al unirme veo mi código, mi link y mi contador, y me llega el correo para confirmar (`HU-SP-116`).
+5. Un correo no se inscribe dos veces, y para esto `ana.ruiz+x@gmail.com` y `anaruiz@gmail.com` son el mismo. Si vuelvo a escribir un correo que ya está, la página no muestra código ni contador: solo dice «Te enviamos tu link a tu correo», y me llega mi enlace privado (`HU-SP-117`). Así nadie ve los datos de otra persona escribiendo su correo. A cambio, esa respuesta distinta revela que el correo ya estaba en la lista, y solo eso.
+6. Con un correo desechable no me puedo inscribir.
+7. Inscribirme con mi propio código, o desde el mismo dispositivo que quien me invitó, no le suma a nadie.
+8. Hay un límite de intentos por conexión.
+
+### HU-SP-116 — Confirmar mi correo
+
+**Como** persona que se unió a la lista
+**quiero** confirmar mi correo
+**para** que mi lugar cuente.
+
+`E-SP-17` · imprescindible · HU-SP-115
+
+**Criterios**
+
+1. Al unirme recibo un correo con un enlace de confirmación de un solo uso, que vence a los 7 días.
+2. El enlace abre una página donde confirmo con un botón. Abrir el enlace no confirma nada: los filtros de correo abren los enlaces solos.
+3. La fecha en que confirmo queda registrada, y define el orden de los Founding Members.
+4. Hasta que confirmo, no cuento en el contador de quien me invitó ni puedo ser Founding Member.
+5. El correo va en el idioma en que me uní e incluye mi código, mi link, mi contador y el enlace privado «Ver mis referidos».
+6. Si el enlace venció o perdí el correo, puedo pedir otro, con límite de intentos. El nuevo deja sin efecto el anterior.
+7. Confirmar otra vez no cambia nada: la página me dice que ya confirmé.
+
+### HU-SP-117 — Ver cuántas personas se han unido con mi link
+
+**Como** persona en la lista
+**quiero** saber cuántos referidos válidos llevo y cuántos me faltan para el siguiente nivel
+**para** seguir invitando.
+
+`E-SP-17` · imprescindible · HU-SP-116
+
+**Criterios**
+
+1. El contador suma a quienes se unieron con mi código y confirmaron su correo, sin contar lo descartado.
+2. Los niveles son 5, 15, 30 y 100. Veo cuántos llevo y cuántos me faltan para el siguiente.
+3. Lo veo al unirme y en cada correo de la lista.
+4. Lo consulto cuando quiera en «mi link», una página a la que solo llego con el enlace privado «Ver mis referidos» de cada correo. No pide contraseña.
+5. Ese enlace es largo, aleatorio y solo mío. Sirve para ver mi código, mi link y mi contador, y para salir de la lista (`HU-SP-123`); para nada más.
+6. Nunca veo los nombres ni los correos de las personas que invité.
+7. Un enlace inválido responde igual que uno que no existe, y me ofrece pedir el correo de nuevo.
+
+### HU-SP-118 — Ser Founding Member
+
+**Como** una de las primeras 100 personas en confirmar su correo
+**quiero** saber que soy Founding Member y qué número tengo
+**para** crear mi cuenta a tiempo y no perder mi lugar.
+
+`E-SP-17` · imprescindible · HU-SP-116
+
+**Criterios**
+
+1. Las primeras 100 inscripciones confirmadas reciben un número del #001 al #100, en el orden en que confirmaron.
+2. Me llega un correo que dice «Eres Founding Member #037» cuando recibo el número.
+3. Cuando Allfit Space abre, tengo 7 días para crear mi cuenta con el mismo correo. Dos días antes de que venzan me llega un aviso.
+4. Si no la creo a tiempo, pierdo el número. Lo recibe la siguiente inscripción confirmada que no tiene número, con el mismo número y 7 días desde ese momento.
+5. Antes de que venza mi plazo, el número también pasa a la siguiente persona si salgo de la lista o si el equipo marca mi inscripción como fraude (`HU-BO-035`).
+6. Una vez creo mi cuenta, el número es mío y no se transfiere. Solo lo pierdo si borro mi cuenta o por fraude comprobado, y entonces nadie lo hereda.
+7. Ser Founding Member no me impide ganar premios por referidos.
+
+### HU-SP-119 — Ver mi insignia de Founding Member en mi perfil
+
+**Como** Founding Member
+**quiero** ver «Founding Member #037» en mi perfil de Allfit Space
+**para** que mi lugar quede reconocido.
+
+`E-SP-17` · imprescindible · HU-SP-118
+
+**Criterios**
+
+1. Al crear mi cuenta de Allfit Space con el mismo correo, ya verificado, mi inscripción queda enlazada a mi cuenta.
+2. Si tengo número, mi perfil muestra la insignia con el número de forma permanente, pague Pro o no.
+3. El número queda en mi cuenta: no se pierde cuando se borran los datos de la lista (`ADR-050`).
+4. Si borro mi cuenta, pierdo la insignia y el número.
+5. Enlazar mi cuenta también me cuenta como referido con cuenta para quien me invitó, si la creé después del lanzamiento (`HU-SP-121`).
+
+### HU-SP-120 — Pagar Allfit Pro al precio de fundador
+
+**Como** Founding Member
+**quiero** pagar Allfit Pro a COP 19.900 al mes
+**para** mantener ese precio mientras siga suscrito.
+
+`E-SP-17` · imprescindible · HU-SP-119, HU-SP-085
+
+**Criterios**
+
+1. La pantalla de Pro me ofrece la suscripción de fundador solo si tengo número de Founding Member. Los demás ven el precio normal.
+2. El precio se mantiene mientras la suscripción siga activa, aunque Allfit suba el precio de Pro.
+3. Si la cancelo y vuelvo, ya no tengo el precio de fundador.
+4. La suscripción de fundador da Allfit Pro igual que la normal (`HU-SP-086`).
+
+### HU-SP-121 — Recibir mis premios por referidos
+
+**Como** persona que invitó a otras
+**quiero** recibir los meses de Allfit Pro que gané
+**para** usarlos en Allfit Space.
+
+`E-SP-17` · imprescindible · HU-SP-117, HU-SP-119
+
+**Criterios**
+
+1. Para los premios solo cuentan los referidos que confirmaron su correo y crearon su cuenta de Allfit Space después del lanzamiento, con el mismo correo.
+2. Niveles: 5 referidos dan 1 mes, 15 dan 2 meses, 30 dan 3 meses y 100 dan 1 año de Allfit Pro y merch de Allfit One.
+3. **Los niveles se suman:** recibo el premio de cada nivel que alcanzo. Con 30 referidos recibo 1 + 2 + 3 = 6 meses; con 100, 18 meses y el merch.
+4. Cada premio me llega por correo como un código de oferta de la tienda del teléfono en que creé mi cuenta, tomado de la bolsa que carga el equipo (`HU-BO-036`). Cada código se entrega una sola vez y queda registrado a quién.
+5. Necesito mi propia cuenta para recibir premios. Si llego a un nivel antes de crearla, el premio me espera hasta que la cree.
+6. Si la bolsa se queda sin códigos, el premio queda pendiente y se entrega cuando el equipo cargue más.
+7. Un premio entregado no se retira. Un referido marcado como fraude deja de contar para los siguientes.
+8. Del merch se encarga el equipo, que me escribe para pedir los datos de envío.
+
+### HU-SP-122 — Enterarme de que Allfit Space abrió
+
+**Como** persona en la lista de espera
+**quiero** recibir un correo cuando Allfit Space abra
+**para** descargar la app y crear mi cuenta a tiempo.
+
+`E-SP-17` · imprescindible · HU-SP-116
+
+**Criterios**
+
+1. Cuando el equipo marca el lanzamiento (`HU-BO-037`), me llega un correo una sola vez, aunque la acción se repita.
+2. Solo lo reciben las inscripciones confirmadas, porque las demás nunca probaron su correo.
+3. Dice que Allfit Space ya está disponible, enlaza a las dos tiendas y pide crear la cuenta con el mismo correo de la inscripción, para que mi número y mis referidos queden en ella.
+4. Si soy Founding Member, dice mi número y la fecha exacta en que vence mi plazo de 7 días.
+5. Dice que, si no creo mi cuenta, mis datos de la lista se borran 90 días después del lanzamiento.
+6. Va en mi idioma e incluye mi contador y el enlace «Ver mis referidos», como todos los correos de la lista.
+
+### HU-SP-123 — Salir de la lista de espera
+
+**Como** persona en la lista
+**quiero** salir de la lista cuando quiera
+**para** que Allfit One deje de tener mis datos.
+
+`E-SP-17` · imprescindible · HU-SP-115
+
+*Historia nueva del 10 de noviembre de 2026. La pide la Ley 1581: quien autoriza puede revocar
+la autorización.*
+
+**Criterios**
+
+1. Cada correo de la lista trae un enlace para salir, y «mi link» también lo ofrece.
+2. Salgo con un botón en la página. Abrir el enlace no borra nada, por la misma razón que en `HU-SP-116`.
+3. Al salir se borran mi nombre, mi correo, mi código y las huellas de mi dispositivo y mi conexión, y dejo de recibir correos de la lista.
+4. Si era Founding Member y mi plazo no había vencido, mi número pasa a la siguiente persona (`HU-SP-118`).
+5. Las personas que invité siguen en la lista, pero ya no le suman a nadie.
+6. Si ya creé mi cuenta de Allfit Space, salir de la lista no la toca. Mi número y mis premios entregados se quedan en la cuenta.
+7. Si nunca creo mi cuenta, mis datos se borran solos 90 días después del lanzamiento.
+
+---
+
 ## Resumen
 
 | Épica | Historias | Imprescindibles |
@@ -2206,17 +2419,18 @@ presenta con la tarjeta de Hoy, que es además lo que va a ver cada mañana si a
 | `E-SP-10` Nutrición | `HU-SP-067` – `HU-SP-074`, `HU-SP-113`, `HU-SP-114` | 0 de 10 |
 | `E-SP-11` Sincronización con apps de salud | `HU-SP-075` | 0 de 1 |
 | `E-SP-12` Contacto y notificaciones | `HU-SP-076` – `HU-SP-078` | 0 de 3 |
-| `E-SP-13` Mi plan con el gimnasio · diferida | `HU-SP-079` – `HU-SP-082` | 0 de 4 |
-| `E-SP-14` Qué pasa si no pago · diferida | `HU-SP-083` | 0 de 1 |
+| `E-SP-13` Mi plan con el gimnasio | `HU-SP-079` – `HU-SP-082` | 4 de 4 |
+| `E-SP-14` Qué pasa si no pago | `HU-SP-083` | 0 de 1 |
 | `E-SP-15` Allfit Pro | `HU-SP-084` – `HU-SP-088` | 5 de 5 |
 | `E-SP-16` Hoy y navegación | `HU-SP-089` – `HU-SP-094`, `HU-SP-100` | 4 de 7 |
-| **Total** | **99 historias** | **49 imprescindibles** |
+| `E-SP-17` Lista de espera y lanzamiento | `HU-SP-115` – `HU-SP-123` | 9 de 9 |
+| **Total** | **108 historias** | **62 imprescindibles** |
 
 El camino mínimo para lanzar es: crear cuenta y entrar, activar el Fitness ID,
 ver qué toca hoy, entrenar y registrarlo aunque no haya señal, ver el historial,
 aceptar la invitación de un gimnasio, decidir qué se comparte y poder cortarlo,
-y tener Pro, por el gimnasio o pagándoselo a Allfit. En V1 no hay pagos a
-gimnasios dentro de la aplicación.
+y tener Pro, por el gimnasio o pagándoselo a Allfit. Los planes presenciales
+de un gimnasio se pagan dentro de la aplicación, con Mercado Pago (`ADR-048`).
 
 **Nutrición no está entre lo imprescindible** aunque ya tenga todo el modelo
 listo: es la rebanada más independiente y puede entrar justo después del

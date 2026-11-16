@@ -94,6 +94,13 @@ COMMIT;
 | `app.platform_role` | Rol de plataforma vigente, resuelto en la transacción contra `support.platform_role_assignments` | Actores de plataforma; **nunca** aceptado desde el cliente, ni desde un grupo de autenticación, ni desde caché |
 | `app.historical_access_case_id` | Caso histórico abierto y verificado | Solo lectura `frozen` |
 
+**As implemented (STUDIO-54..56, migration `20261116090000_a_case_opens_the_frozen_history.sql`). Deviation.** Neither of the last two rows exists as a setting:
+
+- **`app.authn_assurance`:** Studio stays AAL1, and no `aal2` is ever set. The stronger authentication the frozen read asks for is a recent sign-in. `identity.require_recent_studio_authentication(session_id)` checks that the Studio session of the request, which the API passes as an argument and the function matches to `access_control.person()`, has an `authenticated_at` less than ten minutes old (`AF401` otherwise). It is the owner's decision of 8 November 2026 (ADR-023, *As implemented*).
+- **`app.historical_access_case_id`:** the case travels as the HMAC-signed contract scope `frozen_history`, opened by `privacy.open_frozen_read` with `access_control.open_contract_scope('frozen_history', case_id)` only after the case is found exercisable, and read by the frozen policies through `access_control.contract_scope('frozen_history')`. A value the client sets cannot forge it.
+- **`app.purpose`:** it is `frozen_history_review` for every frozen read.
+- **New scopes:** two more contract scopes, `historical_case_settlement` (a relationship) and `historical_case_membership` (a membership), let the closing triggers see and close the cases they make ineligible.
+
 **Reglas de contexto:**
 
 1. Un contexto ausente **no** significa acceso amplio: significa `anonymous`, y `anonymous` no lee ninguna tabla de dominio.
@@ -168,6 +175,28 @@ access_control.actor_kind() = 'professional'
 ```
 
 El caso no reemplaza ninguna condición y `manage_historical_access` no aparece en la lectura: sirve para abrir/cerrar casos, no para ejercerlos. La asignación profesional efectiva tampoco aparece; el antiguo titular necesita un caso igual que cualquier otro actor elegible.
+
+**As implemented (STUDIO-55, migration `20261116090000_a_case_opens_the_frozen_history.sql`).** The formula is split in three functions, none executable by `allfit_api` (`T-PRV-HIST-INT-12`):
+
+- `access_control.historical_case_exercisable(case_id)` holds when all of these do:
+  - the actor kind is `person`, since Studio runs on the person actor;
+  - the case belongs to `access_control.org()`;
+  - it names the membership the request acts as (`app.actor_membership_id`), and the actor owns that membership;
+  - it is `open` and `expires_at > clock_timestamp()`;
+  - the person's account is not `closed`;
+  - the authorized membership still qualifies: an active membership in an active organization, with a current `owner` or `admin` role if she opened the case for herself, or `owner`, `admin` or `coach` if she is the former holder.
+- `privacy.frozen_category(case_id, scope_code, resource)` returns the `frozen` grant of the case's relationship for that scope when its version has a non-excluded `historical_readable` rule for the resource and does not exclude all of it.
+- `access_control.can_read_frozen(case_id, scope_code, resource)` is the conjunction of the two.
+
+**Deviations from the formula above:**
+
+- **The cut:** it is the case's `cut_at`, which the eligibility trigger checked against the relationship's `ended_at` when the case opened, and not `grant.frozen_at` per row. A session counts if `ended_at <= cut_at` and no `execution.execution_revisions` row was created after the cut. A measurement counts if `created_at <= cut_at`.
+- **Recent sign-in, purpose and request id:** a sign-in less than ten minutes old replaces `aal2`, and `privacy.open_frozen_read` checks it together with the request id and the purpose, before the predicate and outside it.
+- **No purpose match:** a case does not match a purpose at read time; its purpose is recorded, not compared.
+- **Fields:** they are filtered by `privacy.scope_reads_frozen(definition, resource, field)` in the closed function.
+- **Denials:** `frozen_session_denied` is part of `access_control.reads_frozen_session`, the function the session policy calls: a denial for the relationship that is `active`, or that has `frozen_denied_at`.
+- **Retention:** not checked, because no frozen data has a retention end yet.
+- **Physical form:** the formula is the policy `executed_sessions_select_frozen`, with `execution_revisions_select_frozen` and `session_visibility_denials_select_frozen` so the cut and the denials can be evaluated under forced row security. Each policy checks that the contract scope `frozen_history` is open and then calls a function (`access_control.reads_frozen_session`, `frozen_case_covers_person`, `frozen_case_covers_relationship`). The functions are SQL with `set search_path`, which PostgreSQL never inlines, so the cases, revisions and denials stay out of every other plan that reads sessions, such as `movements_select_executed`. Body measurements have no frozen policy: `identity.list_frozen_body_progress` reads them through the existing owner policy and applies the cut and the fields itself.
 
 ### 5.3 Antipatrón prohibido en los predicados
 
@@ -248,6 +277,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **`T-PERSON-1` (positiva)** — Una persona lee y actualiza su propia fila.
 - **`T-PERSON-2` (negativa)** — Una persona no puede leer la fila de otra, ni siquiera conociendo su identificador.
 - **`T-PERSON-3` (negativa)** — Un coach con membresía y rol pero **sin** asignación efectiva no obtiene ninguna fila de cliente.
+  - **As implemented (STUDIO-77), deviation in letter (ADR-047):** the client card (`OP-REL-019`) answers a coach who attended her through his current membership, for thirty days, with `{kind: former, person_id, reason, lost_at}`: the id he sent, a reason code and an instant. No row of `identity.people`, no name and no relationship reach him. Everyone else gets the same `404`. Tests: `T-REL-CARD-02`.
 - **`T-PERSON-4` (negativa)** — Un `INSERT` directo con el rol `allfit_api` falla: solo la función de activación crea personas.
 
 #### `ACCESS_ACCOUNT`
@@ -280,7 +310,7 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **`T-SESSION-4` (concurrencia)** — Solo la versión esperada rota el refresh token; el compare-and-swap perdedor no sobrescribe la versión ganadora.
 - **`T-SESSION-5` (revocación)** — Una sesión revocada deja de cargar inmediatamente.
 - **`T-SESSION-6` (superficie)** — Una sesión Studio conserva AAL1 compatible y nunca carga en Backoffice; una fila Backoffice no puede existir sin AAL2, `password_totp`, evidencia y vencimientos.
-- **`T-SESSION-7` (tiempo)** — Quince minutos sin actividad u ocho horas absolutas cierran la sesión aunque el token WorkOS continúe vigente.
+- **`T-SESSION-7` (time)** — Sixty idle minutes or twelve absolute hours end a Backoffice session even while the WorkOS token is still valid (ADR-046; `T-IDN-BACKOFFICE-SWEEP-01` and `T-SUP-STANDING-01` assert 59 and 61 minutes).
 
 #### `ACCESS_ACCOUNT_MFA_FACTOR` · `BACKOFFICE_AUTHENTICATION_ATTEMPT` · `MFA_FACTOR_RECOVERY_EVENT`
 
@@ -563,9 +593,15 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **`T-REL-4` (negativa)** — Una persona no puede tener dos relaciones activas con la **misma** organización: lo impide un índice único parcial.
 - **`T-REL-5` (positiva)** — Terminar la relación **congela** los grants (`frozen`, con `frozen_at`), desacopla las asignaciones y pausa las sesiones futuras en **una** transacción, con un único instante efectivo.
 - **`T-REL-8` (positiva)** — Con caso exacto y `access_control.can_read_frozen`, la superficie histórica devuelve el conjunto autorizado **hasta la fecha de corte** y **ninguna** fila posterior. Se prueba creando una ejecución después del corte y verificando que no aparece ni en detalle ni en conteos.
+  - **As implemented (STUDIO-55):** `T-PRV-HIST-RLS-12`, `-API-02`, `-API-11` and `-API-13`. The historical surface returns no counts.
 - **`T-REL-9` (negativa)** — Un grant `frozen` **no** habilita ninguna escritura: ni observaciones, ni propuestas de corrección, ni asignaciones.
 - **`T-REL-6` (negativa)** — Los datos creados después de la terminación no son visibles para la organización anterior.
 - **`T-REL-7` (negativa)** — Una relación nueva con la misma organización no hereda gestión, grants, notas privadas ni acceso a la asignación desacoplada.
+- **As implemented, `former_attendance` (STUDIO-77, migration `20261118100000_a_coach_opens_the_card_of_a_client.sql`).** The policy `service_relationships_select_former_attendance` is `for select to allfit_owner using (id::text = (select access_control.contract_scope('former_attendance')))`. It admits one row, only while that contract scope is open.
+  - **Who opens it:** only `relationships.former_attendance`, which `relationships.read_client_card` calls when the caller does not attend the person. It opens the scope for the relationship the caller's current membership last attended, reads `status` and `ended_at`, and closes it before returning. `allfit_api` cannot execute it.
+  - **Why:** telling a former attendant whether she left or he was removed (`HU-STUDIO-084`) needs how the link ended, and the normal predicate hides that row from him once he no longer attends her.
+  - **Tests:** `T-REL-CARD-02` checks in `pg_policies` that the policy is `SELECT` for `allfit_owner` only and that its predicate reads the scope through a `(SELECT …)`, once per statement; that the scope is closed again after the card answers; and every reason through the card. It also reads the policy directly as `allfit_owner`: without the scope the lost link is out of reach, with the scope naming it that link is read, and no other link opens with it. Dropping the policy, or opening it to every row, turns these red.
+- **As implemented, search and the card (STUDIO-75/76).** Neither adds a policy on relationships. The directory search (`OP-REL-010` with `q`) still reads through the policy above, so a coach finds only the people assigned to him (`T-REL-DIRECTORY-03`). The live card checks the attending assignment of the caller's membership itself, with the predicate of `relationships.actor_is_assigned` (`T-REL-CARD-01`).
 
 #### `RELATIONSHIP_PROFESSIONAL_ASSIGNMENT` · suplencias
 
@@ -666,6 +702,7 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 - **`T-GRANT-5` (negativa)** — Membresía o rol `admin` sin asignación ni capacidad **no** permiten ejercer el grant.
 - **`T-GRANT-6` (positiva)** — Revocar corta el acceso en la misma transacción: una lectura inmediatamente posterior devuelve vacío, sin ventana de caché.
 - **`T-GRANT-9` (positiva)** — Revocar un grant `frozen` lo cambia a `revoked`, cierra todos los casos abiertos de su relación e impide la siguiente lectura de ese scope.
+  - **As implemented (STUDIO-54..56):** `trg_data_grants_after_update_historical_cases` closes them in the same transaction. Tests: `T-PRV-HIST-AUTO-04..06`, `T-PRV-HIST-API-28` and `historical-access-case-concurrency.test.ts` (a revocation racing an opening).
 - **`T-GRANT-7` (negativa)** — Un grant `read` no habilita ninguna escritura; un `contribute` conserva procedencia y no sobrescribe.
 - **`T-GRANT-8` (negativa)** — Cambiar organización, parte responsable, finalidad o scope exige nueva aceptación: el grant anterior no se reutiliza.
 
@@ -695,6 +732,7 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
   - **Why the intent still holds:** no function returns a denial row to an organization, and `allfit_api` has no privilege on the table, so no organization reads this table through the API.
   - **Grants:** `allfit_api` has none, against the `SELECT/INSERT/UPDATE/DELETE` listed above; writes go through `privacy.hide_session` and `privacy.restore_session`.
   - **Tests:** `T-PRV-HIDE-RLS-01..04`, `T-EXE-AUTHORIZED-RLS-03` and `-RLS-06`. `T-DENY-2` (aggregates) and `T-DENY-6` (planning links) have nothing to test yet.
+- **As implemented (STUDIO-55, migration `20261116090000_a_case_opens_the_frozen_history.sql`). Deviation.** A third policy, `session_visibility_denials_select_frozen` (`for select`), lets the denials of the case's relationship be seen inside the contract scope `frozen_history` while that case is exercisable. It exists for the same reason as the screening policy: the frozen session policy must see them to exclude a session. No read returns a denial. `T-DENY-8` and `T-DENY-9` are `T-PRV-HIST-RLS-12`, `-RLS-14` and `-API-11`: a denial `active` at the cut, or restored after it with `frozen_denied_at` kept, hides the session from the case. A denial restored before the cut does not.
 
 #### `HISTORICAL_ACCESS_CASE`
 
@@ -716,6 +754,26 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 - **`T-HIST-5` (positiva)** — El antiguo titular con membresía activa y caso exacto lee solo el field-set histórico hasta `T`.
 - **`T-HIST-6` (negativa)** — `health_context`, fotos, EXIF, perfil actual y filas posteriores a `T` permanecen ausentes.
 - **`T-HIST-7` (negativa)** — Ninguna policy histórica concede `INSERT`, `UPDATE`, `DELETE` o exportación masiva.
+- **As implemented (STUDIO-54..56, migration `20261116090000_a_case_opens_the_frozen_history.sql`). Deviation.** RLS is enabled and forced, and every policy is `to allfit_owner`. `allfit_api` has **no** privilege on the table, against the `SELECT`, `INSERT` and `UPDATE(status, closed_at)` listed above. It reaches the cases only through `privacy.open_historical_access_case`, `privacy.close_historical_access_case`, `privacy.list_historical_access_cases` and the frozen reads (`T-PRV-HIST-RLS-01/02`).
+  - **The policies:**
+    - `historical_access_cases_select_manager`: the case belongs to `access_control.org()` and the actor has `manage_historical_access` there;
+    - `historical_access_cases_select_authorized`: the actor owns `authorized_membership_id`, so the member a case names finds it, open or closed;
+    - `historical_access_cases_select_settlement` and `historical_access_cases_update_settlement`: the case's relationship is the contract scope `historical_case_settlement`, or its authorized membership is `historical_case_membership`. Only the closing triggers open those scopes, whoever caused the change: the person revoking, or an admin changing a membership or a role;
+    - `historical_access_cases_insert_manager`: `manage_historical_access` in `access_control.org()`, and the actor owns `opened_by_membership_id`;
+    - `historical_access_cases_update_manager`: `manage_historical_access` in `access_control.org()`.
+
+    There is no delete policy, and the immutability trigger refuses delete and truncate for the owner too.
+  - **Exercise is not a row policy on the case:** it is `access_control.historical_case_exercisable`, evaluated by the frozen policies on the data (§5.2). The case itself is visible to its authorized member through `historical_access_cases_select_authorized`.
+  - **Context:** organization and membership from the route, a recent sign-in instead of `aal2`, `app.purpose = 'frozen_history_review'`, `app.request_id`, and the case in the contract scope `frozen_history` (§4).
+  - **Indexes:** they are in `V1_DATA_DICTIONARY.md` §7.8. The policies use `idx_historical_access_cases_organization_opened` and `idx_historical_access_cases_authorized`, and the open case is found by `uidx_historical_access_cases_open`.
+  - **Tests:**
+    - `T-HIST-1` is `T-PRV-HIST-RLS-11`, `-API-19` and `-API-27`;
+    - `T-HIST-2` is `T-PRV-HIST-RLS-17`, `-API-25` and `-API-26`. The purpose is not compared at read time;
+    - `T-HIST-3` is `T-PRV-HIST-VAL-07..10`, `-AUTO-01..03` and `-AUTH-04/05`;
+    - `T-HIST-4` is `T-PRV-HIST-RLS-16`, `-API-22..24`, `-INT-04`, `-VAL-02` and `-AUTH-01/02`, `-AUTH-11`, with a recent sign-in in place of `aal2`;
+    - `T-HIST-5` is `T-PRV-HIST-API-01..18` and `-API-21`;
+    - `T-HIST-6` is `T-PRV-HIST-INT-13` and `-API-17`. Photos and the profile have no historical rule, so they are never read, and no test asks for them;
+    - `T-HIST-7`: every frozen policy is `for select`, and no function writes domain data, though no assertion names this.
 
 #### `ACCESS_EVENT`
 
@@ -734,11 +792,17 @@ El recurso más sensible del modelo: es el que convierte una relación en acceso
 - **`T-ACCESS-3` (positiva)** — Si el evento no puede escribirse, la lectura falla. Se prueba forzando el fallo de la inserción.
 - **`T-ACCESS-4` (positiva)** — Los accesos de un suplente y los de break-glass aparecen distinguidos y son visibles para la persona.
 - **`T-ACCESS-5` (positiva)** — Toda lectura `frozen`, permitida o denegada, registra caso, modo, recurso, propósito, `request_id` y resultado; la persona puede verla.
+  - **As implemented (STUDIO-55):** `T-PRV-HIST-API-05`, `-API-12`, `-API-16`, `-API-20`, `-API-23` and `-INT-11`. The rows are described in `V1_DATA_DICTIONARY.md` §7.9.
 - **`T-ACCESS-6` (negativa)** — `A10` y `A12` no pueden hacer `SELECT` directo sobre `privacy.access_events`.
 - **`T-ACCESS-7` (positiva)** — `A12/audit_break_glass` obtiene solo metadatos `access_mode='break_glass'`; `A10` ve únicamente sus eventos de soporte y la persona ve los eventos cuyo sujeto es ella.
 - **`T-ACCESS-8` (organización)** — `OP-ORG-013` registra sujeto organización, modo `organization_operational`, recurso cerrado, actor/persona/membresía/request/purpose de contexto y todos los campos de relación/grant/caso/scope nulos antes de devolver contenido.
 - **`T-ACCESS-9` (negativa)** — Rechaza cero/dos sujetos, membership inactivo, de otro tenant o de otra persona, recurso distinto y cualquier contexto personal en la rama organización; el fallo revierte la lectura.
 - **`T-ACCESS-10` (proyección)** — `privacy.v_my_access_events` devuelve solo filas `subject_person_id = access_control.person()` y nunca eventos cuyo sujeto es organización.
+- **As implemented, her access log (STUDIO-76, migration `20261118110000_a_person_reads_who_read_her_data.sql`). Deviation (ADR-047).** There is no `privacy.v_my_access_events` and no self `SELECT` policy: `A2` reads her events only through `privacy.list_my_access_events`, a `security definer` function owned by `allfit_owner`, and `allfit_api` still has no privilege on `privacy.access_events`.
+  - **The function's filter:** `subject_person_id` is the actor's person (`42501` otherwise), `actor_person_id` is somebody else, `occurred_at` is within 24 months, and an optional `scope_code`. An event whose subject is an organization never matches, because its `subject_person_id` is null.
+  - **`T-ACCESS-4`:** each row says whether the reader was holder or cover at that instant, and `break_glass` and `support_metadata` reads come as `allfit_team` with the person's name. `T-PRV-ACCESSLOG-01` asserts both.
+  - **`T-ACCESS-10`:** `T-PRV-ACCESSLOG-01` asserts that she sees only her own events, that nobody reads another person's log, and that the table stays closed to `allfit_api`.
+- **As implemented, today writes here (STUDIO-74).** `OP-REL-020` writes one `live`, `allowed` row per client whose training it evaluates (`resource = 'relationships.studio_today'`, `purpose = 'studio_attention_today'`) through `privacy.log_access_event`, and none for a client without an active `relationship_training` grant (`T-REL-TODAY-02`).
 
 #### `ERASURE_REQUEST` · `RETENTION_POLICY` · `DISPOSITION_CASE` · `DISPOSITION_ITEM` · `DISPOSITION_EVENT`
 
@@ -813,6 +877,13 @@ El catálogo es el único dominio con lectura amplia. Su riesgo no es la fuga de
 - **`T-MOV-1` (negativa)** — Una organización **no** ve los movimientos privados de otra, ni por búsqueda, ni por identificador directo, ni por conteo de resultados.
 - **`T-MOV-2` (positiva)** — Promover un movimiento a global crea uno nuevo enlazado como sucesor y **no** reescribe las referencias históricas.
 - **`T-MOV-3` (positiva)** — Archivar lo retira de la búsqueda sin romper las versiones publicadas ni las ejecuciones que lo referencian.
+- **As implemented (STUDIO-57..60, migration `20261113090000_a_gym_names_its_own_movements.sql`). Deviations.** Every policy is on `allfit_owner` under `FORCE ROW LEVEL SECURITY`.
+  - **Grants:** `allfit_api` has no privilege on `catalog.movements` or `catalog.movement_revisions`, against the `SELECT`, `INSERT` and `UPDATE` listed above, and only `SELECT` on the children. It writes an organization's movements through three closed commands and reads them through two closed reads (`T-CAT-MOVEMENT-RLS-01/02`, `-RLS-16`).
+  - **`A2`, added:** `movements_select_planned` (in a step of a version planned for her: `planned_steps` joined to `planned_sessions` on the version, with `person_id = access_control.person()`) and `movements_select_executed` (in an exercise, a strength set or a mobility result of a session she trained) let a person read a gym's movement she trains, and its other names through the inherited alias policy. Nothing else of the gym's library opens, and the Space search and detail stay global. Allowed: `-RLS-03`, `-RLS-04`, `-RLS-08`. Denied: `-RLS-05` (neither planned nor trained), `-RLS-06` (a member of another organization), `-RLS-07` (a member whose organization was not set), `-RLS-09` (the other names of what she cannot see), `-RLS-10/11` (the Space detail and search).
+  - **Archiving is `A4` and `A5` only.** It requires the new capability `archive_movements`, which coaches do not hold, not just `manage_content` (`T-CAT-MOVEMENT-ARCHIVE-RLS-01`, `-ARCHIVE-API-01/02`).
+  - **Children, write policies:** `movement_aliases_all_organization`, `movement_equipment_all_organization` and `movement_variants_all_organization` admit writes for the organization's own movements with `manage_content`. Equipment must be published global, and a variant's base a published global movement. Allowed: `-RLS-17` (other names), `-RLS-21` (equipment), `-RLS-23` (a variant of a global movement). Denied: `-RLS-18` (staff), `-RLS-19` and `-RLS-20` (another organization, for names and for equipment), `-RLS-22` (a variant of the gym's own movement).
+  - **`MOVEMENT_REVISION`:** `movement_revisions_select_member` reads the organization's rows, and `movement_revisions_insert_author` inserts only as the acting membership with `manage_content` or `archive_movements`. No policy admits update or delete, and a trigger refuses both. Allowed: `-RLS-12`. Denied: `-RLS-13` (another organization), `-RLS-14` (claiming an organization he does not belong to), `-RLS-15` (a person who trains with the movement), `-RLS-24` (a revision for another organization).
+  - **`T-MOV-1`:** `T-CAT-MOVEMENT-SEARCH-API-08` and `-API-20` (another organization's movement is neither found nor read, even when it is planned for the searcher). **`T-MOV-3`:** `T-CAT-MOVEMENT-ARCHIVE-INT-02..06`. **`T-MOV-2`** stays unbuilt: there is no promotion to the global library.
 
 #### `RESULT_CONTRACT` · `ACTIVITY_TYPE_RESULT_CONTRACT` · `CONTRACT_FIXTURE`
 
@@ -1075,7 +1146,7 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
   - **`T-PROP-4`:** `T-EXE-PROPOSAL-API-18` (`allfit_api` can neither select, insert nor update a proposal, nor update `execution.strength_sets`).
   - **Policy tests, `T-EXE-PROPOSAL-01` (49):** `select_self` `-RLS-01` (allowed) and `-RLS-02` (another person sees none); `select_proposer` `-RLS-03` (allowed) and `-RLS-04` (not by naming a colleague's membership); `insert_contribute` `-RLS-05` (denied with a read-only grant), `-RLS-06` (denied when signed as another professional) and `-RLS-07` (allowed); `update_self` `-RLS-08` (the proposer does not decide), `-RLS-09` (nor does another person), `-RLS-10` (she does not cancel) and `-RLS-11` (her decision is allowed).
   - **Policy tests, `T-EXE-PROPOSAL-DECIDE-01` (31):** `select_worker` `-SYS-RLS-01` (only what is due) and `update_worker` `-SYS-RLS-02` (it only expires) and `-SYS-RLS-03` (never one within its thirty days).
-  - **Policy tests, `T-EXE-PROPOSAL-CANCEL-01` (20):** `-CANCEL-RLS-01/02` (outside a contract, an unrelated professional sees and cancels none); `select_cancellation` `-CANCEL-RLS-03` (allowed) and `update_cancellation` `-CANCEL-RLS-04` (not another session's), `-05` (it only cancels) and `-06` (allowed); `select_detachment` `-CANCEL-RLS-07` (nothing of another relationship) and `-09` (allowed); `update_detachment` `-CANCEL-RLS-08` (nothing of another relationship) and `-10` (allowed). `-CANCEL-LIST-01/02` show both lists keep a cancelled proposal.
+  - **Policy tests, `T-EXE-PROPOSAL-CANCEL-01` (20):** `-CANCEL-RLS-01/02` (outside a contract, an unrelated professional sees and cancels none); `select_cancellation` `-CANCEL-RLS-03` (allowed) and `update_cancellation` `-CANCEL-RLS-04` (not another session's), `-05` (it only cancels) and `-06` (allowed); `select_detachment` `-CANCEL-RLS-07` (nothing of another relationship) and `-09` (allowed); `update_detachment` `-CANCEL-RLS-08` (nothing of another relationship) and `-10` (allowed). `-CANCEL-LIST-01/02` show both lists keep a cancelled proposal. Since STUDIO-77 the file has 22: `-CANCEL-LIST-03` shows Studio reads a hidden and an annulled session alike as `session_unavailable` (`execution.proposal_for_proposer`), and `-CANCEL-LIST-04` that she still reads which.
 
 #### `REVISION_EVENT` · `RESULT_VALIDATION_EVENT`
 
@@ -1133,6 +1204,13 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 - **Condición RLS base** — `access_control.is_self(person_id)`. Las tablas hijas heredan mediante FK/`EXISTS` al `meal` propio.
 - **Condición Studio** — sin `SELECT` a tablas base; `nutrition.v_client_meals_live` exige `access_control.can_guide_nutrition(person_id,'read')` y `nutrition_intake/read`.
 - **Medios** — Space puede recibir una URL firmada para una comida propia. Studio solo recibe un enlace a `OP-NUT-013`, que reevalúa `access_control.can_guide_nutrition`, `nutrition_intake/read` y `nutrition_media/read` en cada GET, registra `ACCESS_EVENT`, transmite el objeto saneado y nunca redirige a storage; media aislada no produce una fila ni bytes. Break-glass jamás habilita `nutrition_media`, `OP-NUT-013`, storage, `media_ref`, URLs o bytes.
+- **As implemented (STUDIO-61, -62, -65)** — Migration `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql`.
+  - **Deviation:** reading needs no `can_guide_nutrition`, capability or credential, only the attending assignment and the grant (ADR-027, *As implemented*). There is no `nutrition.v_client_meals_live`.
+  - **Policies:** `meals_select_review`, `meal_items_select_review` and `meal_nutrient_values_select_review` (`for select to allfit_owner`) admit rows when both hold:
+    - `person_id` is the subject of the relationship in the contract scope `nutrition_review`;
+    - `access_control.can_access(relationship, 'nutrition_intake', 'read')` is true.
+  - **The contract scope** is opened only by the definers `nutrition.list_client_meals`, `read_client_daily_summaries` and `open_client_meal_photo`, after `identity.open_client_category` has recorded the read.
+  - **The photo:** `has_photo` needs a `nutrition_media` grant whose version shares `media_ref`, and the photo route needs the same. Both answer as if there were no photo otherwise.
 - **Grants mínimos** — `allfit_api` ejecuta funciones y vistas cerradas; `UPDATE/DELETE` directos revocados.
 - **Índices** — meals `(person_id,occurred_at DESC,id DESC)`; hijos `(meal_id,position)`; valores único `(meal_item_id,nutrient_definition_id)`.
 
@@ -1148,6 +1226,20 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 - **Condición RLS base** — persona mediante `goal_sets.person_id`; hijos heredan por FK.
 - **Propuesta profesional** — `access_control.can_guide_nutrition(person_id,'contribute')`, relación/asignación/contexto coincidentes y credencial vigente.
 - **Frozen** — solo `nutrition.v_client_guidance_frozen`, `access_control.can_read_frozen(...,'nutrition_guidance',...)`, origen profesional de la relación y `goal_versions.created_at<=T`.
+- **As implemented (STUDIO-63, -64)** — Migration `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql`.
+  - **Live review** (contract scope `nutrition_review`):
+    - `goal_versions_select_review` admits this relationship's versions and her `active` one, with `nutrition_guidance/read`;
+    - `goal_targets_select_review` follows a visible version;
+    - `goal_decisions_select_review` admits decisions only on this relationship's versions.
+  - **Proposing** (contract scope `nutrition_goal_proposal`, always with the literal `contribute`):
+    - `goal_sets_select/insert/update_proposal`;
+    - `goal_versions_select_proposal`, which exists only to number the new version;
+    - `goal_versions_update_proposal`, `proposed` → `superseded`, this relationship only;
+    - `goal_versions_insert_proposal`: author is the actor through his own membership, plus `identity.credential_verification_is_effective(…, 'nutrition_professional')`;
+    - `goal_targets_select/insert_proposal`.
+  - **Ending** (contract scope `relationship_detachment`): `goal_versions_select/update_detachment`, `proposed` → `cancelled`.
+  - **Frozen:** `goal_versions_select_frozen`, `goal_targets_select_frozen` and `goal_decisions_select_frozen`. Each guards on `(select access_control.contract_scope('frozen_history')) is not null`, then calls `nutrition.reads_frozen_goal_version(relationship, created_at)` or `reads_frozen_goal_decision(version, decided_at)`. These cut at the case's `cut_at` and need the frozen version's historical rule.
+  - **No views:** there is no `nutrition.v_client_guidance_live` or `_frozen`.
 - **Grants mínimos** — contenido de versiones/targets inmutable; estados/decisiones solo por funciones cerradas.
 - **Índices** — goal set único `(person_id)`; versiones `(goal_set_id,created_at DESC,id DESC)` y `(origin_relationship_id,created_at DESC,id DESC)`, activo único y pendiente único por relación; targets `(goal_version_id,nutrient_definition_id)`; decisión única `(goal_version_id)`.
 
@@ -1181,6 +1273,25 @@ Comparten política porque comparten dueño y sensibilidad: heredan íntegrament
 - **`T-NUT-RLS-26` (positiva y negativa)** — La persona lee y da su propio consentimiento de reconocimiento; otra persona no lo lee, no lo da en su nombre y la tabla no le muestra filas ajenas (`OP-NUT-017`).
 - **`T-NUT-RLS-27` (negativa)** — El rol de runtime no escribe en el catálogo de alimentos: solo cambia por curaduría (`ADR-041`).
 - **`T-NUT-RLS-28` (negativa)** — El rol de runtime no escribe productos de Open Food Facts: solo cambian por curaduría (`ADR-041`).
+- **`T-NUT-RLS-29` (positiva y negativa)** — As implemented (STUDIO-63): the live goal history shows her active goal's targets, but says who set it only when this relationship proposed it.
+- **`T-NUT-RLS-30` (negativa)** — As implemented (STUDIO-63): without `nutrition_guidance` the live goal history answers `scope-required` and reads no row.
+- **As implemented (STUDIO-61..65), mapping.** Reading needs no capability or credential, so `T-NUT-RLS-07/08` no longer describe the build. What each id asserts:
+  - **In `T-NUT-STUDIO-01` (46):**
+    - `-04`: holder and cover read;
+    - `-06`: reads are recorded first;
+    - `-07`: a coach who does not attend her finds no client;
+    - `-08`: owner and admin read nothing by role;
+    - `-09`: hidden fields, and no photo without media;
+    - `-10`: `meals_select_review` read directly, and media alone shares no meal;
+    - `-11` to `-13`: the photo;
+    - `-14`: totals only from shared rows;
+    - `-15/16`: revocation, read directly too;
+    - `-20`: live goals, with `goal_versions_select_review` and `goal_decisions_select_review` read directly;
+    - `-29/30`: the active goal and the missing grant.
+  - **In `T-NUT-STUDIO-02` (30):**
+    - `-18`: who may propose: the attending coach with `guide_nutrition` and a credential in force;
+    - `-19`: `read` never proposes, a lapsed verification never proposes, and the insert policy refuses a direct insert.
+  - **In `T-NUT-HIST-01` (17):** `-23/24` (the frozen cut), with `T-NUT-HIST-RLS-01..03` reading the frozen policies directly.
 
 ### 7.11 Pagos y planes
 
@@ -1258,12 +1369,19 @@ Este dominio tiene una particularidad: **el `coach` no aparece en ninguna fila**
 - **`T-BG-6` (positiva)** — Un A12 distinto decide una solicitud estándar; una restringida permanece cerrada hasta dos aprobadores distintos.
 - **`T-BG-7` (negativa)** — `A10` no aprueba, `A12` no ejerce y otro `A10` no usa ni cierra una ventana ajena aunque conozca su ID.
 - **`T-BGG-01..12`** — Quorum, plazos, AAL2, conflictos, categorías prohibidas, auditoría previa, revisión independiente y suspensión por abuso según el contrato de gobernanza.
+- **ADR-046 (as built, migrations `20261115090000_an_admin_opens_their_own_break_glass_window.sql` and `20261115100000_an_admin_finds_a_person_by_name.sql`)** — Decision 2: asking opens the window, with 0 required approvals and 60 minutes for every tier; `support.decide_break_glass` is dropped, so nobody inserts into `break_glass_approvals` any more and the `A12` approval column above, the approval conditions and `T-BG-1`, `T-BG-6`, the «`A10` no aprueba» half of `T-BG-7` and the quorum cases of `T-BGG-01..12` describe only files asked for before. A window is still never opened over one's own data, forbidden categories are still refused, every exercise still writes its evidence first, and the reviewer stays independent of the requester and the subject (`T-SUP-BG-SELF-01`, `T-SUP-BGR-01`). Decision 4: the search matches part of a name, email or phone, and `support.v_support_metadata` and the search answer the full name and contact, replacing the name and contact half of `T-BG-5`; profile, execution, measurement and health fields stay out, and every returned person gets a `privacy.access_events` row (`T-SUP-SEARCH-02`, `T-SUP-RLS-03`). Decision 5: the support reads take an optional case reference, which is still a traceable code when given.
 
 ### 7.12 Rol base y deberes de plataforma
 
 Son controles independientes y acumulativos: el rol base permite iniciar sesión;
 el deber autoriza una operación. Si cualquiera se corrompe o se acepta desde un
 origen no confiable, **todo lo demás deja de valer**.
+
+Since ADR-046 (migration `20261114090000_an_admin_holds_every_duty.sql`) the role brings all
+thirteen duties as rows with `basis = 'admin_role'`, and they last as long as it does. Both
+checks still run in every transaction; for an administrator the role guarantees the duty, so
+the deny case that remains is a Backoffice session without an active role. A duty held
+through the role is never suspended, recertified or revoked on its own.
 
 #### `PLATFORM_ROLE_ASSIGNMENT` · `PLATFORM_DUTY_ASSIGNMENT`
 
@@ -1275,11 +1393,12 @@ origen no confiable, **todo lo demás deja de valer**.
 
 - **Condición RLS** — `access_control.has_platform_role('allfit_admin') AND access_control.has_platform_duty(<operación>) AND access_control.aal()>=2`, todo resuelto **dentro de la transacción** contra las tablas. Nunca desde WorkOS AuthKit, cabecera, payload o caché. El código de operación determina el deber; el caller no lo elige.
 - **Grants mínimos** — tablas base sin DML directo; `allfit_api` sólo `EXECUTE` sobre funciones cerradas. **Sin `DELETE` para ningún rol runtime.**
-- **Índice para la policy** — rol `(person_id,status)` y único parcial vigente; deber unique parcial `(person_id,duty_code)` más `(person_id,status,valid_to)` y `(duty_code,status,valid_to)`.
+- **Índice para la policy** — rol `(person_id,status)` y único parcial vigente; duty partial unique `(person_id,duty_code,basis)` (ADR-046) más `(person_id,status,valid_to)` y `(duty_code,status,valid_to)`.
 - **`T-ROLE-1` (negativa)** — Nadie se asigna su propio rol: lo impide un `CHECK`, no el código.
 - **`T-ROLE-2` (negativa)** — No se puede retirar el último `allfit_admin` activo.
 - **`T-ROLE-3` (negativa)** — Ni `allfit_admin` puede borrar o editar el historial de asignaciones: sin `DELETE` y con las columnas de alta inmutables. Es lo que impide que alguien se dé el rol, lea datos y borre la evidencia.
-- **`T-ROLE-4` (negativa)** — Una persona con rol base pero sin deber vigente no ejecuta ninguna operación.
+- **`T-ROLE-4` (negative, rewritten by ADR-046)** — A Backoffice session without an active `allfit_admin` role holds no duty and runs no operation. A person with the role holds every duty, so the earlier case «role without duty» no longer exists; the pgTAP suites that denied an admin without a given duty now deny a session without an active role (`T-SUP-STANDING-01` and the rewritten `T-SUP-*`, `T-ORG-*`, `T-IDN-*`, `T-PRV-*`, `T-CAT-*` and `T-PAY-PLAN-01`).
+- **`T-ROLE-7` (ADR-046)** — Granting the role brings the thirteen duties; withdrawing it revokes them; a duty held through the role is never suspended, revoked, recertified or rewritten on its own, and never lapses (`T-SUP-STANDING-01`).
 - **`T-ROLE-5` (negativa)** — Si la resolución de rol o deber no puede completarse, la operación falla cerrada.
 - **`T-ROLE-6` (bootstrap/negativa)** — No existe autoaprovisionamiento runtime. Sólo `allfit_migrator`, en ceremonia auditada y una transacción con dos personas/asignaciones cruzadas, puede crear la autoridad inicial.
 - **`T-DUTY-01..08`** — Autoasignación, catálogo/modo, AAL2, vigencia máxima, expiración inmediata, revocación de ventanas, origen no confiable y ausencia de `DELETE` según gobernanza.
@@ -1289,6 +1408,7 @@ origen no confiable, **todo lo demás deja de valer**.
 - Toda lectura de datos de una persona por parte de la plataforma escribe un `ACCESS_EVENT` **en la misma transacción**, con identidad real, deber, categoría, propósito y resultado.
 - **Si el registro no puede escribirse, la lectura no ocurre.**
 - **`T-AUDIT-1` (positiva)** — La persona ve los accesos de Allfit desde su propia aplicación, con nombre, categoría, momento y resultado.
+  - **As implemented (STUDIO-76):** `OP-PRV-015` lists `break_glass` and `support_metadata` reads as `actor.kind = allfit_team` with the reader's name, category, instant and result (`T-PRV-ACCESSLOG-01`). No Space screen shows them yet.
 - **`T-AUDIT-2` (negativa)** — El registro no admite `UPDATE` ni `DELETE` por ningún rol en runtime, incluido `allfit_admin`.
 
 ## 8. Índices exigidos por las policies
@@ -1321,6 +1441,8 @@ Un índice que solo existe para consultas de negocio no basta: la condición RLS
 | `NUTRITION_GOAL_SET` | único `(person_id)` | Una línea longitudinal |
 | `NUTRITION_GOAL_VERSION` | `(goal_set_id,created_at DESC,id DESC)` + `(origin_relationship_id,created_at DESC,id DESC)` + únicos parciales activo/pendiente | Estado, orden estable y concurrencia |
 | `NUTRITION_GOAL_TARGET` | único `(goal_version_id,nutrient_definition_id)` | Proyección de targets |
+
+**As implemented, `HISTORICAL_ACCESS_CASE` (STUDIO-54..56).** The two composite indexes in the row above were not built. The predicate finds the case by its primary key, from the contract scope, so it needs neither. The indexes built are listed in `V1_DATA_DICTIONARY.md` §7.8: `uidx_historical_access_cases_open` (the one open case per relationship, membership and purpose), `idx_historical_access_cases_organization_opened` (the list), and one per foreign key.
 
 ## 9. Catálogo de pruebas
 

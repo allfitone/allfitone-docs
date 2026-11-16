@@ -50,6 +50,7 @@ Cada operación tiene una ficha con los nueve campos exigidos por el plan de fas
 | `SYS` | Procesos de sistema sin actor humano |
 | `PAY` | Pagos y planes |
 | `SUP` | Soporte de plataforma |
+| `WL` | Lista de espera (`ADR-050`) |
 
 El identificador es estable: la matriz de RLS, los contratos de API y las pruebas de Fase 6 lo referencian.
 
@@ -73,7 +74,7 @@ Un actor no es un rol ni un permiso: es el sujeto autenticado desde el que se ev
 | `A11` Curador/verificador de plataforma | Persona con rol base y deber vigente de curaduría, verificación o gestión comercial; cada deber es independiente | No |
 | `A12` Seguridad/privacidad de plataforma | Persona con rol base y deber vigente para administrar accesos, aprobar o auditar break-glass y gestionar privacidad | No |
 
-`A6` y `A7` fueron incorporados y recertificados en Fase 2 el 26 de julio de 2026. `A10`, `A11` y `A12` son modos de actuación derivados del deber comprobado en la transacción; **nunca** son roles de una organización ni valores aceptados desde el cliente. ADR-028 deja sin efecto la consolidación `DT-019`: el rol base `allfit_admin` permite iniciar sesión, pero no concede una operación sin `support.platform_duty_assignments` vigente y AAL2.
+`A6` y `A7` fueron incorporados y recertificados en Fase 2 el 26 de julio de 2026. `A10`, `A11` y `A12` son modos de actuación derivados del deber comprobado en la transacción; **nunca** son roles de una organización ni valores aceptados desde el cliente. ADR-028 deja sin efecto la consolidación `DT-019`: el rol base `allfit_admin` permite iniciar sesión, pero no concede una operación sin `support.platform_duty_assignments` vigente y AAL2. **Since ADR-046** the role brings all thirteen duties as rows of that table (`basis = 'admin_role'`) for as long as it lasts, so an administrator acts in every mode. A Backoffice session without the role still holds no duty, and every operation still checks its duty and AAL2 in its own transaction.
 
 ### 3.1 Fórmula de acceso profesional
 
@@ -206,7 +207,8 @@ Toda sesión conserva la zona horaria de la persona en el momento del hecho. La 
 | Pagos | 16 | 7 | 23 |
 | Sistema | 10 | 1 | 11 |
 | Soporte | 6 | 5 | 11 |
-| **Total** | **133** | **75** | **208** |
+| Lista de espera | 12 | 3 | 15 |
+| **Total** | **145** | **78** | **223** |
 
 Algunas fichas cubren dos identificadores cuando la operación es simétrica —crear y editar un borrador, listar y consultar el detalle—. En esos casos el encabezado nombra ambos y el contenido aplica a los dos.
 
@@ -727,6 +729,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno |
 | **Reglas** | No crea `PERSON`, `ACCESS_ACCOUNT` ni sesión de producto |
 | **Falla cerrada** | Configuración incompleta o proveedor no disponible: no redirige a un destino alternativo |
+| **As implemented, step-up (STUDIO-54..56)** | `GET /studio/v1/auth/start?reauthenticate=true` asks WorkOS for `max_age=0` (`maxAgeSeconds: 0` in the `auth-provider` port), so WorkOS asks for the credentials again whatever session it holds. Studio uses it when an operation answers `403 reauthentication-required`; the new sign-in counts as recent for ten minutes. Without the parameter, nothing changes |
 
 #### `OP-IDN-026` — Completar callback y crear sesión Studio
 
@@ -743,7 +746,8 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Información sensible** | Cookie opaca de 256 bits; solo su SHA-256 se persiste. Access y refresh tokens se cifran con AES-256-GCM y AAD ligada a cuenta, superficie y `sid` |
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Una autenticación válida puede crear `ACCESS_ACCOUNT`, pero nunca `PERSON`. Redirige `303` a Studio sin tokens, códigos ni identificadores en la URL |
-| **Falla cerrada** | Cualquier mismatch de `state`, `sub`, `sid`, issuer o superficie impide crear la sesión |
+| **Falla cerrada** | Cualquier mismatch de `state`, `sub`, `sid`, issuer o superficie impide crear la sesión. An expired or missing `state` cookie (it lasts ten minutes) never uses the code: the callback redirects `303` to the Studio landing with `?access=expired`, which explains it and offers a fresh sign-in |
+| **As implemented, when she authenticated (STUDIO-54..56)** | The verified token's `auth_time` travels as `VerifiedToken.authenticatedAt`, null when the token does not say. It is the one bounded exception to «use only `sub` and `sid`» (monorepo `AGENTS.md` §6): authentication, never authorization. The callback passes it as the seventh argument of `identity.create_access_session`, which stores it in `identity.access_sessions.authenticated_at`; replacing the session of the same `sid` overwrites it. An instant more than a minute in the future is `22023`. A refresh (`identity.rotate_access_session`) never advances it. Migration `20261116090000_a_case_opens_the_frozen_history.sql` |
 
 #### `OP-IDN-027` — Consultar la sesión actual de Studio
 
@@ -761,6 +765,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Sin `person_id`: `registration_incomplete`. Persona activa: `complete`. Persona cerrada: revoca y responde `account-closed` |
 | **Falla cerrada** | Error terminal revoca; fallo transitorio conserva una sesión aún vigente y responde indisponibilidad si ya venció |
+| **As implemented, recent sign-in (STUDIO-54..56)** | `StudioSession` adds the required, nullable `recent_authentication_expires_at`: until when this session's sign-in counts as recent, as `identity.load_access_session` computes it (`authenticated_at` plus `identity.recent_authentication_window()`, ten minutes). It is null when WorkOS did not say when she authenticated, and for every session created before the migration. It only tells the step-up screen when to ask; PostgreSQL decides again on every operation that needs it |
 
 #### `OP-IDN-028` — Cerrar la sesión actual de Studio
 
@@ -876,7 +881,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Tipo** | Consulta |
 | **Superficie** | `GET /backoffice/v1/session` |
 | **Actor** | Persona activa con rol `allfit_admin` y sesión Backoffice AAL2 |
-| **Filtros obligatorios** | Hash y superficie exactos, `sid` válido, AAL2, `password_totp`, inactividad menor de 15 minutos y absoluto menor de 8 horas |
+| **Filtros obligatorios** | Hash y superficie exactos, `sid` válido, AAL2, `password_totp`, idle for less than 60 minutes and under 12 absolute hours (ADR-046; `access_control.backoffice_idle_limit()` and `access_control.backoffice_session_lifetime()`, migration `20261114090000_an_admin_holds_every_duty.sql`). The answer's `inactivity_expires_at` is the last activity plus 60 minutes |
 | **Transacción** | Revalida persona/rol/evidencia y actualiza actividad mediante función cerrada; verifica/refresca token WorkOS fuera de autoridad de dominio |
 | **Información sensible** | Devuelve sólo nivel, método, nombre propio y vencimientos; sin email, factor, deber, claim, token ni permiso |
 | **Falla cerrada** | Cualquier pérdida de autoridad revoca/cierra la sesión y devuelve `401`; proveedor transitoriamente indisponible devuelve `503` sin ampliar vencimientos |
@@ -1021,6 +1026,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Información sensible** | El correo solo viaja enmascarado; el worker lo lee para entregarlo al proveedor. Enlace, token e identificador del reset de WorkOS nunca se guardan ni se devuelven |
 | **Evento de dominio** | `identity.account_recovery_requested.v1` (payload: `request_id`). El worker llama al proveedor, registra `delivered` con el vencimiento del enlace o `failed`; `identity.process_password_reset_succeeded` confirma la solicitud cuando la persona cambia su contraseña |
 | **Reglas** | `HU-BO-010`, criterios 3, 4, 5, 10 y 12. Solo la persona confirma. No hay recuperación por teléfono: V1 no tiene canal SMS |
+| **Implemented (ADR-046 decision 5)** | Migration `20261115100000_an_admin_finds_a_person_by_name.sql`. The prior read `GET /backoffice/v1/people/{personId}/account-recovery` takes `case_reference` as optional: `identity.read_account_recovery` accepts null or empty, and one given in free text is refused with `22023` (`400 invalid-request`). Starting, resending and cancelling still require a case reference, because each opens a case; when the person file was opened without one, the Backoffice web asks for it before enabling those buttons. Tests: `T-IDN-RECOVERY-API-10`, `T-SUP-SEARCH-02` |
 
 #### `OP-IDN-054` — Reenviar una recuperación en curso desde Backoffice
 
@@ -1550,6 +1556,9 @@ relationship it ends, so every pending correction proposal is cancelled with
 `relationship_terminated` at the closure instant (`T-ORG-CLOSURE-INT-20`,
 `T-EXE-PROPOSAL-CANCEL-INT-06/07`). Only an `active` organization can be
 closed. A new command after the closure converges on the original instant.
+There is no `nutrition.cancel_proposals_for_organization_closure` either: since migration
+`20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql` (STUDIO-61..65), `close_relationship` also cancels each
+relationship's pending nutrition goal proposals at the same instant.
 
 #### `OP-ORG-013` — Consultar la organización
 
@@ -1694,6 +1703,8 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | `OP-REL-015` | Consultar qué pide una invitación de cliente | Consulta | `A2` |
 | `OP-REL-017` | Withdraw a termination request (coach) | Command | `A3` |
 | `OP-REL-018` | Refuse a termination request | Command | `A4`, `A5` |
+| `OP-REL-019` | Open the card of a client | Query | `A3` attending her; a former attendant for thirty days |
+| `OP-REL-020` | See what needs attention today | Query | `A3`–`A6`, by capability |
 
 ---
 
@@ -1746,6 +1757,65 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Información sensible** | Ninguna |
 | **Evento de dominio** | `organization.cancelled.v1` |
 | **Reglas** | `HU-BO-015`. `cancelled` solo se alcanza desde `unclaimed` y conserva la auditoría |
+
+#### `OP-ORG-023` — Fijar el cupo de invitados de un gimnasio
+
+Added with `HU-BO-034`, which began as the gap `NEW-ORG-INVITE-QUOTA`. Built in migration
+`20261015120000_what_a_gym_may_fill.sql` (allfitone#108). Migration
+`20261108090000_a_quota_names_the_agreement_that_sold_it.sql` (allfitone#175) added the agreement
+reference and dropped the signature without it.
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/organizations/{organizationId}/guest-quota` (`setBackofficeOrganizationGuestQuota`), body `{seats, agreement_reference}`, `200 OrganizationGuestQuota` |
+| **Actor** | `A11` with the base role, `manage_platform_commercial`, AAL2 and the duty in force (`organizations.require_platform_commercial_duty`, `42501` → `403`). It is not the duty that creates a gym (`manage_organization_lifecycle`, `OP-ORG-018`) |
+| **Filtros obligatorios** | `seats` from 1 to 1,000,000, or `null` for no limit; zero is refused. `agreement_reference` is required: one line of at most 120 characters, trimmed. A `closed` or `cancelled` gym is not sold a quota (`55000` → `409`) |
+| **Transacción** | Locks the organization, writes `guest_quota_seats`, `guest_quota_agreement_reference` and `revision_number + 1`, and records `organization.guest_quota_set.v1` with the previous seats and agreement as `before_snapshot`, the person and the duty assignment |
+| **Idempotencia** | `Idempotency-Key` and `Command-Id` (`system.begin_idempotency`, `OP-ORG-023`). The same number under the same agreement writes nothing; the same number under a new agreement is a renewal and is recorded |
+| **Paginación y orden** | Not applicable. The response carries the whole history, newest first |
+| **Offline / concurrencia** | `no-store`. Two operators deciding at once are serialized by the row lock |
+| **Información sensible** | Commercial terms of the gym. No personal data: the occupancy is a count |
+| **Evento de dominio** | `organization.guest_quota_set.v1` in `organizations.organization_events`; no outbox event |
+| **Reglas** | A live relationship and an invitation still awaiting an answer each take a place. `organizations.organization_guest_occupancy` counts them, and `HU-STUDIO-087` enforces the quota with the same function. Lowering the quota below the occupancy ends no relationship and revokes no invitation, because the command has no statement that could. The gym is over its quota, and the next invitation is refused (`AF409`, migration `20261103003415_enforce_guest_quota.sql`). The response puts `occupied`, `relationships_active`, `invitations_pending`, `places_left` and `over_quota` beside the number, because a quota cannot be judged without them |
+
+#### `OP-ORG-024` — Suspender un gimnasio
+
+Added with `HU-BO-016`, which began as the gap `NEW-ORG-SUSPEND`. Built in migrations
+`20261018120000_an_organization_can_be_suspended.sql` and
+`20261018130000_suspending_a_gym_without_destroying_it.sql`.
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/organizations/{organizationId}/suspension` (`suspendBackofficeOrganization`), body `{reason_code}`, `200 OrganizationSuspension` |
+| **Actor** | `A10` with the base role, `manage_organization_lifecycle`, AAL2 and the duty in force |
+| **Filtros obligatorios** | `reason_code` from the closed list `nonpayment`, `terms_breach`, `security_incident`, `legal_requirement` (`22023` → `422`). Only an `active` gym is suspended: one nobody claimed is not operating, and `cancelled` or `closed` are terminal (`55000` → `409`) |
+| **Transacción** | Sets `status = 'suspended'` and `suspended_at`; records `organization.suspended.v1` with the person and the duty assignment; opens one `organizations.organization_suspensions` period; opens one `planning.service_access_blocks` row (`organization_suspension`, both flags true) per person with a live relationship with the gym; enqueues `organization.suspended.v1` |
+| **Idempotencia** | `Idempotency-Key` and `Command-Id`. Suspending a suspended gym converges and opens no second period |
+| **Paginación y orden** | Not applicable |
+| **Offline / concurrencia** | `no-store`. `uidx_organization_suspensions_open` allows one open period per gym |
+| **Información sensible** | The reason, and how many people are affected. No person is named |
+| **Evento de dominio** | `organization.suspended.v1` (`organization_id`, `reason_code`) |
+| **Reglas** | Nothing is destroyed: the command has no statement that revokes a grant, ends a relationship, drops a membership or deletes a session. The functions that ask `status = 'active'` stop the gym from inviting, assigning, publishing and charging, and `payments.resolve_pro` drops its clients to the free plan. Since allfitone#165 the sessions of a program the gym assigned show paused and refuse to start (`23514`), and its coach contributes nothing (`AF424` → `409 service-paused`). Her own programs are untouched. The policy `service_access_blocks_select_lifecycle` lets this duty count the people affected |
+
+#### `OP-ORG-025` — Reactivar un gimnasio suspendido
+
+Added with `HU-BO-016` criteria 6 and 7, in the same migration as `OP-ORG-024`.
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /backoffice/v1/organizations/{organizationId}/reactivation` (`reactivateBackofficeOrganization`), no body, `200 OrganizationSuspension` |
+| **Actor** | `A10` with the base role, `manage_organization_lifecycle`, AAL2 and the duty in force |
+| **Filtros obligatorios** | A `suspended` gym with its open period; one that was never suspended answers `409` (`55000`) |
+| **Transacción** | Sets `status = 'active'`, clears `suspended_at`, records `organization.reactivated.v1`, ends the open period with who lifted it, closes the blocks opened by that suspension's event and enqueues `organization.reactivated.v1` |
+| **Idempotencia** | `Idempotency-Key` and `Command-Id`. Reactivating a gym that is operating converges |
+| **Paginación y orden** | Not applicable |
+| **Offline / concurrencia** | `no-store`. A suspended gym without an open period answers `40001` |
+| **Información sensible** | Ninguna |
+| **Evento de dominio** | `organization.reactivated.v1` |
+| **Reglas** | Subtractive: it closes only the blocks of this suspension, found by its event and never by person or organization, and restores no copy of anything. A subscription suspended for non-payment during the period keeps denying, because its block is a different row. Nothing revoked, ended, cancelled, started or expired during the suspension comes back, and the days missed stay missed |
 
 #### `OP-REL-001` — Invitar a una persona como cliente
 
@@ -1868,6 +1938,8 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Reglas** | El efecto es inmediato: no hay preaviso para la persona. La organización **conserva su vista congelada del histórico compartido hasta `T`**, más su contenido propio; los datos creados después de `T` nunca son visibles para ella. Congelar **no** es revocar: un estado `revoked` corta el acceso del todo, cierra los casos históricos abiertos e invalida derivados. La lectura solo ocurre por la superficie restringida de ADR-023, con `historical_access_case`, actor elegible, MFA, propósito y `access_control.can_read_frozen`; nunca por pertenencia administrativa ni endpoints operativos. Si la persona elimina su cuenta, la anonimización alcanza también lo que ve un grant congelado. El Fitness ID no se toca. El motivo es **opcional** |
 | **Falla cerrada** | Si cualquier paso falla, se revierte todo: no existe una terminación a medias |
 | **Implementado** | `relationships.end_my_relationship` (migración `20261021120000`) sobre `POST /space/v1/relationships/{relationshipId}/termination`, con `reason` opcional. Cierra con `ended_by_kind = 'person'` mediante `relationships.close_relationship`, la misma función que ahora usa `OP-REL-008`, así que la regla de congelamiento vive en un solo lugar: en un único instante `T` termina la relación, congela los grants `active` —uno ya revocado sigue revocado— y cierra la asignación del titular y las suplencias aceptadas. Una relación ya terminada converge al mismo `T` sin cerrarse dos veces, y el reintento con la misma `Idempotency-Key` responde `Idempotent-Replay`. Relación ajena o inexistente: `404`. Since migration `20261104090000_a_gym_assigns_a_program_through_the_relationship.sql` (STUDIO-39/40) `close_relationship` also calls `planning.detach_relationship_assignments` at the same `T`: each `active` assignment of the relationship becomes `detached_pending_choice`, its management period closes with `relationship_ended`, every session nobody started pauses, and `planning.assignment_detached.v1` is enqueued. Since migration `20261112090000_a_coach_proposes_a_correction_and_she_decides.sql` (STUDIO-52) it also calls `execution.cancel_relationship_correction_proposals` at the same `T`: every pending correction proposal of the relationship becomes `cancelled` with `relationship_terminated` and `settled_at = T`, and stays listed for her and for the professional who proposed it. A proposal already settled keeps its state (`T-EXE-PROPOSAL-CANCEL-INT-03/04`, `-CANCEL-LIST-01/02`). **Not yet:** cancelling pending nutrition proposals, and notifying the organization through the outbox |
+| **As implemented, the historical surface (STUDIO-54..56)** | The restricted surface of ADR-023 that the rules above name exists since migration `20261116090000_a_case_opens_the_frozen_history.sql` (`OP-PRV-018`, `-019`, `-020` and `-025`). It asks for a Studio sign-in less than ten minutes old instead of MFA (the owner's decision of 8 November 2026). A case reads only what existed at `T`, which it stores as `cut_at` from this relationship's `ended_at`, so the instant this operation fixes is the cut every frozen read applies |
+| **As implemented, pending nutrition proposals (STUDIO-61..65)** | The «not yet» above about nutrition no longer holds. Since migration `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql`, `close_relationship` also calls `nutrition.cancel_relationship_goal_proposals` at the same `T`. Every goal version this relationship proposed and she has not decided becomes `cancelled`, with `cancelled_at = greatest(T, created_at)`, and stays in her history. It writes no `nutrition.goal_proposals_cancelled.v1`: `relationship.terminated.v1` already says the relationship ended. Tests: `T-NUT-INT-06`, `goal-proposal-concurrency.test.ts` |
 
 #### `OP-REL-008` — Terminar la relación (organización)
 
@@ -1885,7 +1957,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Evento de dominio** | `relationship.terminated.v1` y derivados |
 | **Reglas** | Efecto inmediato, sin preaviso en V1. La persona es notificada y conserva su asignación desacoplada para decidir (`OP-PLN-015`). Un `coach` **no** puede ejecutar esta operación |
 | **Falla cerrada** | Igual que `OP-REL-007` |
-| **Implemented** | Detachment as in `OP-REL-007`, through the same `close_relationship` (STUDIO-39/40). `T-REL-TERMINATE-01` asserts it: the assignment waits for the person's choice, its period closes at `T`, a completed session stays completed and the next one pauses. Pending correction proposals are cancelled the same way (STUDIO-52, `T-EXE-PROPOSAL-CANCEL-INT-05`) |
+| **Implemented** | Detachment as in `OP-REL-007`, through the same `close_relationship` (STUDIO-39/40). `T-REL-TERMINATE-01` asserts it: the assignment waits for the person's choice, its period closes at `T`, a completed session stays completed and the next one pauses. Pending correction proposals are cancelled the same way (STUDIO-52, `T-EXE-PROPOSAL-CANCEL-INT-05`) Pending nutrition goal proposals too (STUDIO-61..65); the race against a proposal is in `goal-proposal-concurrency.test.ts`. |
 
 #### `OP-REL-009` — Solicitar la terminación (coach)
 
@@ -1953,6 +2025,7 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Evento de dominio** | Ninguno. El directorio no consume grants y no genera `ACCESS_EVENT` |
 | **Reglas** | `A6` (staff) ve el directorio completo de la organización: nombre, estado de relación y estado de invitación, y nada más. La existencia de un grant se muestra como estado, no como contenido.<br><br>Una entrada de invitación **no tiene persona ni nombre**: mientras nadie acepta, no existe persona, ni siquiera provisional (`HU-STUDIO-023`, criterio 8). Lleva el contacto enmascarado en su lugar.<br><br>El estrechamiento de `A3` sobre invitaciones es por emisor y no por asignación, porque una invitación sin responder no tiene asignación sobre la que estrechar |
 | **Falla cerrada** | — |
+| **Implemented, search (STUDIO-75, `HU-STUDIO-082`)** | Migration `20261118090000_a_member_finds_a_client_by_name.sql` (pull request allfitone#204, merged and deployed on 9 November 2026). `GET …/clients?q=` reaches `relationships.list_organization_clients(person, organization, status, limit, cursor_group, cursor_name, cursor_id, query)`, a new eight-argument `security definer` function. **Matching:** `q` is 2 to 80 characters once surrounding and repeated spaces are removed (the API refuses more than 200 raw characters); names only, compared through `relationships.fold_name` (spaces collapsed, Latin accents removed by an explicit `translate`, lower case), with `\`, `%` and `_` escaped so they match as characters. **Narrowing only:** the row policy still decides who comes back, so a coach finds only the people assigned to him; an owner who asks for `terminated` searches the former clients this directory already lists. **Invitations:** with `q`, none appears, because an invitation has no name; `q` with `status=invited` is `22023` → `422`, as is a blank, one-character or over-long `q`. **No match** is an empty `data` with `has_more: false`. **Cursor:** version 3 binds `filter_status` and a 16-character digest of the lowered search, so it never resumes another search; a version 2 cursor still resumes an unsearched page. **No access event**, as above. **Deploy gap:** the seven-argument signature stayed as a `security invoker` wrapper while the API was ahead of the migration; allfitone#205 (`20261119090000_the_directory_keeps_one_signature.sql`) dropped it, and the API binds a null search itself. Tests: `T-REL-DIRECTORY-03` (19), the search tests of `relationships/handlers/studio.test.ts`, `relationships/infrastructure/directory.test.ts` |
 
 #### `OP-REL-015` — Consultar qué pide una invitación de cliente
 
@@ -2043,6 +2116,42 @@ Regla que gobierna todo el dominio: **una relación no es autorización de datos
 | **Falla cerrada** | — |
 | **Implementado (Space)** | `relationships.read_relationship_history` admite desde la migración `20261021120000` a la persona leyendo su propia relación, sin organización y nunca a través de una membresía que no tiene. Responde `private, no-store`. Cada lector ve solo el motivo que declaró su lado: el motivo que dio el gimnasio nunca se le muestra a ella, ni el de ella al gimnasio; `declared_by_us` dice cuál es el caso. Relación ajena o inexistente: `404`, como en `OP-REL-011`. Desde la migración `20261022120000` incluye el tipo `grant_revoked` (rango 9), con `scope_code` en el detalle y nunca lo que el scope cubría |
 
+#### `OP-REL-019` — Open the card of a client
+
+| Field | Value |
+| --- | --- |
+| **Type** | Query |
+| **Surface** | `GET /studio/v1/organizations/{orgId}/clients/{personId}` (`getStudioClientCard`) |
+| **Actor** | `A3` who attends her: the holder, or a cover she accepted whose `ends_on` has not passed. For thirty days, also the coach who attended her through his current membership |
+| **Mandatory filters** | A live membership in an active `{orgId}`; an active relationship of `{personId}` there; an active assignment of that membership in effect now (the predicate of `relationships.actor_is_assigned`), holder first |
+| **Transaction** | None. It reads no fitness data |
+| **Idempotency** | N/A |
+| **Pagination and order** | Not applicable. Sections follow the order of `ScopeCode` |
+| **Offline / concurrency** | `private, no-store` |
+| **Sensitive information** | Her name, the relationship, how he attends her, and the **state** of each category she shares or withdrew, never its content |
+| **Domain event** | None. No `ACCESS_EVENT`, like `OP-REL-011` and `OP-PRV-023`: each section is read through its own audited operation |
+| **Rules** | The card is an index (`HU-STUDIO-083`). `sections` lists each category with an active grant: version, level, `granted_at`, and the operations that read it (`reads`). `nutrition_media` appears only while `nutrition_intake` is active too. `withdrawn` lists each category revoked and not shared again, with when. A category she never shared, or refused, appears nowhere, not as empty and not as locked. No counts. A coach who no longer attends her gets `kind: former` with a reason for thirty days (`HU-STUDIO-084`) |
+| **Fail closed** | Everyone else, an owner or administrator who does not attend her included, gets the same `404` as for somebody who does not exist |
+| **Implemented (STUDIO-76/77)** | `relationships.read_client_card(person, organization, subject)`, migration `20261118100000_a_coach_opens_the_card_of_a_client.sql` (pull request allfitone#204, merged and deployed on 9 November 2026); `cookieAuth`, exact Studio `Origin`, `200 StudioClientCard`. **Attending:** `{kind: attending, person_id, display_name, relationship {id, started_at}, attendance {role, ends_on}, sections[], withdrawn[]}`, from `relationships.client_card_grants`; `ends_on` is null for a holder. The API adds each section's `reads` from `CARD_READS` (`apps/api/src/domains/relationships/handlers/client-card.ts`). **Former:** `{kind: former, person_id, reason, lost_at}` from `relationships.former_attendance(membership, organization, subject)`. It looks only at the caller's current membership, at holder assignments and at covers she accepted, `active` or `ended`; a cover ends at the earlier of `valid_to` and the start of the day after `ends_on`. The last attendance that ended decides, holder first on a tie: `relationship_ended` at `ended_at` when the link is terminated and that attendance was in effect when it ended, otherwise `assignment_ended` (holder) or `substitution_ended` (cover) at its end. It answers only while `lost_at` is less than thirty days old, never with a name, the relationship or a grant, and the same facts give the same answer if she later comes back with another coach. It reads the terminated row through the policy `service_relationships_select_former_attendance` under the contract scope `former_attendance` (ADR-047). **Deviations:** §5.7 and `T-PERSON-3` give way for the former attendant only (ADR-047). **Errors:** no live membership in an active organization `42501` → `403`; neither attending nor former `P0002` → `404` with one message for every case; an invalid identifier `400`; a wrong `Origin` `403`; no session `401`. Tests: `T-REL-CARD-01` (19), `T-REL-CARD-02` (22), `T-REL-CARD-API-01..05`, `relationships/infrastructure/card-and-today.test.ts` |
+
+#### `OP-REL-020` — See what needs attention today
+
+| Field | Value |
+| --- | --- |
+| **Type** | Query |
+| **Surface** | `GET /studio/v1/organizations/{orgId}/today` (`getStudioToday`) |
+| **Actor** | `A3`–`A6`; each notice by its own capability |
+| **Mandatory filters** | A live membership in an active `{orgId}` holding at least one of `invite_clients`, `assign_professionals`, `terminate_relationships`, `invite`, `manage_memberships`, `view_directory` or `observe_training`. Row policies still apply underneath |
+| **Transaction** | One read. The `training` notice writes one `ACCESS_EVENT` per client it evaluates |
+| **Idempotency** | N/A |
+| **Pagination and order** | None. Each notice counts everything it covers and lists at most five |
+| **Offline / concurrency** | `private, no-store` |
+| **Sensitive information** | Names, masked contacts, the state of links and requests. For `training`, whether a client left sessions of her last closed week unlogged and what she finished in the last 48 hours |
+| **Domain event** | None |
+| **Rules** | `HU-STUDIO-081`. A notice the caller cannot act on is absent, not empty. Each carries a link to the operation that resolves it. `empty` is true when no notice other than `team` has a count. A refused or revoked category never appears as something to ask for again (criterion 7). Failed charges join when `E-STUDIO-13` exists |
+| **Fail closed** | No capability at all is `403`; the training part never runs without a request id to record under |
+| **Implemented (STUDIO-74)** | `relationships.read_studio_today(person, organization)`, migration `20261118120000_a_studio_member_sees_what_needs_attention_today.sql` (pull request allfitone#204, merged and deployed on 9 November 2026); `cookieAuth`, exact Studio `Origin`, `200 StudioToday {organization_id, generated_at, empty, notices}`. **Notices:** `client_invitations` (`invite_clients`; client invitations awaiting an answer or lapsed in the last seven days, newest first, contact masked, only the caller's own without `view_directory`; `count`, `awaiting`, `lapsed`); `unassigned_relationships` (`assign_professionals`; live, no holder in effect, a cover does not count; oldest first); `termination_requests` (`terminate_relationships`; pending, oldest first); `team_invitations` (`invite`; as for clients, with `proposed_role_code`); `team` (`manage_memberships`; members with a role in force, `by_role`); `new_relationships` (`view_directory`; live, begun in the last seven days, newest first); `training` (`observe_training`). **Links** (`TODAY_LINKS` in `client-card.ts`): `listStudioOrganizationClients` with `status=invited` or `status=active`, `assignRelationshipHolder`, `terminateRelationship`, `listStudioTeamInvitations`, `listStudioOrganizationMemberships` and, for training, `getStudioClientCard`. **Training:** `relationships.today_training(organization, now)` visits each active relationship where `access_control.can_access(relationship, 'relationship_training', 'read')` holds, so only clients the caller attends who share that category. For each it writes one `privacy.access_events` row (`live`, `allowed`, resource `relationships.studio_today`, purpose `studio_attention_today`, her grant and its version), opens `session_screening` for that relationship, counts the planned sessions of her last closed week (Monday to Sunday in each session's timezone, ADR-032) in assignments with an open management period of the relationship, cancelled and paused ones excluded, logged only with a completed, non-annulled execution, and counts what she completed inside the relationship in the last 48 hours, never an autonomous session; then closes the scope. She is listed when something is unlogged or recent, the most unlogged first, with `closed_week {week_starts_on, planned, not_logged}` (null when nothing was due) and `recent_results {count, last_ended_at}`. A client listed or not is recorded alike; a client without an active grant is neither. **Errors:** no live membership, or none of the seven capabilities, `42501` → `403`; with `observe_training` and no `app.request_id`, `22023` (the API always sends one). Tests: `T-REL-TODAY-01` (24), `T-REL-TODAY-02` (17), `T-REL-TODAY-API-01..03`, `relationships/infrastructure/card-and-today.test.ts` |
+
 ### 7.4 Privacidad
 
 Dueño de `SCOPE_DEFINITION`, `SCOPE_RESOURCE_RULE`, `DATA_CLASSIFICATION`, `CONSENT_EVENT`, `DATA_GRANT`, `SESSION_VISIBILITY_DENIAL`, `HISTORICAL_ACCESS_CASE`, `ACCESS_EVENT`, `ERASURE_REQUEST`, `RETENTION_POLICY`, `DISPOSITION_CASE`, `DISPOSITION_ITEM`, `DISPOSITION_EVENT`, `LEGAL_HOLD` y `HOLD_APPLICATION`.
@@ -2054,6 +2163,7 @@ Reglas que gobiernan todo el dominio:
 - Cada grant congela una **versión exacta** de `SCOPE_DEFINITION`. Publicar una v2 más amplia no amplía los grants v1.
 - El consentimiento se otorga a la **parte responsable** presentada, materializado sobre la organización de la relación; lo ejercen únicamente los profesionales asignados con membresía y capacidad vigentes.
 - Un grant `frozen` no usa la fórmula profesional: exige un `HISTORICAL_ACCESS_CASE` exacto, MFA, propósito permitido, field-set histórico y auditoría según ADR-023.
+  - **As implemented (STUDIO-54..56):** a Studio sign-in less than ten minutes old instead of MFA, by the owner's decision of 8 November 2026 (ADR-023, *As implemented*). See `OP-PRV-018`, `-019`, `-020` and `-025`.
 
 | ID | Operación | Tipo | Actor |
 | --- | --- | --- | --- |
@@ -2076,6 +2186,8 @@ Reglas que gobiernan todo el dominio:
 | `OP-PRV-021` | Seguir las solicitudes de eliminación | Consulta | `A6` con `manage_privacy_requests` |
 | `OP-PRV-022` | Consultar las categorías de información | Consulta | `A2`, `A3`–`A6` |
 | `OP-PRV-023` | Ver qué nos autorizó cada persona | Consulta | `A3`–`A5` con capacidad de directorio |
+| `OP-PRV-024` | List legal holds | Consulta | `A12` con `manage_privacy_requests` |
+| `OP-PRV-025` | List historical access cases | Consulta | `A3`–`A5`: every case with `manage_historical_access`, otherwise only the cases that authorize them |
 
 ---
 
@@ -2096,6 +2208,7 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | Revocar elimina acceso en vivo e histórico, **no** el dato del Fitness ID. La transición `frozen → revoked` es inmediata y el grant anterior nunca se reactiva; volver a compartir exige relación y consentimiento nuevos. Revocar `body_progress` bloquea al tercero sin borrar las mediciones. Los `ACCESS_EVENT` anteriores permanecen: son evidencia, no acceso. Revocar un scope no revoca los demás |
 | **Falla cerrada** | Si la invalidación de derivados no puede confirmarse, la revocación se revierte y se reintenta: nunca se reporta revocado algo que sigue siendo legible |
 | **Implementado** | `privacy.revoke_my_grant` (migración `20261022120000`) sobre `POST /space/v1/consents/{grantId}/revocation` (`revokeConsentGrant`), sin cuerpo. Un grant propio `active` o `frozen` pasa a `revoked` con `revoked_at`; solo ese, los demás no se mueven, y nada se borra (`ADR-012`). Un grant congelado por una relación terminada también se revoca (`ADR-023`). El trigger de transición existente impide reabrirlo: volver a compartir exige un consentimiento nuevo (`ADR-007`). Grant ajeno o inexistente: `P0002` → `404`, sin distinguirlos. Ya revocado por otro comando: `P0004` → `409`. Un reintento con la misma `Idempotency-Key` devuelve la misma respuesta con `Idempotent-Replay`. En la misma transacción escribe `privacy.grant_revoked.v1` en el outbox con `grant_id`, `relationship_id`, `organization_id`, `scope_code`, `scope_version` y `revoked_at`, nunca contenido amparado. **Desviación: no escribe `CONSENT_EVENT`.** `privacy.consent_events` registra respuestas a una opción de invitación —`decision` `accepted \| rejected` y FK obligatoria a la opción— y una revocación no responde ninguna. La evidencia es el propio grant, inmutable una vez revocado, más el evento del outbox. **Invalidación:** hoy no existe ninguna proyección ni caché sobre grants y cada lector comprueba el estado del grant en la misma sentencia, así que el corte es inmediato (`HU-SP-031`, criterio 2); quien añada una proyección o caché tendrá que invalidarla aquí. **Todavía no** cierra `HISTORICAL_ACCESS_CASE`: la tabla no existe y no hay nada que cerrar (`HU-SP-031`, criterio 6). Avisar a la organización no forma parte de esta operación. El historial de la relación (`OP-REL-014`) muestra `grant_revoked` |
+| **As implemented (STUDIO-54..56)** | The «todavía no» above no longer holds. Since migration `20261116090000_a_case_opens_the_frozen_history.sql`, the trigger `trg_data_grants_after_update_historical_cases` (`privacy.close_cases_of_revoked_grant_tg`, `after update of status`, only `frozen → revoked`) closes every open historical access case of the relationship in the same transaction. Each closes with `closed_reason = 'grant_revoked'` and `closed_at` at the revocation, or `expired` at its `expires_at` if its hours had already run out, and enqueues `privacy.historical_access_case_closed.v1`. Revoking an `active` grant closes nothing, because an active relationship has no case. `HU-SP-031` criterion 6 is met (`T-PRV-HIST-AUTO-04..06`, `T-PRV-HIST-API-28`, `historical-access-case-concurrency.test.ts`) |
 | **Regla para métricas de la organización** | Revocar, también un grant congelado, nunca debe mover un indicador del gimnasio. Altas, bajas, retención, duración de la relación, pagos y sesiones asignadas salen de la relación, la suscripción y las asignaciones, que no dependen de ningún grant. Un indicador que use contenido personal (medidas, entrenos, comidas) se guarda ya anonimizado en el momento de calcularlo y no se recalcula leyendo a través de grants. Revocar corta el acceso al historial de esa persona, no las cifras agregadas que el gimnasio ya obtuvo legítimamente. |
 
 #### `OP-PRV-006` — Ocultar una sesión autónoma para una relación
@@ -2168,6 +2281,7 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | Un hold **suspende disposición**; no concede ni mantiene acceso operativo. No existen holds globales ni indefinidos: alcance, motivo, vigencia y liberación son obligatorios y auditables |
 | **Falla cerrada** | Sin alcance acotado o sin vigencia, rechazo |
 | **Implementado** | `privacy.apply_legal_hold` sobre `POST /backoffice/v1/legal-holds`. La separación de deberes se comprueba **por persona**, no por caso: quien pidió o aprobó una ventana break-glass sobre alguien no puede suspender la disposición de esa persona. Responde `AF403`, distinto del `42501` general, para que la pantalla diga cuál de los dos 403 es. Un ítem ya ejecutado responde `55000` y uno inexistente `P0002` |
+| **As built since allfitone#163** | Migration `20261104140000_a_legal_hold_keeps_what_it_names.sql` replaced the function. The first version held only dispositions that were already waiting, and none ever waited: a person's own deletion opened its disposition and executed it in one transaction. A hold now **names a person and kinds of their data**: `privacy.apply_legal_hold(actor, session, scope_description, reason_code, case_reference, valid_to, subject_person_id, data_classification_codes, idempotency_key, command_id, request_hash)`. It is applied when the order arrives, and covers what of those kinds already waits and what she asks to delete while it is in force. Refusals: no kind named (`22023`, «a legal hold names the kinds of data it keeps»); a kind no published policy disposes of (`22023`); nobody with that identifier (`P0002`); the same person-level separation of duties (`AF403`). **Her deletion asks first.** Under a live hold, `nutrition.delete_meal`, `identity.delete_body_progress` and `identity.delete_health_context` keep the record and leave its disposition suspended in an open case. The answer says so, on what ground and until when, never the case reference, the scope or who applied it; for a meal it is `202 MealDeletionHeld`. Asking again answers the same case |
 
 #### `OP-PRV-010` — Liberar un hold legal
 
@@ -2186,6 +2300,7 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | Liberar reanuda la disposición de los ítems **dentro de su alcance** y solo de esos |
 | **Falla cerrada** | — |
 | **Implementado** | `privacy.release_legal_hold` sobre `POST /backoffice/v1/legal-holds/{id}/release`. Devuelve los ítems a `pending` y nunca los ejecuta; un hold ya liberado responde `55000`, y la misma separación de deberes aplica al liberar |
+| **As built since allfitone#163** | Releasing still executes nothing by itself, and a hold already released or lapsed answers `55000`. **No hold is indefinite.** A hold is live while `valid_to` is ahead: one past its date suspends nothing new before any sweep runs, and reads as lapsed. The worker's `privacy_disposition` job then runs `privacy.lapse_legal_holds`, which sets `status = 'lapsed'` and `lapsed_at`, and only the privacy worker may call it (`42501`). What a hold stops holding passes to another live hold over the same data, so a renewed order leaves no gap, or goes back to `pending`. The same job then runs `privacy.execute_due_dispositions`, which executes what is pending and due as the person's own deletion would have, attributed to `privacy_worker`. The row goes, a meal's photo is queued and its deletion announced, and the case closes (`HU-BO-033` criterion 4) |
 
 #### `OP-PRV-011` — Publicar una versión de definición de scope
 
@@ -2272,6 +2387,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Identifica al **actor humano real**, no solo a la organización. Cubre 24 meses. Incluye los accesos de suplentes y los ejercicios de break-glass de soporte |
 | **Falla cerrada** | — |
+| **Implemented (STUDIO-76, `HU-STUDIO-083` criterion 3)** | `privacy.list_my_access_events(person, scope_code, limit, before_occurred_at, before_id)`, a `security definer` function, migration `20261118110000_a_person_reads_who_read_her_data.sql` (pull request allfitone#204, merged and deployed on 9 November 2026); `GET /space/v1/access-events?limit&cursor&scope_code` (`listMyAccessEvents`), `bearerAuth`, `200 MyAccessEventPage`. **Deviation, not cacheable:** it answers `private, no-store`. **Deviation, no view:** there is no `privacy.v_my_access_events` and no table privilege for `allfit_api` (ADR-047). **What it lists:** every event whose subject is her and whose actor is somebody else, allowed or denied, with `occurred_at` in the last 24 months, optionally one `scope_code`. Each row says `actor {kind, display_name}` (`allfit_team` for `break_glass` and `support_metadata`, otherwise `professional`), `organization {id, display_name}` from the reader's membership or else from the relationship, or null; `attendance`, `holder` or `substitute` from the reader's assignment in effect at that instant (an accepted cover only), or null; `access_mode`, `scope_code`, `scope_version`, `resource` and `result`. Her own reads are not listed. **Order and page:** `occurred_at` descending, ties by id descending; keyset on `(occurred_at, id)`; `limit` 1 to 100, default 25; the cursor keeps the instant to the microsecond and is bound to `scope_code`. **Errors:** another person `42501` → `403`; a page, cursor or scope outside the contract `400`, refused before the database; no token `401`; any other database failure `503` (the shared Space privacy mapping, which would also give `422` for `22023`). Reading the log writes nothing to it. It reuses `idx_access_events_target_occurred`. Tests: `T-PRV-ACCESSLOG-01` (21), `T-PRV-API-SPACE-19..22`, `privacy/infrastructure/my-access-log.test.ts` |
 
 #### `OP-PRV-016` — Consultar el estado de una solicitud de supresión
 
@@ -2324,6 +2440,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `privacy.historical_access_case_opened.v1` |
 | **Reglas** | `manage_historical_access` administra casos y no concede lectura. El caso puede autorizar al propio admin/owner o al antiguo titular, pero solo la membresía nombrada puede ejercerlo. Marketing, recuperación comercial, IA y curiosidad operativa son propósitos inválidos |
 | **Falla cerrada** | Sin MFA, propósito permitido, membresía elegible o relación terminada, rechazo |
+| **Implemented (STUDIO-54)** | `privacy.open_historical_access_case(person, session, organization, relationship, authorized_membership, purpose, case_reference, justification, duration_hours, idempotency_key, command_id, request_hash)` returning `(document, replayed)`, migration `20261116090000_a_case_opens_the_frozen_history.sql`; `POST /studio/v1/organizations/{organizationId}/historical-access-cases`, `cookieAuth`, `no-store`, `Idempotency-Key` and `Command-Id`, `201 HistoricalAccessCase` (`Idempotent-Replay` on a retry). **Order of checks:** the person actor, then a recent sign-in on this very Studio session (`identity.require_recent_studio_authentication`, `AF401` → `403 reauthentication-required`), then a live membership in an active organization and `manage_historical_access` (`42501` → `403`). Only then the idempotency receipt and the body, so an outsider learns nothing about which relationships exist. **Deviation, step-up:** a sign-in less than ten minutes old replaces MFA (the owner's decision of 8 November 2026; ADR-023, *As implemented*). **Input:** `purpose` from the closed enum `privacy.historical_access_purpose`, `case_reference` 1 to 120 characters, `justification` 1 to 2000, both trimmed, and `duration_hours` 1 to 24 (`22023` → `422`). **The relationship:** a `terminated` one of this organization, else `P0002` → `404`; it must still hold a `frozen` grant, else `P0004` → `409`. **Whom it authorizes (deviation, narrower than «otro owner/admin»):** the opener herself while she holds a current `owner` or `admin` role, or the professional who held the relationship at the cut (the `holder` assignment with `valid_to = cut_at`) while his membership keeps a current `owner`, `admin` or `coach` role. Staff, another admin or a coach with no part in it is refused by the constraint trigger `trg_historical_access_cases_after_insert_eligible` (`23514` → `422`). **One open case** per relationship, authorized membership and purpose (`uidx_historical_access_cases_open`, `23505` → `409`). An equivalent case whose hours ran out is closed first as `expired` at its `expires_at`, so it stops blocking. **The row:** the case stores `person_id` and `cut_at` (the relationship's `ended_at`), and `expires_at = opened_at + duration_hours`. **Concurrency:** the relationship and its frozen grants are locked `for share`, so a revocation either waits and then closes this case, or commits first and the opening finds nothing frozen (`P0004`). **Event:** `privacy.historical_access_case_opened.v1` with `case_id`, `organization_id`, `relationship_id`, `authorized_membership_id`, `opened_by_membership_id`, `purpose`, `opened_at` and `expires_at`, never the justification or the reference. Opening reads no data and writes no `ACCESS_EVENT`. Tests: `T-PRV-HIST-01` (`-AUTH-01..06`, `-VAL-01..10`, `-OPEN-01..06`, `-IDEM-01/02`, `-EVT-01/02`, `-EXP-02/03`), `historical-access-case-concurrency.test.ts` (2) and `studio-historical-access.test.ts` |
 
 #### `OP-PRV-019` — Cerrar un caso de acceso histórico
 
@@ -2341,6 +2458,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `privacy.historical_access_case_closed.v1` |
 | **Reglas** | Cerrar no borra `ACCESS_EVENT`; un caso cerrado no se reabre |
 | **Falla cerrada** | — |
+| **Implemented (STUDIO-56)** | `privacy.close_historical_access_case(person, organization, case, idempotency_key, command_id, request_hash)` returning `(document, replayed)`, migration `20261116090000_a_case_opens_the_frozen_history.sql`; `POST /studio/v1/organizations/{organizationId}/historical-access-cases/{caseId}/closure`, `cookieAuth`, `no-store`, `Idempotency-Key` and `Command-Id`, no body, `200 HistoricalAccessCase`. **Who:** a live member with `manage_historical_access` (`42501` → `403`); a coach the case authorizes cannot close it without that capability. A case of another organization, or none, is `P0002` → `404`. **No recent sign-in:** ending access is never harder than granting it. **Converges:** a closed case answers as it was closed. An open case closes with `closed_at = least(now, expires_at)`: `closed_by_manager` with `closed_by_membership_id`, or `expired` with no closer when its hours had run out. **Deviation, expiry:** there is no worker and no `privacy.historical_access_case_expired.v1`. A case past `expires_at` is unusable at once and reads as `expired`; it is stored as closed only when someone closes it or opens an equivalent one. **Immutable:** `trg_historical_access_cases_before_update_keep` lets an open case become closed, once, changing only `status`, `closed_at`, `closed_reason` and `closed_by_membership_id`; delete and truncate are refused (`23514`). **Closes on its own** with `grant_revoked` (`OP-PRV-005`) or `membership_ineligible` when the authorized membership stops qualifying. **Event:** `privacy.historical_access_case_closed.v1` with `case_id`, `organization_id`, `relationship_id`, `authorized_membership_id`, `purpose`, `closed_reason` and `closed_at`. Tests: `T-PRV-HIST-01` (`-CLOSE-01..07`, `-EVT-03`, `-INT-02..05`, `-EXP-01`, `-AUTO-01..06`) and `studio-historical-access.test.ts` |
 
 #### `OP-PRV-020` — Consultar una relación histórica congelada
 
@@ -2358,6 +2476,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno; `ACCESS_EVENT` es auditoría obligatoria |
 | **Reglas** | No lista antiguos clientes, no reutiliza `/clients`, no admite escrituras ni exportación masiva. `relationship_training` conserva artefactos bilaterales; `prior_training_history` solo lo compartido; `body_progress` solo medidas estructuradas. Un derivado se sirve únicamente si existía en `T` y todos sus inputs siguen autorizados |
 | **Falla cerrada** | La respuesta ante inexistencia o falta de autorización es indistinguible; cualquier condición ausente devuelve vacío/problema genérico sin filtrar existencia |
+| **Implemented (STUDIO-55)** | Migration `20261116090000_a_case_opens_the_frozen_history.sql`; four reads, all `cookieAuth`, `private, no-store`, each requiring the header `X-Historical-Access-Case`, and each taking `person`, `session`, `organization`, `relationship` and `case`: `privacy.read_historical_relationship` behind `GET /studio/v1/organizations/{organizationId}/historical-relationships/{relationshipId}` (`HistoricalRelationship`: whose, `ended_at`, the case and the frozen categories that stayed readable, with their version and `frozen_at`); `execution.list_frozen_executions(…, limit, cursor_started_at, cursor_id)` behind `…/executions` (`FrozenExecutionPage`); `execution.read_frozen_execution(…, execution)` behind `…/executions/{executionId}` (`FrozenExecution`); `identity.list_frozen_body_progress(…, limit, cursor_measured_on, cursor_id)` behind `…/body-progress` (`FrozenBodyProgressPage` with `applied_scope`). **Shared opening (`privacy.open_frozen_read`):** the person actor, a recent sign-in on this session (`AF401` → `403 reauthentication-required`; deviation: a sign-in less than ten minutes old replaces MFA), a request id, a live membership, and `app.purpose = 'frozen_history_review'`. The case must be exercisable (`access_control.historical_case_exercisable`): it names the membership the request acts as, in this organization and for this relationship, it is open and inside its hours, the membership still qualifies, and her account is not closed. Otherwise the answer is `404`, like a case that does not exist, and the attempt is recorded as `denied` against the person whenever the case or the relationship belongs to the organization. **What it reads (deviation, narrower than «artefactos bilaterales»):** only what the frozen version marks `historical_readable` and does not exclude (`privacy.frozen_category`, `privacy.scope_reads_frozen`). In V1 that is executed sessions with their results, of this relationship under `relationship_training` and autonomous ones under `prior_training_history`, and structured body measurements under `body_progress`, field by field. The detail carries no coach observations, no planned session and no capture source. Programs, observations, derived progress, photos, health context and the profile have no historical read. **The cut:** a session counts only if it is completed, not annulled, `ended_at <= cut_at`, and has no `execution.execution_revisions` row created after the cut. An autonomous one is left out if hidden from that relationship then or since (a denial `active` or with `frozen_denied_at`). A measurement counts only if `created_at <= cut_at`, whatever `measured_on` says. **Pages:** sessions newest first on (`started_at` to the millisecond, `id`); measurements on (`measured_on`, `id`), both descending; `limit` 1 to 100, default 25, opaque cursor. **`scope-required`:** the session detail answers `403` naming `relationship_training` when no training category stayed readable; body progress names `body_progress`. The session list answers an empty page instead. Any session the list would not show is `404` by id. **Audit:** every read writes `privacy.access_events` with `access_mode = 'frozen'` and the case, once per frozen category used (`allowed`) or once `denied`, before answering. Tests: `T-PRV-HIST-02` (40), `T-PRV-HIST-01` (`-READ-01`) and `studio-historical-access.test.ts` |
 
 #### `OP-PRV-021` — Seguir las solicitudes de eliminación
 
@@ -2413,6 +2532,45 @@ Reglas que gobiernan todo el dominio:
 | **Falla cerrada** | Sin capacidad de directorio, `42501`. Un cursor a medias o un tamaño de página fuera de rango, `22023` — no la primera página, que se leería como filas saltadas |
 | **Implementado** | `privacy.list_authorized_scopes`. Cubierta por `T-PRV-SCOPES-01`, cuya aserción de negación se escribió **antes** de la unión y se vio fallar: un coach recibía tres filas donde dos eran suyas. El test se cae el día que alguien quite esa unión |
 
+#### `OP-PRV-024` — List legal holds
+
+Added with `HU-BO-033` in migration `20261104140000_a_legal_hold_keeps_what_it_names.sql`
+(allfitone#163), so the officer can find the holds in force and the ones that ended.
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /backoffice/v1/legal-holds` (`listBackofficeLegalHolds`) with the optional query `status` and `limit`, `200 LegalHoldPage`, `no-store` |
+| **Actor** | `A12` with the base role, `manage_privacy_requests`, AAL2 and the duty in force (`privacy.require_privacy_request_manager`) |
+| **Filtros obligatorios** | `status` is in force (the default) or ended; the database refuses anything else with `22023`. `limit` 1 to 200 |
+| **Transacción** | One, `privacy.list_legal_holds`. It writes one `privacy.access_events` row per person the page names before returning, because each hold names a person by identifier |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | In force: the one ending soonest first. Ended (released by an officer or lapsed on its date): the latest first |
+| **Offline / concurrencia** | `no-store`. A hold past its date reads as lapsed before the worker records it, because it already keeps nothing new |
+| **Información sensible** | The person's identifier, the kinds of data held, the reason, the case reference and who applied and released it |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | `privacy.legal_hold_projection` shapes each hold. `T-PRV-HOLD-02` |
+
+#### `OP-PRV-025` — List historical access cases
+
+Added with STUDIO-54..56: ADR-023 has managers open and close cases, and an authorized member needs to find the case to read through, but no operation listed them.
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /studio/v1/organizations/{organizationId}/historical-access-cases` |
+| **Actor** | `A3`–`A5` with a live membership in an active organization |
+| **Filtros obligatorios** | The organization of the route; optional `relationship_id` |
+| **Transacción** | One, read only, with no domain writes |
+| **Idempotencia** | N/A |
+| **Paginación y orden** | Newest first, keyset on (`opened_at` to the millisecond, `id`), both descending; `limit` 1 to 100, default 25; opaque cursor |
+| **Offline / concurrencia** | `private, no-store` |
+| **Información sensible** | The case: purpose, reference, justification, who opened it, whom it authorizes, whose history and the cut. No fitness data, so it writes no `ACCESS_EVENT` |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | A member with `manage_historical_access` sees every case of the organization (`historical_access_cases_select_manager`); any other member sees only the cases that authorize them (`historical_access_cases_select_authorized`); staff and other coaches see none. A case past its hours reads as `expired` before anyone closes it, and cannot be used |
+| **Falla cerrada** | Without a live membership, `42501` → `403`. A malformed `relationship_id`, page size or cursor is `400` before the database |
+| **Implemented (STUDIO-54..56)** | `privacy.list_historical_access_cases(person, organization, relationship, limit, cursor_opened_at, cursor_id)` returning `(id, opened_at, document)`, migration `20261116090000_a_case_opens_the_frozen_history.sql`, answered as `HistoricalAccessCasePage`. The policies decide which rows; the function only sets the membership context and pages. No recent sign-in is required. Index: `idx_historical_access_cases_organization_opened (organization_id, opened_at desc, id desc)`. Tests: `T-PRV-HIST-LIST-01..05`, `T-PRV-HIST-EXP-01` and `studio-historical-access.test.ts` |
+
 ### 7.5 Catálogo
 
 Dueño de `DISCIPLINE`, `ACTIVITY_TYPE`, `ACTIVITY_TYPE_ALIAS`, `MOVEMENT`, `MOVEMENT_ALIAS`, `MOVEMENT_VARIANT`, `MOVEMENT_INSTRUCTION`, `EQUIPMENT`, `MOVEMENT_EQUIPMENT`, `MUSCLE`, `MOVEMENT_MUSCLE`, `UNIT`, `RESULT_CONTRACT`, `ACTIVITY_TYPE_RESULT_CONTRACT` y `CONTRACT_FIXTURE`.
@@ -2459,6 +2617,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `catalog.private_movement_created.v1` |
 | **Reglas** | Un movimiento privado **solo** es visible para su organización. No pertenece a una disciplina nueva: crear disciplinas o tipos de actividad está reservado a la plataforma. No admite códigos libres sin namespace |
 | **Falla cerrada** | Disciplina inexistente, rechazo |
+| **Implemented (STUDIO-57..60)** | `catalog.create_organization_movement(person, organization, discipline_code, name, aliases, equipment, variant, idempotency_key, command_id, request_hash)` returning `(result, replayed)`, migration `20261113090000_a_gym_names_its_own_movements.sql`; `POST /studio/v1/organizations/{organizationId}/movements`, `cookieAuth`, the exact Studio `Origin`, `Idempotency-Key` and `Command-Id`, `201 OrganizationMovement` with `Location`, `private, no-store`. The movement id is the `Command-Id`. **Who:** a live member of an active organization with `manage_content`, which coach, admin and owner hold. Staff gets `403`, and somebody outside the organization `404`. **What:** a published discipline; a name of 1 to 120 characters, trimmed and with its spaces collapsed; up to ten other names, stored in `movement_aliases` with locale `es`, none blank, repeated or equal to the name; up to sixteen distinct codes of published global equipment; and optionally `variant {movement_id, relation, note?}`, naming a published global movement, with `relation` one of `variant`, `regression` or `progression` and a note of up to 200 characters. Every invalid field is named at once: `22023` → `422` with `errors[].path`. **Born `published`** at `revision_number = 1`, with its author in `created_by_membership_id` (`ck_movements_organization_author`). It gets no muscles, instructions or media, which stay Allfit One's to curate, so it answers `muscles: []`. **A name the organization already uses** fails on `uidx_movements_organization_name` (`23505`) and answers `409 conflict` with `errors[0].code = name-taken` and path `/name`. Another organization, or a global movement, may use the same name. **Event:** `catalog.private_movement_created.v1`, with `movement_id` and `organization_id` only. Creating writes no revision. No access event is written: the catalogue is nobody's personal data. Tests: `T-CAT-MOVEMENT-CREATE-01` (36); the HTTP layer in `T-CAT-STUDIO-MOVEMENT-API-*` and `-IDEM-01`; the bindings in `T-CAT-STUDIO-MOVEMENT-INT-04/05` |
 
 #### `OP-CAT-002` — Actualizar un movimiento privado
 
@@ -2476,6 +2635,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `catalog.private_movement_updated.v1` |
 | **Reglas** | Actualizar un movimiento **no reinterpreta el historial**: las versiones de plantilla y las ejecuciones que lo referencian conservan el significado con el que se registraron. Un movimiento global nunca se edita desde Studio |
 | **Falla cerrada** | Movimiento global, rechazo |
+| **Implemented (STUDIO-57..60)** | `catalog.update_organization_movement(person, organization, movement, expected_revision, changes, idempotency_key, command_id, request_hash)` returning `(result, replayed)`; `PATCH /studio/v1/organizations/{organizationId}/movements/{movementId}` with `{expected_revision, name?, discipline_code?, aliases?, equipment?, variant?}` and at least one change, `200 OrganizationMovement`. Membership, capability and validation are those of `OP-CAT-001`. A list replaces the whole list, and `variant: null` removes the variant. An empty edit or an unknown field is `422` naming `changes`. **The optimistic version is `expected_revision` in the body**, not `If-Match`, as in the other Studio edits. An old one is `40001 stale-movement` → `409 stale-draft`. **Lock:** the command takes the movement `for update` before it changes anything, so it waits for a version being published with it, and that publication waits for it. **History is not reinterpreted: once used, the meaning freezes** (product decision, 2026-11-06). Published versions and executed sessions keep only `movement_id`, so renaming a movement would rename the past. Once a published version uses it (`catalog.movement_in_use`: a row of `planning.planned_steps` names it), its discipline is fixed and its name only takes changes that keep `normalized_name`, that is, case and spacing. Anything else is `55000 movement-in-use` → `409 conflict` with `errors[0].code = movement-in-use`. A movement that is only in a draft is still renamed. Other names, equipment and variant stay editable: they say how to find it, not what was done. The `BEFORE UPDATE` trigger `trg_movements_before_update_meaning` enforces it on every organization row, whoever writes it. `name_locked` in the answer tells Studio beforehand whether name and discipline are frozen; it is always `true` for a global movement. **Refused:** a global movement or another organization's is `404`; an archived one is `409 conflict` with `movement-archived`; a name another movement of the organization has is `409 name-taken`. **Revision:** each edit moves `revision_number` up by one and writes an append-only `catalog.movement_revisions` row with the acting membership, the revision it started from, and the movement before and after (name, discipline, status, other names, equipment and variant). A refused edit leaves none. **Event:** `catalog.private_movement_updated.v1` with `movement_id`, `organization_id` and `revision`. Tests: `T-CAT-MOVEMENT-UPDATE-01` (30), `organization-movement-concurrency.test.ts` (4), `T-CAT-STUDIO-MOVEMENT-API-*` and `-INT-06` |
 
 #### `OP-CAT-003` — Archivar un movimiento privado
 
@@ -2493,6 +2653,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `catalog.private_movement_archived.v1` |
 | **Reglas** | Archivar lo retira de la búsqueda para contenido nuevo, pero **no** lo elimina: las versiones publicadas y las ejecuciones que lo referencian siguen resolviéndolo. Un movimiento referenciado nunca se borra físicamente mientras exista historial |
 | **Falla cerrada** | — |
+| **Implemented (STUDIO-57..60)** | `catalog.archive_organization_movement(person, organization, movement, idempotency_key, command_id, request_hash)` returning `(result, replayed)`; `POST /studio/v1/organizations/{organizationId}/movements/{movementId}/archival` with no body (a body is `415`), `200 OrganizationMovement`. **Who:** the new capability `archive_movements` («Archivar movimientos propios»), which owner and admin hold. Coaches hold `manage_content` too, so archiving needs a capability of its own. A coach or staff gets `403`, and a global movement or another organization's `404`. **Archiving converges:** it sets `status = 'archived'` at the next revision, with one `catalog.movement_revisions` row and `catalog.private_movement_archived.v1`. Archiving again answers the archived movement and writes nothing. There is no way back. **What changes:** the Studio search stops offering it unless asked (`include_archived`), a draft that uses it no longer publishes, and it is not edited again. The versions published with it keep resolving its name, and Studio still reads it, marked `archived`. **Nothing is deleted:** no path deletes a movement, and the `RESTRICT` FKs from `planned_steps` and the execution tables keep a referenced row (`T-MOV-3`). **Accepted race:** a version published at the same instant as the archive stays valid, because publishing does not lock the movement while it validates. Tests: `T-CAT-MOVEMENT-ARCHIVE-01` (16), `T-CAT-STUDIO-MOVEMENT-API-25..27`, `-IDEM-02`, `-INT-07` |
 
 #### `OP-CAT-004` — Publicar contenido del catálogo global
 
@@ -2548,16 +2709,16 @@ Reglas que gobiernan todo el dominio:
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Consulta |
-| **Superficie** | `GET /backoffice/v1/catalog/disciplines` · `GET /backoffice/v1/catalog/activity-types` (Backoffice). Space los leerá en `GET /catalog/v1/disciplines` · `GET /catalog/v1/activity-types` con su token; todavía no están servidas |
+| **Superficie** | `GET /backoffice/v1/catalog/disciplines` · `GET /backoffice/v1/catalog/activity-types` (Backoffice). Space los leerá en `GET /catalog/v1/disciplines` · `GET /catalog/v1/activity-types` con su token; todavía no están servidas. As implemented (STUDIO-164), Studio reads both at `GET /studio/v1/catalog/disciplines` · `GET /studio/v1/catalog/activity-types` with its session cookie: a session template names a discipline and its draft an activity type, so a member picks them from these lists instead of typing a code. Result contracts (`OP-CAT-012`) stay off Studio, because nothing a gym authors reads them |
 | **Actor** | Cualquier cuenta autenticada |
 | **Filtros obligatorios** | Solo contenido global publicado y no archivado |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | Sin paginación en V1: el catálogo global es pequeño y cerrado. Orden por código estable |
-| **Offline / concurrencia** | Cacheable con validación; Space lo precarga para poder registrar sin conexión |
+| **Offline / concurrencia** | Cacheable con validación; Space lo precarga para poder registrar sin conexión. The web surfaces answer uncached and never `304` (Backoffice `no-store`, Studio `private, no-store`): a `304` reached their browsers without `Access-Control-Allow-Origin` |
 | **Información sensible** | Ninguna |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | El código es estable y no se reutiliza. Un tipo de actividad determina qué contratos y estructuras son compatibles |
+| **Reglas** | El código es estable y no se reutiliza. Un tipo de actividad determina qué contratos y estructuras son compatibles. Any active person may read it on every surface: the catalogue is global published content and carries no organisation to check a Studio capability against. An empty list is a real answer, not a fault: no discipline exists until Backoffice publishes one, and until then no session template can be created |
 | **Falla cerrada** | — |
 
 #### `OP-CAT-009` — Buscar movimientos
@@ -2576,6 +2737,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno |
 | **Reglas** | La búsqueda cubre nombre y alias. Un movimiento archivado no aparece salvo petición explícita. `muscle` y `equipment` son repetibles: varios valores de un mismo filtro son `or`, y entre filtros distintos es `and`. Cada fila trae la dirección de su demostración cuando existe; un movimiento sin ella no es un error |
 | **Falla cerrada** | Sin `{orgId}` no se devuelve ningún privado |
+| **Implemented in Studio (STUDIO-57..60)** | `catalog.search_organization_movements(person, organization, query, discipline_code, include_archived, limit, cursor)` returning `{data, page}`; `GET /studio/v1/organizations/{organizationId}/movements?q&discipline&include_archived&limit&cursor`, `cookieAuth`, the exact Studio `Origin`, `200 StudioMovementPage`, `private, no-store`. **Contradiction resolved, actor:** not any authenticated account. It requires `manage_content`, because only those who compose content pick movements. Staff gets `403` and somebody outside the organization `404`. **What:** published global movements plus this organization's, and never another's, not even one another gym planned for the searcher (`T-MOV-1`). Each item says whose it is in `scope` (`global` or `organization`) and whether it is `archived`, with `muscles`, `equipment` and `demo_url`. **Matching:** `q` (up to 120 characters) matches the normalized name or any other name as a literal substring, so `%` and `_` are not patterns. `discipline` (up to 64) narrows it. Archived ones appear only with `include_archived=true`. **Deviation, order:** the normalized name, then the id. There is no relevance ranking. Keyset pages of 1 to 100 results (25 by default) with an opaque cursor; a cursor it cannot read is `400`. **Still pending on `/catalog`:** the Space search matches names only, not other names. Tests: `T-CAT-MOVEMENT-SEARCH-01` (21), `T-CAT-STUDIO-MOVEMENT-API-01..07`, `-INT-01/02` |
 
 #### `OP-CAT-010` — Consultar un movimiento
 
@@ -2593,6 +2755,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Incluye alias, músculos con su principal, equipamiento compatible, los pasos de ejecución en orden, variantes con el porqué de cada una, la demostración visual cuando existe, y sucesor global si fue promovido. Los pasos son contenido curado y revisado: se leen aquí y no se escriben desde ninguna superficie de producto. La demostración viaja como dirección absoluta compuesta al proyectar, nunca como una URL almacenada: el origen es configuración, no dato |
 | **Falla cerrada** | Privado de otra organización: misma respuesta que "no existe" |
+| **Implemented in Studio (STUDIO-57..60)** | `catalog.read_organization_movement(person, organization, movement)`; `GET /studio/v1/organizations/{organizationId}/movements/{movementId}`, `200 OrganizationMovement`, `private, no-store`, with the membership and `manage_content` of the search. It reads a published global movement or one of this organization's, archived ones included. Another organization's, or a global one nobody published, answers `404`, as one that does not exist. The answer carries `id`, `name`, `discipline_code`, `scope`, `archived`, `revision`, `aliases`, `equipment`, `muscles`, `variant_of {id, name, relation, note}`, `name_locked` and `demo_url`, but not the execution steps, which only global movements have. **Contradiction resolved:** the filter above admits, on `/catalog/v1/movements/{id}`, the private movements of an organization where the actor is a member. As built, that Space detail serves the global library only (`T-CAT-MOVEMENT-RLS-10`), and a gym's movement is read here, in Studio. In Space a person sees a gym's movement only inside what she was planned or trained, through `movements_select_planned` and `movements_select_executed`. Tests: `T-CAT-MOVEMENT-SEARCH-API-17..21`, `T-CAT-STUDIO-MOVEMENT-API-08..10`, `-INT-03` |
 
 #### `OP-CAT-011` — Listar equipamiento
 
@@ -3604,6 +3767,7 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | Muestra estado y vencimiento. Las propuestas canceladas por terminación de relación aparecen como canceladas, no desaparecen |
 | **Falla cerrada** | — |
 | **Implemented (STUDIO-53, HU-SP-062)** | Migration `20261112090000_a_coach_proposes_a_correction_and_she_decides.sql`. **Studio:** `execution.list_proposed_corrections(person, organization, status, limit, cursor_expires_at, cursor_id)` behind `GET /studio/v1/organizations/{organizationId}/correction-proposals?status&limit&cursor`, `cookieAuth`, `private, no-store`. **Space:** `execution.list_my_correction_proposals(person, status, limit, cursor_expires_at, cursor_id)` behind `GET /space/v1/correction-proposals?status&limit&cursor`, `bearerAuth`, `no-store`. HU-SP-062 has no Jira task. **Not cacheable:** both answer `no-store`, against «cacheable para presentación». **Every state (deviation from «pendientes»):** both list `pending`, `accepted`, `rejected`, `expired` and `cancelled`, with an optional `status` filter. A pending proposal past `expires_at` reads and filters as `expired` before the sweep marks it. Cancelled ones stay, with `cancel_reason`. **Order and page:** soonest to expire first, keyset on `(expires_at, id)` with an opaque cursor; `limit` 1 to 100, default 25. **Studio:** any live member of an active organization (otherwise `42501` → `403`) sees only what they proposed there, through `correction_proposals_select_proposer`. A colleague's proposals never appear. `ProposedCorrection` has `client {person_id, name}`, `field`, `proposed`, `reason`, `status`, `cancel_reason`, `created_at`, `expires_at` and `settled_at`. It **never carries her value.** `target {execution_id, set_order}` appears only while the proposer still attends her and she shares `relationship_training` or `prior_training_history`; otherwise it is null and the proposal stays listed. A filter, page size or cursor outside the contract is `422`. **Space:** `CorrectionProposal` has `execution_id`, `set_order`, `movement_id`, `movement_name`, `field`, `current` (what she had declared), `proposed`, `reason`, the state and its instants, `proposer_name` and `organization_name`. A filter, page size or cursor outside the contract is `400`. Neither list records an `ACCESS_EVENT`. |
+| **As implemented, Studio's reason (STUDIO-77, `HU-STUDIO-084` criterion 4)** | Migration `20261118100000_a_coach_opens_the_card_of_a_client.sql` recreates `execution.proposal_for_proposer` so that `cancel_reason` reads `session_unavailable` for both `session_hidden` and `session_annulled`: a session she hid from the organization simply does not exist for him, so he is never told it apart from one she annulled. The stored reason is unchanged, and Space (`execution.proposal_for_person`) still tells her which. `ProposedCorrection.cancel_reason` is `ProposedCorrectionCancelReason` (`target_changed`, `session_unavailable`, `relationship_terminated`, null). Tests: `T-EXE-PROPOSAL-CANCEL-LIST-03/04`, `T-EXE-PROPOSAL-API-09` |
 
 #### `OP-EXE-021` — Leer el resumen de un entreno terminado
 
@@ -3787,13 +3951,23 @@ Reglas que gobiernan todo el dominio:
 - Suscripción y relación de servicio son **vínculos distintos** con ciclos independientes.
 - Un `coach` **no** lee el estado de pago de su cliente. Un `staff` tampoco.
 
+> **Changed by `ADR-048` (9 November 2026).** Each leaf below is rewritten by the pull request
+> that builds it. Until then, where a leaf disagrees, `ADR-048` holds:
+>
+> - the gateway is Mercado Pago only, connected through OAuth (`OP-PAY-001`);
+> - a subscription starts `pending`, and the answer carries Mercado Pago's page (`OP-PAY-012`);
+> - ending it from Space or Studio cancels the agreement in Mercado Pago first (`OP-PAY-010`,
+>   `OP-PAY-015`);
+> - a failed charge suspends only once Mercado Pago stops retrying it, and a cancellation made in
+>   Mercado Pago suspends with `gateway_cancelled` (`OP-PAY-016`).
+
 | ID | Operación | Tipo | Actor |
 | --- | --- | --- | --- |
 | `OP-PAY-001` | Conectar la pasarela de la organización | Comando | `A5` |
 | `OP-PAY-002` | Crear un plan | Comando | `A4`, `A5` |
-| `OP-PAY-003` | Editar el borrador de un plan | Comando | `A4`, `A5` |
+| `OP-PAY-003` | Renombrar un plan | Comando | `A4`, `A5` |
 | `OP-PAY-004` | Publicar una versión de plan | Comando | `A4`, `A5` |
-| `OP-PAY-005` | Deprecar una versión de plan | Comando | `A4`, `A5` |
+| `OP-PAY-005` | Retirar una versión de plan | Comando | `A4`, `A5` |
 | `OP-PAY-006` | Listar los planes de la organización | Consulta | `A3`–`A6` |
 | `OP-PAY-007` | Consultar las suscripciones de la organización | Consulta | `A4`, `A5` |
 | `OP-PAY-008` | Suspender manualmente una suscripción | Comando | `A4`, `A5` |
@@ -3836,56 +4010,59 @@ Reglas que gobiernan todo el dominio:
 | **Reglas** | La cuenta es **de la organización**: la plata va de la persona al gimnasio sin tocar a Allfit. Allfit no queda como intermediario financiero. Un secreto en claro nunca entra a la base de datos |
 | **Falla cerrada** | Sin `manage_billing`, proveedor desconocido o conexión activa existente: rechazo |
 
-#### `OP-PAY-002` — Crear un plan · `OP-PAY-003` — Editar su borrador
+#### `OP-PAY-002` — Crear un plan · `OP-PAY-003` — Renombrarlo
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/organizations/{orgId}/plans` · `PUT .../plans/{id}/draft` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/plans` · `PATCH .../plans/{planId}` |
 | **Actor** | `A4`, `A5` con `manage_billing` |
-| **Filtros obligatorios** | Membresía vigente con capacidad; nombre único dentro de la organización |
-| **Transacción** | Crear `organization_plans` con identidad estable, o reemplazar el contenido del borrador |
-| **Idempotencia** | `Idempotency-Key`. `PUT` sin cambios no genera revisión |
+| **Filtros obligatorios** | Membresía vigente con capacidad; nombre recortado de 1 a 80 caracteres, único en la organización sin distinguir mayúsculas; para renombrar, el plan es de `{orgId}` |
+| **Transacción** | Crear `organization_plans` como `draft`, o cambiarle el nombre, esté en venta o no |
+| **Idempotencia** | `Idempotency-Key`. Renombrar al nombre que ya tiene converge sin cambios |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada; versión optimista |
+| **Offline / concurrencia** | Falla cerrada. Renombrar toma el plan con lock. **Sin versión optimista:** el nombre es el único campo, así que gana la última escritura y no hay otro dato que se pueda perder |
 | **Información sensible** | Ninguna categoría personal |
-| **Evento de dominio** | `payments.plan_created.v1` |
-| **Reglas** | El plan tiene identidad antes de tener precio: el precio vive en la versión. Un borrador **nunca** es suscribible |
-| **Falla cerrada** | Nombre repetido en la organización: rechazo |
+| **Evento de dominio** | Ninguno: nada lo consume, y el recibo de idempotencia registra quién lo hizo |
+| **Reglas** | El plan tiene identidad antes de tener precio: el precio vive en la versión. Un borrador **nunca** es suscribible. Un plan publicado también se renombra, y sus suscritos ven el nombre nuevo (decisión del dueño, 9 de noviembre de 2026) |
+| **Falla cerrada** | Nombre repetido: `409`. Plan de otra organización: `404`. Sin `manage_billing`: `403`, porque los planes no son secretos para el equipo |
+| **Implemented (2026-11-09, TECH-48)** | `payments.create_organization_plan(actor, organization, name, key, command, hash)` and `payments.rename_organization_plan(actor, organization, plan, name, key, command, hash)`, migration `20261120090000_a_gym_sells_its_plans.sql`; `POST /studio/v1/organizations/{organizationId}/plans` (`201`) and `PATCH …/plans/{planId}` (`200`), `cookieAuth`, body exactly `{name}`. Both answer the plan as the team sees it (`StudioOrganizationPlan`). `manage_billing` is held by `owner` and `admin`; a `coach` or `staff` gets `42501` → `403`. The check on the plan's organization is the function's own: somebody who administers two gyms still cannot rename one through the other's path. Tests: `T-PAY-GYM-PLAN-01`, `T-PAY-API-02` |
 
 #### `OP-PAY-004` — Publicar una versión de plan
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/organizations/{orgId}/plans/{id}/versions` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/plans/{planId}/versions` |
 | **Actor** | `A4`, `A5` con `manage_billing` |
-| **Filtros obligatorios** | Borrador completo: monto positivo, moneda ISO 4217 y periodo `month` o `year` |
-| **Transacción** | Crear `plan_versions` inmutable con numeración monotónica |
-| **Idempotencia** | `Idempotency-Key`. Publicar dos veces el mismo contenido devuelve la primera versión |
+| **Filtros obligatorios** | Monto en **pesos enteros** (`amount_minor` positivo, múltiplo de 100, hasta 100.000.000.000); moneda `COP`; periodo `month` o `year`; modalidad `in_person` o `remote` |
+| **Transacción** | Bajo lock del plan: retirar la versión en venta, crear la nueva con `max(version_number) + 1` y pasar el plan de `draft` a `published`, todo en la misma transacción |
+| **Idempotencia** | `Idempotency-Key`. Publicar exactamente el precio que ya está en venta converge con `200` y no crea versión. Un replay responde lo mismo que la primera llamada |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada; numeración serializada |
+| **Offline / concurrencia** | Falla cerrada; numeración serializada por el lock del plan. Retirar la versión anterior toma su lock advisory exclusivo (ver `OP-PAY-012`) |
 | **Información sensible** | Ninguna categoría personal |
-| **Evento de dominio** | `payments.plan_version_published.v1` |
-| **Reglas** | Una versión publicada **no se edita jamás**. Subir el precio exige publicar otra versión, y **las suscripciones vigentes conservan la versión que congelaron**: a nadie se le sube el precio por debajo |
-| **Falla cerrada** | Monto no positivo, moneda inválida o periodo fuera de `month`/`year`: rechazo |
+| **Evento de dominio** | Ninguno: nada lo consume todavía |
+| **Reglas** | Una versión publicada **no se edita jamás**. **Un plan tiene un solo precio en venta**: la versión nueva reemplaza a la anterior para las suscripciones nuevas, y **las suscripciones vigentes conservan la versión que congelaron**. Mensual y anual son planes distintos. `in_person` se ofrece y se paga en Space; `remote` se paga solo con el link que manda la organización (`ADR-048`, `HU-STUDIO-088`) |
+| **Falla cerrada** | Monto con centavos o no positivo, otra moneda, otro periodo u otra modalidad: `422`. Plan de otra organización: `404` |
+| **Implemented (2026-11-09, TECH-130)** | `payments.publish_plan_version(actor, organization, plan, amount_minor, currency_code, billing_period, delivery_mode, key, command, hash)`, migration `20261120090000_a_gym_sells_its_plans.sql`, which also adds `plan_versions.delivery_mode`, freezes it in `plan_version_guard_tg` and creates `uidx_plan_versions_live`. `POST …/plans/{planId}/versions` answers `201` with a new version and `200` when it converges; a replay repeats the first status, read from the receipt's `outcome_code`. **Only `COP`:** Mercado Pago Colombia charges in pesos; the contract keeps `currency_code` so another currency needs no new field. Tests: `T-PAY-GYM-PLAN-02`, `T-PAY-API-02` |
 
-#### `OP-PAY-005` — Deprecar una versión de plan
+#### `OP-PAY-005` — Retirar una versión de plan
 
 | Campo | Valor |
 | --- | --- |
 | **Tipo** | Comando |
-| **Superficie** | `POST /studio/v1/organizations/{orgId}/plans/{id}/versions/{v}/deprecation` |
+| **Superficie** | `POST /studio/v1/organizations/{orgId}/plans/{planId}/versions/{planVersionId}/deprecation` |
 | **Actor** | `A4`, `A5` con `manage_billing` |
-| **Filtros obligatorios** | Versión publicada de la organización |
-| **Transacción** | Marcar la versión como deprecada |
-| **Idempotencia** | `Idempotency-Key`; converge |
+| **Filtros obligatorios** | La versión es de ese plan y de `{orgId}` |
+| **Transacción** | Bajo lock del plan y lock advisory exclusivo de la versión: marcarla `deprecated`. Si era la que estaba en venta, el plan queda fuera de venta hasta que se publique otra |
+| **Idempotencia** | `Idempotency-Key`; converge, también si una versión más nueva ya la había reemplazado |
 | **Paginación y orden** | No aplica |
-| **Offline / concurrencia** | Falla cerrada |
+| **Offline / concurrencia** | Falla cerrada. Nombra la versión y no el plan: si alguien publicó otro precio un momento antes, retirar el viejo no toca el nuevo |
 | **Información sensible** | Ninguna categoría personal |
-| **Evento de dominio** | `payments.plan_version_deprecated.v1` |
-| **Reglas** | Deprecar impide **suscripciones nuevas**. **No** cancela, no suspende y no cambia de versión a nadie que ya esté suscrito |
-| **Falla cerrada** | — |
+| **Evento de dominio** | Ninguno: nada lo consume todavía |
+| **Reglas** | Retirar impide **suscripciones nuevas**. **No** cancela, no suspende y no cambia de versión a nadie que ya esté suscrito |
+| **Falla cerrada** | Versión de otro plan o de otra organización: `404` |
+| **Implemented (2026-11-09, TECH-71)** | `payments.deprecate_plan_version(actor, organization, plan, plan_version, key, command, hash)`, migration `20261120090000_a_gym_sells_its_plans.sql`; `POST …/versions/{planVersionId}/deprecation`, without a body, `200`. It writes only the version's `status` and `deprecated_at`. Tests: `T-PAY-GYM-PLAN-02` (the subscription to the retired version is untouched), `T-PAY-API-02` |
 
 #### `OP-PAY-006` — Listar los planes de la organización
 
@@ -3893,16 +4070,17 @@ Reglas que gobiernan todo el dominio:
 | --- | --- |
 | **Tipo** | Consulta |
 | **Superficie** | `GET /studio/v1/organizations/{orgId}/plans` |
-| **Actor** | `A3`–`A6` con membresía vigente |
+| **Actor** | `A3`–`A6` con membresía vigente, `coach` y `staff` incluidos |
 | **Filtros obligatorios** | Planes de `{orgId}` |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
-| **Paginación y orden** | Cursor. Orden: estado y nombre |
-| **Offline / concurrencia** | Cacheable para presentación |
-| **Información sensible** | Ninguna categoría personal |
+| **Paginación y orden** | Cursor. Orden: publicados primero, luego borradores; dentro, por nombre sin distinguir mayúsculas y por id |
+| **Offline / concurrencia** | `private, no-store` |
+| **Información sensible** | Ninguna categoría personal: un precio no es dato de nadie |
 | **Evento de dominio** | Ninguno |
-| **Reglas** | Distingue borradores de versiones publicadas. Una organización nunca ve los planes de otra |
-| **Falla cerrada** | — |
+| **Reglas** | Distingue borradores de planes publicados, y dice si cada uno está en venta. Trae el precio en venta y todas las versiones. Una organización nunca ve los planes de otra. Una persona cliente ve la oferta de Space (`OP-PAY-011`), nunca los borradores |
+| **Falla cerrada** | Sin membresía vigente: `403` |
+| **Implemented (2026-11-09, TECH-133)** | `payments.list_organization_plans_for_team(actor, organization, limit, cursor_status, cursor_name, cursor_plan_id)`, migration `20261120090000_a_gym_sells_its_plans.sql`; `GET …/plans`, `cookieAuth`, `limit` 1–100 (default 50). Keyset on (published first, `lower(name)`, `id`), page cap 101, cursor all or nothing. Each row is `payments.organization_plan_projection`: name, status, `on_sale`, the version on sale or `null`, and every version newest first. Tests: `T-PAY-GYM-PLAN-01`, `T-PAY-API-02` |
 
 #### `OP-PAY-007` — Consultar las suscripciones de la organización
 
@@ -3965,7 +4143,7 @@ Reglas que gobiernan todo el dominio:
 | **Tipo** | Consulta |
 | **Superficie** | `GET /space/v1/organizations/{orgId}/plans` |
 | **Actor** | `A2` con relación vigente en esa organización |
-| **Filtros obligatorios** | Solo versiones **publicadas y no deprecadas**; la persona tiene relación con `{orgId}` |
+| **Filtros obligatorios** | Solo versiones **publicadas y no deprecadas**, y solo **presenciales** (`delivery_mode = 'in_person'`, `ADR-048`); la persona tiene relación con `{orgId}` |
 | **Transacción** | Ninguna |
 | **Idempotencia** | N/A |
 | **Paginación y orden** | Cursor. Orden: monto ascendente |
@@ -3974,6 +4152,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | Ninguno |
 | **Reglas** | No es un catálogo público ni un marketplace: solo lo ve quien ya tiene relación con esa organización. Descubrir gimnasios sigue diferido |
 | **Falla cerrada** | Sin relación con `{orgId}`, misma respuesta que "no existe" |
+| **Changed (2026-11-09, TECH-130)** | Migration `20261120100000_space_offers_only_in_person_plans.sql` recreates `payments.list_organization_plans` with the same signature and one more filter: `delivery_mode = 'in_person'`. A remote plan is paid through the organization's link and never appears in Space. Tests: `T-PAY-GYM-PLAN-02` |
 
 #### `OP-PAY-012` — Suscribirme a un plan
 
@@ -3991,6 +4170,7 @@ Reglas que gobiernan todo el dominio:
 | **Evento de dominio** | `payments.subscription_started.v1` |
 | **Reglas** | Los datos de tarjeta se entregan **directamente a la pasarela de la organización**; Allfit nunca los ve ni los almacena. Suscribirse **no concede ningún acceso a datos**: los scopes solo se deciden al aceptar una relación nueva. Suscribirse tampoco crea la relación de servicio |
 | **Falla cerrada** | Sin pasarela activa en la organización: rechazo explícito, porque no habría a dónde cobrar |
+| **Changed (2026-11-09, TECH-130)** | Migration `20261120100000_space_offers_only_in_person_plans.sql` recreates `payments.subscribe_to_plan` with the same signature. A remote version answers the same `P0002` as one not on offer. It first takes `pg_advisory_xact_lock_shared` on the version, and publishing or retiring takes the exclusive one, so no subscription is created on a version whose retirement has committed. **Not `FOR SHARE`:** under forced RLS a locking read also applies the `UPDATE` policy, which a client does not pass. Checked by hand with two sessions: with the lock, the subscription waits and then gets `P0002`; without it, it lands on the retired version. `pending` and the checkout are still `ADR-048` work |
 
 #### `OP-PAY-013` — Consultar mi suscripción · `OP-PAY-014` — Mi historial de pagos
 
@@ -4435,7 +4615,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | ID | Operación | Tipo | Actor |
 | --- | --- | --- | --- |
 | `OP-SUP-001` | Solicitar ventana break-glass | Comando | `A10/request_break_glass` |
-| `OP-SUP-002` | Aprobar o rechazar break-glass | Comando | `A12/approve_break_glass` |
+| `OP-SUP-002` | Aprobar o rechazar break-glass (retired by ADR-046) | Comando | `A12/approve_break_glass` |
 | `OP-SUP-003` | Ejercer lectura break-glass | Consulta auditada | `A10` solicitante exacto |
 | `OP-SUP-004` | Cerrar mi ventana break-glass | Comando | `A10` solicitante exacto |
 | `OP-SUP-005` | Consultar metadatos operativos | Consulta | `A10` |
@@ -4445,6 +4625,16 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | `OP-SUP-009` | Consultar el registro de accesos de plataforma | Consulta | `A12/audit_platform_access` |
 | `OP-SUP-010` | Asignar, suspender o revocar un deber | Comando | `A12/manage_platform_access` |
 | `OP-SUP-011` | Consultar asignaciones de deber | Consulta | `A12/manage_platform_access` o `audit_platform_access` |
+
+> **ADR-046.** Built: `allfit_admin` brings every duty (`OP-SUP-007`, `OP-SUP-010`,
+> `OP-SUP-011` below; migration `20261114090000_an_admin_holds_every_duty.sql`). Also built:
+> self-approved break-glass windows of 60 minutes for every tier (decision 2, migration
+> `20261115090000_an_admin_opens_their_own_break_glass_window.sql`), which retires
+> `OP-SUP-002`; person search by partial name, email or phone with full name and contact
+> (decision 4) and an optional case reference for support reads (decision 5), both in
+> migration `20261115100000_an_admin_finds_a_person_by_name.sql`. The «Implemented
+> (ADR-046)» rows of `OP-SUP-001` to `OP-SUP-006` below say what changed; the rest of each
+> table still holds.
 
 ---
 
@@ -4464,8 +4654,9 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | `support.break_glass_requested.v1` |
 | **Reglas** | El servidor calcula sensibilidad, aprobaciones y duración. Categoría prohibida se rechaza y audita sin abrir alcance aprobable |
 | **Falla cerrada** | Deber/rol/AAL insuficiente, conflicto, categoría o propósito inválidos: rechazo |
+| **Implemented (ADR-046)** | Migration `20261115090000_an_admin_opens_their_own_break_glass_window.sql`. **Asking opens the window:** `support.request_break_glass` derives 0 approvals and 60 minutes for both tiers (`support.break_glass_required_approvals`, `support.break_glass_duration_minutes`) and inserts the request with `status = 'approved'`, `window_starts_at` at the request and `window_ends_at` 60 minutes later. It emits `support.break_glass_requested.v1` and `support.break_glass_window_opened.v1` (`request_id`, `window_starts_at`, `window_ends_at`). `request_expires_at` is still written 30 minutes after the request but no longer gates a new window. **Unchanged:** the closed purpose (`support.break_glass_purpose`), a traceable `case_reference`, the refusal of forbidden categories, the refusal over one's own data (`42501`) and the idempotent replay. `ck_break_glass_requests_derived` accepts 0/60 and the shapes asked for before (standard 1/30, restricted 2/15), and refuses mixes such as 0/15 or 0/90. In the contract, `BreakGlassRequest.required_approvals` has minimum 0 and `requested_duration_minutes` maximum 60. The Backoffice web says «Ventana abierta por 60 minutos. Cada lectura queda registrada y otra persona la revisa después.» Tests: `T-SUP-BG-SELF-01`, `T-SUP-BG-01`, `T-BG-API-01`, `T-BG-API-02` |
 
-#### `OP-SUP-002` — Aprobar o rechazar break-glass
+#### `OP-SUP-002` — Aprobar o rechazar break-glass (retired)
 
 | Campo | Valor |
 | --- | --- |
@@ -4481,6 +4672,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | `support.break_glass_decided.v1`, y `support.break_glass_window_opened.v1` al completar quorum |
 | **Reglas** | Un rechazo es terminal. Estándar exige una aprobación; restringida dos personas distintas |
 | **Falla cerrada** | Solicitante/sujeto/conflicto/deber vencido o solicitud no pendiente: rechazo |
+| **Retired (ADR-046)** | This table is kept as a historical record. Migration `20261115090000_an_admin_opens_their_own_break_glass_window.sql` drops `support.decide_break_glass`; the route `POST /backoffice/v1/break-glass/requests/{requestId}/decisions` answers `404`, and the OpenAPI operation `decideBackofficeBreakGlass` and schema `BreakGlassDecision` are removed. `support.break_glass_approvals` keeps the approvals recorded before, stays append-only, and nothing writes it any more. `support.break_glass_viewer_projection` no longer returns `viewer_can_decide`. A request asked for before and still pending can no longer be approved and expires; the Backoffice web shows it as «Pedida antes del cambio, sin abrir» and no longer has approve or reject controls. `support.break_glass_decided.v1` is no longer emitted. Tests: `T-SUP-BG-SELF-01`, `T-BG-API-20` |
 
 #### `OP-SUP-003` — Ejercer lectura break-glass
 
@@ -4498,6 +4690,8 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | Ninguno; los registros de acceso son la evidencia |
 | **Reglas** | Sólo lectura. Otro A10, un A12 o el mismo actor con otra solicitud no puede ejercer |
 | **Falla cerrada** | Cualquier falla de autorización o auditoría devuelve cero contenido |
+| **Implemented (ADR-046)** | Unchanged. A window opened since ADR-046 is `approved` from the request with 0 required approvals, so its requester can exercise it at once; every read still writes `support.break_glass_events` and `privacy.access_events` before content |
+| **Code branch `feat/backoffice-last-gaps` (merge and deploy pending)** | **What she hid** (`HU-BO-008` c4, migration `20261122100000`): a training read returns `hidden_sessions` beside the sessions, never inside them: each active hiding among the sessions on the page, with its relationship and the gym's name. A hiding she took back is not listed. `support.break_glass_hidden_sessions` reads it through the policy `session_visibility_denials_select_break_glass`, which admits only the reader of a live window over her. **Every session** (migration `20261122140000`): `support.exercise_break_glass` gains `p_before_started_at` and `p_before_id`, and the body takes the optional `before` cursor. A training read answers the 100 sessions older than the cursor and `has_older_sessions`; without a cursor it answers the newest 100, as before. Both halves of the cursor or neither, and only for a training category, else `422` (`22023`). Each page passes the same gate and writes its own events. The six-argument function is dropped, so an API older than the migration cannot exercise a window, and an API newer than the database cannot either |
 
 **Contenido implementado (`HU-BO-009`, mediciones).** Con `body_progress`, una lectura permitida responde `outcome: "allowed"` y `content.body_progress`, con hasta 500 mediciones de la persona del expediente, las más recientes primero, y la misma proyección que ve la persona: `has_media` sin referencia. `body_progress` lee sólo `identity.body_progress_records`; apuntarla a otro `resource_type` se registra y responde `denied` con `resource_out_of_scope`. Las categorías cuyos datos la plataforma todavía no guarda siguen respondiendo `content_unavailable`.
 
@@ -4538,6 +4732,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Es la operación ordinaria. No devuelve nombres ni contactos completos; localizar persona exige identificador o coincidencia exacta, caso trazable y respuesta enmascarada |
 | **Falla cerrada** | — |
+| **Implemented (ADR-046)** | Migration `20261115100000_an_admin_finds_a_person_by_name.sql` replaces the rule above. **Search:** `GET /backoffice/v1/support/people?q=&case_reference=&limit=` accepts only those parameters (the old `identifier`, `email` and `phone` answer `400 invalid-request`); `q` is trimmed and 2 to 100 characters, and `limit` defaults to 25 and is at most 25. `support.search_people(actor, session, case_reference, query, limit)` matches part of the lowered name, email or phone, with `\`, `%` and `_` escaped so a wildcard never lists everybody, or the exact person identifier, in name order. It answers `outcome` (`found` or `not_found`), `items` and `has_more`; each `SupportPersonMatch` carries `person_id`, `display_name`, `contact_email`, `contact_phone` and `account_status`, and no masked contact. **Evidence:** one `support.metadata_queries` row per search (`lookup_kind = 'text'`, sha256 of the lowered term, `result_count`) and one `privacy.access_events` row per person returned (`resource = 'support.person_search'`, purpose `support_diagnosis`, access mode `support_metadata`); a session without the admin role is refused and nothing is recorded. **Person file:** `GET /backoffice/v1/support/people/{personId}` returns `SupportPersonMetadata` with `display_name`, `contact_email` and `contact_phone` added from `support.v_support_metadata`; the older masked fields stay, and it never shows the provider subject or separate given and family names. **Case reference (decision 5):** optional for the search, the person file, `/people/{personId}/payments` and `/support/billing-follow-up`; one given must match `^[A-Z][A-Z0-9_-]{2,63}$`, and free text answers `400 invalid-request`. The Backoffice web has one field «Nombre, correo o teléfono», an optional case and a table with name, email, phone and account state; it says when nobody matched and when more than 25 did. Tests: `T-SUP-SEARCH-02`, `T-SUP-RLS-03`, `T-SUP-API-23` to `28`, `46`, `48`, `49`, `T-SUP-UNIT-01`, `T-SUP-UNIT-02` |
 
 #### `OP-SUP-006` — Revisar un caso break-glass ejercido
 
@@ -4555,6 +4750,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | `support.break_glass_reviewed.v1` o `support.break_glass_incident_opened.v1` |
 | **Reglas** | El 100% de casos ejercidos se revisa; aprobar el caso impide revisarlo como independiente |
 | **Falla cerrada** | Revisor no independiente o deber/AAL inválido: rechazo |
+| **Implemented (ADR-046)** | Unchanged. Nobody approves a window opened since ADR-046, so its reviewer only has to differ from the requester and the subject: the requester cannot review it and the other administrator can. A case approved before still keeps its approvers out of its review. Tests: `T-SUP-BG-SELF-01`, `T-SUP-BGR-01` |
 
 #### `OP-SUP-007` — Asignar o retirar el rol base de plataforma
 
@@ -4568,10 +4764,11 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Idempotencia** | `Idempotency-Key`. Asignar un rol ya vigente converge |
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Un cambio de acceso **nunca** se confirma desde caché |
-| **Información sensible** | Identidad interna del equipo; el rol sólo permite entrar y no concede categorías de datos |
+| **Información sensible** | Identidad interna del equipo. Since ADR-046 the role brings every duty; reading a person's content still needs a break-glass window |
 | **Evento de dominio** | `support.platform_role_granted.v1`, `support.platform_role_revoked.v1` |
-| **Reglas** | No hay autoasignación. El rol **no tiene vencimiento** y nunca puede quedar cero `allfit_admin`; no implica ningún deber. El historial es append-only e inmutable |
+| **Reglas** | No hay autoasignación. El rol **no tiene vencimiento** y nunca puede quedar cero `allfit_admin`. El historial es append-only e inmutable. Since ADR-046 the role brings the thirteen duties (see below) |
 | **Falla cerrada** | Último `allfit_admin`, rol fuera del catálogo o persona inactiva: rechazo |
+| **Implemented (ADR-046)** | Migration `20261114090000_an_admin_holds_every_duty.sql`. **Granting brings the duties:** the `AFTER INSERT` trigger `trg_platform_role_assignments_insert_grant_duties` runs `support.grant_standing_platform_duties()`, which inserts the thirteen duties of `support.standing_platform_duties()` with `basis = 'admin_role'`, `valid_to = 9999-12-31 00:00:00+00`, `reason_code = 'admin_role'` and the role's grantor as `granted_by_person_id`, and queues one `support.platform_duty_granted.v1` per duty. The grantor is never the person, because the role is never self-granted. **Withdrawing** is unchanged: `support.close_revoked_platform_access()` revokes every duty, by whoever withdrew the role, closes the person's break-glass windows and revokes their Backoffice sessions. Tests: `T-SUP-STANDING-01` |
 
 #### `OP-SUP-008` — Consultar quién tiene rol de plataforma
 
@@ -4589,6 +4786,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Muestra vigentes y retiradas, con quién asignó y cuándo. Ninguna organización ni persona externa lo consulta |
 | **Falla cerrada** | — |
+| **Code branch `feat/backoffice-last-gaps` (merge and deploy pending)** | `HU-BO-029` c1, migration `20261122090000_the_team_names_who_holds_access.sql`. Each assignment carries `person_name` and `granted_by_name`, the `display_name` of the holder and the grantor, null only when a person has no name on file. Naming a person is reading her, so `support.record_platform_access_read` writes one `privacy.access_events` row per distinct person a page names before it travels, as the person search does since ADR-046. The commands that return an assignment carry the names too and write no extra event, because each is itself a record of who acted on whom. The same applies to `OP-SUP-011` |
 
 #### `OP-SUP-009` — Consultar el registro de accesos de plataforma
 
@@ -4606,6 +4804,7 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Identifica a la persona real, deber, categoría, sujeto, propósito, resultado e instante. El registro es inmutable. Un auditor no revisa como independiente un caso que solicitó o aprobó. La persona afectada ve el reflejo minimizado desde su aplicación |
 | **Falla cerrada** | Si el registro no puede escribirse en el momento de una lectura, **esa lectura no ocurre** |
+| **Paged read** | allfitone#159 (`20261104100400_the_access_log_pages_to_the_end.sql`) reads the log to the end, one page at a time, with `privacy.page_access_events`. The unpaged `privacy.list_access_events` stayed for the API deployed before it. Migration `20261122120000_the_unpaged_access_log_read_goes.sql` (code branch `feat/backoffice-last-gaps`, merge and deploy pending) drops it: nothing called it, and nobody kept it in step with the paged read |
 
 #### `OP-SUP-010` — Asignar, suspender o revocar un deber de plataforma
 
@@ -4623,6 +4822,8 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | `support.platform_duty_granted.v1`, `support.platform_duty_suspended.v1`, `support.platform_duty_revoked.v1` |
 | **Reglas** | Nadie se autoasigna; un deber no implica otro; vencer se evalúa por tiempo aunque el job no haya corrido |
 | **Falla cerrada** | Rol base ausente, catálogo/AAL/vigencia inválidos o autoasignación: rechazo |
+| **Implemented (ADR-046)** | Migration `20261114090000_an_admin_holds_every_duty.sql`. Every duty requires `allfit_admin`, and the role already brings all thirteen, so these commands only matter for a temporary duty granted before ADR-046. **Granting converges:** `support.assign_platform_duty` still validates the role, the catalogue and a window of at most 90 days, then answers the assignment the person already holds (scheduled or active, in any basis, preferring `admin_role`) and adds no row; granting an administrator a duty answers it with `basis: admin_role`. **A duty held through the role follows the role:** `support.suspend_platform_duty`, `support.revoke_platform_duty` and `support.recertify_platform_duty` (`POST .../{id}/recertification`, also `OP-SUP-010`) fail on it with `23514 a duty held through the admin role follows the role`, which the API answers as `409 conflict`; the rule lives in `support.preserve_platform_duty_history`, which also freezes `basis`. **Concurrency:** the current-assignment unique index is `(person_id, duty_code, basis)`, so a temporary duty from before lives beside the standing one and lapses on its own date, and two temporary ones of the same duty never coexist. The Backoffice web no longer offers a grant form. Tests: `T-SUP-STANDING-01`, `T-SUP-RECERT-01` |
+| **Recertification and lapse (allfitone#161)** | Migration `20261104120000_a_duty_is_recertified_and_closes_its_windows.sql` (`HU-BO-028` c4 and c5, `HU-BO-029` c2). **Recertifying:** `support.recertify_platform_duty` behind `POST /backoffice/v1/platform/duty-assignments/{assignmentId}/recertification` (`recertifyBackofficePlatformDuty`). It records who attests that a duty in force is still needed, and when, in `recertified_by_person_id` and `recertified_at`, which existed and nothing wrote. It requires `manage_platform_access` and AAL2, and never the duty's own holder (`42501`); a duty not in force answers `23514`. It does not extend the window: longer authority is a new assignment. Since ADR-046 a duty held through the role is never recertified on its own. **Lapsing:** `support.lapse_platform_duties` moves every duty past `valid_to` to `expired` and closes the break-glass windows of a requester left without `request_break_glass`. The worker's `platform_duty_lapse` job runs it each minute as `worker`, so no one is named as its author. The policies `break_glass_requests_select_worker` and `break_glass_requests_update_worker` let the worker see open requests and only close them. `support.close_revoked_platform_access` also closes the windows when the base role is withdrawn, which until then left them `approved` |
 
 #### `OP-SUP-011` — Consultar asignaciones de deber
 
@@ -4640,6 +4841,30 @@ Regla que gobierna todo el dominio: **el rol base permite entrar; el deber autor
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Muestra historial, otorgante, vigencia, AAL, recertificación, suspensión y revocación; sin `DELETE` |
 | **Falla cerrada** | Deber del consultante ausente o vencido: rechazo |
+| **Implemented (ADR-046)** | Each `PlatformDutyAssignment` now carries the required `basis` (`granted` or `admin_role`). The Backoffice web shows an `admin_role` duty as «Permanente · rol admin» instead of its far `valid_to`, and «Sigue al rol» instead of the recertify, suspend and revoke actions. A temporary duty from before keeps its dates and actions until it lapses |
+| **Code branch `feat/backoffice-last-gaps` (merge and deploy pending)** | Each assignment carries `person_name` and `granted_by_name`, and a page writes one access event per person it names, as `OP-SUP-008` does |
+
+#### Backoffice reads built under their gap identifiers
+
+Seven Backoffice reads were built without an `OP-*` number. The contract still names them
+by the `NEW-*` gap of the traceability matrix (`x-allfit-operation`), so this table lists
+them under that name. Each one is a read with no domain writes, `no-store`, and checks
+its duty inside the database function (`42501` → `403`).
+
+| Gap identifier | Route | Function | Duty | Stories |
+| --- | --- | --- | --- | --- |
+| `NEW-SUP-DASHBOARD` | `GET /backoffice/v1/support/business` | `support.read_business_panel` | `view_platform_metrics` | `HU-BO-004`; `HU-BO-020` c1 and c2 |
+| `NEW-SUP-ATTENTION` | `GET /backoffice/v1/support/attention` | `support.read_attention_panel` | Each block shows only for the duty that can act on it | `HU-BO-005` |
+| `NEW-SUP-PERSON-PAYMENTS` | `GET /backoffice/v1/support/people/{personId}/payments` | `support.person_payments` | `view_billing_metadata` | `HU-BO-018` |
+| `NEW-SUP-BILLING-FOLLOW-UP` | `GET /backoffice/v1/support/billing-follow-up` | `support.billing_follow_up` | `view_billing_metadata` | `HU-BO-005` c1 and c5; `HU-BO-020` c3 and c4 |
+| `NEW-SUP-JOB-HEALTH` | `GET /backoffice/v1/support/job-health` | `support.list_job_health` | `diagnose_support_metadata` | `HU-BO-031` |
+| `NEW-SUP-ORG-SEARCH` | `GET /backoffice/v1/organizations` | `organizations.list_backoffice_organizations` | `diagnose_support_metadata` or `manage_organization_lifecycle` | `HU-BO-012` |
+| `NEW-SUP-ORG-DETAIL` | `GET /backoffice/v1/organizations/{organizationId}` | `organizations.read_backoffice_organization` | `diagnose_support_metadata` or `manage_organization_lifecycle` | `HU-BO-013` |
+
+The two billing reads and the gym's file write one `privacy.access_events` row per person
+they name before they answer; if the record fails, the read fails. The two panels name
+nobody. A figure of the business panel that counts people, or money paid by people, is
+`below_threshold` under the minimum of five.
 
 ### 7.10 Nutrición
 
@@ -4825,6 +5050,7 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Profesional no recibe `media_ref` ni URL de storage; con ambos scopes recibe únicamente el enlace autenticado de `OP-NUT-013` |
 | **Falla cerrada** | Media aislada, admin/staff, credencial vencida o falta de grant producen cero señal |
+| **Implemented (STUDIO-61)** | `nutrition.list_client_meals(person, organization, subject, from, to, limit, cursor_occurred_at, cursor_id)`, migration `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql` (pull request allfitone#203, merge and database deploy pending); `GET /studio/v1/organizations/{organizationId}/clients/{personId}/nutrition/meals?from&to&limit&cursor`, `cookieAuth`, `private, no-store`, `200 ClientNutritionMealPage`. **Deviation, who reads:** the attending professional (`holder`, or a cover she accepted) with a live membership and her `nutrition_intake` grant; no capability and no credential (the owner's decision of 8 November 2026; ADR-027, *As implemented*). Not attending her is `P0002` → `404`, the same for admin, owner and staff. **Order:** `identity.open_client_category(…, 'studio_nutrition_review')` writes the access event, allowed or denied, before any row; without the grant the answer is `403 scope-required` naming `nutrition_intake`. Rows then come through `meals_select_review`, `meal_items_select_review` and `meal_nutrient_values_select_review`, under the contract scope `nutrition_review`. **What it shows:** `nutrition.client_meal_json`, each field only if her version shares it, otherwise null; never `media_ref` or the revision. **Deviation, the photo:** no `AuthenticatedMediaLink`. `has_photo` is said only when she also shares `nutrition_media`, and `photo_scope` names that version; the list then writes a second access event under `nutrition_media`. **Range:** one to thirty-one of her local days (`22023` → `422`, the API checks it first). **Page:** newest first on (`occurred_at`, `id`); `limit` 1 to 100, default 25; the cursor keeps the instant at full precision. **No plan window:** her Space plan's history window does not apply. Tests: `T-NUT-STUDIO-01` (`T-NUT-RLS-04`, `-06`, `-07`, `-08`, `-09`, `-10`, `-15`, `T-NUT-API-06`, `-10`, `-12`) and `nutrition/handlers/studio.test.ts` |
 
 #### `OP-NUT-010` — Consultar resúmenes autorizados
 
@@ -4842,6 +5068,7 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Revocación elimina también totales, tendencias y `has_more` |
 | **Falla cerrada** | Nunca devuelve agregados parciales que revelen filas ocultas |
+| **Implemented (STUDIO-62)** | `nutrition.read_client_daily_summaries(person, organization, subject, from, to)`, migration `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql`; `GET …/clients/{personId}/nutrition/daily-summaries?from&to`, `200 ClientNutritionDailySummaryPage`. Same opening, deviation and access event as `OP-NUT-009`, under `nutrition_intake`. **Per day** of a range of one to thirty-one days, in order: `meal_count`, null when her version does not share `local_date`, and `nutrient_totals` in canonical units, null when it does not share nutrient values. Totals add up only rows the review policies admit; a day with no meals has `meal_count = 0` and no totals. Computed at read time, with no streak, trend or hidden-day count. Tests: `T-NUT-RLS-10`, `-14`, `-15`, `T-NUT-API-07` |
 
 #### `OP-NUT-011` — Consultar historial autorizado de objetivos
 
@@ -4859,6 +5086,8 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Frozen excluye comidas, fotos, resúmenes, metas personales y post-corte; conserva `author.kind=professional` y el `author_person_id` congelado |
 | **Falla cerrada** | Sin caso válido no existe fallback al endpoint live |
+| **Implemented, live (STUDIO-63)** | `nutrition.list_client_goal_versions(person, organization, subject, limit, cursor_created_at, cursor_id)`, migration `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql`; `GET …/clients/{personId}/nutrition/goals/versions?limit&cursor`, `200 ClientNutritionGoalHistory`. Same opening and deviation as `OP-NUT-009`, under `nutrition_guidance` (`403 scope-required` without it). **`data`:** the versions this relationship proposed, in every status, newest first on (`created_at`, `id`), each with its targets, `author` (`kind`, `person_id`), `rationale` when her version shares it, and her decision. Never the version number. **`active`:** her active goal with its targets. **Deviation, masked (the owner's decision of 8 November 2026):** when another relationship or she herself set it, it carries `goal_version_id: null` and `from_this_relationship: false`, and no author, rationale or origin. Policies `goal_versions_select_review` (this relationship's versions, or the active one), `goal_targets_select_review` and `goal_decisions_select_review` (decisions only on this relationship's versions). The optional `X-Historical-Access-Case` header is gone from this route. Tests: `T-NUT-RLS-20`, `-29`, `-30`, `T-NUT-API-14` |
+| **Implemented, frozen (STUDIO-63)** | `nutrition.list_frozen_goal_versions(person, session, organization, relationship, case, limit, cursor_created_at, cursor_id)`; `GET /studio/v1/organizations/{organizationId}/historical-relationships/{relationshipId}/nutrition/goal-versions`, header `X-Historical-Access-Case`, `200 FrozenNutritionGoalVersionPage`. **Deviation, step-up:** a Studio sign-in less than ten minutes old instead of AAL2 (`AF401` → `403 reauthentication-required`), as in `OP-PRV-020`. It opens through `privacy.open_frozen_read` and `privacy.frozen_category('nutrition_guidance')`. **What it shows:** only professional versions of this relationship with `created_at <= cut_at`, newest first, each with `status_at_cut`, its decision only if made by the cut, and only the fields the frozen version keeps `historical_readable`. A grant on `nutrition_guidance` v1 kept none, so it answers `403 scope-required`. Policies `goal_versions_select_frozen`, `goal_targets_select_frozen` and `goal_decisions_select_frozen` guard on the open `frozen_history` scope and call `nutrition.reads_frozen_goal_version` and `reads_frozen_goal_decision`. Every read writes an access event in `frozen` mode with the case. Tests: `T-NUT-HIST-01` (17), `studio-historical-access.test.ts`, `privacy/infrastructure/historical-access.test.ts` |
 
 #### `OP-NUT-012` — Proponer una versión de objetivos
 
@@ -4876,6 +5105,7 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Evento de dominio** | `nutrition.goal_version_proposed.v1` |
 | **Reglas** | La propuesta exige `rationale` no vacío de hasta 2000 caracteres, no activa ni modifica la meta vigente, no contiene menú o indicación clínica y publica solo `author.kind=professional` más `author.person_id` |
 | **Falla cerrada** | Payload sin `rationale` válido o cualquier condición profesional ausente falla antes de persistir y no crea versión parcial |
+| **Implemented (STUDIO-64)** | `nutrition.propose_goal_version(person, organization, subject, rationale, targets, idempotency_key, command_id, request_hash)` returning `(result, replayed)`, migration `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql`; `POST …/clients/{personId}/nutrition/goals/versions`, `Idempotency-Key` (v4) and `Command-Id` (v7), body `ProfessionalNutritionGoalVersionCreate`, `201 ClientNutritionGoalVersion` (`Idempotent-Replay` on a retry). **Order of checks:** the attending coach (`P0002` → `404`); `guide_nutrition`, which only `coach` holds (`42501` → `403 forbidden`); a `nutrition_professional` credential in force, `identity.effective_credential_verification` (`AF431` → `403 credential-required`, new); `nutrition_guidance` at `contribute` (`AF430` → `403 scope-required`, `AF424` → `409 service-paused`). Then the body: `rationale` trimmed, 1 to 2000 characters, and 1 to 6 targets (`22023` → `422` with field codes); `nutrition.write_targets` validates each. Then the idempotency receipt. **Locks:** the relationship `for share`, the assignment read again, the grant `for share` and checked again, then her goal set `for update`. **Writes:** this relationship's pending version becomes `superseded` (`IX-33`); the new one takes `id = command_id`, the next number and the `credential_verification_id`; `nutrition.goal_version_proposed.v1` carries ids only. Her active goal is untouched. The insert policy `goal_versions_insert_proposal` repeats the credential and `contribute` checks (`IX-31`). Tests: `T-NUT-STUDIO-02` (30; `T-NUT-RLS-18/19`, `T-NUT-INT-03..07`, `T-NUT-IDEM-05`, `T-NUT-API-08`), `goal-proposal-concurrency.test.ts` (10), `nutrition/handlers/studio.test.ts` |
 
 #### `OP-NUT-013` — Obtener una foto de comida autorizada
 
@@ -4893,6 +5123,7 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Responde bytes `image/jpeg`, `image/png` o `image/webp`; nunca expone `media_ref`, query firmada o URL durable de storage |
 | **Falla cerrada** | Recurso inexistente, scope revocado, media aislada, relación/asignación/membresía inválida o credencial vencida producen el mismo `404` sin bytes |
+| **Implemented (STUDIO-65)** | `nutrition.open_client_meal_photo(person, organization, subject, meal)`, migration `20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql`; `GET …/clients/{personId}/nutrition/meals/{mealId}/photo`. The function re-checks the attending assignment and both grants, and needs her `nutrition_media` version to share `nutrition.meals.media_ref`. It records one access event under `nutrition_media` on every call, allowed or denied, and returns the storage key only to the API. The API streams the sanitized object. **Deviation, media type:** `image/jpeg` only, because the sanitizer always writes JPEG. Headers: `Cache-Control: private, no-store`, `Content-Disposition: inline`, `X-Content-Type-Options: nosniff`. Any refusal, `42501` included, is the same `404` with no bytes; a store failure is `503`. No credential is needed (ADR-027, *As implemented*). Tests: `T-NUT-RLS-11`, `-12`, `-13`, `-16`, `T-NUT-API-05`, `nutrition/handlers/studio.test.ts` |
 
 #### `OP-NUT-014` — Buscar alimentos en el catálogo
 
@@ -4962,6 +5193,64 @@ Regla que gobierna todo el dominio: **la persona escribe su registro; el profesi
 | **Reglas** | Guarda la versión del texto aceptado; una versión nueva exige aceptar otra vez |
 | **Falla cerrada** | Una versión desconocida se rechaza |
 
+### 7.12 Lista de espera
+
+Dominio nuevo de `ADR-050` (10 de noviembre de 2026). Reglas que gobiernan todo el dominio:
+
+- Una inscripción **no es una persona**: no tiene cuenta ni `PERSON`, y entra como `A0` por un
+  endpoint público que solo acepta las llamadas que space-web hace desde su servidor con su
+  secreto.
+- **Sin autorización no se escribe nada**, y se guarda la fecha y la versión de la política.
+- La conexión y el dispositivo solo se guardan como huella con clave; **nunca en claro**.
+- **Ningún `GET` cambia estado:** confirmar y salir son `POST` desde una página.
+- El contador se calcula al leer: inscripciones confirmadas del invitador que cuentan.
+- Noventa días después del lanzamiento, ninguna inscripción sin persona conserva datos
+  personales.
+
+Las fichas completas las escribe el pull request que construye cada operación, empezando por
+`TECH-292`, `TECH-293` y `TECH-294`. Hasta entonces, esta tabla y `ADR-050` son el contrato.
+
+| ID | Operación | Tipo | Actor |
+| --- | --- | --- | --- |
+| `OP-WL-001` | Unirme a la lista de espera | Comando | `A0` desde space-web |
+| `OP-WL-002` | Confirmar mi correo | Comando | `A0` con token de confirmación |
+| `OP-WL-003` | Pedir de nuevo el correo de la lista | Comando | `A0` desde space-web |
+| `OP-WL-004` | Consultar mi link y mi contador | Consulta | `A0` con token privado |
+| `OP-WL-005` | Salir de la lista de espera | Comando | `A0` con token privado |
+| `OP-WL-006` | Enlazar una inscripción con la cuenta de Allfit Space | Comando | `A9` |
+| `OP-WL-007` | Asignar, recordar y liberar los números de Founding Member | Comando | `A9` |
+| `OP-WL-008` | Entregar los premios por referidos | Comando | `A9` |
+| `OP-WL-009` | Enviar el correo de apertura | Comando | `A9` |
+| `OP-WL-010` | Borrar la lista 90 días después del lanzamiento | Comando | `A9` |
+| `OP-WL-011` | Listar, buscar y totalizar la lista de espera | Consulta | `A11` con `manage_platform_commercial` |
+| `OP-WL-012` | Marcar una inscripción como fraude | Comando | `A11` con `manage_platform_commercial` |
+| `OP-WL-013` | Cargar códigos de oferta | Comando | `A11` con `manage_platform_commercial` |
+| `OP-WL-014` | Consultar la bolsa de códigos y los premios pendientes | Consulta | `A11` con `manage_platform_commercial` |
+| `OP-WL-015` | Marcar el lanzamiento de Allfit Space | Comando | `A11` con `manage_platform_commercial` |
+| `OP-WL-016` | Quitar la marca de fraude de una inscripción | Comando | `A11` con `manage_platform_commercial` |
+
+`OP-WL-002` escribe además `waitlist.signup_confirmed.v1` en el outbox, una vez por inscripción
+y con el total de confirmadas como único dato. El worker lo convierte en un aviso al canal
+privado de los fundadores en Slack (`ADR-050`, decisión 10, `TECH-338`). El despliegue y la
+operación del aviso están en [OPERATIONS.md](../../OPERATIONS.md).
+
+`OP-WL-002` asigna además el número de Founding Member cuando quedan números libres, y
+`OP-WL-005` pasa el número de quien sale a la siguiente inscripción confirmada sin número. Cada
+asignación escribe `waitlist.founding_number_assigned.v1`, con el número como único dato, y el
+worker envía el correo «Eres Founding Member #037» (`ADR-050`, decisión 5, `TECH-298`). De
+`OP-WL-007` existe la asignación, la liberación por salida y la liberación por fraude
+(`OP-WL-012`); el plazo y su recordatorio no están construidos.
+
+`OP-WL-011`, `OP-WL-012` y `OP-WL-016` son la revisión de la lista en el Backoffice
+(`HU-BO-035`, `TECH-302`, allfitone#263; `ADR-050`, decisión 11). Las lecturas no se
+registran. Marcar y quitar la marca piden un motivo y escriben en `waitlist.signup_events`,
+que se borra con su inscripción. Quien recupera la marca no recupera su número: toma el
+siguiente que quede libre. La respuesta lleva `has_space_account`, que es `false` hasta que
+`OP-WL-006` enlace la inscripción con su cuenta.
+
+El precio de fundador (`HU-SP-120`) no es una operación de este dominio: es un producto más de
+`OP-PAY-018` y `OP-PAY-019`, que se ofrece solo a quien tiene número de Founding Member.
+
 ## 8. Catálogo de eventos de dominio
 
 Un evento se escribe en el outbox dentro de la transacción de su comando. Transporta identificadores, nunca contenido sensible.
@@ -4971,13 +5260,14 @@ Un evento se escribe en el outbox dentro de la transacción de su comando. Trans
 | Identidad | `onboarding_attempt_started`, `eligibility_evaluated`, `person_activated`, `contact_changed`, `contact_verified`, `profile_claim_declared`, `profile_claim_revised`, `body_progress_recorded`, `health_context_declared`, `invitation_intent_decided`, `invitation_revoked`, `invitation_expired`, `professional_profile_updated`, `professional_credential_declared`, `professional_credential_revised`, `professional_credential_retired`, `professional_credential_verified`, `professional_credential_verification_revoked` |
 | Organizaciones | `created`, `created_unclaimed`, `updated`, `site_created`, `site_updated`, `membership_created`, `membership_terminated`, `membership_resigned`, `role_granted`, `role_revoked`, `staff_invited`, `ownership_transferred`, `closed` |
 | Relaciones | `client_invited`, `professional_assigned`, `professional_reassigned`, `substitution_proposed`, `substitution_decided`, `substitution_ended`, `substitution_expired`, `termination_requested`, `terminated` |
-| Privacidad | `grant_created`, `grant_rejected`, `grant_frozen`, `grant_revoked`, `grant_review_due`, `scope_definition_published`, `session_visibility_denied`, `session_visibility_restored`, `erasure_requested`, `erasure_resolved`, `disposition_case_opened`, `disposition_executed`, `disposition_reapplied`, `legal_hold_applied`, `legal_hold_released` |
+| Privacidad | `grant_created`, `grant_rejected`, `grant_frozen`, `grant_revoked`, `grant_review_due`, `scope_definition_published`, `session_visibility_denied`, `session_visibility_restored`, `erasure_requested`, `erasure_resolved`, `disposition_case_opened`, `disposition_executed`, `disposition_reapplied`, `legal_hold_applied`, `legal_hold_released`. As implemented (STUDIO-54..56): also `historical_access_case_opened` and `historical_access_case_closed`, with identifiers, purpose and instants and never the justification; there is no `historical_access_case_expired` |
 | Catálogo | `private_movement_created`, `private_movement_updated`, `private_movement_archived`, `result_contract_published` |
 | Planificación | `session_template_created`, `session_template_draft_updated`, `session_template_version_published`, `session_template_version_derived`, `session_template_version_deprecated`, `program_created`, `program_draft_updated`, `program_version_published`, `program_version_deprecated`, `assignment_created`, `assignment_detached`, `assignment_cancelled`, `assignment_continued`, `assignment_ended`, `session_rescheduled`, `prescription_revised`, `session_template_discarded`, `program_discarded` |
 | Ejecución | `attempt_started`, `attempt_resumed`, `attempt_abandoned`, `session_started`, `finalized`, `primary_resolved`, `primary_changed`, `revised`, `annulled`, `observation_created`, `observation_revised`, `correction_proposed`, `correction_decided`, `correction_expired`, `derived_recomputed` |
-| Nutrición | `meal_recorded`, `meal_revised`, `meal_deleted`, `goal_version_proposed`, `goal_version_activated`, `goal_version_accepted`, `goal_version_rejected`, `goal_proposals_cancelled` |
+| Nutrición | `meal_recorded`, `meal_revised`, `meal_deleted`, `goal_version_proposed`, `goal_version_activated`, `goal_version_accepted`, `goal_version_rejected`, `goal_proposals_cancelled` As implemented (STUDIO-61..65): `goal_version_proposed` carries `goal_version_id`, `person_id`, `relationship_id` and `organization_id`, never targets or rationale. Ending a relationship writes no `goal_proposals_cancelled`. |
 | Pagos | `gateway_connected`, `gateway_revoked`, `plan_created`, `plan_version_published`, `plan_version_deprecated`, `subscription_started`, `subscription_suspended`, `subscription_reactivated`, `subscription_ended`, `payment_recorded`, `platform_plan_published`, `platform_plan_version_published`, `platform_subscription_started`, `platform_subscription_suspended`, `platform_subscription_reactivated`, `platform_subscription_ended`, `organization_premium_granted`, `organization_premium_revoked` |
 | Soporte | `platform_role_granted`, `platform_role_revoked` |
+| Lista de espera | `email_requested`, `signup_confirmed`, `founding_number_assigned` |
 
 ## 9. Operaciones explícitamente fuera de V1
 

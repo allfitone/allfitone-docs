@@ -259,6 +259,15 @@ administradores distintos del sujeto. No se recupera el secreto anterior: se
 revoca factor, intentos y sesiones, se conserva evidencia y el próximo login
 enrola otro TOTP.
 
+**Correction (ADR-046, *A stale ceremony*).** Neither workflow nor their protected
+environments exist; the code repository's workflows are `ci.yml`, `deploy-aws.yml`
+and `deploy-database-aws.yml`. The bootstrap of step 5 is the `bootstrap` command of
+the migrator task (`infra/docker/migrator.sh`), described in
+[Backoffice Authentication Operations](../../products/backoffice/AUTHENTICATION_OPERATIONS.md).
+No migrator command runs `identity.recover_backoffice_totp_factor`, and it needs two
+administrators other than the subject, which a team of two administrators cannot
+provide.
+
 ## Studio team-invitation rollout
 
 `OP-ORG-005` crea la invitación, su intención de membresía y el evento
@@ -299,7 +308,7 @@ Despliegue en este orden:
 1. integrar documentación y código con los tres gates desactivados;
 2. aplicar primero la migración de enums y después la de funciones, índices,
    límites y ciclo de vida mediante el workflow protegido de producción;
-3. configurar claves HMAC, Resend, cron, base URL y reglas Vercel; desplegar API,
+3. configurar claves HMAC, correo (Amazon SES, ADR-049), cron, base URL y reglas Vercel; desplegar API,
    worker y Studio con los gates todavía apagados;
 4. consultar invitaciones productivas pendientes. Si alguna fue enviada con un
    enlace antiguo de Space, detener la activación y aprobar explícitamente una
@@ -995,7 +1004,10 @@ the row and is skipped. Two consequences:
 sides, with its reason: `target_changed` when she corrects the session herself,
 `session_annulled`, `session_hidden` (only that relationship's), and
 `relationship_terminated`. **Revoking a grant without terminating leaves a
-pending proposal pending**: she can still decide it.
+pending proposal pending**: she can still decide it. Since STUDIO-77 (migration
+`20261118100000_a_coach_opens_the_card_of_a_client.sql`) Studio reads both
+`session_annulled` and `session_hidden` as `session_unavailable`; the stored reason and
+what she sees in Space are unchanged.
 
 **Publishing the scopes.** The V1 rules in `packages/db/scripts/v1-scope-rules.ts`
 now declare `execution.correction_proposals` under `relationship_training`
@@ -1056,3 +1068,1323 @@ Tests:
   racing a termination.
 - The worker's `correction-proposals.test.ts` (9) and
   `correction-proposal-expiry.test.ts` (2) cover the email and the job.
+
+## A gym names its own movements (STUDIO-57..60)
+
+Migration `20261113090000_a_gym_names_its_own_movements.sql` lets a gym create,
+edit, archive and search its own movements from Studio (`HU-STUDIO-064` to
+`HU-STUDIO-067`). It does six things:
+
+- adds the capability `archive_movements` («Archivar movimientos propios») and
+  grants it to owner and admin;
+- adds `revision_number` and `created_by_membership_id` to `catalog.movements`,
+  with `ck_movements_organization_author`, and partial indexes on `movement_id`
+  in `planning.planned_steps`, `execution.session_exercises`,
+  `execution.strength_sets` and `execution.mobility_results`;
+- adds the append-only table `catalog.movement_revisions`, with its policies;
+- adds the trigger `trg_movements_before_update_meaning`, which freezes the
+  discipline and the name of a movement a published version uses;
+- adds two select policies so that a person reads a gym's movement she was
+  planned or trained, and write policies on `movement_aliases`,
+  `movement_equipment` and `movement_variants` for the organization's own
+  movements;
+- adds the commands `catalog.create_organization_movement`,
+  `update_organization_movement` and `archive_organization_movement`, and the
+  reads `catalog.search_organization_movements` and
+  `read_organization_movement`. `allfit_api` can execute these five and none of
+  their helpers.
+
+The new table starts empty, and every existing movement starts at revision 1, so
+there is no backfill.
+
+**Before applying it, check for organization movements.**
+`ck_movements_organization_author` fails the migration if a row with
+`content_scope = 'organization'` already exists without an author. No code path
+could create one before this release, but check production read-only first:
+
+```sql
+select count(*) from catalog.movements where content_scope = 'organization';
+```
+
+`0` is expected. Otherwise, stop and decide each row's author before applying.
+
+**Locks.** Adding the columns and constraints takes an `ACCESS EXCLUSIVE` lock on
+`catalog.movements` while the checks and the FK validate, which is brief on a
+catalogue of a few hundred rows. The four new indexes are built without
+`CONCURRENTLY`, so each blocks writes to its table while it builds, including
+`execution.strength_sets`. With `lock_timeout = 5s`, a busy table makes the
+migration fail rather than queue; retry it. `statement_timeout = 60s` bounds each
+build.
+
+**Deploy order.** Merging runs **Deploy AWS**, which rolls out the API with the
+five new routes and registers this commit's migrator. Then dispatch **Deploy
+Database AWS** right after it finishes. Until the migration is applied, the five
+routes answer `503`. No screen calls them yet (STUDIO-129..132), and nothing that
+exists changes behaviour: published versions and sessions keep resolving their
+movements.
+
+**The freeze.** Once a published version uses an organization movement, its
+discipline is fixed and its name only changes in case and spacing. The trigger
+enforces it on the row, so it also holds for a manual fix in production: an
+`UPDATE` that renames a used movement fails with `55000 movement-in-use`. To
+correct a used movement's name, create a new movement and use it in the next
+version.
+
+**Accepted race.** A version published at the same instant the movement is
+archived stays valid, because publishing checks the movement is published and
+does not lock it until it writes the steps. The version keeps resolving the
+name, so nothing breaks, and nothing watches for it.
+
+What to watch, read-only:
+
+```sql
+-- Each edit or archive leaves exactly one revision, so the counter matches the history.
+select movement.id, movement.revision_number
+from catalog.movements as movement
+where movement.content_scope = 'organization'
+  and movement.revision_number <> 1 + (
+    select count(*) from catalog.movement_revisions as revision
+    where revision.movement_id = movement.id
+  );
+```
+
+It should return no rows.
+
+Tests:
+
+- `T-CAT-MOVEMENT-CREATE-01` (36) covers who creates, every field validated at
+  once, the name per organization, IDEM, the stored row, the event, and that the
+  runtime writes movements only through the command.
+- `T-CAT-MOVEMENT-UPDATE-01` (30) covers the freeze at the command and at the
+  row, case and spacing, other names, equipment and variant, the revision, stale
+  edits, IDEM, archived and foreign movements, and the event.
+- `T-CAT-MOVEMENT-ARCHIVE-01` (16) covers who archives, converging, a draft that
+  no longer publishes, a version that still resolves, and that nothing referenced
+  is deleted.
+- `T-CAT-MOVEMENT-SEARCH-01` (21) covers the global and own library and nobody
+  else's, other names, archived movements, the discipline, pages and cursors,
+  literal matching, and the read.
+- `T-CAT-MOVEMENT-RLS-01` (22) covers the person's two policies, the revisions'
+  policies, and both directions of every new write policy.
+- `organization-movement-concurrency.test.ts` (4) covers a rename racing a
+  publication in both orders, two creates with the same name, and two edits of
+  the same revision.
+- `T-ORG-TEAM-DIRECTORY-01` now counts 23 capabilities and 43 role grants.
+
+## An Allfit admin holds every duty (ADR-046)
+
+Migration `20261114090000_an_admin_holds_every_duty.sql` makes the `allfit_admin`
+role bring all thirteen Backoffice duties for as long as it lasts, and lengthens the
+Backoffice session to 60 idle minutes and 12 hours (ADR-046 decisions 1 and 3). It
+does six things:
+
+- adds `basis` (`granted` by default, or `admin_role`) to
+  `support.platform_duty_assignments`, with `ck_platform_duty_assignments_basis`, and
+  replaces `ck_platform_duty_assignments_window` with a check by basis: a `granted`
+  duty lasts at most 90 days; an `admin_role` one ends at `9999-12-31 00:00:00+00`
+  with `reason_code = 'admin_role'`;
+- rebuilds `uidx_platform_duty_assignments_current` on
+  `(person_id, duty_code, basis)`;
+- adds `support.standing_platform_duties()` and the `AFTER INSERT` trigger
+  `trg_platform_role_assignments_insert_grant_duties`, whose function
+  `support.grant_standing_platform_duties()` inserts the thirteen duties for every
+  new active role, granted by whoever granted the role;
+- backfills the same thirteen duties for every active administrator;
+- replaces `support.preserve_platform_duty_history`, which now freezes `basis` and
+  refuses to suspend, expire, recertify or, while the role is active, revoke an
+  `admin_role` duty; `support.assign_platform_duty`, which converges on a duty held
+  in any basis; `support.platform_duty_assignment_projection`, which returns
+  `basis`; and `support.bootstrap_backoffice_administrators`, which keeps its seven
+  arguments but inserts only the two crossed roles and ignores `p_valid_to`;
+- adds `access_control.backoffice_idle_limit()` (60 minutes) and
+  `access_control.backoffice_session_lifetime()` (12 hours), and rewrites
+  `access_control.has_platform_duty`, `access_control.has_platform_role`,
+  `access_control.holds_backoffice_duty`, `identity.expire_backoffice_sessions`,
+  `identity.complete_backoffice_authentication` and
+  `identity.load_backoffice_access_session` from their latest definitions, changing
+  only the limit.
+
+**What production already holds stays.** The temporary duties the administrators
+hold today, `manage_platform_access` included, live beside the standing ones and
+lapse on their own date. Nothing is rewritten and nobody is recorded as having
+revoked them. The old window check already bounded every existing row to 90 days,
+so the new check validates without a pre-deploy query. The backfill gives every
+active administrator the thirteen standing duties whether or not their temporary
+ones have lapsed, so applying the migration also restores access lost to a lapse.
+The backfill queues no `support.platform_duty_granted.v1`; every role granted
+afterwards queues one per duty.
+
+**Locks.** Adding the column and the checks takes an `ACCESS EXCLUSIVE` lock on
+`support.platform_duty_assignments` while the window check validates, and the
+unique index is rebuilt without `CONCURRENTLY`. The table only holds the
+administrators' duties, so both are brief. Creating the trigger locks
+`support.platform_role_assignments` for an instant. With `lock_timeout = 5s`, a busy
+table makes the migration fail rather than queue; retry it.
+
+**Deploy order.** Merging runs **Deploy AWS**, which rolls out the API and the
+Backoffice web and registers this commit's migrator. Then dispatch **Deploy Database
+AWS** right after it finishes. Until the migration is applied:
+
+- PostgreSQL still ends a session after 15 idle minutes or 8 hours. The cookie
+  already lasts 12 hours and `GET /backoffice/v1/session` already reports an idle
+  deadline 60 minutes after the last activity, so the countdown is wrong, but the
+  session still ends when the database says so;
+- the duty inventory carries no `basis`, so the Backoffice shows every duty with its
+  dates and actions, and it no longer offers a grant form. A temporary duty that
+  lapses in that gap can only be granted again through the API, by someone who
+  still holds `manage_platform_access`. Applying the migration restores every
+  active administrator's duties anyway.
+
+**The bootstrap ceremony** no longer takes `DUTY_DAYS`. `infra/docker/migrator.sh
+bootstrap` passes `null` for the validity argument, which the function ignores, and
+a `DUTY_DAYS` left in the task's environment neither bounds nor blocks it.
+
+What to watch, read-only:
+
+```sql
+-- Every active administrator holds the thirteen duties through the role.
+select role_assignment.person_id, count(duty.id) as standing
+from support.platform_role_assignments as role_assignment
+left join support.platform_duty_assignments as duty
+  on duty.person_id = role_assignment.person_id
+ and duty.basis = 'admin_role'
+ and duty.status = 'active'
+where role_assignment.platform_role = 'allfit_admin'
+  and role_assignment.status = 'active'
+group by role_assignment.person_id
+having count(duty.id) <> 13;
+```
+
+It should return no rows.
+
+Tests:
+
+- `T-SUP-STANDING-01` (30) covers the thirteen duties from the ceremony and from a
+  role granted in Backoffice, their grantor and mode, a session without the role,
+  converging grants, the refusal to suspend, revoke, recertify or rewrite a standing
+  duty, the window by basis, a temporary duty beside a standing one, 59 and 61 idle
+  minutes in the duty and role checks, the policy helper and the session load, and
+  withdrawing the role.
+- `T-IDN-BACKOFFICE-SWEEP-01` (10) asserts 61 idle minutes against 59, and 12 hours,
+  for the worker's sweep.
+- `T-IDN-BACKOFFICE-CEREMONIES-01` (17) asserts that the crossed roles bring 26
+  crossed standing duties whatever `p_valid_to` says, and refuses one person in
+  both seats.
+- `T-SUP-RECERT-01` (13) recertifies and lapses `granted` duties, as production
+  still holds them.
+- The pgTAP suites that denied an admin without a given duty now deny a Backoffice
+  session without an active role; the allow case is unchanged.
+- `migrator-bootstrap.test.ts` checks that the command needs only `SUBJECT_A`,
+  `SUBJECT_B` and `CEREMONY_REFERENCE`, and that a leftover `DUTY_DAYS` changes
+  nothing.
+- The API tests assert the session cookie's `Max-Age=43200` and an idle deadline 60
+  minutes after the last activity.
+
+## An Allfit One admin opens their own window and finds a person by name (ADR-046)
+
+Two migrations build ADR-046 decisions 2, 4 and 5 (code branch
+`feat/backoffice-self-approved-break-glass`; its pull request and the database deploy are
+pending).
+
+`20261115090000_an_admin_opens_their_own_break_glass_window.sql` (decision 2):
+
+- replaces `support.break_glass_required_approvals(tier)`, which now returns 0, and
+  `support.break_glass_duration_minutes(tier)`, which returns 60, for both tiers;
+- replaces `ck_break_glass_requests_derived`: a row has the new shape (0 approvals, 60
+  minutes) or one of the two shapes asked for before ADR-046 (standard 1/30, restricted
+  2/15); a mix such as 0/15 or 0/90 is refused;
+- drops `support.decide_break_glass`. `OP-SUP-002` is retired: the route
+  `POST /backoffice/v1/break-glass/requests/{requestId}/decisions` answers `404`, and the
+  OpenAPI operation `decideBackofficeBreakGlass` and schema `BreakGlassDecision` are gone;
+- replaces `support.break_glass_viewer_projection` without `viewer_can_decide`; it keeps
+  `viewer_is_requester` and `viewer_can_exercise`;
+- replaces `support.request_break_glass`, which inserts the request with
+  `status = 'approved'`, `window_starts_at` at the request and `window_ends_at` 60 minutes
+  later, and emits `support.break_glass_requested.v1` and
+  `support.break_glass_window_opened.v1` (`request_id`, `window_starts_at`,
+  `window_ends_at`). It still writes `request_expires_at` 30 minutes after the request. The
+  closed purpose, the traceable case reference, the refusal of forbidden categories and of a
+  window over one's own data, exercising, closing and the review are unchanged.
+
+`20261115100000_an_admin_finds_a_person_by_name.sql` (decisions 4 and 5):
+
+- on `support.metadata_queries`, drops `not null` from `case_reference`, whose check now
+  accepts null or a traceable code, and adds `text` to `ck_metadata_queries_lookup_kind`;
+- drops `support.search_people(uuid, uuid, text, text, text)`, which took a lookup kind,
+  and creates `support.search_people(p_actor_person_id uuid, p_actor_session_id uuid,
+  p_case_reference text, p_query text, p_limit integer) returns jsonb`, executable only by
+  `allfit_api`. The term is `lower(btrim(query))`, at least two characters; the limit is 1 to
+  25 (`22023` otherwise). It matches part of `lower(display_name)`, `lower(contact_email)`
+  or `contact_phone`, with `\`, `%` and `_` escaped, or the exact person identifier, orders
+  by `lower(display_name)` then id, and answers
+  `{ matches: [{ person_id, display_name, contact_email, contact_phone, account_status }],
+  has_more }`. Each search writes one `support.metadata_queries` row (`lookup_kind =
+  'text'`, `lookup_hash` the sha256 of the lowered term, `result_count`) and one
+  `privacy.access_events` row per person returned (`resource = 'support.person_search'`,
+  purpose `support_diagnosis`, access mode `support_metadata`). A Backoffice session without
+  the admin role gets `42501` and nothing is recorded;
+- replaces `support.v_support_metadata`, appending `display_name`, `contact_email` and
+  `contact_phone`, so `support.person_metadata` returns them; the masked fields stay;
+- replaces `support.person_metadata`, `support.person_payments`,
+  `support.billing_follow_up` and `identity.read_account_recovery` from their latest
+  definitions, changing only the case reference: null or empty is accepted, and one given
+  in free text is refused with `22023 a case reference is a traceable code, never free
+  text`. Starting, resending and cancelling an account recovery still require one.
+
+**What production already holds stays.** Every break-glass file asked for before keeps its
+quorum and length, and the new check accepts both old shapes, so it validates without a
+pre-deploy query. Its approvals stay in `support.break_glass_approvals`, which is
+append-only and which nothing writes any more. A request still pending when the migration
+runs can no longer be approved: it expires 30 minutes after it was asked, and the
+Backoffice shows it as «Pedida antes del cambio, sin abrir». Recorded searches keep their
+lookup kind and case reference.
+
+**Locks.** Replacing the check on `support.break_glass_requests`, and the checks and the
+`not null` on `support.metadata_queries`, takes an `ACCESS EXCLUSIVE` lock on each table
+while the new checks validate. Both tables are small, so it is brief. With
+`lock_timeout = 5s`, a busy table makes the migration fail rather than queue; retry it.
+
+**Deploy order.** The same as in
+[the section above](#an-allfit-admin-holds-every-duty-adr-046): merging runs
+**Deploy AWS**, then dispatch **Deploy Database AWS** right after it finishes. Until the
+migration is applied:
+
+- every person search fails with `503 upstream-unavailable`, because the API calls a
+  `support.search_people` signature that does not exist yet;
+- the person file, payments, the billing follow-up and the recovery read answer
+  `400 invalid-request` without a case reference, because the old functions still require
+  one, so the billing follow-up screen, which now loads without a case, fails. With a case
+  they work, but the person file arrives without `display_name`, `contact_email` and
+  `contact_phone`;
+- no new break-glass window opens: the database still creates the request as `requested`
+  with its old quorum, and the API no longer offers a way to approve it. The Backoffice
+  shows it as «Pedida antes del cambio, sin abrir» and it expires after 30 minutes. A window
+  already open keeps working.
+
+What to watch, read-only:
+
+```sql
+-- Both should be true once the migration is applied.
+select
+  to_regprocedure(
+    'support.decide_break_glass(uuid, uuid, uuid, text, text, uuid, uuid, bytea)'
+  ) is null as approval_retired,
+  to_regprocedure(
+    'support.search_people(uuid, uuid, text, text, integer)'
+  ) is not null as search_by_term;
+
+-- Files asked for since the deploy show 0 approvals and 60 minutes.
+select sensitivity_tier, required_approvals, requested_duration_minutes, status, count(*)
+from support.break_glass_requests
+where requested_at >= now() - interval '1 day'
+group by sensitivity_tier, required_approvals, requested_duration_minutes, status
+order by sensitivity_tier;
+```
+
+**Local tooling.** `packages/db/scripts/approve-local-break-glass.ts` is deleted, and
+`packages/db/scripts/bootstrap-local-operator.ts` no longer makes a third local
+administrator to reach a quorum: the local operator opens their own window.
+
+**Open follow-ups.**
+
+- The `approve_break_glass` duty no longer approves anything; it only still grants reading
+  the whole break-glass tray. Whether to retire or rename it is an owner decision.
+- The search has no trigram index and scans `identity.people`. That is acceptable at the
+  current volume; revisit with `pg_trgm` if it grows.
+- `request_expires_at` is still written for new windows but no longer gates anything.
+- The masked fields of the person file can be removed once no screen reads them.
+
+Tests:
+
+- `T-SUP-BG-SELF-01` (25) covers windows that open at once with 0 approvals and 60 minutes,
+  one `support.break_glass_window_opened.v1` each, a replay that converges, the refusals
+  (forbidden category, own data, missing or invalid purpose, free-text case, a session
+  without the role), that `support.decide_break_glass` no longer exists and the tray offers
+  no decision, that the requester cannot review while the other administrator can, and that
+  1/30 and 2/15 rows stay valid while mixed shapes are refused.
+- `T-SUP-BG-01`, `T-SUP-BGR-01`, `T-PRV-AUD-01`, `T-SUP-BG-03`, `T-SUP-BG-TRAIN-01`,
+  `T-SUP-RECERT-01`, `T-IDN-BODY-01`, `T-IDN-HEALTH-01` and `T-NUT-DISP-01` are rewritten
+  for windows that open on request; `T-SUP-BGR-01` keeps a case approved before ADR-046 to
+  assert that its approver cannot review it. `T-SUP-BG-02` asserts that a holder of
+  `approve_break_glass` reads the whole tray.
+- `T-SUP-SEARCH-02` (27) covers partial name, email and phone, the identifier, `_` and `%`
+  as characters, the page and `has_more`, the evidence per search and per person returned,
+  searches and reads without a case, a free-text case refused, and starting a recovery
+  still needing one. `T-SUP-RLS-03` (35) is rewritten for the search and the person file;
+  `T-SUP-PAY-01`, `T-SUP-BILLING-01` and `T-IDN-RECOVERY-01` now refuse a free-text case
+  instead of a missing one.
+- API: `T-BG-API-01`, `02`, `08`, `09` and `20`; `T-SUP-API-23` to `28`, `46`, `48` and `49`;
+  `T-SUP-UNIT-01` and `02`; `T-IDN-RECOVERY-API-10` reads a recovery without a case.
+
+## A case opens the frozen history (STUDIO-54..56)
+
+`20261116090000_a_case_opens_the_frozen_history.sql` builds the historical access case of
+ADR-023 (HU-STUDIO-061, 062 and 063; code branch `feat/historical-access-case`, whose pull
+request and database deploy are pending). The decisions, and how they differ from the
+ADR, are in
+[ALLFIT_ARCHITECTURE_DECISIONS.md](refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md),
+ADR-023, section *As implemented (STUDIO-54/55/56)*.
+
+It does five things:
+
+- **A recent sign-in.**
+  - **The column.** It adds `identity.access_sessions.authenticated_at`, nullable and
+    allowed only on the `studio` surface (`ck_access_sessions_authenticated`), and
+    `identity.recent_authentication_window()`, ten minutes.
+  - **The session functions.** It replaces `identity.create_access_session` with a
+    seven-argument version whose last argument, `p_authenticated_at`, defaults to null;
+    the six-argument version is dropped. It also replaces `identity.load_access_session`,
+    which adds `recent_authentication_expires_at`.
+  - **The check.** It creates `identity.require_recent_studio_authentication(session_id)`,
+    which raises `AF401`.
+- **The case table.** It creates the enums `privacy.historical_access_purpose` and
+  `privacy.historical_case_status`, and the table `privacy.historical_access_cases`, with:
+  - forced row security and no privilege for `allfit_api`;
+  - the eligibility constraint trigger, which is not deferrable;
+  - the immutability triggers;
+  - six policies;
+  - one partial unique index, for one open case per relationship, membership and purpose.
+- **Open, close, list.** It creates `privacy.open_historical_access_case`,
+  `privacy.close_historical_access_case` and `privacy.list_historical_access_cases`,
+  executable by `allfit_api`.
+- **Closing on its own.** It adds three triggers that close open cases in the transaction
+  that makes them ineligible:
+  - `trg_data_grants_after_update_historical_cases` on `privacy.data_grants`, when a frozen
+    grant is revoked;
+  - `trg_organization_memberships_after_update_historical_cases` on
+    `organizations.organization_memberships`, when a membership stops being active;
+  - `trg_membership_roles_after_update_historical_cases` on
+    `organizations.membership_roles`, when a role ends.
+- **Reading through a case.**
+  - **The predicate.** `access_control.historical_case_exercisable`,
+    `privacy.frozen_category`, `access_control.can_read_frozen` and
+    `privacy.scope_reads_frozen`.
+  - **Three `for select` policies.** `executed_sessions_select_frozen`,
+    `execution_revisions_select_frozen` and `session_visibility_denials_select_frozen`, all
+    under the contract scope `frozen_history`. Each asks first whether that scope is open,
+    once per statement, and only then calls `access_control.reads_frozen_session`,
+    `access_control.frozen_case_covers_person` or
+    `access_control.frozen_case_covers_relationship`.
+  - **Why functions, not inline subqueries.** PostgreSQL expands a policy's subqueries,
+    with the policies of every table they name, into each plan that reads the table, and
+    every catalogue read of a gym's movement reads executed sessions through
+    `movements_select_executed`. With the subqueries inline, the movement commands became
+    four times slower and `organization-movement-concurrency.test.ts` timed out. A SQL
+    function with `set search_path` is never inlined (the shape of
+    `access_control.reads_under_break_glass`), so it is planned only when a case is read.
+  - **Four reads,** executable by `allfit_api`: `privacy.read_historical_relationship`,
+    `execution.list_frozen_executions`, `execution.read_frozen_execution` and
+    `identity.list_frozen_body_progress`. Each records `privacy.access_events` in `frozen`
+    mode before answering.
+
+**No backfill.** Every session created before the migration keeps `authenticated_at`
+null, so nobody holds a recent sign-in when it lands. A member who opens or reads a case
+gets `403 reauthentication-required` and signs in again through
+`GET /studio/v1/auth/start?reauthenticate=true`, which sends WorkOS `max_age=0`. Nothing
+else in Studio asks for it, so no other screen notices.
+
+**Locks.** With `lock_timeout = 5s` and `statement_timeout = 60s`, a busy table makes the
+migration fail rather than queue; retry it.
+
+- **`identity.access_sessions`:** adding the column and its check takes an
+  `ACCESS EXCLUSIVE` lock while the check validates. The column is null on every row, so
+  this is a short scan.
+- **`execution.executed_sessions`, `execution.execution_revisions` and
+  `privacy.session_visibility_denials`:** `CREATE POLICY` takes an `ACCESS EXCLUSIVE` lock
+  on each for an instant, with no scan.
+- **`privacy.data_grants`, `organizations.organization_memberships` and
+  `organizations.membership_roles`:** `CREATE TRIGGER` takes a `SHARE ROW EXCLUSIVE` lock
+  on each, which blocks writes but not reads, for an instant.
+
+**Deploy order.** Merging runs **Deploy AWS**; dispatch **Deploy Database AWS** right after
+it finishes, as in [the section above](#an-allfit-admin-holds-every-duty-adr-046).
+
+- **Studio sign-in breaks until the migration is applied.** The new API calls
+  `identity.create_access_session` with seven arguments, which do not exist yet, so every
+  callback answers `503 upstream-unavailable` and nobody can sign in to Studio.
+- **Existing sessions keep working.** `loadSession` reads `select *` and treats a missing
+  `recent_authentication_expires_at` as null.
+- **The seven historical routes answer `503`,** because their functions do not exist yet.
+- **The other order is safe.** The old API's six-argument call resolves to the new function
+  through the default, so applying the migration before the API ships breaks nothing. Keep
+  the gap short either way.
+
+**What a case can read depends on what was published.** A case reads only the scope
+versions whose rules mark a resource `historical_readable` and do not exclude it. The V1
+rules in `packages/db/scripts/v1-scope-rules.ts` mark executed sessions (`relationship_training`
+and `prior_training_history`, at `read`) and the six structured fields of body measurements
+(`body_progress`) since 5 November 2026 (commit `9dcd837`, HU-BO-024). A version published
+from earlier rules may mark nothing, and a case over a relationship frozen on it reads
+nothing: the reads answer an empty list or `403 scope-required`, never an error.
+
+**Events.** `privacy.historical_access_case_opened.v1` and
+`privacy.historical_access_case_closed.v1` go to the outbox with identifiers, purpose and
+instants, never the justification or the reference. No worker consumes them yet. There is
+no `expired` event: a case past its hours reads as `expired` and opens nothing, and it is
+stored as closed only when someone closes it or opens an equivalent case, or when one of
+the three triggers closes it.
+
+**A gap the triggers leave.** No trigger watches `organizations.organizations`. A case
+whose organization is suspended stays `open`, but cannot be exercised, because the read
+checks that the organization is active.
+
+What to watch, read-only:
+
+```sql
+-- Published versions and how many historical rules each has. A version with 0 lets a
+-- case read nothing under it.
+select definition.scope_code, definition.version_number,
+       count(*) filter (where rule.historical_readable and not rule.is_excluded)
+         as historical_rules
+from privacy.scope_definitions as definition
+left join privacy.scope_resource_rules as rule on rule.scope_definition_id = definition.id
+where definition.status = 'published'
+group by definition.scope_code, definition.version_number
+order by definition.scope_code, definition.version_number;
+
+-- Frozen grants whose version keeps nothing readable afterwards.
+select shared.scope_code, definition.version_number, count(*) as frozen_grants
+from privacy.data_grants as shared
+join privacy.scope_definitions as definition on definition.id = shared.scope_definition_id
+where shared.status = 'frozen'
+  and not exists (
+    select 1 from privacy.scope_resource_rules as rule
+    where rule.scope_definition_id = shared.scope_definition_id
+      and rule.historical_readable and not rule.is_excluded
+  )
+group by shared.scope_code, definition.version_number;
+
+-- Must be empty: an open case after a frozen grant of its relationship was revoked.
+select hcase.id
+from privacy.historical_access_cases as hcase
+join privacy.data_grants as shared on shared.relationship_id = hcase.relationship_id
+where hcase.status = 'open'
+  and shared.status = 'revoked'
+  and shared.revoked_at >= hcase.opened_at;
+
+-- Must be empty: an open case whose authorized membership is no longer active.
+select hcase.id
+from privacy.historical_access_cases as hcase
+join organizations.organization_memberships as membership
+  on membership.id = hcase.authorized_membership_id
+where hcase.status = 'open'
+  and membership.status <> 'active';
+
+-- Must be 0: a frozen read recorded without its case (the last day only, so the
+-- partition key prunes).
+select count(*)
+from privacy.access_events
+where access_mode = 'frozen'
+  and historical_access_case_id is null
+  and occurred_at >= now() - interval '1 day';
+```
+
+**Open follow-ups.**
+
+- No Studio screen opens, lists, closes or reads a case yet; the routes are backend only.
+- The 24 months of case retention in the data dictionary are not enforced, and the
+  immutability trigger refuses deletes until a disposition path exists.
+- No test covers a case refused because the person closed her account, though the predicate
+  checks it.
+- Frozen nutrition guidance (`OP-NUT-011` with a case) is built since STUDIO-61..65; see
+  *A coach reads and guides what a client eats* below.
+
+Tests:
+
+- `T-PRV-HIST-01` (58) covers `OP-PRV-018`, `-019` and `-025`, under these groups:
+  - the table under forced row security;
+  - the recent sign-in: Studio only, never in the future, the ten-minute window;
+  - who may open a case, and whom it may name;
+  - the validation;
+  - opening, replaying and the one open case;
+  - the events, with no justification or reference;
+  - listing per role;
+  - immutability;
+  - closing and converging;
+  - derived expiry;
+  - closing on its own: role ended, membership left, frozen grant revoked;
+  - a category that did not freeze.
+- `T-PRV-HIST-02` (40) covers `OP-PRV-020`:
+  - the three policies, and that nothing is visible without a case;
+  - a stale sign-in;
+  - each read, with the cut, the hidden, corrected and annulled sessions, the measurements
+    recorded before the cut and the fields the version kept;
+  - the access record per category, and each refusal recorded;
+  - expired, closed and foreign cases;
+  - the revocation that closes the case;
+  - that `allfit_api` cannot call the predicate;
+  - that no case reads her health.
+- `historical-access-case-concurrency.test.ts` (2) races a revocation against an opening
+  in both orders.
+- API: `studio-historical-access.test.ts` (18) covers the seven routes, the headers, the
+  error mapping and the cache headers. The Studio identity tests and the WorkOS adapter
+  test cover `auth_time`, `reauthenticate=true` and `recent_authentication_expires_at`.
+
+## A coach reads and guides what a client eats (STUDIO-61..65)
+
+`20261117090000_a_coach_reads_and_guides_what_a_client_eats.sql` lets the coach who attends
+a person read the nutrition she shares and propose her goals (HU-STUDIO-068..072,
+`OP-NUT-009..013`; pull request allfitone#203, whose merge and database deploy are
+pending). The decisions, and how they differ from the ADR, are in
+[ALLFIT_ARCHITECTURE_DECISIONS.md](refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md),
+ADR-027, section *As implemented (STUDIO-61..65)*.
+
+It does five things:
+
+- **The credential.**
+  - It inserts the credential type `nutrition_professional` into
+    `catalog.professional_credential_types`.
+  - It adds `identity.effective_credential_verification(person, type)` and
+    `identity.credential_verification_is_effective(verification, person, type)`. Neither is
+    executable by `allfit_api`.
+- **Policies on the nutrition tables.** All are `to allfit_owner`, under contract scopes
+  that only the new functions open:
+  - `*_select_review` on meals, items, nutrient values, goal versions, targets and decisions;
+  - `*_proposal` on goal sets, versions and targets;
+  - `goal_versions_select/update_detachment`;
+  - `goal_*_select_frozen` on versions, targets and decisions.
+- **The reads and the command,** executable by `allfit_api`:
+  - `nutrition.list_client_meals`;
+  - `nutrition.read_client_daily_summaries`;
+  - `nutrition.open_client_meal_photo`;
+  - `nutrition.list_client_goal_versions`;
+  - `nutrition.propose_goal_version`;
+  - `nutrition.list_frozen_goal_versions`.
+- **Cancelling at the end.** It creates `nutrition.cancel_relationship_goal_proposals` and
+  recreates `relationships.close_relationship` with the body of `20261112090000` plus that
+  call. Her ending it, the gym ending it and the organization closing all go through it.
+- **Helpers.** Non-inlined SQL helpers for the policies:
+  - `nutrition.scoped_relationship` and `scoped_subject`;
+  - `goal_version_visible`, `goal_version_from` and `proposal_in_progress`;
+  - `reads_frozen_goal_version` and `reads_frozen_goal_decision`.
+
+  JSON projections: `client_meal_json`, `client_targets_json`, `client_goal_version_json` and
+  `field_shared`.
+
+**What it does not add.** It adds no table, column, index or trigger, and needs no
+backfill. Creating the policies takes a brief exclusive lock on each nutrition table. With
+`lock_timeout = 5s`, a busy table makes the migration fail rather than queue; retry it.
+
+**Deploy order.** Merging runs **Deploy AWS**. Then dispatch **Deploy Database AWS**.
+Until the migration is applied, the six new routes answer `503`. Nothing that exists
+changes behaviour, since no existing signature changes.
+
+**After the deploy: publish `nutrition_guidance` v2.** Until it is published, no grant
+can reach `contribute` and no frozen case keeps guidance, so proposing answers
+`403 scope-required` and the frozen read answers the same.
+
+1. A curator with `curate_global_catalog` opens Backoffice `/permissions` and publishes a
+   new version of `nutrition_guidance`. The rules come from
+   `packages/db/scripts/v1-scope-rules.ts`:
+   - **Up to `contribute`:** `nutrition.goal_sets`, `nutrition.goal_versions` and
+     `nutrition.goal_targets`, field `*`.
+   - **Read and historical:** `nutrition.goal_decisions`, field `*`.
+   - **Historical fields on `nutrition.goal_versions`:** `version_number`, `origin`,
+     `status`, `rationale`, `author_person_id`, `origin_relationship_id`, `created_at`,
+     `activated_at` and `cancelled_at`.
+   - **Historical fields on `nutrition.goal_targets`:** `nutrient_definition_id`, `mode`,
+     `minimum_value`, `maximum_value`, `exact_value` and `unit_code`.
+   - **Excluded:** `nutrition.meals` and `nutrition.meal_items`.
+
+   Locally, `publish-local-scopes.ts` publishes it on its own, because it now publishes a
+   new version whenever a scope's rules changed.
+2. Grants already given stay at their version (ADR-007). A v1 grant still reads goals, but
+   never proposes and keeps nothing for a case.
+3. **Known limit:** Studio-web invites at `read` only
+   (`apps/studio-web/src/lib/client-invitations.ts`), and nothing raises an existing grant.
+   Proposing works only once an invitation asks `nutrition_guidance` at `contribute`, which
+   is front work (STUDIO-136).
+4. Staff verify each coach's `nutrition_professional` credential in Backoffice
+   (`verify_professional_credentials`), as for any other type. Only the `coach` role holds
+   `guide_nutrition`.
+
+**The event.** `nutrition.goal_version_proposed.v1` carries the version, the person, the
+relationship and the organization, never targets or rationale. It is a domain record:
+no worker consumes it, and she is not told by email yet.
+
+**Checks after the deploy.** All are read only and return identifiers, never content.
+
+```sql
+-- v2 is published once the curator has acted.
+select version_number, status, published_at
+from privacy.scope_definitions
+where scope_code = 'nutrition_guidance'
+order by version_number;
+
+-- Must be empty: a professional version without the verification it was proposed under.
+select id
+from nutrition.goal_versions
+where origin = 'professional'
+  and credential_verification_id is null;
+
+-- Must be empty: a proposal still waiting on a relationship that has ended.
+select version.id
+from nutrition.goal_versions as version
+join relationships.service_relationships as relationship
+  on relationship.id = version.origin_relationship_id
+where version.status = 'proposed'
+  and relationship.status = 'terminated';
+```
+
+**Open follow-ups.**
+
+- No Studio screen calls the new routes yet (STUDIO-133..137).
+- Invitations ask for `read` only, as above.
+- She is not notified of a proposal; the event has no consumer.
+- Inside `nutrition.list_frozen_goal_versions`, the cut repeats what the frozen policy
+  already applies. Removing it changes nothing a test can see. The policy is the guard,
+  and the mutation tests prove it.
+
+Tests:
+
+- `T-NUT-STUDIO-01` (46) covers `OP-NUT-009`, `-010`, `-011` live and `-013`:
+  - holder and cover read; no attendance means not found; owner and admin read nothing
+    by role;
+  - fields the version hides;
+  - the photo, only with both grants and a version that keeps where it is;
+  - totals only from shared rows;
+  - the access record before any row;
+  - revocation on the next request;
+  - live goals with her active goal masked;
+  - the review policies read directly.
+- `T-NUT-STUDIO-02` (30) covers `OP-NUT-012`:
+  - who may propose, and each state of the credential;
+  - a `read` grant and a paused service;
+  - validation and idempotency;
+  - superseding;
+  - cancelling at the end;
+  - the event without content;
+  - the insert policy against a direct write.
+- `T-NUT-HIST-01` (17) covers `OP-NUT-011` frozen:
+  - only this relationship's proposals by the cut, and each `status_at_cut`;
+  - a decision after the cut is not told;
+  - a v1 grant answers `scope-required`;
+  - a stale sign-in, expired and foreign cases;
+  - the access record in `frozen` mode;
+  - the frozen policies read directly.
+- `T-IDN-PROFESSIONAL-PROFILE-01` now expects four credential types.
+- `goal-proposal-concurrency.test.ts` (10) races a proposal against another proposal, her
+  decision, her own goal, a revocation and the end of the relationship. One case holds the
+  goal set and checks that a proposal waits on it before numbering.
+- API:
+  - `nutrition/handlers/studio.test.ts` covers the five routes against the contract, the
+    origin and cookie, ranges, the uniform photo `404`, proposal validation, the request
+    hash and every error mapping;
+  - the application and infrastructure tests for Studio nutrition;
+  - `studio-historical-access.test.ts` and `privacy/infrastructure/historical-access.test.ts`
+    cover the frozen route and its binding.
+
+## The client card, today, search and her access log (STUDIO-74..77)
+
+Four migrations build `HU-STUDIO-081..084` and `OP-PRV-015` (pull request allfitone#204,
+merged and deployed on 9 November 2026). The decisions, and how they differ from earlier documents, are in
+[ALLFIT_ARCHITECTURE_DECISIONS.md](refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md),
+ADR-047.
+
+- **`20261118090000_a_member_finds_a_client_by_name.sql` (`OP-REL-010`, STUDIO-75).**
+  - It creates `relationships.fold_name(text)`, immutable, which no runtime role executes.
+  - It creates the eight-argument `relationships.list_organization_clients(…, p_query)`,
+    `security definer`, executable by `allfit_api`.
+  - It replaces the seven-argument signature with a `security invoker` wrapper that calls
+    the new one with a null search. Both stayed executable by `allfit_api` until
+    `20261119090000_the_directory_keeps_one_signature.sql` (allfitone#205) dropped the wrapper.
+- **`20261118100000_a_coach_opens_the_card_of_a_client.sql` (`OP-REL-019`, STUDIO-76/77).**
+  - It creates the policy `service_relationships_select_former_attendance` on
+    `relationships.service_relationships`, `for select to allfit_owner`, admitting the one
+    row named by the open contract scope `former_attendance`.
+  - It creates the helpers `relationships.client_card_grants` and
+    `relationships.former_attendance`, which no runtime role executes, and the entry point
+    `relationships.read_client_card`, `security definer`, executable by `allfit_api`.
+  - It recreates `execution.proposal_for_proposer` with one change: `session_hidden` and
+    `session_annulled` read as `session_unavailable`.
+- **`20261118110000_a_person_reads_who_read_her_data.sql` (`OP-PRV-015`, STUDIO-76).** It
+  creates `privacy.list_my_access_events`, `security definer`, executable by `allfit_api`.
+  It adds no view, no policy, no grant on `privacy.access_events` and no index.
+- **`20261118120000_a_studio_member_sees_what_needs_attention_today.sql` (`OP-REL-020`,
+  STUDIO-74).** It creates the helpers `relationships.today_invitations` and
+  `relationships.today_training(organization, now)`, which no runtime role executes, and
+  the entry point `relationships.read_studio_today`, `security definer`, executable by
+  `allfit_api`.
+
+**What they do not add.** No table, column, index or trigger, and no backfill. The only
+policy is the `former_attendance` one. `CREATE POLICY` takes an `ACCESS EXCLUSIVE` lock on
+`relationships.service_relationships` for an instant, with no scan. With
+`lock_timeout = 5s`, a busy table makes the migration fail rather than queue; retry it.
+
+**The contract scope `former_attendance`.** The policy compares the row's id with
+`(select access_control.contract_scope('former_attendance'))`, read once per statement.
+Only `relationships.former_attendance` opens it, for the one relationship the caller's
+current membership last attended, reads `status` and `ended_at`, and closes it before it
+returns. `read_client_card` calls it only when the caller does not attend the person. A
+coach never reads anything else of that row, and nobody else reaches it.
+
+**Deploy order.** Merging runs **Deploy AWS**, which rolls out the API first. Then dispatch
+**Deploy Database AWS**, as in [the section above](#an-allfit-admin-holds-every-duty-adr-046).
+Until the migrations are applied:
+
+- **The plain directory keeps working.** Without `q`, the API calls the seven-argument
+  `list_organization_clients`, which already exists.
+- **Search, the card, today and the access log answer `503`.** Their functions do not exist
+  yet (`42883`), and the API maps any other database failure to `upstream-unavailable`.
+- **Studio's correction list still says `session_hidden` or `session_annulled`**, values the
+  new contract no longer lists. No Studio screen reads `cancel_reason` yet.
+- **The other order is safe.** The old API calls only the seven-argument directory, which
+  the migration keeps; its correction list would say `session_unavailable`, which no screen
+  reads yet. Keep the gap short either way.
+
+**What today writes.** Every opening by a member with `observe_training` writes one row in
+`privacy.access_events` per client evaluated: `resource = 'relationships.studio_today'`,
+`purpose = 'studio_attention_today'`, `access_mode = 'live'`, `result = 'allowed'`, under
+her `relationship_training` grant, with the request id the API generates. A client with no
+active `relationship_training` grant is neither evaluated nor recorded. Each such row is
+listed in her access log, so a coach who opens today often fills his clients' logs.
+
+**Checks after the deploy.** All are read only and return catalogue facts or counts, never
+content.
+
+```sql
+-- Owner, security and who may call each function. Expected: every row owned by
+-- allfit_owner; security definer for the eight-argument directory, read_client_card,
+-- read_studio_today and list_my_access_events; allfit_api executes those four and none
+-- of the five helpers. Since allfitone#205 the directory has one signature.
+select procedure.oid::regprocedure as function,
+       pg_get_userbyid(procedure.proowner) as owner,
+       procedure.prosecdef as security_definer,
+       has_function_privilege('allfit_api', procedure.oid, 'execute') as api_executes
+from pg_proc as procedure
+join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+where namespace.nspname || '.' || procedure.proname in (
+  'relationships.list_organization_clients', 'relationships.read_client_card',
+  'relationships.read_studio_today', 'privacy.list_my_access_events',
+  'relationships.fold_name', 'relationships.client_card_grants',
+  'relationships.former_attendance', 'relationships.today_invitations',
+  'relationships.today_training')
+order by 1;
+
+-- Expected: one row, roles {allfit_owner}, command SELECT.
+select policyname, roles, cmd
+from pg_policies
+where schemaname = 'relationships'
+  and tablename = 'service_relationships'
+  and policyname = 'service_relationships_select_former_attendance';
+
+-- Expected: false. Her log is read only through privacy.list_my_access_events.
+select has_table_privilege('allfit_api', 'privacy.access_events', 'select') as api_selects;
+```
+
+**Open follow-ups.**
+
+- No screen calls the new routes yet: the Studio screens are STUDIO-146..149, and the Space
+  screen for the access log is front work too.
+- The seven-argument `list_organization_clients` is gone: allfitone#205 dropped it on
+  9 November 2026, once no deployed API called it.
+- A coach who comes back under a different membership gets no reason: only the current
+  membership is looked at.
+- Name folding covers Latin accents only.
+- `training` counts the planned sessions that exist. A week of a program without an end
+  that she never opened may hold none (ADR-032 plants it on her read).
+
+Tests:
+
+- `T-REL-DIRECTORY-03` (19) covers `q`: accents and case, spaces, `%` and `_` as
+  characters, no invitations, keyset through the matches, an owner searching `terminated`,
+  a coach finding only his clients, the length limits and `invited`, no access event, the
+  one signature left since allfitone#205, and the folding helper closed to the runtime.
+- `T-REL-CARD-01` (19) covers the live card: the sections and their order, version and
+  level, meal photos only with the meals, withdrawn and shared again, refused nowhere, an
+  accepted cover with its `ends_on`, owner, admin and staff not found, a non-member
+  refused, no access event, and which functions the runtime may call.
+- `T-REL-CARD-02` (22) covers the former card: each reason and its instant, a cover ended
+  early or by its date, held and then covered, thirty days, a refused or unanswered cover,
+  no name, her return changing nothing, another coach and the owner told nothing, no
+  access event, the policy for `allfit_owner` only and its scope read once per statement.
+- `T-PRV-ACCESSLOG-01` (21) covers `OP-PRV-015`: order and ties, a coach's read with the
+  person, the organization and holder or cover, denied and frozen reads, break-glass and
+  support by name, her own and others' reads and the horizon excluded, the scope filter,
+  keyset inside a tie, nobody reading another log, the limits, the cursor and scope
+  validation, nothing written by reading, the table closed to `allfit_api`, and the
+  subject index on every partition.
+- `T-REL-TODAY-01` (24) covers the notices per role, the counts and the five items, a
+  coach's own invitations, unassigned and termination requests, team invitations and the
+  team, new relationships, `empty`, refusals, and no access event for the counts.
+- `T-REL-TODAY-02` (17) covers `training`: the closed week, cancelled, paused and annulled
+  sessions, 48 hours, the screening scope closed afterwards, one access event per client
+  evaluated with its grant and none without one, a lapsed cover, the request id, the week
+  in her timezone, and that the runtime cannot call the helper.
+- `T-EXE-PROPOSAL-CANCEL-01` now has 22: `-CANCEL-LIST-03/04` show Studio's
+  `session_unavailable` and her real reason.
+- `T-ORG-CLOSE-01` counts the relationship functions the runtime reaches: nineteen since
+  allfitone#205, which left the directory with one signature.
+- API:
+  - `relationships/handlers/client-card.test.ts`: `T-REL-CARD-API-01..05` and
+    `T-REL-TODAY-API-01..03` (the contract, the links, the error mapping, origin, session
+    and identifiers);
+  - `relationships/handlers/studio.test.ts`: the search, its validation and its cursors;
+  - `relationships/infrastructure/card-and-today.test.ts` and `directory.test.ts`: the
+    bindings, the request id, and the seven-argument call without a search;
+  - `privacy/handlers/space.test.ts` (`T-PRV-API-SPACE-19..22`) and
+    `privacy/infrastructure/my-access-log.test.ts`: the route, the cursor bound to the
+    scope, and the binding;
+  - `execution/handlers/studio.test.ts` (`T-EXE-PROPOSAL-API-09`): the contract refuses
+    `session_hidden` and `session_annulled` for Studio.
+
+## The directory keeps one signature (allfitone#205)
+
+`20261119090000_the_directory_keeps_one_signature.sql` drops the seven-argument
+`relationships.list_organization_clients`, the `security invoker` wrapper that STUDIO-75 kept
+for its deploy gap. The API binds the search, or null, as the eighth argument. The function
+is dropped without `cascade`, so the migration fails if anything still calls it.
+
+**Deploy order.** Either order is safe:
+
+- the new API calls only the eight-argument function, live since allfitone#204;
+- Deploy Database AWS waits for that commit's migrator.
+
+It was applied on 9 November 2026.
+
+**Check after the deploy.** Expected: one row, the eight-argument signature.
+
+```sql
+select procedure.oid::regprocedure as signature
+from pg_proc as procedure
+join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+where namespace.nspname = 'relationships'
+  and procedure.proname = 'list_organization_clients';
+```
+
+Tests:
+
+- `T-REL-DIRECTORY-03` proves that only that signature is left and that `allfit_api`
+  executes it.
+- `T-REL-DIRECTORY-01/02` call it.
+- `T-ORG-CLOSE-01` counts nineteen relationship functions.
+- `directory.test.ts` binds a null search in the last position.
+
+## A gym sells its plans (HU-STUDIO-074..077)
+
+Two migrations build `HU-STUDIO-074..077` (`OP-PAY-002..006`; Jira TECH-48, TECH-130, TECH-71
+and TECH-133; pull request allfitone#207). What each operation does is in
+[the operations matrix](refactor/03_PROPOSED_DESIGN/V1_OPERATIONS_MATRIX.md), and why plans
+are delivered in person or remotely is in ADR-048.
+
+- **`20261120090000_a_gym_sells_its_plans.sql`.**
+  - It adds `payments.plan_versions.delivery_mode text not null default 'in_person'`, with
+    `ck_plan_versions_delivery_mode`. A constant default adds the column without rewriting
+    the table, and every existing version reads `in_person`, which is what Space has always
+    offered.
+  - It recreates `payments.plan_version_guard_tg` so `delivery_mode` is frozen with the
+    rest of a published version.
+  - It creates `uidx_plan_versions_live`, unique on `(plan_id) where status = 'published'`:
+    one price on sale per plan.
+  - It creates the helpers `payments.organization_plan_projection` and
+    `payments.require_plan_manager`, which no runtime role executes, and five entry points,
+    `security definer` and executable by `allfit_api`: `create_organization_plan`,
+    `rename_organization_plan`, `publish_plan_version`, `deprecate_plan_version` and
+    `list_organization_plans_for_team`.
+- **`20261120100000_space_offers_only_in_person_plans.sql`.** It recreates
+  `payments.list_organization_plans` and `payments.subscribe_to_plan` with the same
+  signatures and grants. Both keep only `in_person` versions. `subscribe_to_plan` first takes
+  `pg_advisory_xact_lock_shared` on the version; publishing and retiring take the exclusive
+  lock, so no subscription is created on a version whose retirement has committed.
+
+**What they do not add.** No table, policy, table grant or backfill. Adding the column and
+the constraint takes an `ACCESS EXCLUSIVE` lock on `payments.plan_versions` for an instant,
+and building the index blocks writes to it while it reads a small table. With
+`lock_timeout = 5s`, a busy table makes the migration fail rather than queue; retry it.
+
+**Before the deploy: one price on sale per plan.** The index cannot be built if a plan
+already has two published versions. Nothing in production has published one yet, because
+Studio had no route for it. The master user does not bypass RLS, so a `select` on
+`payments.plan_versions` returns nothing whatever the table holds. Before Deploy Database AWS
+is dispatched, read the row count instead, read only:
+
+```sql
+select n_live_tup
+from pg_stat_user_tables
+where schemaname = 'payments'
+  and relname = 'plan_versions';
+```
+
+Zero means nothing can conflict. Otherwise the index finds any duplicate itself: the
+migration fails and rolls back whole, and nothing changes. Which price stays on sale is then
+the gym's decision, not the deploy's.
+
+**Deploy order.** Merging runs **Deploy AWS**, which rolls out the API first. Then dispatch
+**Deploy Database AWS**. Until the migrations are applied:
+
+- **The five plan routes answer `503`.** Their functions do not exist yet (`42883`), and
+  the API maps any other database failure to `upstream-unavailable`.
+- **Space keeps answering as before.** Its list and subscribe functions keep their old
+  bodies, and no remote version can exist without the new column.
+
+**Rollback.** The migrations are forward only. An API rollback leaves the five functions
+unused; the column, the index and the in-person filter stay.
+
+**Check after the deploy.** Expected: five rows, each `true`.
+
+```sql
+select procedure.proname, has_function_privilege('allfit_api', procedure.oid, 'execute')
+from pg_proc as procedure
+join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+where namespace.nspname = 'payments'
+  and procedure.proname in (
+    'create_organization_plan', 'rename_organization_plan', 'publish_plan_version',
+    'deprecate_plan_version', 'list_organization_plans_for_team'
+  );
+```
+
+Tests:
+
+- `T-PAY-GYM-PLAN-01` covers creating, renaming and listing.
+- `T-PAY-GYM-PLAN-02` covers publishing, replacing, retiring and what Space offers.
+- `T-PAY-SUBSCRIPTION-01` writes its second version after retiring the first.
+- `T-PAY-API-02` (`studio-plans.test.ts`) checks the routes against the contract.
+- The race between retiring and subscribing needs two sessions, so pgTAP cannot run it. It
+  was checked by hand on 9 November 2026. With the lock, the subscription waited for the
+  retirement and was refused with `P0002`. Without the lock, it landed on the retired
+  version.
+
+## The Backoffice closes (code branch `feat/backoffice-last-gaps`)
+
+The branch closes what was left of the Backoffice in code. Its pull request and its deploy
+are pending. It brings seven migrations:
+
+| Migration | What it does | Where it is documented |
+| --- | --- | --- |
+| `20261122090000_the_team_names_who_holds_access.sql` | Names the holder and the grantor in the team inventory, with an access event per person named | `OP-SUP-008`, `OP-SUP-011` |
+| `20261122100000_a_window_sees_what_she_hid_from_a_gym.sql` | Shows a window which sessions she hid and from which gym | `OP-SUP-003`, data dictionary §7.7 |
+| `20261122110000_a_new_name_reopens_a_verified_credential.sql` | Opens a `name_change` review when she changes her name | Data dictionary §4.12.1 |
+| `20261122120000_the_unpaged_access_log_read_goes.sql` | Drops `privacy.list_access_events` | `OP-SUP-009` |
+| `20261122130000_an_archived_movement_still_reads_by_name.sql` | Keeps an archived global movement readable by name | Data dictionary §8.4 |
+| `20261122140000_a_window_reads_every_session.sql` | Pages a window's training past the newest 100 sessions | `OP-SUP-003` |
+| `20261122150000_the_worker_sweeps_photo_disposals.sql` | Lets the worker sweep both photo disposal queues | ADR-039, data dictionary §4.7.3 and §10A.12 |
+
+It also changes Terraform in `infra/production`:
+
+- **The worker's secret keys.** The worker receives the six `OBJECT_STORE_*` keys the API
+  already has. They are in the same environment secret, so no new value is created.
+- **A per-address limit on sign-in.** An AWS WAF web ACL limits the sign-in routes on the
+  load balancer (see
+  [AUTHENTICATION_OPERATIONS.md](../../products/backoffice/AUTHENTICATION_OPERATIONS.md#límites-por-dirección)).
+
+**Deploy order.**
+
+1. Merging runs **Deploy AWS**, which rolls out the API, the webs and the worker.
+2. Then dispatch **Deploy Database AWS** without `include_all`. The plan must list only
+   the seven `20261122…` migrations.
+3. Then run `terraform plan` in `infra/production`, review it, and `terraform apply`.
+   **Deploy AWS** only swaps images and keeps the task definitions Terraform wrote, so
+   neither the WAF nor the worker's keys exist until this apply.
+
+**Between steps 1 and 2:**
+
+- **No break-glass window can be read.** The new API calls `support.exercise_break_glass`
+  with eight arguments, and the database still has only the six-argument version, so every
+  read fails. The reverse order would fail the same way, because the migration drops the
+  six-argument version that the old API calls.
+- **The Team screen reads «Sin nombre registrado»** for everyone, because the database does
+  not return names yet.
+- **The worker's minute job fails at `media_disposal`, every minute.** The claim functions
+  do not exist yet. The job is the last of the batch, so every other job has already run,
+  but the batch answers `503`. The Backoffice diagnosis names the job «Borrado de fotos
+  eliminadas».
+
+**Between steps 2 and 3:**
+
+- **Sign-in has no per-address limit**, as it has had none since the move to AWS.
+- **`media_disposal` fails whenever a photo is due.** The worker has no store keys yet,
+  and it builds its store client only when something is due. With nothing due it
+  succeeds. The rows wait, and the next claim after the apply removes them.
+
+**Rollback.** The migrations are forward only. An API rolled back to before the branch
+cannot read a break-glass window, because the six-argument function is gone; roll the
+database forward rather than the API back. The WAF is removed by reverting the Terraform
+change and applying again.
+
+**Check after the deploy.** Expected: five rows, each `true`.
+
+```sql
+select namespace.nspname, procedure.proname,
+       has_function_privilege('allfit_api', procedure.oid, 'execute')
+from pg_proc as procedure
+join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+where (namespace.nspname, procedure.proname) in (
+  ('nutrition', 'claim_media_disposals'), ('nutrition', 'seal_swept_media_disposal'),
+  ('identity', 'claim_body_photo_disposals'), ('identity', 'seal_swept_body_photo_disposal'),
+  ('support', 'exercise_break_glass')
+);
+```
+
+After the apply, the AWS console lists the web ACL `allfitone-sign-in` (scope `REGIONAL`), associated
+with the load balancer.
+
+Tests:
+
+- pgTAP: `T-SUP-TEAM-01`, `T-SUP-BG-HIDDEN-01`, `T-IDN-VERIFY-NAME-01`,
+  `T-CAT-GLOBAL-ARCHIVE-01`, `T-PRV-SCOPE-WIDER-01`, `T-SUP-BG-PAGE-01` and
+  `T-NUT-MEDIA-SWEEP-01`. `T-PRV-AUD-01` now runs against the paged read.
+- API: `T-BG-API-31` and `T-BG-API-32` page a window and refuse a malformed cursor.
+- Worker: `media-disposals.test.ts` and `main.test.ts`, including a failure in the last job
+  after every other job ran.
+- Terraform: `infra/modules/edge/tests/edge.tftest.hcl`, 8 runs.
+
+## The founders hear that someone confirmed on the waitlist (TECH-338, allfitone#258)
+
+When a person confirms their email on the Allfit Space waitlist (`OP-WL-002`), the founders'
+private Slack channel gets one notice. It carries the person's name and email, the channel they
+came through, the language, whether somebody invited them, and how many confirmed sign-ups the
+list holds. The decision and its limits are in `ADR-050`, decision 10.
+
+`20261129090000_the_team_hears_that_someone_confirmed_on_the_waitlist.sql` does two things:
+
+- It redefines `waitlist.confirm`, which now enqueues `waitlist.signup_confirmed.v1` in the
+  transaction that confirms, once per sign-up. The payload is `confirmed_total` alone.
+- It creates `waitlist.prepare_team_notice(uuid)`, for the worker actor only. It answers what the
+  notice says, or `skipped` when the sign-up is gone.
+
+The worker posts through the `TeamChannel` port of `packages/notifications`, whose adapter is a
+Slack incoming webhook. The consumer rides the existing outbox delivery job.
+
+**The channel's address.** `SLACK_FOUNDERS_WEBHOOK_URL`, in the environment secret and in the
+worker's secret keys in `infra/production`.
+
+- It is a credential: whoever holds it can post to the channel. It never goes in the repository,
+  in a log or in a ticket.
+- It is named by its channel, not by this notice. Any later notice for the founders reuses it.
+  Another channel gets its own key, because a Slack incoming webhook posts to one channel.
+- Without the key's value, or with one that does not start with `https://hooks.slack.com/`, the
+  worker claims no notice. The events wait in the outbox and every email is delivered as usual.
+  For a malformed value the worker logs one line that names the key, never the value.
+
+**Moving the notices to another channel.**
+
+1. In the Slack app «Allfit One Notifications», add an incoming webhook for the new channel.
+2. Replace the value of `SLACK_FOUNDERS_WEBHOOK_URL` in the environment secret.
+3. Force a new deployment of the worker: it reads the secret when the task starts.
+4. Delete the old webhook in the Slack app.
+
+**Switches.** No switch gates the notice itself. A notice needs a confirmation, though, and the
+confirmation email goes out only with `STAFF_INVITATION_DELIVERY_ENABLED` and
+`WAITLIST_EMAIL_DELIVERY_ENABLED` both `true`. The first is the worker's general switch for every
+email. It was still `false` when the list opened on 14 November 2026, and it was turned on that
+day.
+
+**Deploy order.** As it was done on 14 November 2026:
+
+1. Put the key in the environment secret first. ECS does not start a task whose listed secret key
+   is missing.
+2. Merging runs **Deploy AWS**.
+3. Apply Terraform to the worker's task definition alone, never during a Deploy AWS:
+   `terraform apply -target='module.services.aws_ecs_task_definition.service["worker"]'`.
+   Then dispatch **Deploy AWS** once more, so the worker starts on the revision that lists the
+   key (run 43647166762).
+4. Dispatch **Deploy Database AWS** without `include_all`. The plan must list only
+   `20261129090000` (run 43648281660).
+
+Steps 3 and 4 are safe in either order. Before the migration nothing enqueues the event, and
+before the key the worker claims none.
+
+**When a post fails.** Slack answering 429 or 5xx, and a network error, are retried. Any other
+answer is not, and the event is set aside as `provider_rejected`. Delivery is at-least-once, so a
+notice can arrive twice.
+
+**What the channel holds.** Names and emails. Leaving the list and the 90-day sweep delete them
+from the database, not from Slack. How long the channel keeps messages is set in Slack and was
+not decided on 14 November 2026. A test sign-up deleted from the database leaves its notice in
+the channel, to be removed by hand.
+
+**Check after the deploy.** Expected: one row, both `true`.
+
+```sql
+select to_regprocedure('waitlist.prepare_team_notice(uuid)') is not null as present,
+       has_function_privilege(
+         'allfit_api', 'waitlist.prepare_team_notice(uuid)', 'execute'
+       ) as granted;
+```
+
+Then a real confirmation posts a notice within about a minute. Notices that wait are counted as
+the owner role, because the outbox is forced under RLS:
+
+```sql
+select count(*) as waiting
+from system.outbox_events
+where event_type = 'waitlist.signup_confirmed.v1'
+  and published_at is null;
+```
+
+On 14 November 2026 three test sign-ups were confirmed in production. Each event was published,
+which the worker does only after Slack accepts the post, and the test sign-ups were deleted
+afterwards.
+
+Tests:
+
+- pgTAP: `T-WL-INT-03`, new, and `T-WL-RLS-01`, which covers the new function's grant and its
+  worker-only guard.
+- Worker: `T-WRK-WL-07` to `T-WRK-WL-15`, in `waitlist-team-notices.test.ts` and
+  `founders-channel.test.ts`. `delivery-coverage.test.ts` knows the new event.
+- `packages/notifications`: `team-channel.test.ts`.
+
+## The first hundred confirmed are Founding Members (TECH-298, allfitone#261)
+
+Confirming the email on the Allfit Space waitlist gives a sign-up a Founding Member number, from 1
+to 100, in confirmation order. The decision, and what is not built yet, are in `ADR-050`,
+decision 5.
+
+`20261130090000_the_first_hundred_confirmed_are_founding_members.sql` does this:
+
+- It adds `founding_number` and `founding_assigned_at` to `waitlist.signups`, with a unique index
+  on the number.
+- It creates `waitlist.fill_founding_numbers()`, not granted to the runtime role. Under one
+  advisory lock it gives each free number, lowest first, to the earliest-confirmed sign-up that
+  holds none and is not marked as fraud. It enqueues `waitlist.founding_number_assigned.v1` for
+  each, with the number as the only payload.
+- It redefines `waitlist.confirm`, which fills the numbers and answers the one the sign-up holds,
+  and `waitlist.forget_signup`, which fills again after deleting a sign-up that held a number.
+- `waitlist.read_my_link` and `waitlist.prepare_team_notice` answer the number too.
+- It creates `waitlist.prepare_founding_email(uuid)`, for the worker actor only. It answers what
+  the email needs, or `skipped` when the sign-up is gone or no longer holds that number.
+- It ends by filling the numbers for whoever had already confirmed.
+
+The worker sends «Eres Founding Member #037» in the language the person joined in. The
+confirmation page and the referrals page of space-web show the number.
+
+**Switches.** The email rides the waitlist's own switches: `STAFF_INVITATION_DELIVERY_ENABLED`
+and `WAITLIST_EMAIL_DELIVERY_ENABLED`, both `true`. With either off, the events wait in the
+outbox and the numbers are still assigned.
+
+**Deploy order.** No new setting and no Terraform. As it was done on 14 November 2026:
+
+1. Merging runs **Deploy AWS** (run 43662970201).
+2. Dispatch **Deploy Database AWS** without `include_all`. The plan must list only
+   `20261130090000` (run 43664153931).
+
+Either order is safe. The API and the worker read `founding_number` as optional, so the new code
+works before the migration. Before the new worker is up, the events wait unclaimed.
+
+**Deleting a test sign-up.** A number its holder gives up goes to the next sign-up in line, and
+that person gets the email. Fewer than a hundred confirmed sign-ups means nobody is waiting for a
+number, and a deleted test sign-up simply frees its own. Once the hundred are held, delete a test
+sign-up with `select waitlist.forget_signup('<id>')` as the owner role, never with a direct
+`delete`: the function is what hands the number on. It also counts the sign-up in
+`waitlist.departed_daily_totals`.
+
+**Check after the deploy.** Expected: one row, all `true`.
+
+```sql
+select to_regprocedure('waitlist.prepare_founding_email(uuid)') is not null as present,
+       has_function_privilege(
+         'allfit_api', 'waitlist.prepare_founding_email(uuid)', 'execute'
+       ) as granted,
+       not has_function_privilege(
+         'allfit_api', 'waitlist.fill_founding_numbers()', 'execute'
+       ) as fill_kept_internal;
+```
+
+Numbers held and emails that wait are counted as the owner role, because both tables are forced
+under RLS:
+
+```sql
+select (select count(*) from waitlist.signups where founding_number is not null) as held,
+       (select count(*) from system.outbox_events
+         where event_type = 'waitlist.founding_number_assigned.v1'
+           and published_at is null) as emails_waiting;
+```
+
+On 14 November 2026 the list held no sign-ups when the migration ran, so it gave no number. One
+test sign-up was then confirmed in production: it took number 1, the email and the founders'
+notice were published, and the sign-up was deleted afterwards.
+
+Tests:
+
+- pgTAP: `T-WL-INT-04`, new, and `T-WL-RLS-01`, which covers the new function's grant, its
+  worker-only guard and that the fill is not granted. `T-WL-INT-02` pinned the columns
+  `read_my_link` returns; the list now includes the person's own number.
+- Concurrency: `T-WL-INT-05`, in `packages/db/tests/waitlist-founding-concurrency.test.ts`. It was
+  watched failing on the unique index with the lock removed.
+- API: `T-WL-API-01`, for the number on both routes.
+- Worker: `T-WRK-WL-16` to `T-WRK-WL-21`, in `waitlist-founding-emails.test.ts`, and
+  `T-WRK-WL-22` for the founders' notice. `delivery-coverage.test.ts` knows the new event.
+- `packages/notifications`: the template, in both languages.
+- space-web: the two answers in `waitlist.test.ts`, and the link pages in
+  `e2e/waitlist-links.spec.ts`.
+
+## The team reviews the waitlist and marks fraud (TECH-302, allfitone#263)
+
+The Backoffice has a screen, `/waitlist`, where the team reads the Allfit Space waitlist, marks a
+sign-up as fraud and takes a mark back. The decisions are in `ADR-050`, decision 11.
+
+`20261201090000_the_team_reviews_the_space_waitlist.sql` does this:
+
+- It creates `waitlist.signup_events`, the append-only record of marks and of marks taken back.
+  It is forced under RLS and not granted to the runtime role. Its rows cascade from the sign-up:
+  they are deleted when the person leaves and when the list is swept.
+- It creates `waitlist.list_backoffice_signups` and `waitlist.read_backoffice_totals`
+  (`OP-WL-011`), `waitlist.mark_signup_as_fraud` (`OP-WL-012`) and
+  `waitlist.withdraw_fraud_mark` (`OP-WL-016`), granted to the runtime role. Each one checks
+  `manage_platform_commercial` and AAL2 itself.
+- It redefines `waitlist.fill_founding_numbers()`, which now reads the sign-up again before it
+  gives the number, so a sign-up marked while the fill waited is passed over.
+
+**No switch and no setting.** No Terraform, no secret, no email.
+
+**Who can open it.** Anybody with a live `manage_platform_commercial` duty. An Allfit One admin
+holds every duty (`ADR-046`).
+
+**Deploy order.**
+
+1. Merging runs **Deploy AWS**.
+2. Dispatch **Deploy Database AWS** without `include_all`. The plan must list only
+   `20261201090000`.
+
+Between the two steps the screen cannot read the list and says so. Nothing else depends on the
+migration: joining, confirming and the emails work as before.
+
+**Check after the deploy.** Expected: one row, all `true`.
+
+```sql
+select to_regclass('waitlist.signup_events') is not null as present,
+       has_function_privilege(
+         'allfit_api',
+         'waitlist.mark_signup_as_fraud(uuid, uuid, uuid, text, uuid, uuid, bytea)',
+         'execute'
+       ) as mark_granted,
+       has_function_privilege(
+         'allfit_api',
+         'waitlist.withdraw_fraud_mark(uuid, uuid, uuid, text, uuid, uuid, bytea)',
+         'execute'
+       ) as withdrawal_granted,
+       not has_table_privilege('allfit_api', 'waitlist.signup_events', 'select')
+         as record_kept_internal;
+```
+
+**Reading the record of a sign-up.** As the owner role, because the table is forced under RLS:
+
+```sql
+select event_type, reason, previous_discard_reason, released_founding_number,
+       actor_person_id, occurred_at
+from waitlist.signup_events
+where signup_id = '<id>'
+order by occurred_at;
+```
+
+**What a mark does to the numbers.** A marked sign-up gives up its number, and the next
+confirmed sign-up in line gets it, with the Founding Member email. Taking the mark back does not
+return that number: the sign-up waits for the next one free.
+
+**Deleting a test sign-up** is still `select waitlist.forget_signup('<id>')` as the owner role.
+The record of its review goes with it.
+
+**«Con cuenta» says «No» for everybody.** Nothing links a sign-up to its Allfit Space account
+until `OP-WL-006` (`TECH-299`). The answer carries `has_space_account` as `false` until then.
+
+When this was written, on 15 November 2026, the pull request was open and nothing was deployed.
+The screen had been tested against a mocked API, and the API against a local database.
+
+Tests:
+
+- pgTAP: `T-WL-RLS-02` and `T-WL-RLS-03` for who may read, mark and take a mark back;
+  `T-WL-INT-06` for the list, the totals, the mark and the record leaving with its sign-up;
+  `T-WL-INT-08` for taking a mark back; `T-WL-IDEM-02` and `T-WL-IDEM-03` for both commands.
+- API: `T-WL-API-02`, for the four routes against the contract.
+- Backoffice: `waitlist-review.test.ts` for what the screen says, and
+  `e2e/waitlist-review.spec.ts` for the screen.

@@ -37,22 +37,29 @@ técnico.
 
 ## 2. Quién usa el Backoffice
 
-`allfit_admin` es la habilitación base para que una persona del equipo de Allfit
-pueda iniciar sesión. **No concede por sí sola acceso a datos ni capacidad para
-ejecutar acciones.** Cada operación exige un deber de plataforma vigente,
-otorgado por otra persona, con vigencia máxima de 90 días y el nivel de
-autenticación requerido.
+`allfit_admin` lets a person on the Allfit One team sign in to the Backoffice and,
+since ADR-046, brings all thirteen platform duties for as long as the person holds
+it. Every operation still checks, in its own transaction, the duty it names and the
+required authentication level. Without the role, a Backoffice session can do
+nothing. A duty granted on its own lasts at most 90 days; only temporary duties
+granted before ADR-046 are of that kind.
 
 | Modo de actuación | Deberes principales | Límite |
 | --- | --- | --- |
 | Soporte ordinario (`A10`) | métricas, diagnóstico y metadatos de soporte | No ve contenido personal, entrenamiento, cuerpo, salud, nutrición ni medios |
 | Curaduría/verificación (`A11`) | catálogo global o verificación de credenciales | Cada deber es independiente; curar no permite verificar |
-| Seguridad/privacidad (`A12`) | administrar accesos, aprobar y auditar break-glass, gestionar solicitudes legales | No solicita ni ejerce una ventana que aprueba o audita |
+| Seguridad/privacidad (`A12`) | administrar accesos, auditar break-glass, gestionar solicitudes legales | Never reviews a window they requested (ADR-046) |
 
 Una persona puede recibir más de un deber, pero la separación se comprueba en
 cada caso: nadie se autoasigna; solicitante, aprobadores y revisor son personas
 distintas cuando el flujo lo exige; un deber vencido o revocado corta el acceso
 de inmediato.
+
+Since ADR-046 an administrator acts in all three modes. Self-approved break-glass,
+partial person search with full name and contact, and an optional case reference
+are built too (ADR-046 decisions 2, 4 and 5): nobody approves a window any more,
+and the requester and the reviewer are still different people. The stories below
+say so where their criteria changed.
 
 Dos aclaraciones de nombre:
 
@@ -66,9 +73,10 @@ gimnasios y entregarlos, publicar contenido global, verificar títulos
 profesionales, consultar información comercial minimizada y ayudar a iniciar
 flujos de identidad sin modificar los datos directamente.
 
-El contenido de entrenamiento sólo se consulta mediante una ventana
-break-glass estándar aprobada. Cuerpo, salud y registro nutricional requieren
-una ventana restringida y dos aprobadores distintos. Fotos, archivos, identidad
+Training content is read only through a standard break-glass window. Body,
+health and the nutrition log need a restricted window. Since ADR-046 both open on
+request and last 60 minutes, and the other administrator reviews them afterwards.
+Fotos, archivos, identidad
 y contacto completos, secretos de autenticación, pagos detallados, raw de
 sensores y notas privadas no son categorías aprobables por break-glass.
 
@@ -82,7 +90,7 @@ sensores y notas privadas no son categorías aprobables por break-glass.
 | Operar un gimnasio en nombre de su dueño | Se le entrega y él lo administra desde Allfit Studio |
 | Cobrar o mover dinero | Los cobros los reporta la pasarela |
 | Leer contenido sensible por tener `allfit_admin` | El rol base permite entrar; el deber y, cuando aplica, break-glass autorizan cada operación |
-| Aprobar o auditar mi propio acceso excepcional | La separación de deberes es obligatoria y falla cerrada |
+| Review my own exceptional access | Since ADR-046 an administrator opens their own window, but the reviewer is never the requester or the subject |
 | Borrar el registro de accesos, roles o deberes | Nadie puede, para que la evidencia sirva de algo |
 
 Cada lectura permitida o denegada de datos de una persona queda registrada antes
@@ -108,8 +116,8 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 2. El correo debe estar verificado y debo ser una persona activa con rol base `allfit_admin` vigente; si falta cualquiera de estas condiciones **no entro**, aunque la cuenta exista.
 3. Correo, contraseña, cuenta, persona o rol inválidos producen la misma respuesta. Un código incorrecto no revela más información y el intento termina al quinto fallo.
 4. La sesión sólo nace después de que WorkOS confirme el challenge TOTP y PostgreSQL materialice AAL2 para ese `sid`. No se infiere AAL2 de claims, grupos, `auth_time`, rol o Application.
-5. La sesión del Backoffice es independiente de la de Allfit Studio: entrar a uno no me mete al otro. Caduca a las ocho horas como máximo y a los quince minutos de inactividad.
-6. Entrar no habilita ninguna operación: cada pantalla y acción comprueba dentro de su transacción un deber vigente y `required_aal=2`.
+5. La sesión del Backoffice es independiente de la de Allfit Studio: entrar a uno no me mete al otro. It expires after 12 hours at most and after 60 minutes of inactivity (ADR-046).
+6. Each screen and action checks, inside its transaction, a duty in force and `required_aal=2`. Since ADR-046 the role brings every duty, so an administrator who signs in holds them all.
 7. Esta evidencia V1 combina contraseña y TOTP. No es resistente al phishing y no se presenta como equivalencia integral a una oferta AAL2 moderna con WebAuthn/passkeys.
 8. El navegador reanuda un challenge o enrolamiento pendiente después de recargar, pero nunca persiste correo, contraseña, código, QR, clave TOTP ni identidad del proveedor.
 9. Mientras se comprueba la sesión o hay una respuesta indeterminada, el contenido autenticado permanece desmontado. Una respuesta perdida tras verificar TOTP se resuelve comprobando la sesión antes de repetir el mismo comando idempotente.
@@ -126,7 +134,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 1. Al cerrar sesión se revoca primero la sesión opaca local, se elimina su cookie host-only y se solicita la revocación del `sid` exacto en WorkOS.
 2. Repetir el cierre, cerrar una sesión ya ausente o usar `manual`, `inactivity` o `recovery` produce el mismo resultado seguro y no redirige a Hosted AuthKit.
-3. La sesión caduca sola tras quince minutos de inactividad o al cumplir ocho horas, y el worker reintenta cualquier revocación externa parcial.
+3. The session expires on its own after 60 minutes of inactivity or 12 hours (ADR-046), and the worker retries any partial external revocation.
 4. Retirar el rol base, recuperar el factor o cambiar la contraseña corta también las sesiones Backoffice y los intentos pendientes.
 5. El navegador desmonta inmediatamente el contenido autenticado, sincroniza el cierre entre pestañas y revalida al recuperar visibilidad o restaurar el historial. Si no puede confirmar el cierre, muestra una recuperación segura sin datos del operador.
 
@@ -140,7 +148,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 **Criterios**
 
-1. Pido el restablecimiento con mi correo y WorkOS envía un enlace temporal desde su dominio alojado `*.authkit.app`; Backoffice no usa Resend para este flujo.
+1. Pido el restablecimiento con mi correo y WorkOS envía un enlace temporal desde su dominio alojado `*.authkit.app`; Backoffice no usa el correo propio de Allfit One (Amazon SES) para este flujo.
 2. El mensaje y la respuesta `202` son los mismos exista o no la cuenta y aunque el proveedor tarde o falle.
 3. Al cambiar la contraseña se cierran mis sesiones Studio y Backoffice y se invalidan intentos Backoffice pendientes, sin eliminar mi factor TOTP activo.
 4. `auth.allfit.one` está diferido. Incorporarlo después cambia configuración y branding de páginas alojadas, no contratos ni sesiones locales.
@@ -199,10 +207,10 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 **Criterios**
 
-1. Busco por identificador o por coincidencia exacta de un correo o teléfono que la persona entregó en su caso de soporte; no existe búsqueda exploratoria por nombre.
-2. Los resultados muestran únicamente identificador, contacto parcialmente oculto y estado operativo de la cuenta.
+1. I search in one field, «Nombre, correo o teléfono», by part of a name, an email or a phone, or by the person's identifier, with at least two characters. A `%` or `_` is searched as itself, so a search never lists everybody (ADR-046).
+2. Results show the name, email, phone and account state of up to 25 people in name order; if more match, the screen says there are more (ADR-046).
 3. Si no hay resultados se dice claramente; no aparece una lista vacía sin explicación.
-4. La búsqueda exige `diagnose_support_metadata`, referencia de caso y queda registrada incluso si no encuentra resultados.
+4. The search requires `diagnose_support_metadata`, which the admin role brings. A case reference is optional and, when I give one, must be a traceable code. Every search is logged even if it finds nobody, and every person it returns gets an access event she can see (ADR-046).
 
 ### HU-BO-007 — Ver el estado operativo de una persona
 
@@ -214,10 +222,10 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 
 **Criterios**
 
-1. Veo identificador, estado de cuenta, antigüedad, contactos parcialmente ocultos y estado de verificación, sin valores completos.
+1. I see the identifier, name, full email and phone, account state, age of the account and verification state; never the identity provider's subject (ADR-046).
 2. Veo que existen perfil, relaciones, plan, Pro y permisos, junto con sus estados y fechas; no veo objetivos, contenido, pagos ni destinatarios desde esta ficha.
 3. Para resolver un caso de entrenamiento uso `HU-BO-008`; para cuerpo, salud o nutrición uso `HU-BO-009`. Ninguna pantalla amplía silenciosamente la categoría aprobada.
-4. La ficha exige `diagnose_support_metadata`, referencia de caso y registra la consulta.
+4. The file requires `diagnose_support_metadata` and logs the read. A case reference is optional and, when given, must be a traceable code; to start, resend or cancel an account recovery from the file I still give one (ADR-046).
 5. La ficha carga aunque falten datos y representa desconocido como vacío, nunca como cero o falso.
 
 ### HU-BO-008 — Ver el entrenamiento de una persona
@@ -234,8 +242,8 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 2. Puedo abrir una sesión y ver lo que registró: series, cargas, distancias o duración según la modalidad.
 3. Veo su agenda: qué tiene planeado y de qué programa viene.
 4. Veo también lo que ella ocultó a algún gimnasio, indicando para cuál está oculto.
-5. Sólo puedo consultar mediante mi propia ventana break-glass estándar, aprobada para esa persona, caso, propósito y categorías; dura como máximo 30 minutos.
-6. Cada lectura revalida AAL2, deber, quorum, categoría y vigencia, y registra resultado permitido o denegado antes de devolver contenido.
+5. I can only read through my own standard break-glass window for that person, case, purpose and categories. Asking opens it at once and it lasts 60 minutes; nobody else approves it, and the other administrator reviews it afterwards (ADR-046).
+6. Each read revalidates AAL2, duty, window, category and validity, and logs an allowed or denied result before returning content. Since ADR-046 a new window has no quorum to complete.
 
 ### HU-BO-009 — Ver cuerpo, salud y nutrición
 
@@ -250,9 +258,9 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 1. Veo mediciones corporales, dolores y limitaciones declaradas, y las comidas que registró con sus valores.
 2. **Ninguna foto ni ningún archivo se abre desde el Backoffice.** Ni fotos de progreso corporal, ni fotos de comida, ni documentos. Se guardan y la persona los ve en su aplicación, pero desde aquí no son accesibles.
 3. Donde hay una foto, se indica que existe. Se sabe que está, no se ve.
-4. La consulta requiere una ventana break-glass restringida, dos aprobadores distintos y una duración máxima de 15 minutos.
+4. The read requires a restricted break-glass window. Asking opens it at once and it lasts 60 minutes like any other; nobody else approves it, and the other administrator reviews it afterwards (ADR-046).
 5. Fotos, archivos y `nutrition_media` se rechazan antes de abrir la ventana; conocer que existe un medio no concede URL, referencia de storage ni bytes.
-6. Cada lectura revalida AAL2, deber, quorum, categoría y vigencia, y registra resultado permitido o denegado antes de devolver contenido.
+6. Each read revalidates AAL2, duty, window, category and validity, and logs an allowed or denied result before returning content. Since ADR-046 a new window has no quorum to complete.
 
 ### HU-BO-010 — Ayudar a corregir un dato de identidad
 
@@ -422,7 +430,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 2. Veo cada cobro con su resultado, incluidos los fallidos y el motivo.
 3. Veo si está suspendida y desde cuándo.
 4. **Nunca veo datos de tarjeta**, porque Allfit no los guarda.
-5. La consulta exige `view_billing_metadata`, referencia de caso y una proyección cerrada; pagos no son categoría break-glass.
+5. The read requires `view_billing_metadata` and a closed projection; a case reference is optional and, when given, a traceable code (ADR-046). Payments are not a break-glass category.
 
 ### HU-BO-019 — Ver las suscripciones de un gimnasio
 
@@ -454,7 +462,7 @@ ni el contenido consultado. Si la auditoría falla, la lectura no ocurre.
 1. Veo las suscripciones a Allfit, activas y suspendidas, y lo que suman.
 2. Distingo quién paga directo de quién tiene Pro por su gimnasio.
 3. Veo los cobros fallidos para poder hacer seguimiento.
-4. La consulta exige `view_platform_metrics`; identificar pagadores individuales requiere además `view_billing_metadata` y finalidad de soporte trazable.
+4. The read requires `view_platform_metrics`; naming individual payers also requires `view_billing_metadata`, and the list of charges to follow up opens without a case reference, which is optional and, when given, a traceable code (ADR-046).
 
 ---
 
@@ -593,7 +601,12 @@ nadie verifica, esa función no se puede usar.
 
 `E-BO-07` · imprescindible
 
-*Historia nueva del 1 de octubre de 2026, todavía sin construir. La consume `HU-STUDIO-087`.*
+*Historia nueva del 1 de octubre de 2026. La consume `HU-STUDIO-087`.*
+
+*Built (`OP-ORG-023`). The founder sets the quota from the gym's file, and `HU-STUDIO-087`
+refuses the invitation that would exceed it. Since allfitone#175 every decision also names
+the commercial agreement it was sold under (`HU-BO-027` c2 and c5). Without a quota a gym
+has no limit: every gym that existed before was sold without one.*
 
 **Criterios**
 
@@ -616,10 +629,10 @@ nadie verifica, esa función no se puede usar.
 
 **Criterios**
 
-1. El rol `allfit_admin` permite iniciar sesión, pero no concede ninguna operación sin deber vigente.
+1. The `allfit_admin` role lets a person sign in and brings all thirteen duties for as long as it lasts (ADR-046). Withdrawing it revokes them.
 2. **No puedo asignarme ni el rol ni un deber a mí mismo.** Administrar acceso exige `manage_platform_access` y AAL2.
 3. **Nunca puede quedar el Backoffice sin ningún administrador base activo.**
-4. Cada deber tiene catálogo cerrado, vigencia máxima de 90 días, AAL requerido y recertificación independiente.
+4. Every duty belongs to a closed catalogue and requires AAL2. A duty held through the role has no end of its own and is never suspended, revoked or recertified on its own; it follows the role. A temporary duty granted before ADR-046 keeps its 90-day end and its recertification until it lapses.
 5. Quitar el rol revoca la sesión; suspender, revocar o vencer un deber corta inmediatamente sus operaciones y cierra ventanas break-glass del solicitante afectado.
 6. El historial de roles y deberes se conserva; retirar no borra ni reescribe.
 
@@ -634,7 +647,7 @@ nadie verifica, esa función no se puede usar.
 **Criterios**
 
 1. Veo quién tiene rol base hoy y quién lo tuvo antes.
-2. Veo sus deberes vigentes, suspendidos, vencidos o revocados, con vigencia, AAL, otorgante y última recertificación.
+2. Veo sus deberes vigentes, suspendidos, vencidos o revocados, con vigencia, AAL, otorgante y última recertificación. A duty held through the role reads as permanent and follows the role (ADR-046).
 3. La consulta exige `manage_platform_access` o `audit_platform_access`; ninguna organización ni persona externa puede verla.
 
 ### HU-BO-030 — Ver el registro de accesos
@@ -705,6 +718,70 @@ nadie verifica, esa función no se puede usar.
 
 ---
 
+## E-BO-10 · Lista de espera y lanzamiento
+
+Lo que el equipo hace con la lista de espera de Allfit Space (`E-SP-17`, `ADR-050`): revisarla,
+cargar los códigos de los premios y marcar el día en que Allfit Space abre. La lista es interna:
+nunca se publica como ranking.
+
+### HU-BO-035 — Revisar la lista de espera
+
+**Como** fundador
+**quiero** ver la lista de espera
+**para** saber cuánta gente hay, quiénes son Founding Members y detectar fraude.
+
+`E-BO-10` · imprescindible
+
+**Criterios**
+
+1. Veo cada inscripción con su nombre, su correo, su fecha, si confirmó, su número de Founding Member, si ya creó su cuenta de Allfit Space y cuántos referidos válidos lleva.
+2. Busco por nombre, correo o código.
+3. Puedo marcar una inscripción como fraude, con un motivo. Deja de sumar a quien la invitó y, si era Founding Member y su plazo no había vencido, su número pasa a la siguiente persona (`HU-SP-118`).
+4. Veo los totales: inscritas, confirmadas, con cuenta y por canal de origen. El canal sale del link con el que llegó la persona, o es «referido» o «directo».
+5. Nunca veo las huellas de dispositivo ni de conexión: solo si una inscripción se descartó y por qué.
+6. Exige `manage_platform_commercial`, AAL2 y actor humano auditado. Marcar fraude y quitar la marca quedan registrados con su motivo y con quien lo hizo. Ese registro se borra con la inscripción. Consultar la lista no se registra.
+7. Puedo quitar una marca de fraude, con un motivo. La inscripción vuelve a como estaba antes de la marca y vuelve a sumar a quien la invitó. Si había confirmado su correo, recibe el siguiente número de Founding Member que quede libre, no el que tenía.
+8. Una conexión compartida entre varios referidos se me muestra como señal para revisar. Nunca descarta una inscripción por sí sola.
+
+Mientras no exista el enlace con la cuenta de Allfit Space (`TECH-299`), «con cuenta» dice «no» en todas las inscripciones y el total con cuenta no se muestra.
+
+### HU-BO-036 — Cargar los códigos de oferta de las tiendas
+
+**Como** fundador
+**quiero** subir los códigos de oferta que generan App Store y Google Play
+**para** que los premios por referidos se entreguen solos.
+
+`E-BO-10` · imprescindible
+
+**Criterios**
+
+1. Los subo por archivo, separados por tienda y por premio: 1, 2, 3 o 12 meses.
+2. Veo cuántos quedan de cada tipo, cuántos se entregaron y a quién.
+3. Me avisa cuando quedan pocos de un tipo, y muestra los premios pendientes por falta de códigos.
+4. Un código repetido o ya entregado no se carga dos veces.
+5. Los códigos nunca se muestran completos, porque cada uno vale un premio.
+6. Exige `manage_platform_commercial`, AAL2 y actor humano auditado.
+
+### HU-BO-037 — Marcar el lanzamiento de Allfit Space
+
+**Como** fundador
+**quiero** marcar el día en que Allfit Space queda publicado en las dos tiendas
+**para** que la lista de espera sepa que ya abrió.
+
+`E-BO-10` · imprescindible
+
+*Historia nueva del 10 de noviembre de 2026. Sale de `TECH-321`, que necesitaba una fecha de
+lanzamiento registrada.*
+
+**Criterios**
+
+1. Lo marco cuando Allfit Space ya está publicado en App Store y Google Play. Se marca una sola vez y pide confirmación explícita, porque no se deshace.
+2. Marcarlo envía el correo de apertura a cada inscripción confirmada (`HU-SP-122`) y empieza a contar los 7 días de los Founding Members y los 90 días del borrado de la lista.
+3. Desde ese momento la lista ya no acepta inscripciones: `space.allfit.one` lleva a las tiendas.
+4. Exige `manage_platform_commercial`, AAL2 y actor humano auditado.
+
+---
+
 ## 4. Procesos automáticos
 
 No son historias porque nadie los pide: se disparan solos. El Backoffice es
@@ -725,6 +802,9 @@ donde se ven sus efectos y sus fallos, en `HU-BO-005` y `HU-BO-031`.
 | Recálculo de indicadores | Por corrección o cambio | Un indicador desactualizado **no se muestra** hasta recalcularse |
 | Registro de cobros de gimnasios | Webhook de la pasarela | Un cobro fallido suspende de forma indefinida. **Nunca termina nada** ni toca permisos |
 | Registro de cobros de Allfit | Webhook | Un cobro fallido baja a plan gratuito. **Bajar a gratis nunca elimina datos** |
+| Números de Founding Member | Al confirmar, al vencer cada plazo y dos días antes | Nunca hay más de 100 números con dueño. Un número sin cuenta a tiempo pasa a la siguiente persona confirmada; uno ya enlazado a una cuenta no se mueve nunca |
+| Premios por referidos | Al enlazar una cuenta y al cargar códigos | Cada nivel se entrega una vez por persona y cada código una vez. Sin códigos, el premio queda pendiente y el Backoffice lo muestra |
+| Borrado de la lista de espera | Una vez, 90 días después del lanzamiento | Borra las inscripciones que nunca crearon cuenta y deja de las demás solo lo que necesitan la insignia y los premios. Quedan totales diarios sin datos personales |
 
 ---
 
@@ -754,9 +834,11 @@ donde se ven sus efectos y sus fallos, en `HU-BO-005` y `HU-BO-031`.
 | `E-BO-07` Planes y Pro | `HU-BO-025` – `HU-BO-027`, `HU-BO-034` | 3 de 4 |
 | `E-BO-08` Equipo de Allfit | `HU-BO-028` – `HU-BO-031` | 2 de 4 |
 | `E-BO-09` Obligaciones legales | `HU-BO-032` – `HU-BO-033` | 0 de 2 |
-| **Total** | **34 historias** | **18 imprescindibles** |
+| `E-BO-10` Lista de espera y lanzamiento | `HU-BO-035` – `HU-BO-037` | 3 de 3 |
+| **Total** | **37 historias** | **21 imprescindibles** |
 
-Las 18 imprescindibles son el Backoffice mínimo para lanzar: entrar, ver cómo va
+Las 21 imprescindibles son el Backoffice mínimo para lanzar: entrar, ver cómo va
 el negocio, encontrar a una persona y abrir su ficha y su entrenamiento, montar
 y entregar un gimnasio con su cupo, ver los pagos a Allfit, verificar títulos, publicar el catálogo y
-los planes, y controlar quién del equipo tiene acceso.
+los planes, controlar quién del equipo tiene acceso, y llevar la lista de espera de Allfit Space
+hasta su lanzamiento.

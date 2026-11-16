@@ -200,6 +200,7 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 | `HU-STUDIO-085` | `HU-STUDIO-014` |
 | `HU-STUDIO-086` | `HU-STUDIO-001`, `HU-STUDIO-085` |
 | `HU-STUDIO-087` | `HU-STUDIO-023` |
+| `HU-STUDIO-088` | `HU-STUDIO-073`, `HU-STUDIO-075` |
 
 ---
 
@@ -1461,10 +1462,10 @@ falla antes de persistir nada.
 
 ## E-STUDIO-13 · Planes y cobro
 
-> **Diferida de V1** (1 de octubre de 2026). En la primera versión los gimnasios
-> **no le cobran a sus clientes a través de Allfit**: el gimnasio le paga a Allfit por
-> fuera de la plataforma, y cada persona que invita entra con Allfit Pro. Estas
-> historias se conservan para cuando se abra esa puerta; su prioridad pasa a `después`.
+> **Reabierta para V1** el 9 de noviembre de 2026 (`ADR-048`), después de haberse diferido el
+> 1 de octubre. Cada gimnasio conecta su propia cuenta de Mercado Pago y les cobra directo a sus
+> clientes; Allfit One no cobra comisión. Un plan presencial se paga dentro de Space, y uno
+> remoto, con un link que manda el gimnasio (`HU-STUDIO-088`).
 
 **La plata nunca pasa por Allfit.** Cada organización conecta su propia cuenta de
 pasarela y cobra directo. Allfit refleja el estado y suspende o reactiva.
@@ -1475,10 +1476,10 @@ estado de pago de una persona no es un dato de entrenamiento.
 ### HU-STUDIO-073 — Conectar nuestra cuenta de cobro
 
 **Como** propietario de la organización
-**quiero** conectar nuestra cuenta de Mercado Pago o Wompi
+**quiero** conectar nuestra cuenta de Mercado Pago
 **para** poder cobrarles a nuestros clientes.
 
-`E-STUDIO-13` · después
+`E-STUDIO-13` · imprescindible
 
 **Criterios**
 
@@ -1486,6 +1487,9 @@ estado de pago de una persona no es un dato de entrenamiento.
 2. La cuenta es **nuestra**: el dinero va del cliente a nosotros sin pasar por Allfit.
 3. Allfit guarda una referencia a nuestras credenciales, **nunca las credenciales mismas**.
 4. Solo puede haber una cuenta de cobro activa a la vez.
+5. La conectamos autorizando a Allfit One desde Mercado Pago. **Nunca pegamos claves** en Studio.
+6. Si quitamos el acceso desde Mercado Pago, Studio nos lo dice, y nadie puede suscribirse hasta que la conectemos otra vez.
+7. Por ahora solo Mercado Pago. Wompi llega cuando pueda cobrar cada periodo por sí solo.
 
 ### HU-STUDIO-074 — Crear un plan
 
@@ -1493,7 +1497,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 **quiero** crear un plan comercial
 **para** ofrecérselo a nuestros clientes.
 
-`E-STUDIO-13` · después
+`E-STUDIO-13` · imprescindible
 
 **Criterios**
 
@@ -1501,19 +1505,35 @@ estado de pago de una persona no es un dato de entrenamiento.
 2. Un borrador **no se le puede vender a nadie** hasta publicarlo.
 3. No podemos tener dos planes con el mismo nombre.
 
+> **Implemented as (TECH-48, backend).** `POST /studio/v1/organizations/{organizationId}/plans`
+> creates a draft and `PATCH …/plans/{planId}` renames it (`OP-PAY-002`, `OP-PAY-003`). A
+> name is trimmed, 1 to 80 characters, and unique in the gym without regard to case. A
+> published plan can be renamed too, and its subscribers read the new name. Only `owner` and
+> `admin` (`manage_billing`) write; a coach or staff member is told `403`. Migration
+> `20261120090000_a_gym_sells_its_plans.sql`.
+
 ### HU-STUDIO-075 — Publicar una versión de plan
 
 **Como** admin u owner
 **quiero** publicar el plan con su precio
 **para** que la gente pueda suscribirse.
 
-`E-STUDIO-13` · después
+`E-STUDIO-13` · imprescindible
 
 **Criterios**
 
-1. Defino monto, moneda y si el cobro es **mensual o anual**. No hay otras opciones.
+1. Defino monto, moneda, si el cobro es **mensual o anual** y si el plan es **presencial o remoto**. No hay otras opciones.
 2. Una versión publicada **no se edita nunca**. Cambiar el precio exige publicar otra.
 3. **A quien ya está suscrito no se le sube el precio**: conserva la versión que aceptó.
+4. Un plan presencial se paga dentro de Space. Uno remoto se paga solo con el link que le mandamos a cada persona (`HU-STUDIO-088`).
+
+> **Implemented as (TECH-130, backend).** `POST …/plans/{planId}/versions` (`OP-PAY-004`) with
+> `amount_minor`, `currency_code`, `billing_period` and `delivery_mode`. **A plan has one
+> price on sale:** publishing retires the previous version in the same command, and whoever
+> subscribed to it keeps it. Monthly and yearly are separate plans. Amounts are whole pesos in
+> `COP`, because Mercado Pago Colombia charges in pesos. Publishing the price already on sale
+> changes nothing. Space offers and subscribes only to `in_person` versions. Migrations
+> `20261120090000_a_gym_sells_its_plans.sql` and `20261120100000_space_offers_only_in_person_plans.sql`.
 
 ### HU-STUDIO-076 — Retirar una versión de plan
 
@@ -1528,18 +1548,29 @@ estado de pago de una persona no es un dato de entrenamiento.
 1. Retirar impide **suscripciones nuevas**.
 2. **No cancela, no suspende y no cambia de plan** a nadie que ya esté suscrito.
 
+> **Implemented as (TECH-71, backend).** `POST …/plans/{planId}/versions/{planVersionId}/deprecation`
+> (`OP-PAY-005`), without a body. Retiring the price on sale takes the plan off sale until
+> another is published. Retiring a version a newer price already replaced changes nothing. A
+> subscription in flight waits for the retirement and is then refused, so nobody subscribes
+> to a version already retired. Migration `20261120090000_a_gym_sells_its_plans.sql`.
+
 ### HU-STUDIO-077 — Ver nuestros planes
 
 **Como** integrante de la organización
 **quiero** ver los planes que ofrecemos
 **para** saber qué estamos vendiendo.
 
-`E-STUDIO-13` · después
+`E-STUDIO-13` · imprescindible
 
 **Criterios**
 
 1. Distingo borradores de versiones publicadas.
 2. Nunca veo los planes de otra organización.
+
+> **Implemented as (TECH-133, backend).** `GET …/plans` (`OP-PAY-006`). Every active member
+> reads it, coach and staff included, because a price is nobody's personal data. It lists
+> published plans first, then drafts, by name; each plan says whether it is on sale and
+> carries every version, newest first. Migration `20261120090000_a_gym_sells_its_plans.sql`.
 
 ### HU-STUDIO-078 — Ver quién está suscrito y quién debe
 
@@ -1547,13 +1578,14 @@ estado de pago de una persona no es un dato de entrenamiento.
 **quiero** ver el estado de pago de nuestros clientes
 **para** administrar el negocio.
 
-`E-STUDIO-13` · después
+`E-STUDIO-13` · imprescindible
 
 **Criterios**
 
 1. Veo quién está activo, quién suspendido y quién terminó.
 2. **Un coach no accede a esta pantalla**, aunque tenga a esa persona asignada. Un staff tampoco.
 3. Aquí no hay **ningún** dato de entrenamiento, cuerpo, salud ni nutrición.
+4. Veo quién todavía no ha hecho su primer pago y, de cada suspendido, por qué: fallaron los cobros, se canceló en Mercado Pago o lo suspendimos nosotros.
 
 ### HU-STUDIO-079 — Suspender o reactivar a mano
 
@@ -1561,7 +1593,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 **quiero** suspender o reactivar una suscripción manualmente
 **para** manejar casos que el cobro automático no cubre.
 
-`E-STUDIO-13` · después
+`E-STUDIO-13` · importante
 
 **Criterios**
 
@@ -1573,6 +1605,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 6. No se pide una autorización nueva únicamente cuando el permiso actual sigue vigente. Si existe otro bloqueo —por ejemplo, la organización continúa suspendida—, la escritura y las sesiones afectadas siguen pausadas.
 7. Solo vuelven a estar disponibles las sesiones futuras, no iniciadas y no canceladas que todavía pertenezcan a una relación y asignación vigentes.
 8. Si la operación intentara tocar permisos, relaciones, membresías, asignaciones o el estado intrínseco de una sesión, se revierte entera.
+9. Una suscripción cuyo cobro se canceló en Mercado Pago no se puede reactivar, porque nada la cobraría. La persona se suscribe de nuevo.
 
 ### HU-STUDIO-080 — Terminar una suscripción
 
@@ -1580,13 +1613,31 @@ estado de pago de una persona no es un dato de entrenamiento.
 **quiero** terminar la suscripción de alguien
 **para** cerrar el vínculo comercial.
 
-`E-STUDIO-13` · después
+`E-STUDIO-13` · importante
 
 **Criterios**
 
 1. **Terminar el plan no termina la relación** con la persona. Son dos cosas distintas: para terminar la relación existe otra acción, con sus propios efectos.
 2. **Ningún proceso automático puede terminar una suscripción.** Siempre queda registrado qué persona lo decidió.
 3. Una suspensión puede durar indefinidamente sin convertirse nunca en terminación por sí sola.
+4. Terminarla también cancela el cobro en Mercado Pago, y solo termina cuando Mercado Pago lo confirma.
+
+### HU-STUDIO-088 — Mandar el link de pago de un plan remoto
+
+**Como** admin u owner
+**quiero** generar el link de pago de un plan remoto para un cliente
+**para** cobrarle por WhatsApp o por correo un programa que sigue a distancia.
+
+`E-STUDIO-13` · importante
+
+**Criterios**
+
+1. Solo se genera para una versión publicada de un plan **remoto** y para una persona con la que tenemos una relación vigente.
+2. El link abre una página de Allfit One, no la de Mercado Pago. La persona entra con su cuenta, ve el plan y el precio, y decide pagar. **Generar el link no la suscribe a nada.**
+3. El link sirve solo para esa persona: otra cuenta que lo abra no puede pagar con él.
+4. El pago va directo a nuestra cuenta de Mercado Pago, igual que el de un plan presencial.
+5. En Space la persona ve su plan remoto activo, pero **no hay botón de pago ni link** para planes remotos.
+6. Un coach o un staff no puede generarlo.
 
 ---
 
@@ -1610,6 +1661,17 @@ estado de pago de una persona no es un dato de entrenamiento.
 6. Si no hay nada pendiente se dice, en lugar de mostrar una pantalla vacía.
 7. Un scope rechazado o revocado nunca reaparece como “permiso pendiente” ni como una acción para que el coach vuelva a solicitarlo. Las decisiones de scopes ocurren únicamente dentro de la aceptación de una nueva relación.
 
+> **Implemented as (STUDIO-74, backend).** `GET /studio/v1/organizations/{organizationId}/today`
+> (`OP-REL-020`). Each notice appears only when the caller's roles can resolve it, counts
+> everything it covers, lists at most five, and links to the operation that resolves it:
+> client and team invitations awaiting an answer or lapsed in the last seven days,
+> relationships with no holder, termination requests, the team by role, relationships begun
+> in the last seven days, and the coach's clients with sessions of **last week** (Monday to
+> Sunday, in each session's timezone) not logged or results finished in the last 48 hours. `empty` says
+> there is nothing to do. Staff never see training. Only clients who share
+> `relationship_training` are looked at, and each one evaluated leaves one line in her access
+> log. Failed charges join with `E-STUDIO-13`. The screen is `STUDIO-146`. See ADR-047.
+
 ### HU-STUDIO-082 — Buscar a una persona de mi gimnasio
 
 **Como** integrante del gimnasio
@@ -1625,6 +1687,14 @@ estado de pago de una persona no es un dato de entrenamiento.
 3. Los resultados muestran nombre y estado de la relación. **Ningún dato de entrenamiento**, ni siquiera resumido.
 4. Si no hay resultados se dice claramente.
 
+> **Implemented as (STUDIO-75, backend).** `q` on
+> `GET /studio/v1/organizations/{organizationId}/clients` (`OP-REL-010`): 2 to 80
+> characters, matched against names only, without accents or case. It narrows the directory
+> the caller already reads, so a coach finds only his assigned clients; invitations never
+> match, because they have no name yet. No match is an empty list. A search writes no access
+> event: results carry identity and the state of the link, never training data. The screen
+> is `STUDIO-147`. See ADR-047.
+
 ### HU-STUDIO-083 — Ver la ficha de una persona que atiendo
 
 **Como** coach con asignación vigente
@@ -1638,6 +1708,15 @@ estado de pago de una persona no es un dato de entrenamiento.
 1. En un solo lugar veo su perfil, su programa, sus sesiones y su progreso, **según lo que me haya autorizado**.
 2. Lo que no me autorizó **no aparece como vacío ni como bloqueado**: no aparece.
 3. Cada consulta queda registrada y la persona la ve.
+
+> **Implemented as (STUDIO-76, backend).** `GET /studio/v1/organizations/{organizationId}/clients/{personId}`
+> (`OP-REL-019`) is the card of a client the caller attends, as holder or as a cover she
+> accepted. It lists each category she shares now, with the operations that read it, and what
+> she withdrew; a category she never shared appears nowhere. The card carries no counts and
+> writes no access event: each section is read through its own operation, which records the
+> read. She sees those records in Space at `GET /space/v1/access-events` (`OP-PRV-015`): who
+> read what, for which organization, and when. The Studio screen is `STUDIO-148`; the Space
+> screen is front work too. See ADR-047.
 
 ### HU-STUDIO-084 — Entender por qué dejé de ver algo
 
@@ -1653,6 +1732,16 @@ estado de pago de una persona no es un dato de entrenamiento.
 2. Son motivos distintos y se distinguen: que me quiten de un cliente no es lo mismo a que el cliente se vaya del gimnasio.
 3. Saber que una categoría no está disponible **no me dice si esa persona tiene o no datos** de ese tipo.
 4. Si la persona ocultó una sesión concreta, **no me entero**: para mí simplemente no existe.
+
+> **Implemented as (STUDIO-77, backend).** A category she revoked is listed as withdrawn, with
+> when, on the live card. A coach who no longer attends her and opens her card gets the reason
+> instead of «not found» for thirty days: she left the gym (`relationship_ended`), his
+> attendance ended while the link went on (`assignment_ended`), or his cover ran out
+> (`substitution_ended`), with the instant. Only whoever attended her through his current
+> membership is told; anyone else, the owner included, gets «not found». It never says who
+> ended the link or why, and never carries her name. No answer says whether there is data
+> behind a category. A correction proposal whose session she hid or annulled reads
+> `session_unavailable` in Studio. The screen is `STUDIO-149`. See ADR-047.
 
 ---
 
@@ -1673,12 +1762,12 @@ estado de pago de una persona no es un dato de entrenamiento.
 | `E-STUDIO-10` Historial de una relación terminada | `HU-STUDIO-061` – `HU-STUDIO-063` | 0 de 3 |
 | `E-STUDIO-11` Catálogo privado de movimientos | `HU-STUDIO-064` – `HU-STUDIO-067` | 0 de 4 |
 | `E-STUDIO-12` Nutrición | `HU-STUDIO-068` – `HU-STUDIO-072` | 0 de 5 |
-| `E-STUDIO-13` Planes y cobro · diferida | `HU-STUDIO-073` – `HU-STUDIO-080` | 0 de 8 |
+| `E-STUDIO-13` Planes y cobro | `HU-STUDIO-073` – `HU-STUDIO-080`, `HU-STUDIO-088` | 5 de 9 |
 | `E-STUDIO-14` Resumen del día | `HU-STUDIO-081` – `HU-STUDIO-084` | 3 de 4 |
-| **Total** | **87 historias** | **40 imprescindibles** |
+| **Total** | **88 historias** | **45 imprescindibles** |
 
 El camino mínimo para lanzar es: entrar, crear el gimnasio con su equipo,
 invitar a una persona dentro del cupo, armar un programa y asignárselo, y ver
-lo que ejecutó. En V1 no se cobra a las personas desde Studio. En una sola confirmación, la persona acepta la relación y
+lo que ejecutó. Desde el 9 de noviembre de 2026 el gimnasio también les cobra a sus clientes, con su propia cuenta de Mercado Pago (`ADR-048`). En una sola confirmación, la persona acepta la relación y
 decide cada scope de forma independiente; el coach trabaja desde el primer día
 únicamente con los grants que la persona concedió.

@@ -79,13 +79,13 @@ El documento registra las decisiones de alcance aprobadas y las brechas de traza
 | `DB-P5-001` | P0 | Recertificar alcance y trazabilidad HU | Alcance aprobado; trazabilidad técnica pendiente |
 | `DB-P5-002` | P0 | Resolver el modelo de acceso de Backoffice | Resuelto: opción B aprobada y propagada |
 | `DB-P5-003` | P0 | Materializar objetos físicos de soporte | Resuelto en diseño por ADR-028 |
-| `DB-P5-004` | P0 | Completar ciclo de vida de organizaciones | Pendiente |
-| `DB-P5-005` | P0 | Registrar actores de plataforma en eventos organizacionales | Pendiente |
-| `DB-P5-006` | P0 | Modelar suspensión reversible de servicio | Pendiente |
+| `DB-P5-004` | P0 | Completar ciclo de vida de organizaciones | Closed: every state of §9.1 is built, `suspended` since 18 October 2026 and `closed` by its owner since 3 November 2026 (see §9) |
+| `DB-P5-005` | P0 | Registrar actores de plataforma en eventos organizacionales | Closed on 13 September 2026 with the person and the duty assignment, not the role assignment (see §9) |
+| `DB-P5-006` | P0 | Modelar suspensión reversible de servicio | Closed: `planning.service_access_blocks` for an unpaid subscription (12 October 2026) and for a suspended gym (18 October 2026), enforced on reads and contributions since 5 November 2026 (see §10) |
 | `DB-P5-007` | P0 | Completar persistencia de pagos y Pro | Cerrado por `ADR-043` para la suscripción de la persona a Allfit (12 de octubre de 2026); los pagos de organización siguen diferidos |
 | `DB-P5-008` | P0 | Cerrar resolución determinística de entitlements | Cerrado por `ADR-043` el 12 de octubre de 2026 (`payments.resolve_pro`) |
-| `DB-P5-009` | P0 | Persistir cambios y recuperación de identidad | Pendiente |
-| `DB-P5-010` | P0 | Persistir solicitudes de verificación profesional | Pendiente |
+| `DB-P5-009` | P0 | Persistir cambios y recuperación de identidad | Partly closed: account recovery is built (27 September 2026); contact changes started from Space are not (see §5) |
+| `DB-P5-010` | P0 | Persistir solicitudes de verificación profesional | Closed on 13 September 2026, with a request that carries no outcome (see §6) |
 | `DB-P5-011` | P0 | Crear bandeja de avisos y entregas | Pendiente |
 | `DB-P5-012` | P0 | Crear preferencias generales de persona | Pendiente |
 | `DB-P5-013` | P0 | Tipar referencias de perfil a catálogos | Pendiente |
@@ -129,6 +129,15 @@ Para Backoffice V1 el último punto se cierra con contraseña + challenge TOTP d
 Esta evidencia no es resistente al phishing y no se declara equivalencia integral con una oferta AAL2 moderna hasta incorporar WebAuthn/passkeys. El MFA global de Hosted AuthKit permanece desactivado para Backoffice; SSO, OAuth, Magic Auth, SMS y passkeys siguen fuera de esta fase. `auth.allfit.one` queda diferido: el reset alojado usa `*.authkit.app` y añadir dominio propio después no migra contratos ni sesiones. Las operaciones AAL2 de otras superficies continúan fallando cerradas hasta su recertificación específica.
 
 ## 5. Identidad, contacto y recuperación
+
+**As built (`DB-P5-009`, partly closed).** Migration `20260927020000_backoffice_account_recovery.sql`
+built `identity.identity_action_requests` and `identity.identity_action_events` for the one
+action the Backoffice needs, account recovery (`HU-BO-010`). `identity.identity_action_kind`
+has the single value `account_recovery`; the statuses are the six of §5.2. The request keeps
+a hint and a SHA-256 fingerprint of the address, never the address or the provider's reset
+identifier. The contact changes a person starts from Space (`HU-SP-076`, `HU-SP-077`) are
+not built. They will arrive as new values of that enum, with the proposal columns they
+need, so the rest of this section still describes work to do.
 
 ### 5.1 Problema
 
@@ -208,6 +217,16 @@ Columnas mínimas:
 - Ningún log, evento u outbox contiene códigos o enlaces completos.
 
 ## 6. Verificación de credenciales profesionales
+
+**As built (`DB-P5-010`, closed).** Migration `20260913120000_credential_verification_queue.sql`
+built `identity.credential_verification_requests`. It departs from §6.2 on purpose: a request
+is `pending`, `resolved` or `cancelled` and carries no outcome. The outcome lives only on
+`identity.professional_credential_verifications`, which points back at the request it
+resolved, so the result is never stored twice. Declaring a credential opens the request for
+that exact version and retiring it withdraws the request, which makes a revision its own
+review. Validity is derived and cannot exceed twelve months. The conflicts are checked
+against the data: the holder, a shared membership, and since migration `20261105100100` a
+coaching relationship in either direction.
 
 ### 6.1 Problema
 
@@ -345,6 +364,18 @@ Modificar `identity.notification_preferences`:
 
 ## 9. Ciclo de vida de organizaciones
 
+**As built (`DB-P5-004` and `DB-P5-005`, closed).**
+
+- **States.** `organizations.organization_status` holds the five values of §9.1:
+  - `unclaimed` and `cancelled` since migration `20260913150000`, with `claimed_at` and `cancelled_at` from `20260913150100`;
+  - `suspended` since `20261018120000` and `20261018130000`, with `suspended_at`;
+  - `closed`, which its owner reaches through `OP-ORG-012` since `20261103014500_close_organizations.sql`.
+- **No `closed_at`.** No `closed_at` column was added: the instant lives on `organization.closed.v1`.
+- **Suspension history.** §9.2 became `organizations.organization_suspensions`, with a closed `reason_code` list and one open period per gym.
+- **Platform authorship.** §9.3 was built in `20260913160100_organization_handover.sql` with `actor_person_id` and `actor_duty_assignment_id` instead of a role assignment, `actor_kind` and `reason_code`. `ck_organization_events_platform_actor` keeps the person and the duty together, never with a membership, and requires them on the events only Allfit authors.
+
+The data dictionary §5.1, §5.9 and §5.11 hold the physical form.
+
 ### 9.1 Estados
 
 `HU-BO-014`, `HU-BO-015` y `HU-BO-016` requieren organizaciones no reclamadas, canceladas y suspendidas. La operación `OP-ORG-018` ya usa `unclaimed`, pero el diccionario solo permite `active` y `closed`.
@@ -402,6 +433,16 @@ Modificar `organizations.organization_events`:
 - Todo helper `access_control.has_membership` o `access_control.has_capability` usado para escritura debe comprobar el estado operativo de la organización.
 
 ## 10. Suspensión de pago y pausa reversible
+
+**As built (`DB-P5-006`, closed).**
+
+- **The table.** `planning.service_access_blocks` was built as §10.2 recommends, in migration `20261012140000_a_subscription_has_a_life.sql`, for an unpaid subscription.
+- **A suspended gym.** Migration `20261018130000` opens one block per client when a gym is suspended (`source_kind = 'organization_suspension'`). Reactivating closes only the blocks of that suspension's event.
+- **Enforcement.** Migrations `20261105101000` and `20261105101100` enforce §10.3:
+  - every session of a program the gym assigned shows paused and does not start while any block that `blocks_future_sessions` is open;
+  - `access_control.can_access(..., 'contribute')` refuses while a block that `blocks_professional_contribution` is open, and `planning.require_training_grant` names the cause with `AF424`;
+  - reading never consults the block.
+- **No snapshot.** Nothing is written to a session, a grant, a relationship or an assignment. Closing a block recomputes from what is true now, and a day missed while it lasted stays missed.
 
 ### 10.1 Problema
 
