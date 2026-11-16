@@ -7672,8 +7672,14 @@ refused with a closed value, before any context is built.
     trap obeyed, none in the wrong language, a median of 2.6 seconds and about USD 0.009 a
     summary at AWS's list price. **Claude Haiku 4.5 does not**: 86 % shown, because it kept
     writing proportions after being told not to, and one answer half in English.
-  - It spent about USD 4.3. Sonnet 4.6 is proposed; the owner chooses, and no model is pinned
-    until then.
+  - OpenAI's open-weight `gpt-oss-120b`, the one OpenAI model the account can ask, was tried
+    once and does not pass: 8 % shown, 91 of 99 answers in the wrong shape. That says how it
+    answers the way the adapter asks for structure, not how it writes.
+  - It spent about USD 4.4.
+- **The owner chose Claude Sonnet 4.6 for the weekly summary on 16 November 2026, for now.**
+  The account cannot ask Claude 5.x or OpenAI's GPT models: AWS offers it no agreement for
+  them, which is a question for AWS and not a setting. Production pins the model in
+  `infra/production/main.tf`, and another takes its place only after the eval passes with it.
 - The port grows with the first capability that needs more: tools and several turns for the
   questions, streaming if an answer is too slow without it. The first slice needs neither.
 
@@ -7802,7 +7808,7 @@ meal-photo consent becoming part of this one.
   first slice are `E-SP-18` (`HU-SP-124` to `HU-SP-128`) and `E-STUDIO-15` (`HU-STUDIO-089` to
   `HU-STUDIO-091`); those of the other two slices are not written.
 - It does not choose a model for any capability. Meal-photo recognition has an eval and a
-  model; the weekly summary has an eval that proposes one, and none is pinned.
+  model; so does the weekly summary, chosen by the owner after its eval (decision 11).
 - It does not bring the assistant to the Backoffice.
 - It does not settle the data processing agreements or the international transfer under Law
   1581, like ADR-041 and ADR-045.
