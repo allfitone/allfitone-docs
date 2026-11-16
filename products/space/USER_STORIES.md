@@ -431,6 +431,10 @@ entrenamiento los ha validado.
 3. Puedo dejarlo en blanco y agregarlo después.
 4. Es de las categorías más delicadas y solo la ve un gimnasio si tengo relación con él.
 
+**Construida el 12 de noviembre de 2026 (`TECH-326`).** «Dolor y limitaciones» se abre
+desde Perfil y se puede llenar en cualquier momento; queda vacío hasta que la persona
+agregue algo.
+
 ### HU-SP-015 — Saltarme el onboarding y retomarlo después
 
 **Como** persona con prisa
@@ -694,6 +698,10 @@ ti— y esta dice **dónde y cómo** ocurre.
 3. No puedo editar la observación de un profesional; para eso existe el flujo de propuesta en sentido contrario.
 4. Dos correcciones seguidas producen dos versiones ordenadas; ninguna se pierde.
 
+**Para el contexto de salud, decidido el 12 de noviembre de 2026 (`TECH-326`, ADR-052).**
+Corregir un dolor, una limitación o una recuperación cambia ese registro y no guarda lo
+anterior: algo nuevo es un registro nuevo. El criterio 2 sigue valiendo para el perfil
+fitness, que sí guarda sus versiones.
 ### HU-SP-023 — Ver mi perfil fitness
 
 **Como** persona
@@ -789,6 +797,13 @@ peso y la estatura son una serie y se abren en Cuerpo.
 3. Esto no es historia clínica: no se me piden diagnósticos, laboratorios ni documentos médicos.
 4. Solo puedo declarar tipos del catálogo reducido de V1: dolor, limitación y recuperación.
 5. Puedo declarar sin conexión.
+
+**Construida el 12 de noviembre de 2026 (`TECH-326`).** En Perfil, «Dolor y limitaciones»
+lista lo activo, lo que está en recuperación y lo que ya terminó. Agregar pide qué es (dolor,
+limitación o recuperación), la zona si aplica, la descripción con sus palabras y desde
+cuándo; «hasta cuándo» solo en una recuperación. El lado del cuerpo va en la descripción.
+Cada registro se puede corregir o eliminar. Por ahora se declara con conexión: el
+criterio 5 queda pendiente.
 
 ---
 
