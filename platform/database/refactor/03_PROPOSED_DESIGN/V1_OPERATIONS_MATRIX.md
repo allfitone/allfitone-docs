@@ -355,7 +355,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Paginación y orden** | No aplica |
 | **Offline / concurrencia** | Falla cerrada. Dos peticiones concurrentes producen una sola persona: la unicidad se resuelve en la base, no en el cliente |
 | **Información sensible** | Datos identificativos básicos |
-| **Evento de dominio** | `identity.person_activated.v1` |
+| **Evento de dominio** | `identity.person_activated.v1`, escrito en el outbox en la misma transacción, con el identificador de la persona como único dato. Lo consume `OP-WL-006` |
 | **Reglas** | **Ya no crea la persona: la activa.** Es el único camino que lleva un Fitness ID a `active`, y no mueve ningún dato de sitio — lo que se respondió durante el onboarding ya está escrito sobre la persona. Studio puede invocarlo exclusivamente para que el titular autenticado complete su propia activación; nunca puede activar a otra persona ni adquirir por ello potestades organizacionales. Reactivar una persona ya `active` devuelve la misma y no vuelve a sellar `activated_at` |
 | **Falla cerrada** | Sin elegibilidad `pass` no hay persona, aunque la invitación exista y esté vigente |
 
@@ -5245,8 +5245,20 @@ worker envía el correo «Eres Founding Member #037» (`ADR-050`, decisión 5, `
 (`HU-BO-035`, `TECH-302`, allfitone#263; `ADR-050`, decisión 11). Las lecturas no se
 registran. Marcar y quitar la marca piden un motivo y escriben en `waitlist.signup_events`,
 que se borra con su inscripción. Quien recupera la marca no recupera su número: toma el
-siguiente que quede libre. La respuesta lleva `has_space_account`, que es `false` hasta que
-`OP-WL-006` enlace la inscripción con su cuenta.
+siguiente que quede libre. La respuesta lleva `has_space_account`, verdadero cuando
+`OP-WL-006` ya enlazó la inscripción con su cuenta, y los totales cuentan las enlazadas.
+
+`OP-WL-006` es el enlace con la cuenta (`HU-SP-119`, `TECH-299`, allfitone#265; `ADR-050`,
+decisión 7). Lo dispara `identity.person_activated.v1`, que `OP-IDN-003` escribe cuando la
+persona termina el onboarding. El worker lee de `identity` la persona, su correo verificado
+y la tienda del teléfono (`identity.prepare_account_link`) y se los entrega a
+`waitlist.link_signup`, las dos llamadas en una transacción y solo como actor worker. La
+inscripción se busca por el correo canónico; si no estaba confirmada, queda confirmada. El
+número de Founding Member se copia a la persona por la función propia de `identity` y queda
+en `waitlist.settled_founding_numbers`, de donde nunca vuelve a repartirse. Es idempotente:
+el mismo evento entregado dos veces no cambia nada. `OP-IDN-012` devuelve el número en
+`founding_member_number`. `OP-IDN-003` acepta además `store` (`app_store` o `google_play`),
+opcional, que queda en el intento y se copia a la inscripción al enlazar.
 
 El precio de fundador (`HU-SP-120`) no es una operación de este dominio: es un producto más de
 `OP-PAY-018` y `OP-PAY-019`, que se ofrece solo a quien tiene número de Founding Member.
@@ -5267,7 +5279,7 @@ Un evento se escribe en el outbox dentro de la transacción de su comando. Trans
 | Nutrición | `meal_recorded`, `meal_revised`, `meal_deleted`, `goal_version_proposed`, `goal_version_activated`, `goal_version_accepted`, `goal_version_rejected`, `goal_proposals_cancelled` As implemented (STUDIO-61..65): `goal_version_proposed` carries `goal_version_id`, `person_id`, `relationship_id` and `organization_id`, never targets or rationale. Ending a relationship writes no `goal_proposals_cancelled`. |
 | Pagos | `gateway_connected`, `gateway_revoked`, `plan_created`, `plan_version_published`, `plan_version_deprecated`, `subscription_started`, `subscription_suspended`, `subscription_reactivated`, `subscription_ended`, `payment_recorded`, `platform_plan_published`, `platform_plan_version_published`, `platform_subscription_started`, `platform_subscription_suspended`, `platform_subscription_reactivated`, `platform_subscription_ended`, `organization_premium_granted`, `organization_premium_revoked` |
 | Soporte | `platform_role_granted`, `platform_role_revoked` |
-| Lista de espera | `email_requested`, `signup_confirmed`, `founding_number_assigned` |
+| Lista de espera | `email_requested`, `signup_confirmed`, `founding_number_assigned` (consume `identity.person_activated`) |
 
 ## 9. Operaciones explícitamente fuera de V1
 
