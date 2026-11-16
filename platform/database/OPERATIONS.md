@@ -2369,8 +2369,13 @@ order by occurred_at;
 
 **What a mark does to the numbers.** A marked sign-up gives up its number, and the next
 confirmed sign-up in line gets it, with the Founding Member email. Taking the mark back does not
-return that number: the sign-up waits for the next one free. A sign-up that already has its
-account keeps its number when it is marked: the number is the person's by then.
+return that number: the sign-up waits for the next one free.
+
+**A mark on a sign-up that already has its account** (allfitone#268) takes the number from the
+sign-up and from the person, so the badge leaves the app, and gives it to nobody: it stays in
+`waitlist.settled_founding_numbers` and no email goes out. The record of the mark keeps it in
+`withheld_founding_number`, and taking the mark back returns that same number to both. The
+migration is `20261203090000_proven_fraud_takes_the_number_from_the_person`.
 
 **Deleting a test sign-up** is still `select waitlist.forget_signup('<id>')` as the owner role.
 The record of its review goes with it.

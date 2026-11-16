@@ -736,7 +736,7 @@ nunca se publica como ranking.
 
 1. Veo cada inscripción con su nombre, su correo, su fecha, si confirmó, su número de Founding Member, si ya creó su cuenta de Allfit Space y cuántos referidos válidos lleva.
 2. Busco por nombre, correo o código.
-3. Puedo marcar una inscripción como fraude, con un motivo. Deja de sumar a quien la invitó y, si era Founding Member y su plazo no había vencido, su número pasa a la siguiente persona (`HU-SP-118`).
+3. Puedo marcar una inscripción como fraude, con un motivo. Deja de sumar a quien la invitó y, si era Founding Member y su plazo no había vencido, su número pasa a la siguiente persona (`HU-SP-118`). Si ya tenía cuenta de Allfit Space, pierde el número y nadie lo hereda; si después quito la marca, lo recupera.
 4. Veo los totales: inscritas, confirmadas, con cuenta y por canal de origen. El canal sale del link con el que llegó la persona, o es «referido» o «directo».
 5. Nunca veo las huellas de dispositivo ni de conexión: solo si una inscripción se descartó y por qué.
 6. Exige `manage_platform_commercial`, AAL2 y actor humano auditado. Marcar fraude y quitar la marca quedan registrados con su motivo y con quien lo hizo. Ese registro se borra con la inscripción. Consultar la lista no se registra.

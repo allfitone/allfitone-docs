@@ -6747,7 +6747,9 @@ allfitone#261 (`TECH-298`); the deadline is not built. 15 November 2026, decisio
 team reviews the list in the Backoffice, marks fraud and takes a mark back, as built in
 allfitone#263 (`TECH-302`). 15 November 2026, decision 7: linking as built in allfitone#265
 and allfitone#266 (`TECH-299`); the owner chose that a sign-up has its account when the
-person finishes the onboarding, and that the store of the phone is recorded then.<br>
+person finishes the onboarding, and that the store of the phone is recorded then.
+15 November 2026, decisions 5 and 11: the owner chose that proven fraud takes the number
+from a person who already has her account, and that nobody inherits it (allfitone#268).<br>
 **Source:** the internal document «Estrategia de lanzamiento de Allfit Space» v1.0 (7 November
 2026), the epic `TECH-290` and its tickets.
 
@@ -6882,8 +6884,8 @@ follow from it:
      2 days before it.
    - **Linking.** When the holder links an account, the number is copied to the person through
      `identity`'s own function, reached through its `index.ts`. From then on the number belongs to
-     the person: it survives the waitlist's retention rule, it never moves again, and it is deleted
-     with the account.
+     the person: it survives the waitlist's retention rule, it never goes to anybody else, and it
+     is deleted with the account. Proven fraud takes it from her, and nobody inherits it.
    - **As built on 14 November 2026** (`TECH-298`, allfitone#261). Assignment and one of the
      three hand-overs exist; the rest waits.
      - **One rule.** `waitlist.fill_founding_numbers` gives each free number, lowest first, to
@@ -6904,13 +6906,20 @@ follow from it:
        number. The founders' notice of decision 10 carries it too.
      - **Fraud.** Marking a sign-up as fraud (`OP-WL-012`) clears its number and fills
        again. Taking the mark back (`OP-WL-016`) puts the sign-up back in line, for the
-       next number free (decision 11). A sign-up that already has its account is the
-       exception: see decision 7 and the known limits.
+       next number free (decision 11).
+     - **Fraud after the account exists** (`HU-SP-118`, criterion 6; allfitone#268). The
+       owner chose on 15 November 2026 that the person loses the number and nobody
+       inherits it. The mark clears it on the sign-up and, through `identity`'s own
+       function, on the person, so the badge goes. It stays settled, so the fill passes
+       over it and no email goes out. The record of the mark keeps the number it
+       withheld, and taking the mark back returns that same number to the sign-up and
+       to the person, without an email.
      - **Once linked, the number is settled.** Linking (decision 7) copies the number to
        `identity.people.founding_member_number` through `identity`'s own function and
        writes it in `waitlist.settled_founding_numbers`, a table that holds the number
        and nothing about anybody. A settled number is never free again: not when the
-       sign-up leaves the list, not when the list is deleted, not when the account is.
+       sign-up leaves the list, not when the list is deleted, not when the account is,
+       not when a fraud mark takes it from the person.
        A sign-up that is linked before it has a number settles it the moment the fill
        gives it one.
      - **Not built.** The deadline, its reminder and the hand-over when it passes wait for the
@@ -7015,16 +7024,18 @@ follow from it:
       reviewing it is the team's ordinary work. Marking and taking a mark back are
       recorded.
     - **A mark.** The sign-up stops counting for whoever invited it and gives up its
-      number, which goes to the next sign-up in line (decision 5). It needs a one-line
-      reason.
+      number, which goes to the next sign-up in line (decision 5). With an account the
+      number is withheld instead: the person loses it and nobody inherits it. It needs
+      a one-line reason.
     - **A mark can be taken back**, with a reason, because a mark can be a mistake. The
       sign-up returns to what it was before the mark, with two limits. The number it gave
-      up is somebody else's by then, so it waits in line for the next one free. And if
+      up is somebody else's by then, so it waits in line for the next one free; a
+      withheld number went to nobody, so that one is returned. And if
       its device came to count for the same inviter in the meantime, it returns as a
       repeated device instead of counting twice. It can be marked again.
     - **The record.** `waitlist.signup_events` is append-only. Each row keeps who acted,
-      the duty assignment they acted under, when, the reason, the number released and
-      what the sign-up was before the mark. **It is deleted with its sign-up**, when the
+      the duty assignment they acted under, when, the reason, the number released or
+      withheld and what the sign-up was before the mark. **It is deleted with its sign-up**, when the
       person leaves and in the 90-day sweep, because the reason is free text about a
       person.
     - **«Has an account».** The answer carries `has_space_account`, true once linking
@@ -7065,12 +7076,10 @@ follow from it:
   invariant 8 speaks of the database alone. How long the channel keeps messages is set in
   Slack, and on 14 November 2026 it was not yet decided. Until it is, a notice is removed by
   hand.
-- **Fraud after an account exists is not decided.** As built, a fraud mark on a sign-up
-  that is already linked stops it counting for its inviter and leaves the number with the
-  person, because decision 5 says a settled number never moves. `HU-SP-118`, criterion 6,
-  says the person loses the number on proven fraud and nobody inherits it. The owner has
-  not chosen between the two. Taking the number away later is possible: it is settled, so
-  nobody else can hold it.
+- **A withheld number is remembered by its sign-up alone.** The record of the mark is
+  deleted with the sign-up (decision 11). If a marked person leaves the list, the number
+  stays settled and nothing says whose it was: it cannot be returned, and it is never
+  given again.
 - **Deleting a Space account does not exist yet.** The foreign key from the sign-up to the
   person cascades, and the number stays settled, so the database already does what
   decision 8 and `HU-SP-119`, criterion 4, ask for. Nothing calls it.
@@ -7154,7 +7163,8 @@ follow from it:
 8. Two confirmations at the same instant never take the same Founding Member number, and the 101st
    confirmation gets none.
 9. A holder who misses the deadline, leaves or is marked as fraud before linking hands the same
-   number to the earliest-confirmed sign-up without one; after linking, the number never moves.
+   number to the earliest-confirmed sign-up without one; after linking, the number goes to nobody
+   else, and a fraud mark takes it from the person without anybody inheriting it.
 10. Reaching 5, 15 and 30 delivers three rewards once each, even when the job runs twice; an empty
     pool leaves the reward pending and delivers it when codes arrive.
 11. The 90-day sweep deletes unlinked sign-ups and strips linked ones, and the daily totals stay.
