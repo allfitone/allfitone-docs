@@ -7447,7 +7447,9 @@ answered the five questions this ADR had left open: a lawyer reviews the consent
 text is written, the meal-photo consent becomes part of it (decision 4), a professional is told
 when a client has not agreed (decision 5), stored summaries stay with the person (decision 8),
 and the assistant comes with Allfit Pro in Space and from Starter in Studio (decision 10). The
-rest is the design that follows from them, for review. Nothing is built.<br>
+rest is the design that follows from them, for review. The same day the owner asked for the
+first slice to be built. Its first piece, the AI consent, is allfitone#270; «What is built»
+says how far it goes.<br>
 **Date:** 15 November 2026<br>
 **Complements:** ADR-045, whose port is how every capability here asks a model.<br>
 **Opens the gate of:** ADR-021, for «IA contextual, recomendaciones automáticas, agentes».
@@ -7536,6 +7538,17 @@ The last section says where each gate stands.
   carried over is settled with that slice.
 - A lawyer reviews it before its text is written. It is the broadest option over sensitive
   data under Law 1581, and no text exists.
+- It lives in `intelligence`, as the recognition consent lives in `nutrition`.
+  `privacy.consent_events` records what a person decided about an organisation, scope by
+  scope; this consent is to the platform and carries no relationship and no scope.
+- One is in force for a person, or none. A later text ends the earlier one, withdrawing ends
+  it, and giving it back is a new consent. What she accepted and when is kept: a consent is
+  never deleted, and the only change it admits is its end, once.
+- The text in force is the API's to say, as the meal-photo consent follows its recogniser
+  (ADR-045, decision 10): her data cannot reach a vendor she did not accept, whatever order
+  code and migrations are released in. PostgreSQL keeps what is published and what she holds.
+- Only the text in force can be given. An app build that still shows an older text would
+  otherwise replace the consent she holds with a superseded one.
 
 **5. In Studio the assistant reads as the professional, and never more.**
 A run about a client needs two things, both checked in PostgreSQL at that moment:
@@ -7623,8 +7636,8 @@ without the assistant's part, never a made-up answer.
 
 | Entity | What it holds |
 | --- | --- |
-| `intelligence.consent_versions` | Each published text, by its date |
-| `intelligence.consents` | Who accepted which version and when, and who withdrew and when |
+| `intelligence.consent_versions` | Each published text, by its date. Built; none published |
+| `intelligence.consents` | Who accepted which version and when, and how and when it ended: `replaced` or `withdrawn`. Built |
 | `intelligence.runs` | Decision 7 |
 | `intelligence.weekly_summaries` | Decision 8: one a person a week, its text and its model |
 
@@ -7653,7 +7666,7 @@ second slice. No table is created for a slice before that slice is built (ADR-02
 | 4. Sensitive data, purposes and new scopes | Decisions 4, 5 and 6; the lawyer's review is pending |
 | 5. Operations, authorisation and transactions | Decisions 5 and 10, in outline |
 | 6. ADR and logical model approved | This ADR, proposed |
-| 7. Migrations, RLS, contracts, tests, observability | Not started |
+| 7. Migrations, RLS, contracts, tests, observability | Started: the AI consent (allfitone#270). Runs, ceilings and summaries are not started |
 | 8. Exit criteria and disposition | Not started |
 
 ### Open questions
@@ -7666,19 +7679,33 @@ For the design, before the first slice:
 
 2. Whether a professional accepts something of their own, since their programmes and questions
    reach the model too.
-3. Whether the AI consent lives in `intelligence`, as the recognition consent lives in
-   `nutrition`, or in `privacy`.
-4. The exact context contract of each summary.
-5. Whether the consent screen tells the person that her professionals see when she has not
+3. The exact context contract of each summary.
+4. Whether the consent screen tells the person that her professionals see when she has not
    agreed (decision 5).
-6. How a person who accepted only the meal-photo text is carried into the AI consent
+5. How a person who accepted only the meal-photo text is carried into the AI consent
    (decision 4).
 
 Pending, and not a question: the lawyer's review of decision 4.
 
+### What is built
+
+**The AI consent, in the database and in the API (allfitone#270).** Stories `HU-SP-124` and
+`HU-SP-125`, as far as a person can reach them without a screen.
+
+- Schema `intelligence` with `consent_versions` and `consents`, and three operations:
+  `OP-ITL-001` gives it, `OP-ITL-002` withdraws it, `OP-ITL-003` reads it. Their records are
+  in the operations matrix, section 7.13.
+- Three Space routes: `GET` and `PUT /space/v1/intelligence/consent`, and
+  `POST /space/v1/intelligence/consent/withdrawal`.
+- It is closed in production. No text is published and the API's text in force is null, so
+  the routes answer and nothing can be given.
+
+Not built: the consent text and its screen in Space, runs and ceilings, both summaries, what a
+professional is told in Studio, and the meal-photo consent becoming part of this one.
+
 ### What this decision does not do
 
-- It builds nothing and creates no table, route, scope or permission.
+- It creates no scope and no permission, and nothing for a slice before that slice is built.
 - It does not write the texts a person reads; no consent text exists. The stories of the
   first slice are `E-SP-18` (`HU-SP-124` to `HU-SP-128`) and `E-STUDIO-15` (`HU-STUDIO-089` to
   `HU-STUDIO-091`); those of the other two slices are not written.
@@ -7693,7 +7720,12 @@ Named when each slice is built. By class, the first slice owes at least:
 
 - `RLS`: a person reads and gives only her own consent; a run about a client is refused without
   an active grant, and refused without the client's consent, each seen to succeed first.
+  For the consent: `T-ITL-RLS-01` to `T-ITL-RLS-07`.
 - `INT`: invariants 2, 3, 4 and 7.
-- `IDEM`: giving and withdrawing the consent.
-- `API`: each route against the contract, with every closed failure.
+- `IDEM`: giving and withdrawing the consent: `T-ITL-IDEM-01` to `T-ITL-IDEM-03`.
+- `API`: each route against the contract, with every closed failure. For the consent:
+  `T-ITL-API-01` to `T-ITL-API-08` and `T-ITL-API-UNIT-01` to `T-ITL-API-UNIT-05`.
+- For the consent, beyond those classes: `T-ITL-CONSENT-01` to `T-ITL-CONSENT-11` for giving,
+  replacing, withdrawing and giving back, and `T-ITL-INT-01` to `T-ITL-INT-08` for one consent
+  in force, history that cannot be rewritten and two commands at the same instant.
 - An eval for each summary, with cases a capability must refuse.

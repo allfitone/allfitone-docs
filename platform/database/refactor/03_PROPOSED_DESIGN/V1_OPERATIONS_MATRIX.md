@@ -208,7 +208,8 @@ Toda sesión conserva la zona horaria de la persona en el momento del hecho. La 
 | Sistema | 10 | 1 | 11 |
 | Soporte | 6 | 5 | 11 |
 | Lista de espera | 12 | 3 | 15 |
-| **Total** | **145** | **78** | **223** |
+| Asistente | 2 | 1 | 3 |
+| **Total** | **147** | **79** | **226** |
 
 Algunas fichas cubren dos identificadores cuando la operación es simétrica —crear y editar un borrador, listar y consultar el detalle—. En esos casos el encabezado nombra ambos y el contenido aplica a los dos.
 
@@ -5265,6 +5266,79 @@ opcional, que queda en el intento y se copia a la inscripción al enlazar.
 
 El precio de fundador (`HU-SP-120`) no es una operación de este dominio: es un producto más de
 `OP-PAY-018` y `OP-PAY-019`, que se ofrece solo a quien tiene número de Founding Member.
+
+### 7.13 Assistant
+
+New domain of `ADR-053` (15 November 2026), `intelligence`. Its commercial name is copy and
+never a technical name. Rules that govern the whole domain:
+
+- **No data of a person reaches a model without her AI consent in force.** One consent covers
+  every capability, in Space and in Studio.
+- **The text in force is the API's to say.** PostgreSQL keeps what is published and what a
+  person holds; the version a capability requires travels with the code that decides where
+  her data goes.
+- **A consent is never deleted.** It ends, once, as `replaced` or `withdrawn`.
+- A capability's own operations are written by the pull request that builds it. Today the
+  domain has the consent and nothing that asks a model.
+
+| ID | Operation | Type | Actor |
+| --- | --- | --- | --- |
+| `OP-ITL-001` | Give my consent to the assistant | Command | `A2` |
+| `OP-ITL-002` | Withdraw my consent to the assistant | Command | `A2` |
+| `OP-ITL-003` | Read my consent to the assistant | Query | `A2` |
+
+---
+
+#### `OP-ITL-001` — Give my consent to the assistant
+
+| Field | Value |
+| --- | --- |
+| **Type** | Command |
+| **Surface** | `PUT /space/v1/intelligence/consent` |
+| **Actor** | `A2` |
+| **Required filters** | Own person |
+| **Transaction** | `intelligence.give_consent`, under the person's advisory lock |
+| **Idempotency** | `Idempotency-Key` and `Command-Id` |
+| **Pagination and order** | N/A |
+| **Offline / concurrency** | Online only. A consent given while she withdraws waits for the withdrawal and then stands |
+| **Sensitive information** | None in the request: a text version |
+| **Domain event** | None |
+| **Rules** | Only the text in force can be given. Holding it already writes nothing. A later text ends the earlier one as `replaced` and keeps it. Story `HU-SP-124` |
+| **Fails closed** | A version that is not the text in force, or any version while none is in force, `422`. Another person's consent, `403` |
+
+#### `OP-ITL-002` — Withdraw my consent to the assistant
+
+| Field | Value |
+| --- | --- |
+| **Type** | Command |
+| **Surface** | `POST /space/v1/intelligence/consent/withdrawal`, without a body |
+| **Actor** | `A2` |
+| **Required filters** | Own person |
+| **Transaction** | `intelligence.withdraw_consent`, under the person's advisory lock |
+| **Idempotency** | `Idempotency-Key` and `Command-Id`; the request hash covers the method and the path |
+| **Pagination and order** | N/A |
+| **Offline / concurrency** | Online only |
+| **Sensitive information** | None |
+| **Domain event** | None |
+| **Rules** | Ends the consent in force as `withdrawn`, for every capability and in both products. Nothing is deleted. Withdrawing when none is in force answers the same. It never depends on a text being in force. Story `HU-SP-125` |
+| **Fails closed** | Another person's consent, `403` |
+
+#### `OP-ITL-003` — Read my consent to the assistant
+
+| Field | Value |
+| --- | --- |
+| **Type** | Query |
+| **Surface** | `GET /space/v1/intelligence/consent` |
+| **Actor** | `A2` |
+| **Required filters** | Own person |
+| **Transaction** | `intelligence.read_consent` |
+| **Idempotency** | N/A |
+| **Pagination and order** | N/A |
+| **Offline / concurrency** | Online only |
+| **Sensitive information** | None |
+| **Domain event** | None |
+| **Rules** | Answers the text in force (`current_version`, null while there is none), the text she holds and since when, and when she last withdrew it while she holds none |
+| **Fails closed** | For anyone but the person herself the function answers nothing |
 
 ## 8. Catálogo de eventos de dominio
 
