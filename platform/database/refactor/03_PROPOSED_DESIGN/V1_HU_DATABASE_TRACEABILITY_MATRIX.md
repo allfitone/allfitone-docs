@@ -52,6 +52,11 @@ Este compromiso no afirma que las 86 HU estén implementadas. Una HU cuenta como
 > `deferred`: the capability is outside the V1 baseline and outside the ratified BETA scope,
 > and it enters through the gates of ADR-021. They are reclassified when the slice is approved
 > to build.
+>
+> On 15 November 2026 the owner asked for the first slice to be built. allfitone#270 builds the
+> AI consent of `HU-SP-124` and `HU-SP-125` in the database and the API, closed in production
+> until a consent text is published. Their priority and scope state are not changed here: that
+> classification is the owner's.
 
 ## 2. Reglas de clasificación
 
@@ -364,8 +369,8 @@ Lectura de columnas:
 | `HU-SP-121 — Recibir mis premios por referidos` | `imprescindible` | `included_v1` | `OP-WL-008` | `waitlist`: entregas por nivel y bolsa de códigos | PR pendiente (`TECH-301`); niveles que se suman, una entrega por nivel aunque el job corra dos veces, bolsa vacía | `TECH-304` verifica si una persona puede canjear un segundo código durante el primer periodo gratis. |
 | `HU-SP-122 — Enterarme de que Allfit Space abrió` | `imprescindible` | `included_v1` | `OP-WL-009` | `waitlist`: fecha de lanzamiento y marca de envío por inscripción | PR pendiente (`TECH-321`); una vez por inscripción, solo confirmadas, por tandas | |
 | `HU-SP-123 — Salir de la lista de espera` | `imprescindible` | `included_v1` | `OP-WL-005` + `OP-WL-010` | `waitlist`: borrado de la inscripción, sus tokens y huellas; totales diarios sin datos personales | PR pendiente (sin ticket); `GET` sin efecto, número que pasa a la siguiente persona, invitados que dejan de sumar, barrido a los 90 días | Historia nueva del 10 de noviembre de 2026 (Ley 1581). |
-| `HU-SP-124 — Autorizar que el asistente use mis datos` | `después` | `deferred` | `NEW-ITL-CONSENT-GIVE` | Sin objetos V1 | Not applicable while deferred | `ADR-053`, proposed on 15 November 2026. Deferred: no `intelligence` schema, table, function, permission or job until the slice passes the gates of ADR-021. |
-| `HU-SP-125 — Retirar mi autorización al asistente` | `después` | `deferred` | `NEW-ITL-CONSENT-WITHDRAW` | Sin objetos V1 | Not applicable while deferred | `ADR-053`, proposed on 15 November 2026. Deferred: no `intelligence` schema, table, function, permission or job until the slice passes the gates of ADR-021. |
+| `HU-SP-124 — Autorizar que el asistente use mis datos` | `después` | `deferred` | `OP-ITL-001` + `OP-ITL-003` | `intelligence.consent_versions`, `intelligence.consents` | `T-ITL-CONSENT-01` to `T-ITL-CONSENT-06`, `T-ITL-IDEM-01`, `T-ITL-IDEM-02`, `T-ITL-RLS-01` to `T-ITL-RLS-07`, `T-ITL-INT-01` to `T-ITL-INT-07`, `T-ITL-API-01` to `T-ITL-API-08` | `ADR-053`. Built in allfitone#270: the database and the API, closed in production because no consent text is published. Not built: the text and its screen in Space. |
+| `HU-SP-125 — Retirar mi autorización al asistente` | `después` | `deferred` | `OP-ITL-002` | `intelligence.consents` | `T-ITL-CONSENT-07` to `T-ITL-CONSENT-11`, `T-ITL-IDEM-03`, `T-ITL-RLS-03`, `T-ITL-INT-07`, `T-ITL-INT-08`, `T-ITL-API-06` | `ADR-053`. Built in allfitone#270: the database and the API, closed in production because no consent text is published. Not built: the text and its screen in Space. |
 | `HU-SP-126 — Ver el resumen de mi semana` | `después` | `deferred` | `NEW-ITL-WEEKLY-SUMMARY` | Sin objetos V1 | Not applicable while deferred | `ADR-053`, proposed on 15 November 2026. Deferred: no `intelligence` schema, table, function, permission or job until the slice passes the gates of ADR-021. |
 | `HU-SP-127 — Ver y borrar mis resúmenes` | `después` | `deferred` | `NEW-ITL-WEEKLY-SUMMARY-LIST` | Sin objetos V1 | Not applicable while deferred | `ADR-053`, proposed on 15 November 2026. Deferred: no `intelligence` schema, table, function, permission or job until the slice passes the gates of ADR-021. |
 | `HU-SP-128 — Saber cuándo un profesional usó el asistente con mis datos` | `después` | `deferred` | `NEW-ITL-CLIENT-SUMMARY` + `OP-PRV-015` | Sin objetos V1 | Not applicable while deferred | `ADR-053`, proposed on 15 November 2026. Deferred: no `intelligence` schema, table, function, permission or job until the slice passes the gates of ADR-021. |
