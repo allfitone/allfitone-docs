@@ -58,6 +58,7 @@
 | ADR-048 | A gym charges its clients through its own Mercado Pago account |
 | ADR-049 | Allfit One sends its email through Amazon SES |
 | ADR-050 | The Allfit Space waitlist is a domain of its own, and forgets who never joins |
+| ADR-053 | The assistant is one domain for Space and Studio, and a model sees only what its person agreed to |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -7356,3 +7357,246 @@ Scenario 8 is covered by `T-WL-INT-04` and `T-WL-INT-05`. Of scenario 9, leaving
 `T-WL-INT-04` and fraud by `T-WL-INT-06`; the deadline and linking wait for the code that
 builds them. Scenarios 15 and 16 are covered by `T-WL-RLS-02`, `T-WL-RLS-03`, `T-WL-INT-06`
 and `T-WL-INT-08`.
+
+---
+
+## ADR-053 — The assistant is one domain for Space and Studio, and a model sees only what its person agreed to
+
+**Status:** proposed. The owner decided four things on 15 November 2026: the assistant works in
+Space and in Studio from its first delivery, it reaches the Backoffice later and not at first,
+one consent covers everything it does, and its first capabilities are the six of decision 1. The
+rest is the design that follows from them, for review. Nothing is built.<br>
+**Date:** 15 November 2026<br>
+**Complements:** ADR-045, whose port is how every capability here asks a model.<br>
+**Opens the gate of:** ADR-021, for «IA contextual, recomendaciones automáticas, agentes».
+
+### Context
+
+Allfit One wants an assistant across its products. Its commercial name is not settled and is
+never a technical name (ADR-045, decision 7); here it is «the assistant», and its domain is
+`intelligence`.
+
+What exists today is the plumbing: one port to the model vendors (ADR-045) and one task over it,
+meal-photo recognition (ADR-041). There is no domain, no table, no route and no permission for
+an assistant.
+
+Earlier decisions already fence the ground:
+
+- No V1 scope or grant authorises AI context. `ai_context` stays apart from the seven scopes
+  (ADR-007, ADR-016).
+- A copy of data used as AI context is deleted when its run ends, and is never used to train a
+  model (ADR-012).
+- A process or a model may write a draft; publishing needs an authorised, auditable actor
+  (ADR-009, invariant 9).
+- A session a person hid from a relationship does not reach any AI context the organisation can
+  see (ADR-020).
+- What a model produced records the exact model (ADR-018).
+- Medical inference by AI is outside every scope (ADR-016), and nutrition is not clinical
+  (ADR-027).
+
+ADR-021 lets a deferred capability in only as a coherent vertical slice that passes eight gates.
+The last section says where each gate stands.
+
+### Decision
+
+**1. The first six capabilities, three in each product.**
+
+| Product | Capability | What comes out | Needs a model |
+| --- | --- | --- | --- |
+| Space | Weekly summary | What she trained, how she ate and what changed against the week before | yes |
+| Space | Suggestion for the next session | A draft session built from her last ones | yes |
+| Space | Questions about her own data | An answer, such as how much protein she ate this week | yes |
+| Studio | Client summary before a session | What the client did since the last one and what to look at | yes |
+| Studio | Draft of a programme or of an adjustment | A draft the professional reviews and publishes | yes |
+| Studio | Clients who stopped training or logging | A list | no |
+
+- The sixth is a query, not a model's work. It is an ordinary Studio read over what the
+  professional may already see, it sends nothing outside Allfit One, and it needs none of what
+  this ADR adds. The assistant's screen may show it; its story belongs to the domain it reads.
+- Out of scope: the Backoffice, for now; diagnosis and any medical inference; clinical nutrition;
+  anything the assistant would do on its own, such as publishing, assigning or messaging; and
+  training or tuning a model on anyone's data.
+
+**2. Words, and what they are not.**
+
+- A **capability** is one thing the assistant does, with its own prompt, context, checks, eval
+  and model (ADR-045, decision 3). It is not a feature flag.
+- A **run** is one time a capability asked a model for one actor. It is not a conversation log.
+- A **context** is the data a run sends to the model. It is not a copy kept anywhere.
+- The **AI consent** is a person's agreement that her data may be sent to a model. It is not a
+  grant to an organisation.
+- A **summary** is generated text about a period. It is not a professional observation, and it
+  is not part of the person's record of what she did.
+- A **draft** is content waiting for an actor. It is not a published version.
+
+**3. One domain, `intelligence`, for both products.**
+
+- It lives in `apps/api/src/domains/intelligence` and in the `intelligence` schema, and serves
+  `/space/v1` and `/studio/v1` with the same use cases. What differs between the two is the
+  projection, as everywhere else.
+- It reads other domains only through their public interface, with the actor's own identity,
+  and never their tables. It has no data of its own about training or nutrition.
+- Its operations are `OP-ITL-*` and its tests `T-ITL-*`.
+
+**4. One consent for everything the assistant does.**
+
+- It is the person's, given to Allfit One, and asked once: the first time she uses any
+  capability. It covers her training, her nutrition, her body measures and her health context.
+- It is a versioned text that names where the data goes, like the consent of ADR-045, decision
+  10. Another vendor is another text, and she is asked again.
+- Withdrawing it stops every capability for her at once, in Space and in Studio.
+- This is how `ai_context` enters: as a consent of the person to the platform, not as an eighth
+  scope of a grant. An organisation receives nothing new by it.
+- Each capability still sends only what it needs (decision 6). One consent is one question, not
+  one bucket.
+
+**5. In Studio the assistant reads as the professional, and never more.**
+A run about a client needs two things, both checked in PostgreSQL at that moment:
+
+- the professional may read that data now, under an active grant of the client to the
+  organisation, exactly as on screen. A hidden session is not there (ADR-020), and neither is
+  anything a frozen or revoked grant no longer shows;
+- the client holds the current AI consent.
+
+The read that builds the context is written to the access log in the same transaction, before
+the model is asked. If that write fails, nothing is sent. The client sees it in her access log
+like any other read.
+
+**6. Each capability declares what it sends, and identity never goes.**
+
+- A capability has a versioned context contract: the fields it may send, in the manner of the
+  field contracts of ADR-016. Nothing outside it reaches the model.
+- No context carries a name, an email, a document, a phone, a photo or a precise address. The
+  model is told about «the person».
+- A run records the version of the contract it used.
+
+**7. A run is recorded; what it sent is not.**
+`intelligence.runs` keeps who asked, about whom, which capability, which contract version, the
+exact model, the tokens in and out, the closed outcome and when. It keeps no context, no prompt
+and no answer. The context exists in memory for the run and is gone with it (ADR-012).
+
+**8. What a capability produces, and whose it is.**
+
+- **The weekly summary is the person's.** One is kept for each week, with the exact model that
+  wrote it (ADR-018). Asking again replaces it, and she can delete it.
+- **The client summary is not kept.** It is produced when the professional asks and lives in the
+  answer. Nothing derived from a client stays in a cache the organisation can read (ADR-020).
+- **A suggestion or a draft is a draft of `planning`.** The assistant calls planning's own draft
+  operations as the actor who asked, and the draft records that a model wrote it and which one.
+  Publishing or assigning is that actor's act (ADR-009). The assistant has no write path of its
+  own.
+- **An answer to a question** lives in its conversation. How long a conversation is kept is
+  decided with that capability (decision 12, third slice).
+
+**9. Generated, and not a doctor.**
+Every output says it was generated and from which of her data. No capability diagnoses, infers
+a medical condition or prescribes; its eval includes cases that must be refused.
+
+**10. A ceiling for every actor.**
+Runs are counted in PostgreSQL, per person and per professional. Over the ceiling a run is
+refused with a closed value, before any context is built. The numbers, and which plan includes
+the assistant, are set with pricing.
+
+**11. Models.**
+
+- Every capability asks through `packages/ai-provider` (ADR-045), on Amazon Bedrock, with
+  processing in the United States.
+- Each capability has its eval and reaches production only with a model that passed it.
+- The port grows with the first capability that needs more: tools and several turns for the
+  questions, streaming if an answer is too slow without it. The first slice needs neither.
+
+**12. Three slices, in this order.**
+
+1. **Summaries.** The consent, runs and ceilings, with the weekly summary in Space and the
+   client summary in Studio. They share one mechanism, need no conversation, and the second
+   proves decision 5, which is the hard part.
+2. **Drafts.** The suggestion for the next session in Space and the draft of a programme or an
+   adjustment in Studio.
+3. **Questions.** Her questions about her own data in Space.
+
+The list of clients who stopped training or logging is not in this order: it needs no model and
+can ship as a Studio story at any time.
+
+**13. It fails closed, and the product works without it.**
+A run ends as `answered`, `unavailable`, `refused` or `over-ceiling`. A failure shows the screen
+without the assistant's part, never a made-up answer.
+
+### Minimal logical model
+
+| Entity | What it holds |
+| --- | --- |
+| `intelligence.consent_versions` | Each published text, by its date |
+| `intelligence.consents` | Who accepted which version and when, and who withdrew and when |
+| `intelligence.runs` | Decision 7 |
+| `intelligence.weekly_summaries` | Decision 8: one a person a week, its text and its model |
+
+Drafts stay in `planning`; how a draft records the model that wrote it is settled with the
+second slice. No table is created for a slice before that slice is built (ADR-021).
+
+### Invariants
+
+1. No data of a person reaches a model without her current AI consent.
+2. A run for a professional contains nothing that professional could not read at that moment.
+3. The read behind a run is in the access log before the model is asked.
+4. A hidden session neither appears in nor changes a run for the organisation.
+5. No context carries a field that identifies the person.
+6. Nothing the assistant produces is published, assigned or sent without an actor's own act.
+7. A run keeps no context, no prompt and no answer.
+8. Withdrawing the consent stops new runs for that person at once, in both products.
+9. A capability reaches production only with a model that passed its eval.
+
+### Where the gates of ADR-021 stand
+
+| Gate | State |
+| --- | --- |
+| 1. Scope, actors and use cases | Decision 1; the stories are not written |
+| 2. Terms and counterexamples | Decision 2 |
+| 3. Ownership, provenance and lifecycle | Decisions 7 and 8 |
+| 4. Sensitive data, purposes and new scopes | Decisions 4, 5 and 6; the legal review is open |
+| 5. Operations, authorisation and transactions | Decisions 5 and 10, in outline |
+| 6. ADR and logical model approved | This ADR, proposed |
+| 7. Migrations, RLS, contracts, tests, observability | Not started |
+| 8. Exit criteria and disposition | Not started |
+
+### Open questions
+
+For the owner:
+
+1. **Legal review of one consent.** A single consent over training, nutrition, body and health
+   is the broadest option for sensitive data under Law 1581. It has not been reviewed.
+2. **The meal-photo consent.** It exists on its own (ADR-041). The proposal is that it becomes
+   part of the AI consent when the first slice ships, so a person is asked one thing.
+3. **Who gets the assistant, and how much.** Which Space and Studio plans include it, and the
+   ceilings of decision 10.
+4. **A client without the consent.** What the professional is told: that the assistant is not
+   available for this client, with or without the reason.
+5. **Stored summaries when the consent is withdrawn.** Whether they are deleted or stay hers
+   until she deletes them.
+
+For the design, before the first slice:
+
+6. Whether a professional accepts something of their own, since their programmes and questions
+   reach the model too.
+7. Whether the AI consent lives in `intelligence`, as the recognition consent lives in
+   `nutrition`, or in `privacy`.
+8. The exact context contract of each summary.
+
+### What this decision does not do
+
+- It builds nothing and creates no table, route, scope or permission.
+- It does not write the stories or the texts a person reads; no consent text exists.
+- It does not choose a model for any capability. Only meal-photo recognition has an eval.
+- It does not bring the assistant to the Backoffice.
+- It does not settle the data processing agreements or the international transfer under Law
+  1581, like ADR-041 and ADR-045.
+
+### Tests
+
+Named when each slice is built. By class, the first slice owes at least:
+
+- `RLS`: a person reads and gives only her own consent; a run about a client is refused without
+  an active grant, and refused without the client's consent, each seen to succeed first.
+- `INT`: invariants 2, 3, 4 and 7.
+- `IDEM`: giving and withdrawing the consent.
+- `API`: each route against the contract, with every closed failure.
+- An eval for each summary, with cases a capability must refuse.
