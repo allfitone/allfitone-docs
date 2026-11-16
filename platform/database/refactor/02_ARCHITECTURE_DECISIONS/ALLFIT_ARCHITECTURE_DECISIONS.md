@@ -5802,6 +5802,8 @@ ESLint rejects, everywhere else in the repository:
   - It asks for Converse's structured output, and holds the answer to the schema again.
   - A model without structured output, such as Amazon Nova, is asked for the same schema as the
     input of one tool it must call. Nothing holds the model to the schema there but that check.
+  - A model's own request fields, such as `reasoning_effort`, are passed on as the task's
+    configuration gives them.
   - It uses HTTP/1.1 and not the HTTP/2 the client defaults to, because nothing here uses
     bidirectional streams and Bun fails with that handler.
   - It has its own entry, `@allfitone/ai-provider/bedrock`, so a deployable that does not ask
@@ -5870,15 +5872,15 @@ errors.
 
 ### Tests
 
-- `T-AIP-UNIT-01..12`: the port and its adapters, against a fake Gateway and a fake Bedrock.
+- `T-AIP-UNIT-01..13`: the port and its adapters, against a fake Gateway and a fake Bedrock.
   They cover a valid answer, the three failures, the deadline, an error that carries neither the
-  request nor the answer, a schema Bedrock would not take, and the answer asked through a tool.
+  request nor the answer, a schema Bedrock would not take, the answer asked through a tool, and a model's own fields.
 - `T-REC-UNIT-12..14`: recognition over the port, including its schema through the Bedrock
   adapter.
 - The lint rule, proved with files that break it and files that keep it.
 - The recognition eval, which now also measures Bedrock models (`bun run eval bedrock:<id>`) and
   reports the tokens a photo cost each model. Gemini passed it after decision 8.
-- The first Bedrock measurements, on 15 November 2026. No Bedrock model passes yet:
+- The first Bedrock measurements, on 15 November 2026. One Bedrock model passes, Kimi K2.5:
 
 | Model | Foods named | Errors | Median | Tokens a photo (in / out) | Passes |
 | --- | --- | --- | --- | --- | --- |
@@ -5886,9 +5888,16 @@ errors.
 | Amazon Nova Pro, Bedrock | 80 % | 2 | 6.5 s | 3,389 / 594 | no |
 | Amazon Nova 2 Lite, Bedrock | 79 % | 0 | 3.4 s | 2,393 / 1,017 | no |
 | Amazon Nova Lite, Bedrock | 69 % | 0 | 7.0 s | 3,437 / 1,166 | no |
+| Kimi K2.5, Bedrock | 100 %, 99 %, 100 % (three runs) | 0 | 13.4 s | 2,470 / 1,000 | yes |
+| Kimi K3, Bedrock, reasoning off | 92 % | 1 | 14.1 s | 2,995 / 3,812 | no |
+| Kimi K3.1, Bedrock, reasoning off | 83 % | 2 | 5.6 s | 3,102 / 1,388 | no |
+| Kimi K3.1, Bedrock, as it comes | 75 % | 3 | 30.8 s | 3,040 / 5,967 | no |
 
   Nova Pro's two errors are answers that left out an item's `detail` list; on the ten it answered
-  in shape it named 96 %. Claude Haiku 4.5 could not be measured: the account has not sent
+  in shape it named 96 %. Kimi K2.5 passes on what it names, but its median of 13.4 s a photo
+  is close to the 15 s production allows, so it cannot replace Gemini without a longer deadline.
+  Kimi K3 and K3.1 reason before they answer and were asked with `reasoning_effort` set to
+  `none`. Claude Haiku 4.5 could not be measured: the account has not sent
   Anthropic's use case form. Claude 5.x and the OpenAI models are not available to the account.
 
 ---
