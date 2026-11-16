@@ -5880,7 +5880,7 @@ errors.
 - The lint rule, proved with files that break it and files that keep it.
 - The recognition eval, which now also measures Bedrock models (`bun run eval bedrock:<id>`) and
   reports the tokens a photo cost each model. Gemini passed it after decision 8.
-- The first Bedrock measurements, on 15 November 2026. One Bedrock model passes, Kimi K2.5:
+- The first Bedrock measurements, on 15 November 2026. Two Bedrock models pass, Claude Sonnet 4.6 and Kimi K2.5:
 
 | Model | Foods named | Errors | Median | Tokens a photo (in / out) | Passes |
 | --- | --- | --- | --- | --- | --- |
@@ -5892,13 +5892,16 @@ errors.
 | Kimi K3, Bedrock, reasoning off | 92 % | 1 | 14.1 s | 2,995 / 3,812 | no |
 | Kimi K3.1, Bedrock, reasoning off | 83 % | 2 | 5.6 s | 3,102 / 1,388 | no |
 | Kimi K3.1, Bedrock, as it comes | 75 % | 3 | 30.8 s | 3,040 / 5,967 | no |
+| Claude Sonnet 4.6, Bedrock | 93 % | 0 | 6.1 s | 3,356 / 795 | yes |
+| Claude Haiku 4.5, Bedrock | 74 % | 0 | 3.7 s | 3,355 / 668 | no |
 
   Nova Pro's two errors are answers that left out an item's `detail` list; on the ten it answered
   in shape it named 96 %. Kimi K2.5 passes on what it names, but its median of 13.4 s a photo
   is close to the 15 s production allows, so it cannot replace Gemini without a longer deadline.
   Kimi K3 and K3.1 reason before they answer and were asked with `reasoning_effort` set to
-  `none`. Claude Haiku 4.5 could not be measured: the account has not sent
-  Anthropic's use case form. Claude 5.x and the OpenAI models are not available to the account.
+  `none`. Claude Sonnet 4.6 passes at a median of 6.1 s, the slowest photo
+  11.7 s, inside that deadline. Claude Haiku 4.5 is as fast as Gemini and names 74 %. Claude 5.x
+  and the OpenAI models are not available to the account.
 
 ---
 
