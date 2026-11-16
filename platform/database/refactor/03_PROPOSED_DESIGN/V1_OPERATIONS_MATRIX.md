@@ -5278,14 +5278,24 @@ never a technical name. Rules that govern the whole domain:
   person holds; the version a capability requires travels with the code that decides where
   her data goes.
 - **A consent is never deleted.** It ends, once, as `replaced` or `withdrawn`.
+- **A run is recorded; what it sent is not.** `intelligence.runs` keeps who asked, the
+  contract version, the exact model, the tokens and how it ended; never a context, a prompt
+  or an answer. A run only ends, once.
+- **Everything that can refuse does so before anything is read**: the plan, the consent in
+  force and the ceiling, in that order, in the transaction that would read.
+- **No transaction is open while a model is asked.** Asking is two transactions with the
+  model between them.
 - A capability's own operations are written by the pull request that builds it. Today the
-  domain has the consent and nothing that asks a model.
+  domain has the consent and the weekly summary of Space.
 
 | ID | Operation | Type | Actor |
 | --- | --- | --- | --- |
 | `OP-ITL-001` | Give my consent to the assistant | Command | `A2` |
 | `OP-ITL-002` | Withdraw my consent to the assistant | Command | `A2` |
 | `OP-ITL-003` | Read my consent to the assistant | Query | `A2` |
+| `OP-ITL-004` | Ask for the summary of my week | Command | `A2` |
+| `OP-ITL-005` | List my weekly summaries | Query | `A2` |
+| `OP-ITL-006` | Delete one of my weekly summaries | Command | `A2` |
 
 ---
 
@@ -5339,6 +5349,57 @@ never a technical name. Rules that govern the whole domain:
 | **Domain event** | None |
 | **Rules** | Answers the text in force (`current_version`, null while there is none), the text she holds and since when, and when she last withdrew it while she holds none |
 | **Fails closed** | For anyone but the person herself the function answers nothing |
+
+#### `OP-ITL-004` — Ask for the summary of my week
+
+| Field | Value |
+| --- | --- |
+| **Type** | Command |
+| **Surface** | `POST /space/v1/intelligence/weekly-summaries`, with the Monday of the week, the zone of the device and the language |
+| **Actor** | `A2`, with Allfit Pro and the AI consent in force |
+| **Required filters** | Own person. The current week or the one before, Monday to Sunday in the zone sent |
+| **Transaction** | Two, with the model between them. `intelligence.begin_weekly_summary` decides, reads and opens the run under the person's advisory lock; `intelligence.finish_weekly_summary` closes it and keeps the summary. None is open while the model is asked |
+| **Idempotency** | `Idempotency-Key` and `Command-Id`. The run's id is the `Command-Id`: a request sent again answers what its run became and asks no model twice |
+| **Pagination and order** | N/A |
+| **Offline / concurrency** | Online only. Two requests at once for the last place under the ceiling: one takes it, the other is over the ceiling. The same request sent again while the model is asked waits (`409`) |
+| **Sensitive information** | The request carries none. The model is shown the context contract `weekly-summary/1` and nothing else: training and nutrition of two weeks and the active nutrition goal, with no identity, notes, body measures or health context. Neither the context nor the answer is logged |
+| **Domain event** | None |
+| **Rules** | One summary is kept a week; asking again replaces it. A week with nothing logged asks no model and answers so. A provisional ceiling of four runs a calendar week (ADR-053, decision 10); a failed or refused run takes no place. The summary records the exact model and which of her data it was written from. Reads go through `execution.read_my_sessions_between`, `nutrition.read_daily_summaries` and `nutrition.read_my_goals`, as herself. Story `HU-SP-126` |
+| **Fails closed** | Without Pro, `403 plan-limit-reached` naming `weekly_summary` (`AF402`). Without the consent in force, `403 consent-required` (`AF432`). Over the ceiling, `429` with `renews_at`. A week that is neither, or an unknown zone, `422`. No model configured, a model that does not answer, or an answer that may not be shown, `503`, and nothing is kept. Sent again after its summary was deleted, `410`. Another person, `403` |
+
+#### `OP-ITL-005` — List my weekly summaries
+
+| Field | Value |
+| --- | --- |
+| **Type** | Query |
+| **Surface** | `GET /space/v1/intelligence/weekly-summaries` |
+| **Actor** | `A2` |
+| **Required filters** | Own person |
+| **Transaction** | `intelligence.list_weekly_summaries` |
+| **Idempotency** | N/A |
+| **Pagination and order** | The latest week first. Opaque cursor; 20 by default, 50 at most |
+| **Offline / concurrency** | Online only |
+| **Sensitive information** | Her own summaries. No organisation and no professional reads them: they belong to no scope she shares |
+| **Domain event** | None |
+| **Rules** | Needs neither Pro nor the consent: what she has stays hers. Story `HU-SP-127` |
+| **Fails closed** | For anyone but the person herself the function answers an empty page |
+
+#### `OP-ITL-006` — Delete one of my weekly summaries
+
+| Field | Value |
+| --- | --- |
+| **Type** | Command |
+| **Surface** | `DELETE /space/v1/intelligence/weekly-summaries/{weekStartsOn}`, without a body |
+| **Actor** | `A2` |
+| **Required filters** | Own person |
+| **Transaction** | `intelligence.delete_weekly_summary` |
+| **Idempotency** | `Idempotency-Key` and `Command-Id`; the request hash covers the method and the path |
+| **Pagination and order** | N/A |
+| **Offline / concurrency** | Online only |
+| **Sensitive information** | None |
+| **Domain event** | None |
+| **Rules** | Only the summary goes: no session and no meal is touched, and the run that wrote it stays. Never limited by a plan or by the consent. Story `HU-SP-127` |
+| **Fails closed** | No summary for that week, or another person's, `404` |
 
 ## 8. Catálogo de eventos de dominio
 
