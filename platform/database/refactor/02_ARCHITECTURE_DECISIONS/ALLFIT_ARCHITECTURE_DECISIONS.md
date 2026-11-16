@@ -5140,8 +5140,9 @@ proveedores externos y a la IA nutricional. El resto de ADR-027 sigue vigente.
 
 > **Amended by [ADR-045](#adr-045-ai-models-are-used-through-one-port-and-each-task-picks-its-own-with-its-eval),
 > decision 10**, on 15 November 2026: recognition moves from Gemini through Vercel AI Gateway to
-> Claude Sonnet 4.6 on Amazon Bedrock, under a consent text of its own. It is built and not yet
-> applied; until it is, what this ADR says about the vendor still describes production.
+> Claude Sonnet 4.6 on Amazon Bedrock, under a consent text of its own. It was applied in
+> production on 16 November 2026; what this ADR says about the vendor describes the route that
+> answered until then, which stays in the code.
 
 ### Contexto
 
@@ -5730,9 +5731,9 @@ que quedó sin movimiento.
 ## ADR-045 — AI models are used through one port, and each task picks its own with its eval
 
 **Status:** in review. The code is built (allfitone#187) and not merged. The recognition eval
-passed again on 15 November 2026 with what decision 8 changes. Decision 10 is built
-(allfitone#267), not merged and not applied: production still answers through the Gateway.<br>
-**Date:** 6 November 2026, revised 15 November 2026<br>
+passed again on 15 November 2026 with what decision 8 changes. Decision 10 was applied
+in production on 16 November 2026 (allfitone#187): food recognition answers on Amazon Bedrock.<br>
+**Date:** 6 November 2026, revised 15 and 16 November 2026<br>
 **Complements:** ADR-041, whose food recognition now asks its model through this port.
 
 ### Context
@@ -5800,8 +5801,8 @@ ESLint rejects, everywhere else in the repository:
 
 **5. Today's adapters:**
 
-- **Vercel AI Gateway, with the AI SDK.** It is the one in production until decision 10 is
-  applied. It asks for zero
+- **Vercel AI Gateway, with the AI SDK.** It answered in production until decision 10 was
+  applied on 16 November 2026, and stays as a route. It asks for zero
   retention on every request, always, and the task says which inference providers the request
   may go through: recognition, only through Vertex.
 - **Amazon Bedrock, with the Converse API of the AWS SDK.**
@@ -5817,7 +5818,7 @@ ESLint rejects, everywhere else in the repository:
   - It has its own entry, `@allfitone/ai-provider/bedrock`, so a deployable that does not ask
     Bedrock does not load its client.
   - The recognition eval uses it to measure Bedrock models with the credits, and food
-    recognition answers through it once decision 10 is applied.
+    recognition answers through it in production since decision 10 was applied.
 - **Memory**, for tests.
 
 **6. A schema is only as portable as the strictest vendor's structured output.**
@@ -5878,6 +5879,14 @@ AWS credits pay for Bedrock. This amends ADR-041, which names Gemini through the
 - **The Gateway route stays** until the switch has proven itself. Going back to it after people
   accepted the new text would ask them again without end, because the database answers the
   latest version a person accepted. It fails closed.
+- **Applied on 16 November 2026.** The migration published `2026-11-15`. Terraform was applied
+  to four resources only: the API's task role and its policy, the task definition, and the
+  deploy role's policy. The last one is easy to miss: the pipeline must be allowed to pass a
+  new task role to ECS, or every later release fails when it registers the revision. A plan
+  after the apply shows no changes.
+- **The app build did not come first.** The owner ordered the switch without it. A phone on a
+  build older than allfitone#187 shows the first text and records the new version until it is
+  updated. The app is not in the stores, so those are team phones.
 
 ### Invariants
 
@@ -5897,8 +5906,8 @@ AWS credits pay for Bedrock. This amends ADR-041, which names Gemini through the
 - It does not settle the DPAs or the international transfer under Law 1581, like ADR-041.
 - It does not confirm that the AWS Activate credits cover Anthropic models on Bedrock, nor
   what a photo costs there.
-- It does not validate the Terraform of decision 10: it was written without a `terraform`
-  binary at hand.
+- No photo was recognised through the app in production after the switch. What was checked is
+  the role's policy by simulation, in both directions, a clean plan and the API's health.
 - The eval scores the foods a model names, not the detail of its estimates. A model that named
   every food and guessed the nutrients badly would pass.
 
