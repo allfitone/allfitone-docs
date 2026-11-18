@@ -1075,7 +1075,7 @@ Lo que queda de este lado es solo saber qué autorizó y qué no.
 
 ### HU-STUDIO-050 — Cancelar una asignación
 
-**Como** coach con asignación efectiva, admin u owner
+**Como** coach o suplente con asignación efectiva
 **quiero** cancelar un programa que administramos
 **para** detenerlo cuando ya no aplica.
 
@@ -1086,6 +1086,8 @@ Lo que queda de este lado es solo saber qué autorizó y qué no.
 1. Se cancelan **solo** las sesiones futuras que no se empezaron.
 2. Cancelar **no borra** historial: lo ya ejecutado y las sesiones pasadas permanecen.
 3. La asignación no desaparece del historial personal de la persona.
+4. Solo cancela quien atiende a la persona. Un admin u owner que no la atiende no cancela:
+   si el coach ya no está, primero reasigna la relación.
 
 ---
 
