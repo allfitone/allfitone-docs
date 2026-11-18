@@ -43,6 +43,7 @@ generado son el inventario exhaustivo.
 | Asignar versión | `POST /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments` | `OP-PLN-010` | `ProgramAssignmentCreate` | `ProgramAssignment` | `no-store` |
 | List a relationship's assignments | `GET /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments` | `OP-PLN-018` | `limit`, `cursor` | `RelationshipAssignmentPage` | `private, no-store` |
 | Move a managed session | `PATCH /studio/v1/organizations/{organizationId}/planned-sessions/{plannedSessionId}` | `OP-PLN-012` | `PlannedSessionReschedule` | `RelationshipAssignmentSession` | `no-store` |
+| Read what an assignment prescribes | `GET /studio/v1/organizations/{organizationId}/assignments/{assignmentId}/prescription` | `OP-PLN-037` | — | `AssignmentPrescription` | `private, no-store` |
 | Adjust a prescription | `POST /studio/v1/organizations/{organizationId}/assignments/{assignmentId}/prescription-revisions` | `OP-PLN-013` | `PrescriptionRevisionCreate` | `PrescriptionRevision` | `no-store` |
 | Cancel a managed assignment | `POST /studio/v1/organizations/{organizationId}/assignments/{assignmentId}/cancellation` | `OP-PLN-014` | command headers + empty object | `AssignmentCancellation` | `no-store` |
 | Search movements, ours included | `GET /studio/v1/organizations/{organizationId}/movements` | `OP-CAT-009` | query `q`, `discipline`, `include_archived`, `limit`, `cursor` | `StudioMovementPage` | `private, no-store` |

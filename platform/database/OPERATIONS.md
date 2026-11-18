@@ -641,7 +641,8 @@ termination.
 Migration `20261105090000_a_coach_manages_what_the_gym_assigned.sql` lets the
 coach who attends a client move a session of a program the gym manages
 (`OP-PLN-012`), adjust its prescription for that one person (`OP-PLN-013`), and
-lets the coach, an administrator or the owner stop it (`OP-PLN-014`). It adds
+lets the coach, an administrator or the owner stop it (`OP-PLN-014`; only the
+coach since migration `20261208090000`, in the last section). It adds
 `planned_sessions.revision_number`, `planning.planned_session_reschedules` and
 `planning.prescription_revisions`, the row policies and two contract scopes
 (`planned_session_lookup`, `assignment_administration`). It also redefines
@@ -676,9 +677,9 @@ where period.end_reason = 'cancelled'
 
 Three domain events are enqueued and no worker consumes them yet:
 `planning.session_rescheduled.v1`, `planning.prescription_revised.v1` and
-`planning.assignment_cancelled.v1`. Administrators and owners can cancel, but
-`OP-PLN-018` refuses them, so Studio has no read that gives them an assignment
-id yet.
+`planning.assignment_cancelled.v1`. Administrators and owners could cancel, but
+`OP-PLN-018` refuses them, so Studio had no read that gave them an assignment
+id. Migration `20261208090000` took that permission away.
 
 `T-PLN-MANAGE-01` covers authorization, the three commands, Space's adjusted
 reads and every row policy; `managed-assignment-concurrency.test.ts` covers a
@@ -2447,3 +2448,69 @@ Tests:
 - Emails: `waitlist-emails.test.ts` in `packages/notifications`, for the line at each level.
 - space-web: `waitlist.test.ts` for the line and the parsers, `e2e/waitlist.spec.ts` and
   `e2e/waitlist-links.spec.ts` for the form and the page.
+
+## Only who attends her stops a program, and the coach reads what she adjusts (TECH-330, HU-STUDIO-049)
+
+Two migrations close two gaps of the contract around a managed assignment. Neither adds a
+table, a policy or a grant on a table.
+
+**`20261208090000_only_who_attends_her_stops_a_program.sql`** replaces
+`planning.cancel_managed_assignment` with the same body and one argument changed:
+`manage_relationships` no longer stands in for attending the person.
+
+- The holder or an accepted cover cancels, with the training shared at `contribute`.
+- An administrator or an owner who does not coach answers `403 forbidden`, like staff. One
+  who coaches, but not her, answers `404`.
+- An organization whose coach left reassigns the relationship first (`OP-REL-003`). Ending
+  the relationship still detaches every program it gave.
+
+It was a permission nobody could use. `OP-PLN-018` answers only who holds or covers the
+relationship, and no other read of Studio returns an assignment id. Giving it a screen meant
+showing the person's training to somebody who does not attend her, so it was removed instead
+(decision of 17 November 2026). `HU-STUDIO-050` says so.
+
+**`20261209090000_a_coach_reads_the_prescription_she_adjusts.sql`** adds
+`planning.read_assignment_prescription` (`OP-PLN-037`,
+`GET /studio/v1/organizations/{organizationId}/assignments/{assignmentId}/prescription`) and
+its helper `planning.assigned_routine_item`, which the runtime role cannot call.
+
+- `OP-PLN-013` takes a `planned_step_id` and no read of Studio returned one. A published
+  routine is read without the ids of its steps, and `OP-PLN-018` names a step only once it
+  carries an adjustment, so the first adjustment had no id to send.
+- The answer is the assigned version, never a newer one: each routine once, its steps as
+  published with their ids, and on each step the adjustments in force, the latest of each
+  kind.
+- It answers who `OP-PLN-018` answers: the holder or an accepted cover, with the training
+  shared at `read`. Without the grant it answers `403 scope-required`. Nobody new reads the
+  person's training.
+- Every read writes an access event under `planning.program_assignments` before anything is
+  returned. Without a request id the read does not happen.
+- It follows the relationship, not the management period. A detached or cancelled program is
+  still read while the relationship lasts, and answers `404` once it ends.
+
+**Deploying it.** The API runs before the migrations. Until `20261209090000` is applied the
+new route answers `503`, and nothing calls it: Studio's screen for `HU-STUDIO-049` is not
+built. Cancelling keeps working in between, with the old rule.
+
+**What to check after applying.** The runtime role can call the read and not its helper. This
+read-only query must return `t` and `f`:
+
+```sql
+select has_function_privilege('allfit_api',
+         'planning.read_assignment_prescription(uuid, uuid, uuid)', 'execute'),
+       has_function_privilege('allfit_api',
+         'planning.assigned_routine_item(uuid, uuid)', 'execute');
+```
+
+When this was written, on 17 November 2026, the pull request was not merged and nothing was
+deployed. Both changes had been tested against a local database.
+
+Tests:
+
+- pgTAP: `T-PLN-MANAGE-01`. The read is `API-04`, `INT-57..64`, `RLS-37..48` and `RLS-51`;
+  the narrowed cancellation is `RLS-29..32`, `RLS-49/50` and `IDEM-06/07`.
+- API: `handlers/studio.test.ts` (`T-PLN-API-187/188`) for the route against the contract,
+  and `planning-projections.test.ts` (`T-PLN-API-186`) for what PostgreSQL returns.
+- `managed-assignment-concurrency.test.ts` cancels as the coach.
+
+The PR records mutation evidence for every guard of the read and for the narrowed command.
