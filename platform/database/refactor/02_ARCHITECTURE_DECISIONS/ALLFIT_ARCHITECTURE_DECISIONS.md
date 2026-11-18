@@ -7439,7 +7439,11 @@ and `T-WL-INT-08`.
 
 ## ADR-053 — The assistant is one domain for Space and Studio, and a model sees only what its person agreed to
 
-**Status:** proposed. The owner decided five things on 15 November 2026: the assistant works in
+**Status:** accepted by the owner on 16 November 2026. The stories of its first slice stay
+deferred until the consent text and its screen exist. The same day the owner settled three
+things for the weekly summary: what a model is shown (decision 6), a provisional ceiling
+(decision 10) and a budget for its eval (decision 11). The owner decided five things on
+15 November 2026: the assistant works in
 Space and in Studio from its first delivery, it reaches the Backoffice later and not at first,
 one consent covers everything it does, its first capabilities are the six of decision 1, and
 nothing that identifies a person is sent to a model (decision 6). The same day the owner
@@ -7447,9 +7451,9 @@ answered the five questions this ADR had left open: a lawyer reviews the consent
 text is written, the meal-photo consent becomes part of it (decision 4), a professional is told
 when a client has not agreed (decision 5), stored summaries stay with the person (decision 8),
 and the assistant comes with Allfit Pro in Space and from Starter in Studio (decision 10). The
-rest is the design that follows from them, for review. The same day the owner asked for the
-first slice to be built. Its first piece, the AI consent, is allfitone#270; «What is built»
-says how far it goes.<br>
+rest is the design that follows from them. The same day the owner asked for the first slice
+to be built. Its first piece, the AI consent, is allfitone#270, and its second, the weekly
+summary's backend, is allfitone#271; «What is built» says how far each goes.<br>
 **Date:** 15 November 2026<br>
 **Complements:** ADR-045, whose port is how every capability here asks a model.<br>
 **Opens the gate of:** ADR-021, for «IA contextual, recomendaciones automáticas, agentes».
@@ -7549,6 +7553,8 @@ The last section says where each gate stands.
   code and migrations are released in. PostgreSQL keeps what is published and what she holds.
 - Only the text in force can be given. An app build that still shows an older text would
   otherwise replace the consent she holds with a superseded one.
+- A capability asked without the consent in force is refused by PostgreSQL with `AF432`,
+  before anything of hers is read. The API answers `403 consent-required`.
 
 **5. In Studio the assistant reads as the professional, and never more.**
 A run about a client needs two things, both checked in PostgreSQL at that moment:
@@ -7575,17 +7581,35 @@ decided it on 15 November 2026 with that cost stated.
 - What a person types into a question is hers to choose. The rule covers what Allfit One
   builds and sends.
 - A run records the version of the contract it used.
+- **The weekly summary's contract is `weekly-summary/1`**, as the owner approved it on
+  16 November 2026: her sessions of the week and of the week before (exercises, work sets,
+  loads, duration and her own records), her daily totals of energy, protein, carbohydrates and
+  fat, and her active nutrition goal. No notes, no session titles, no body measures and no
+  health context. The contract lives in `packages/weekly-summary`, with the code that builds
+  the one document a model is shown.
+- Every figure a summary may state is worked out before the model is asked. A number in an
+  answer that the document does not have is an invented one, and the answer is refused. A
+  proportion is a figure too, in words or not, and the document gives none.
 
 **7. A run is recorded; what it sent is not.**
 `intelligence.runs` keeps who asked, about whom, which capability, which contract version, the
 exact model, the tokens in and out, the closed outcome and when. It keeps no context, no prompt
 and no answer. The context exists in memory for the run and is gone with it (ADR-012).
 
+- A run only ends, once. The table refuses every other change and every delete.
+- Asking is two transactions with the model between them: the first decides, reads and opens
+  the run; the second closes it. No transaction is open while a model is asked.
+- A run nobody closed is closed by the person's next request, as `unavailable`, once it is
+  five minutes old. A process that dies between the two transactions would otherwise hold a
+  place under her ceiling for ever.
+
 **8. What a capability produces, and whose it is.**
 
 - **The weekly summary is the person's.** One is kept for each week, with the exact model that
-  wrote it (ADR-018). Asking again replaces it, and she can delete it. Withdrawing the consent
-  stops new runs and deletes nothing: the summaries she has stay hers until she deletes them.
+  wrote it (ADR-018) and which of her data it was written from. Asking again replaces it, and
+  she can delete it. Withdrawing the consent or leaving Pro stops new runs and deletes nothing:
+  the summaries she has stay hers until she deletes them, and she lists and deletes them
+  without either.
 - **The client summary is not kept.** It is produced when the professional asks and lives in the
   answer. Nothing derived from a client stays in a cache the organisation can read (ADR-020).
 - **A suggestion or a draft is a draft of `planning`.** The assistant calls planning's own draft
@@ -7607,12 +7631,55 @@ refused with a closed value, before any context is built.
 - **In Studio** it comes from the Starter plan up; the Free plan does not have it.
 - The entitlement is resolved in PostgreSQL like any other, before the ceiling.
 - The numbers of the ceilings are set with pricing.
+- **Until then the weekly summary has a provisional ceiling**, set by the owner on
+  16 November 2026: one summary a week and three more tries, four runs. It is a constant of
+  the operation and not a row of the plan catalogue, because no plan has a number yet.
+- The ceiling counts the runs a person asked in her own calendar week, Monday to Sunday in
+  the zone her device sends, whichever week they are about. A run still open and a run
+  answered take a place. A run the model failed, one whose answer was refused and a week with
+  nothing logged take none, so an outage costs her nothing. Over the ceiling is a recorded
+  run, and she is told when it renews.
+- **In Space the entitlement is asked of `payments.resolve_pro`, not of the plan catalogue.**
+  There, a function no plan version declares limits nobody (DT-018), which protects what
+  people already had; this is new and costs money each time, so nobody has it by a plan's
+  silence. Pro through an organisation counts. The refusal is `AF402` naming
+  `weekly_summary`.
+- Everything that can refuse does so before anything of hers is read.
 
 **11. Models.**
 
 - Every capability asks through `packages/ai-provider` (ADR-045), on Amazon Bedrock, with
   processing in the United States.
 - Each capability has its eval and reaches production only with a model that passed it.
+- Without a model configured a capability is closed: asking answers `503` before anything is
+  decided or read. That is its switch.
+- The owner approved up to USD 10 of AWS credits for the weekly summary's eval on
+  16 November 2026, for that eval only. A model passes with at least 90 % of its answers
+  shown, none that obeys a trap and none in the wrong language; the number is a proposal.
+  Passing is necessary and not sufficient: somebody reads the answers before a model is
+  chosen.
+- **The eval was run on 16 November 2026**, on Bedrock with `us.` inference profiles: 33
+  invented weeks, nine of them traps, three times each, four runs. Claude 5.x models were not
+  available to the account, so the candidates were Claude Haiku 4.5 and Claude Sonnet 4.6.
+  - The first run found two faults in the check and none in the model: it did not read
+    «22 135 kg», thousands grouped with a space, and a week did not state its seven days, so
+    «6 de 7 días» was refused. Both are fixed.
+  - Reading the answers found what the check could not: Haiku stated proportions in words in
+    ten or eleven answers a run, and several were false, such as a volume «doubled» that had
+    risen by 28 %. Sonnet said «double» three or four times a run, each time exactly true. A
+    proportion in words is now refused (decision 13).
+  - With the final prompt and checks, **Claude Sonnet 4.6 passes**: 98 % of answers shown, no
+    trap obeyed, none in the wrong language, a median of 2.6 seconds and about USD 0.009 a
+    summary at AWS's list price. **Claude Haiku 4.5 does not**: 86 % shown, because it kept
+    writing proportions after being told not to, and one answer half in English.
+  - OpenAI's open-weight `gpt-oss-120b`, the one OpenAI model the account can ask, was tried
+    once and does not pass: 8 % shown, 91 of 99 answers in the wrong shape. That says how it
+    answers the way the adapter asks for structure, not how it writes.
+  - It spent about USD 4.4.
+- **The owner chose Claude Sonnet 4.6 for the weekly summary on 16 November 2026, for now.**
+  The account cannot ask Claude 5.x or OpenAI's GPT models: AWS offers it no agreement for
+  them, which is a question for AWS and not a setting. Production pins the model in
+  `infra/production/main.tf`, and another takes its place only after the eval passes with it.
 - The port grows with the first capability that needs more: tools and several turns for the
   questions, streaming if an answer is too slow without it. The first slice needs neither.
 
@@ -7629,8 +7696,15 @@ The list of clients who stopped training or logging is not in this order: it nee
 can ship as a Studio story at any time.
 
 **13. It fails closed, and the product works without it.**
-A run ends as `answered`, `unavailable`, `refused` or `over-ceiling`. A failure shows the screen
-without the assistant's part, never a made-up answer.
+A run ends as `answered`, `unavailable`, `refused`, `over-ceiling` or `nothing-logged`. A
+failure shows the screen without the assistant's part, never a made-up answer.
+
+- `refused` is an answer that may not be shown: the wrong shape, a number the context does
+  not have, a proportion said in words («almost double»), a part about something she did not
+  log, a link, markup, or anything that reads as medical. The run keeps what it cost; what
+  the answer said is neither kept nor logged.
+- `nothing-logged` is a run that asked no model, because there was nothing to send. It was
+  added with the weekly summary.
 
 ### Minimal logical model
 
@@ -7638,8 +7712,8 @@ without the assistant's part, never a made-up answer.
 | --- | --- |
 | `intelligence.consent_versions` | Each published text, by its date. Built; none published |
 | `intelligence.consents` | Who accepted which version and when, and how and when it ended: `replaced` or `withdrawn`. Built |
-| `intelligence.runs` | Decision 7 |
-| `intelligence.weekly_summaries` | Decision 8: one a person a week, its text and its model |
+| `intelligence.runs` | Decision 7. Built |
+| `intelligence.weekly_summaries` | Decision 8: one a person a week, its four parts, its sources and its model. Built |
 
 Drafts stay in `planning`; how a draft records the model that wrote it is settled with the
 second slice. No table is created for a slice before that slice is built (ADR-021).
@@ -7665,21 +7739,23 @@ second slice. No table is created for a slice before that slice is built (ADR-02
 | 3. Ownership, provenance and lifecycle | Decisions 7 and 8 |
 | 4. Sensitive data, purposes and new scopes | Decisions 4, 5 and 6; the lawyer's review is pending |
 | 5. Operations, authorisation and transactions | Decisions 5 and 10, in outline |
-| 6. ADR and logical model approved | This ADR, proposed |
-| 7. Migrations, RLS, contracts, tests, observability | Started: the AI consent (allfitone#270). Runs, ceilings and summaries are not started |
+| 6. ADR and logical model approved | This ADR, accepted on 16 November 2026 |
+| 7. Migrations, RLS, contracts, tests, observability | Started: the AI consent (allfitone#270) and the weekly summary's backend with its runs and ceiling (allfitone#271). The client summary is not started |
 | 8. Exit criteria and disposition | Not started |
 
 ### Open questions
 
 For the owner:
 
-1. **The ceilings.** How many runs each plan allows (decision 10).
+1. **The ceilings.** How many runs each plan allows (decision 10). The weekly summary runs
+   under a provisional one until then.
 
 For the design, before the first slice:
 
 2. Whether a professional accepts something of their own, since their programmes and questions
    reach the model too.
-3. The exact context contract of each summary.
+3. The exact context contract of the client summary. The weekly summary's is settled
+   (decision 6).
 4. Whether the consent screen tells the person that her professionals see when she has not
    agreed (decision 5).
 5. How a person who accepted only the meal-photo text is carried into the AI consent
@@ -7700,8 +7776,30 @@ Pending, and not a question: the lawyer's review of decision 4.
 - It is closed in production. No text is published and the API's text in force is null, so
   the routes answer and nothing can be given.
 
-Not built: the consent text and its screen in Space, runs and ceilings, both summaries, what a
-professional is told in Studio, and the meal-photo consent becoming part of this one.
+**The weekly summary, in the database and in the API (allfitone#271).** Stories `HU-SP-126`
+and `HU-SP-127`, as far as a person can reach them without a screen.
+
+- Package `packages/weekly-summary`: the context contract, the prompt, the checks an answer
+  must pass and the eval.
+- `intelligence.runs` and `intelligence.weekly_summaries`, a reader in `execution`, and three
+  operations: `OP-ITL-004` asks, `OP-ITL-005` lists, `OP-ITL-006` deletes. Their records are in
+  the operations matrix, section 7.13.
+- Three Space routes: `POST` and `GET /space/v1/intelligence/weekly-summaries`, and
+  `DELETE /space/v1/intelligence/weekly-summaries/{weekStartsOn}`.
+- It is closed in production. No model is configured, so asking answers `503` before anything
+  is read; and no consent text is in force.
+
+Decided while building it, and recorded in decisions 4, 7, 10 and 13: the entitlement asked of
+`payments.resolve_pro`, the ceiling as a constant and what it counts, `AF432`, the
+`nothing-logged` outcome and the closing of a run nobody closed.
+
+Known limit: the week of the ceiling follows the zone the device sends, so changing it near
+midnight on a Sunday can move a request into the next week. It moves hours, never the number
+of places.
+
+Not built: the consent text and its screen in Space, the screens of the weekly summary, its
+model in production, the client summary, what a professional is told in Studio, and the
+meal-photo consent becoming part of this one.
 
 ### What this decision does not do
 
@@ -7709,7 +7807,8 @@ professional is told in Studio, and the meal-photo consent becoming part of this
 - It does not write the texts a person reads; no consent text exists. The stories of the
   first slice are `E-SP-18` (`HU-SP-124` to `HU-SP-128`) and `E-STUDIO-15` (`HU-STUDIO-089` to
   `HU-STUDIO-091`); those of the other two slices are not written.
-- It does not choose a model for any capability. Only meal-photo recognition has an eval.
+- It does not choose a model for any capability. Meal-photo recognition has an eval and a
+  model; so does the weekly summary, chosen by the owner after its eval (decision 11).
 - It does not bring the assistant to the Backoffice.
 - It does not settle the data processing agreements or the international transfer under Law
   1581, like ADR-041 and ADR-045.
@@ -7728,4 +7827,17 @@ Named when each slice is built. By class, the first slice owes at least:
 - For the consent, beyond those classes: `T-ITL-CONSENT-01` to `T-ITL-CONSENT-11` for giving,
   replacing, withdrawing and giving back, and `T-ITL-INT-01` to `T-ITL-INT-08` for one consent
   in force, history that cannot be rewritten and two commands at the same instant.
-- An eval for each summary, with cases a capability must refuse.
+- For the weekly summary:
+  - `T-WSM-UNIT-01` to `T-WSM-UNIT-58`: the document, its numbers, every rule that refuses an
+    answer, and the summariser over the port.
+  - `T-ITL-SUMMARY-01` to `T-ITL-SUMMARY-37`: asking, both weeks as read, the ceiling,
+    regenerating, listing and deleting.
+  - `T-ITL-RLS-08` to `T-ITL-RLS-19`: another person neither asks, reads, closes, lists nor
+    deletes, each but `T-ITL-RLS-11` seen to succeed first.
+  - `T-ITL-INT-09` to `T-ITL-INT-23`: invariant 7 and a run that only ends, once; two requests
+    at the same instant for the last place under the ceiling.
+  - `T-ITL-IDEM-04` to `T-ITL-IDEM-11`: asking and deleting again, and one request sent twice
+    at the same instant.
+  - `T-ITL-API-09` to `T-ITL-API-16` and `T-ITL-API-UNIT-06` to `T-ITL-API-UNIT-17`.
+- An eval for each summary, with cases a capability must refuse. The weekly summary's is in
+  `packages/weekly-summary/eval`: 33 invented weeks, nine of them traps.
