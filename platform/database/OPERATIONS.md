@@ -2562,7 +2562,7 @@ for that commit. When the commit also brings migrations, dispatch `Deploy databa
 first. The workflow:
 
 1. resets a local database without the seed, because production has none, and runs
-   `packages/db/tests/curation.test.ts`, which loads every script twice;
+   `packages/db/tests/curated-content.test.ts`, which loads every script twice;
 2. requires the migrator image of this commit;
 3. runs `migrate curate` inside the VPC and copies its log into the job.
 
@@ -2622,5 +2622,5 @@ Tests:
 - `infra/scripts/src/run-migrator.test.ts`: the script numbers reach the task, and anything
   that is not a list of numbers is refused.
 - `packages/db/curation/run-order.test.ts`: `RUN_ORDER` lists every script once.
-- `packages/db/tests/curation.test.ts`, against a real database: one pass loads every
+- `packages/db/tests/curated-content.test.ts`, against a real database: one pass loads every
   demonstration, and a second run moves no identity.
