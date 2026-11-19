@@ -6403,6 +6403,46 @@ The design choices that follow from them, as built:
      revoked category never surfaces here (criterion 7).
    - **Refusals:** a caller with none of the seven capabilities gets `42501` (`403`); the
      training part needs a request id (`22023` otherwise), which the API always sends.
+   - **Indicators (decided by the owner on 19 November 2026, allfitone#286).** The read also
+     says how the organization is doing. The product specification had the operational
+     dashboard in phase 2; three charts come forward to V1, under the notices and never
+     in their place. They are states, so they never change `empty`, and each is absent
+     unless the caller's roles open it.
+
+     | Indicator | Capability | What it says |
+     | --- | --- | --- |
+     | `training_adherence` | `observe_training` | Sessions due and logged by the clients the caller attends, summed over eight closed weeks |
+     | `relationship_changes` | `view_directory` | Relationships begun and ended in each of the last six months |
+     | `professional_load` | `assign_professionals` | Live relationships each coach holds today |
+
+     - **With the V1 roles:** a coach gets `training_adherence`; an owner or
+       administrator gets `relationship_changes` and `professional_load`; staff get
+       `relationship_changes`, which counts the relationships they already list in the
+       directory, and never anything about training.
+     - **Adherence reads no more than the notice, and records no more.** It sums the
+       same clients, sessions and rule as `training`, over eight weeks instead of one,
+       inside the look that notice already takes. So it writes no access event of its
+       own: the one each client gets per read now stands for eight weeks. A second
+       line per client per load would say twice that one person looked once.
+     - **Only sums leave the read.** No name and no figure of one person. With a single
+       client the sum is hers, which the coach may already read in her card. A session
+       she hid from the relationship is not logged, because the screening scope never
+       shows it: the sum cannot tell that something exists that she does not share.
+     - **A week closes where its program runs (`ADR-032`).** The eight weeks end at the
+       latest one closed for every client evaluated, so each week shown is complete
+       for all of them. A week with nothing due travels as 0 and 0 and is drawn as a
+       gap, never as a rate of zero.
+     - **A month is a local question.** An organization stores no timezone, so the
+       viewer's travels with the request and `relationship_changes` is absent without
+       it rather than answered in UTC, where a relationship begun on the 31st at eight
+       in the evening in Bogotá would fall in the next month.
+     - **The timezone is a setting, not an argument.** `app.viewer_timezone` leaves the
+       signature of `relationships.read_studio_today` alone, so the API and the
+       migration can ship in either order: an API ahead of the migration gets no
+       `indicators`, and a migration ahead of the API gets no timezone.
+     - **Whoever holds the coach role in force is listed, the one with no client
+       too:** that is who a client without a professional can be given to. A cover
+       holds nobody.
 7. **She sees who read her data (`OP-PRV-015`, `HU-STUDIO-083` criterion 3).**
    `GET /space/v1/access-events`, `privacy.list_my_access_events(person, scope_code, limit,
    before_occurred_at, before_id)`.
