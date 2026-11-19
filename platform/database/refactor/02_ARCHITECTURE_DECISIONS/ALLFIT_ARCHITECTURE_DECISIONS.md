@@ -6987,7 +6987,8 @@ person finishes the onboarding, and that the store of the phone is recorded then
 15 November 2026, decisions 5 and 11: the owner chose that proven fraud takes the number
 from a person who already has her account, and that nobody inherits it (allfitone#268).
 15 November 2026, decisions 3 and 6: the counter says two figures, registered and active,
-as built in allfitone#269 (`TECH-334`).<br>
+as built in allfitone#269 (`TECH-334`). 18 November 2026, decision 6: the owner chose that
+a referral is active after logging on five different days, not after three records.<br>
 **Source:** the internal document «Estrategia de lanzamiento de Allfit Space» v1.0 (7 November
 2026), the epic `TECH-290` and its tickets.
 
@@ -7084,8 +7085,8 @@ follow from it:
    sign-up keeps its connection hash, and the Backoffice shows an inviter whose sign-ups share
    one, for the team to review (`TECH-302`). Until then, a fourth sign-up for one inviter from
    one connection within 24 hours did not count. The launch strategy v1.2 pays rewards only
-   for active referrals: an account after launch and 3 workouts or meals in the first 14 days
-   (`TECH-301`). Addresses typed by somebody else never get there, so the ceiling no longer
+   for active referrals: an account after launch and activity logged in the first 14 days
+   (`TECH-301`; decision 6 has the rule). Addresses typed by somebody else never get there, so the ceiling no longer
    protected the rewards, and it discarded friends who joined together. Migration
    `20261128090000_a_shared_connection_counts_for_the_inviter.sql` drops it and counts again
    the sign-ups it had discarded, unless their device already counts for the same inviter.
@@ -7179,8 +7180,13 @@ follow from it:
      100 give 12 months and Allfit One merch. Thirty referrals are 1 + 2 + 3 = 6 months.
    - A referral counts for the rewards when it is active: it is confirmed, it counts, it is
      linked to a person whose Space account was created after the launch, and that person
-     logged 3 workouts or meals in their first 14 days (launch strategy v1.2). It becomes
-     active once and stays so.
+     logged a workout or a meal on at least five different days of their first 14 days. It
+     becomes active once and stays so.
+   - **Five days, not three records** (the owner, 18 November 2026). The launch strategy v1.2
+     said 3 workouts or meals. Three records fit in one sitting, so an account made up to
+     collect a reward was cheap; five days make it come back. A partner raised counting only
+     referrals who pay Allfit Pro the same day; the owner kept the activity rule and raised
+     it. Which clock decides the day is settled with the rewards job (`TECH-301`).
    - Rewards go to the inviter's person, so the inviter needs an account of their own. A level
      reached before that waits for the link.
    - A reward is an offer code for the platform recorded at linking, taken from the pool loaded in

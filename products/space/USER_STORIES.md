@@ -2354,7 +2354,7 @@ Los embajadores se escribirán como historias cuando se cierren sus reglas (`TEC
 
 **Criterios**
 
-1. Para los premios solo cuentan los referidos activos: confirmaron su correo, crearon su cuenta de Allfit Space después del lanzamiento, con el mismo correo, y registraron 3 entrenamientos o comidas en sus primeros 14 días (estrategia de lanzamiento v1.2).
+1. Para los premios solo cuentan los referidos activos: confirmaron su correo, crearon su cuenta de Allfit Space después del lanzamiento, con el mismo correo, y registraron entrenamientos o comidas en al menos 5 días distintos de sus primeros 14 días (decisión del dueño del 18 de noviembre de 2026; la estrategia de lanzamiento v1.2 decía 3 registros).
 2. Niveles: 5 referidos dan 1 mes, 15 dan 2 meses, 30 dan 3 meses y 100 dan 1 año de Allfit Pro y merch de Allfit One.
 3. **Los niveles se suman:** recibo el premio de cada nivel que alcanzo. Con 30 referidos recibo 1 + 2 + 3 = 6 meses; con 100, 18 meses y el merch.
 4. Cada premio me llega por correo como un código de oferta de la tienda del teléfono en que creé mi cuenta, tomado de la bolsa que carga el equipo (`HU-BO-036`). Cada código se entrega una sola vez y queda registrado a quién.
