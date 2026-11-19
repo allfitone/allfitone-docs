@@ -2514,3 +2514,113 @@ Tests:
 - `managed-assignment-concurrency.test.ts` cancels as the coach.
 
 The PR records mutation evidence for every guard of the read and for the narrowed command.
+
+## The curated content reaches production (TECH-359, allfitone#283)
+
+No migration. A migrator command, `curate`, and a workflow, `Curate database (AWS)`.
+
+The catalogue of movements and programs, the foods, the packaged products and the goal
+references live in `packages/db/curation`. They are content, not schema: `db:reset` does not
+load them and neither does a deploy. Until this change nothing ran them in production, so
+Studio could not create a routine and Space had no program to offer.
+
+**What runs.** The migrator image carries the scripts and `packages/db/curation/RUN_ORDER`.
+`migrate curate` runs them in that order:
+
+| Script                          | Loads                                                              |
+| ------------------------------- | ------------------------------------------------------------------ |
+| `001_global_training_catalogue` | Disciplines, activity types with their default result contract, 38 movements and 24 programs |
+| `003_movement_wave_1`           | 362 more movements                                                 |
+| `002_movement_demonstrations`   | The demonstration of each movement                                 |
+| `004_program_covers`            | Two cover photographs per program                                  |
+| `005_food_catalogue`            | Foods, nutrients, portions and recipes                             |
+| `006_off_products`              | Packaged products from Open Food Facts                             |
+| `007_goal_references`           | The nutrition goal each training goal brings                       |
+| `008_program_access`            | Which programs the free plan opens                                 |
+
+**The order is not the number.** `002` skips a demonstration whose movement is not there yet,
+so `003` runs first. Run by number on a fresh database, the first pass leaves 34
+demonstrations out of 388 and reports nothing. A new script goes into `RUN_ORDER`;
+`run-order.test.ts` fails while one is missing from it.
+
+**How it passes row security.** The scripts run as the master user, like migrations. The
+catalogue tables force row security and several have no insert policy, and `pg_roles` shows
+the master as neither a superuser nor `BYPASSRLS`. It still bypasses row security, because it
+is a member of `rds_superuser`. This read-only query shows it, and answered `f` in production
+on 18 November 2026:
+
+```sql
+select row_security_active('catalog.units'::regclass);
+```
+
+Nothing was granted and no policy changed. To rehearse locally, run as local `postgres`,
+which has `BYPASSRLS`. A role copied from the master's visible attributes fails on the first
+insert, and that is not what production does.
+
+**Running it.** Dispatch `Curate database (AWS)` from `main` once `Deploy AWS` has finished
+for that commit. When the commit also brings migrations, dispatch `Deploy database (AWS)`
+first. The workflow:
+
+1. resets a local database without the seed, because production has none, and runs
+   `packages/db/tests/curated-content.test.ts`, which loads every script twice;
+2. requires the migrator image of this commit;
+3. runs `migrate curate` inside the VPC and copies its log into the job.
+
+The `only` input narrows a run to some script numbers, separated by spaces: `001 003`. A
+number that names no script stops the run before anything is written.
+
+The workflow shares the concurrency group of `Deploy database (AWS)`, so content never loads
+while the schema is moving.
+
+**Rerunning.** Every script is rerunnable and each one is a single transaction. A script that
+fails leaves nothing half written, and the scripts before it stay loaded. A rerun keeps
+every identity a person's data points at: movements, programs, foods and products. It
+rewrites food aliases, food portions and product portions under new ids, and no other table
+references those.
+
+**Before running `002`.** Its illustrations come from the free tier of ExerciseDB, which is
+non-commercial. `packages/db/curation/import/MEDIA_NOTICE.md` says they are not cleared to
+ship. Until the owner decides, set `only` to every other number. A movement with no
+demonstration draws the body figure.
+
+**The media origin.** `002` and `004` store keys, not files. The API composes each address
+from `CATALOG_MEDIA_BASE_URL`, so the objects must already be on that origin. On 18 November
+2026 the production origin answered `200` for one cover and one demonstration, each with the
+byte size its row records.
+
+**Publish nothing of the catalogue by hand first.** `001` points at its activity types and
+result contracts by fixed id. One published from Backoffice under the same code would be
+kept, and those references would point at nothing. This is reasoned from the script; it was
+not rehearsed.
+
+**What it does not load.** The permission catalogue. A person publishes
+`privacy.scope_definitions` from Backoffice `/permissions`, with the rules of
+`packages/db/scripts/v1-scope-rules.ts`. Until then Studio cannot invite a client.
+
+**What to check after running.** This read-only query, as the master:
+
+```sql
+select (select count(*) from catalog.disciplines) as disciplines,
+       (select count(*) from catalog.movements) as movements,
+       (select count(*) from catalog.movement_media) as demonstrations,
+       (select count(*) from planning.programs where content_scope = 'global') as programs,
+       (select count(*) from nutrition.foods) as foods,
+       (select count(*) from nutrition.products) as products;
+```
+
+With every script run, the content of 18 November 2026 gives 4, 400, 388, 24, 299 and 2457.
+Before this change production had none of them.
+
+When this was written, on 18 November 2026, the pull request was open and nothing had run
+in production. The command had been rehearsed with the migrator image, over TLS, against a
+database built from the 264 migrations alone.
+
+Tests:
+
+- `infra/scripts/src/migrator-curate.test.ts`: the listed order, the first failure stopping
+  the run, the narrowed run, and the two refusals that happen before anything is written.
+- `infra/scripts/src/run-migrator.test.ts`: the script numbers reach the task, and anything
+  that is not a list of numbers is refused.
+- `packages/db/curation/run-order.test.ts`: `RUN_ORDER` lists every script once.
+- `packages/db/tests/curated-content.test.ts`, against a real database: one pass loads every
+  demonstration, and a second run moves no identity.
