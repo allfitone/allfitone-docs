@@ -2624,3 +2624,59 @@ Tests:
 - `packages/db/curation/run-order.test.ts`: `RUN_ORDER` lists every script once.
 - `packages/db/tests/curated-content.test.ts`, against a real database: one pass loads every
   demonstration, and a second run moves no identity.
+
+## Studio's today also says how the organization is doing (HU-STUDIO-081, allfitone#286)
+
+One migration, `20261211090000_today_also_says_how_the_gym_is_doing.sql`. The decisions are in
+[ALLFIT_ARCHITECTURE_DECISIONS.md](refactor/02_ARCHITECTURE_DECISIONS/ALLFIT_ARCHITECTURE_DECISIONS.md),
+ADR-047, decision 6.
+
+- It drops `relationships.today_training(uuid, timestamptz)` and creates it again with two
+  more columns, `closed_through` and `weeks`. It now returns one row per client evaluated;
+  which of them the notice lists is decided by its caller. No runtime role executes it.
+- It creates `relationships.today_adherence(jsonb, timestamptz)` and
+  `relationships.today_relationship_changes(uuid, text, timestamptz)`, which no runtime role
+  executes.
+- It replaces `relationships.read_studio_today(uuid, uuid)`, `security definer`, executable
+  by `allfit_api`, with the same signature. The answer gains `indicators`.
+
+**What it does not add.** No table, column, index, policy or trigger, and no backfill. It
+takes no lock on a table.
+
+**The setting `app.viewer_timezone`.** The API sets it for the transaction from the
+`timezone` query parameter, empty when there is none. `read_studio_today` refuses a value
+PostgreSQL does not know (`22023`) and leaves `relationship_changes` out when it is empty.
+Nothing else reads it.
+
+**Either side may ship first.**
+
+- The API ahead of the migration: the old function ignores the setting and answers without
+  `indicators`, which the contract allows. The screen draws no chart.
+- The migration ahead of the API: nothing sets the timezone, so `relationship_changes` is
+  absent. The other two indicators travel and an older API passes them through.
+
+**The access log does not grow.** `training_adherence` is worked out inside the look the
+`training` notice takes. A read still writes one `privacy.access_events` row per client
+evaluated; that row now stands for eight weeks.
+
+**Verification after deploying, read-only:**
+
+```sql
+select has_function_privilege('allfit_api', 'relationships.read_studio_today(uuid, uuid)', 'execute') as api_reads,
+       has_function_privilege('allfit_api', 'relationships.today_training(uuid, timestamptz)', 'execute') as api_runs_training,
+       has_function_privilege('allfit_api', 'relationships.today_adherence(jsonb, timestamptz)', 'execute') as api_runs_adherence,
+       has_function_privilege('allfit_api', 'relationships.today_relationship_changes(uuid, text, timestamptz)', 'execute') as api_runs_changes;
+```
+
+It must answer `true`, `false`, `false`, `false`.
+
+When this was written, on 19 November 2026, the pull request was open and nothing had run
+in production.
+
+Tests:
+
+- `T-REL-TODAY-03` (27): who is told what, the three indicators, the week and the month
+  cut with a clock handed in, a hidden session, and the access log unchanged.
+- `T-REL-TODAY-01` (24) and `T-REL-TODAY-02` (17): the notices, as before.
+- `T-REL-TODAY-API-04..06` and `relationships/infrastructure/card-and-today.test.ts`: the
+  contract, the timezone the API accepts, and the setting it travels in.

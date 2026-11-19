@@ -259,6 +259,8 @@ No debe ser un dashboard lleno de gráficas sin jerarquía. Debe responder:
 
 > **¿Qué necesita atención hoy?**
 
+Decisión del 19 de noviembre de 2026: el resumen trae desde la V1 tres gráficos, debajo de lo pendiente y nunca en su lugar. Cada uno responde una pregunta de quien lo ve: la adherencia de los clientes del coach en sus últimas ocho semanas cerradas, las relaciones que empiezan y terminan cada mes, y los clientes que tiene cada profesional. Siguen la regla de los avisos: lo que el rol no puede ver no aparece (`HU-STUDIO-081`, criterio 8).
+
 Puede mostrar, según rol y fase:
 
 - Invitaciones pendientes.
@@ -911,7 +913,7 @@ Propuesta inicial:
 
 Después de aprobar e implementar la baseline:
 
-- Dashboard operativo contextual.
+- Dashboard operativo contextual, más allá de los tres indicadores que el resumen trae desde la V1 (`HU-STUDIO-081`).
 - Flujos completos de revisión y seguimiento.
 - Mejoras de colaboración y reasignación.
 - Mensajería bajo un dominio y consentimiento propios.

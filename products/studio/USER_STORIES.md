@@ -1665,6 +1665,7 @@ estado de pago de una persona no es un dato de entrenamiento.
 5. Desde cada aviso llego directo a donde se resuelve.
 6. Si no hay nada pendiente se dice, en lugar de mostrar una pantalla vacía.
 7. Un scope rechazado o revocado nunca reaparece como “permiso pendiente” ni como una acción para que el coach vuelva a solicitarlo. Las decisiones de scopes ocurren únicamente dentro de la aceptación de una nueva relación.
+8. Además de lo pendiente, veo cómo va lo que me corresponde según mi rol: como coach, cuánto cumplieron mis clientes en sus últimas ocho semanas cerradas; como admin, cuántas relaciones empezaron y terminaron cada mes y cuántos clientes tiene cada profesional. Es estado, no trabajo pendiente: no cambia lo que dice el criterio 6.
 
 > **Implemented as (STUDIO-74, backend).** `GET /studio/v1/organizations/{organizationId}/today`
 > (`OP-REL-020`). Each notice appears only when the caller's roles can resolve it, counts
@@ -1676,6 +1677,20 @@ estado de pago de una persona no es un dato de entrenamiento.
 > there is nothing to do. Staff never see training. Only clients who share
 > `relationship_training` are looked at, and each one evaluated leaves one line in her access
 > log. Failed charges join with `E-STUDIO-13`. The screen is `STUDIO-146`. See ADR-047.
+>
+> **Indicators (backend, allfitone#286).** The same read carries `indicators`, which are state
+> and never change `empty`; one the caller's roles do not open is absent.
+> `training_adherence` (`observe_training`) is what the clients the coach attends who share
+> `relationship_training` had due and logged, summed over their last eight closed weeks. It
+> comes out of the look the `training` notice already takes, so it adds no line to an
+> access log: the line each client gets per read now stands for eight weeks instead of one.
+> A session she hid from the relationship counts as not logged, and only sums travel, never
+> a name or a figure of one person. `relationship_changes` (`view_directory`) is the
+> relationships begun and ended in each of the last six months of the viewer's timezone
+> (`?timezone=`), absent without one. `professional_load` (`assign_professionals`) is the
+> clients each coach holds today, the ones who hold nobody included. The Design System
+> draws them (`AreaChart`, `BarChart`, `BarList`); the screen is a separate change. See
+> ADR-047, decision 6.
 
 ### HU-STUDIO-082 — Buscar a una persona de mi gimnasio
 

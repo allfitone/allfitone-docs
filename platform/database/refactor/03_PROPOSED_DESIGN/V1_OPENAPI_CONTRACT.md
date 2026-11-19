@@ -81,7 +81,7 @@ generado son el inventario exhaustivo.
 | Read a client's health context | `GET …/clients/{personId}/health-context` | `OP-IDN-020` | query `limit`, `cursor` | `ClientHealthContextPage` | `private, no-store` |
 | Find a client by name | `GET /studio/v1/organizations/{organizationId}/clients` | `OP-REL-010` | query `status`, `q`, `limit`, `cursor` | `ClientDirectoryPage` | `private, no-store` |
 | Open the card of a client | `GET /studio/v1/organizations/{organizationId}/clients/{personId}` | `OP-REL-019` | path | `StudioClientCard` | `private, no-store` |
-| See what needs attention today | `GET /studio/v1/organizations/{organizationId}/today` | `OP-REL-020` | path | `StudioToday` | `private, no-store` |
+| See what needs attention today | `GET /studio/v1/organizations/{organizationId}/today` | `OP-REL-020` | path, query | `StudioToday` | `private, no-store` |
 | Show a body photo to a gym | `PUT /space/v1/body-photos/{photoId}/shares` | `OP-IDN-061` | `BodyPhotoShareCreate` | `BodyPhotoShare` | `no-store` |
 | Stop showing it | `DELETE /space/v1/body-photos/{photoId}/shares/{relationshipId}` | `OP-IDN-062` | path | `BodyPhotoShare` | `no-store` |
 | Listar lo que comparto | `GET /space/v1/consents` | `OP-PRV-013` | sin body | `SpaceConsentList` | `private, no-store` |
@@ -211,9 +211,16 @@ allfitone#204, merged and deployed on 9 November 2026.
   - `StudioClientLossReason` is `relationship_ended`, `assignment_ended` or
     `substitution_ended`.
 - **Today (`OP-REL-020`).** `getStudioToday`, tag *Studio Relationships*, `cookieAuth`,
-  `200`, `400`, `401`, `403` and `503`.
-  - `StudioToday` is `{organization_id, generated_at, empty, notices}`. Each notice is
-    optional, and an absent notice is one the caller cannot act on.
+  the optional query parameter `timezone` (`IanaTimeZone`); `200`, `400`, `401`, `403`,
+  `422` and `503`.
+  - `StudioToday` is `{organization_id, generated_at, empty, notices, indicators}`. Each
+    notice is optional, and an absent notice is one the caller cannot act on.
+  - `indicators` (allfitone#286) is optional, because the API and the database ship apart,
+    and so is each indicator in it: `StudioTodayTrainingAdherence` (`clients` and eight
+    `weeks` of `week_starts_on`, `planned`, `logged`), `StudioTodayRelationshipChanges`
+    (six `months` of `month`, `started`, `ended`) and `StudioTodayProfessionalLoad`
+    (`count`, `unassigned` and at most twelve `items` of `membership_id`, `display_name`,
+    `clients`). They carry no link: they are states, with nothing to resolve.
   - The notices are `StudioTodayInvitations` (clients and team), `StudioTodayRelationships`
     (unassigned and new), `StudioTodayTerminationRequests`, `StudioTodayTeam` and
     `StudioTodayTraining`, each with at most five items and a `StudioTodayLink` to the
