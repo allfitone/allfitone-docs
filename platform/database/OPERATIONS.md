@@ -2681,3 +2681,58 @@ Tests:
 - `T-REL-TODAY-01` (24) and `T-REL-TODAY-02` (17): the notices, as before.
 - `T-REL-TODAY-API-04..06` and `relationships/infrastructure/card-and-today.test.ts`: the
   contract, the timezone the API accepts, and the setting it travels in.
+
+## A person keeps her theme for Studio (HU-STUDIO-092, allfitone#289)
+
+One migration, `20261212090000_a_person_keeps_her_theme_for_studio.sql`. It serves `OP-IDN-068`
+and `OP-IDN-069`.
+
+- It creates `identity.surface_preferences`: one row per person per product, with her
+  `theme` (`dark` or `light`). Row security is enabled and forced; `allfit_api` has no
+  privilege on the table.
+- It creates `identity.read_studio_preferences(uuid)` and
+  `identity.put_studio_preferences(uuid, text, uuid, uuid, bytea)`, both `security definer`
+  and executable by `allfit_api` only.
+
+**What it does not add.** No column on an existing table, no backfill, no flag, no job and
+no outbox event. It takes no lock on a table that exists.
+
+**No row means she never chose.** The read answers `theme: null` and Studio shows its own
+default, dark. Nothing has to be seeded.
+
+**The API ships ahead of the migration.** Merging the code deploys the API; the database
+deploy is a separate, manual step. In between, both routes answer `503`
+`upstream-unavailable`, because the functions do not exist yet. Nothing else is affected:
+the routes are their own, and signing in does not call them. The Studio screen that reads
+them ships after the migration; were it to meet the `503`, it keeps what the browser
+remembers, or dark, and says nothing.
+
+**Not deleted with anything yet.** The foreign key to `identity.people` is `on delete
+restrict` and no policy allows a delete. When account deletion is built it has to include
+this table.
+
+**Verification after deploying, read-only:**
+
+```sql
+select has_function_privilege('allfit_api', 'identity.read_studio_preferences(uuid)', 'execute') as api_reads,
+       has_function_privilege('allfit_api', 'identity.put_studio_preferences(uuid, text, uuid, uuid, bytea)', 'execute') as api_keeps,
+       has_table_privilege('allfit_api', 'identity.surface_preferences', 'select') as api_reads_table,
+       (select relrowsecurity and relforcerowsecurity from pg_class where oid = 'identity.surface_preferences'::regclass) as row_security_forced;
+```
+
+It must answer `true`, `true`, `false`, `true`.
+
+The migration was applied in production on 20 November 2026 (UTC) by `Deploy database
+(AWS)`, whose plan listed it alone. The verification above was run there the same day and
+answered as expected; the table has three policies (select, insert and update, each for
+her own row) and none for delete.
+
+Tests:
+
+- `T-IDN-STUDIO-PREFERENCES-01` (39): the table and its key (`T-IDN-PHY-24..27`), what
+  choosing does (`T-IDN-INT-41..46`), who may read and keep (`T-IDN-RLS-25..33`) and the
+  replay of a command (`T-IDN-IDEM-19..20`).
+- `identity/handlers/studio-preferences.test.ts` (`T-IDN-API-01..14`): both routes against
+  the published contract, with every refusal.
+- `identity/infrastructure/studio-preferences.test.ts` (`T-IDN-UNIT-01..03`): the order of
+  the arguments the functions receive.

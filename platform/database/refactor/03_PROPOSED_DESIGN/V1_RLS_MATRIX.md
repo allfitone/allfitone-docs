@@ -500,6 +500,30 @@ Las pruebas se identifican como `T-<RECURSO>-<n>` y alimentan directamente la su
 - **`T-INV-7` (positiva)** — La expiración por lotes usa bloqueo con `SKIP LOCKED` y emite una sola evidencia por invitación.
 - **`T-INV-8` (negativa)** — Los límites persisten solo hashes SHA-256, nunca email o IP en claro.
 
+#### `SURFACE_PREFERENCE`
+
+| Actor | SELECT | INSERT | UPDATE | DELETE |
+| --- | --- | --- | --- | --- |
+| `A2` | Own | Own | Own | — |
+| Rest | — | — | — | — |
+
+- **RLS condition** — `access_control.is_self(person_id)` on `surface_preferences_select_self`, `_insert_self` and `_update_self`, for `allfit_owner`. Row security is enabled and forced, so it binds the owner too. There is no delete policy: a choice is replaced, never removed.
+- **Required context** — `actor_kind = 'person'` and `actor_person_id`. No organization context: the choice is hers wherever she works.
+- **Minimum grants** — `allfit_api` has no privilege on the table. It executes `identity.read_studio_preferences(uuid)` (`OP-IDN-068`) and `identity.put_studio_preferences(uuid, text, uuid, uuid, bytea)` (`OP-IDN-069`), both `security definer`, and nobody else does.
+- **The functions check the actor null-safely first.** The gate of `OP-IDN-017` compares with `<>`, so a transaction that names no person passes it; each function refuses with `is distinct from` before calling that gate, which then asks that she is active.
+- **No access record.** A theme is not sensitive and nobody but her reads it, so the read writes no `ACCESS_EVENT`.
+- **`T-IDN-RLS-25` (positive)** — She reads what she chose.
+- **`T-IDN-RLS-26` (negative)** — The neighbour does not read her theme.
+- **`T-IDN-RLS-27` (negative)** — Nor chooses it for her, and the neighbour's own stays unchosen: nothing of one person reaches another.
+- **`T-IDN-RLS-28` (negative)** — An account that is not a person yet reads no preference and keeps none.
+- **`T-IDN-RLS-29` (negative)** — A closed account reads none and keeps none, which is the answer `OP-IDN-017` gives her.
+- **`T-IDN-RLS-30` (negative)** — A transaction that names no acting person reads none and keeps none.
+- **`T-IDN-RLS-31` (negative)** — Straight at the table, the neighbour sees no row of hers, while she sees her own.
+- **`T-IDN-RLS-32` (negative)** — The neighbour cannot write a row in her name.
+- **`T-IDN-RLS-33` (negative)** — The runtime role cannot read the table nor write a row.
+- **As implemented (allfitone, `feat/studio-theme-preference`, migration `20261212090000_a_person_keeps_her_theme_for_studio.sql`).** Tests in `T-IDN-STUDIO-PREFERENCES-01`; `T-IDN-PHY-25` holds that row security is on and forced, `T-IDN-PHY-26` that nobody calls the two functions by default.
+- **Finding, not changed here.** `identity.require_professional_actor` compares the actor with `<>`, so with `app.actor_kind = 'person'` and no acting person it raises nothing. It guards `OP-IDN-017`, `OP-IDN-010` and the credential operations. No row leaks, because the `is_self` policies return none, but the function answers instead of refusing. The shared guard was left as it is: changing it changes the authorization of those operations and belongs in a migration of its own.
+
 ### 7.2 Organizaciones
 
 #### `ORGANIZATION` · `ORGANIZATION_TYPE` · `ORGANIZATION_TYPE_TRANSITION` · `ORGANIZATION_SITE`

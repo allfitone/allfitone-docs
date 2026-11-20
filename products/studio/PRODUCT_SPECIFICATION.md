@@ -247,6 +247,8 @@ La navegación completa puede converger en cinco áreas principales:
 
 Configuración, ayuda y administración de cuenta permanecen como utilidades, no como el centro del producto.
 
+Decisión del 19 y el 20 de noviembre de 2026: Studio tiene tema oscuro y tema claro, y abre en oscuro. Cada persona elige el suyo en «Mi cuenta» y la elección se guarda en su cuenta, no en el navegador, así que la encuentra en cualquier equipo (`HU-STUDIO-092`). La elección es de la persona y de Studio: no cambia lo que ve el resto del equipo ni otro producto. El menú se queda oscuro en los dos temas y la página pública de Studio conserva su propio aspecto.
+
 ---
 
 ## 6. Las cinco áreas principales

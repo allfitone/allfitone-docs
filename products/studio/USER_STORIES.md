@@ -204,6 +204,7 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 | `HU-STUDIO-089` | `HU-STUDIO-054`, `HU-STUDIO-083`, `HU-STUDIO-091` |
 | `HU-STUDIO-090` | `HU-STUDIO-089` |
 | `HU-STUDIO-091` | `HU-STUDIO-001` |
+| `HU-STUDIO-092` | `HU-STUDIO-001` |
 
 ---
 
@@ -435,6 +436,24 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 4. Si alguna terminación no se puede completar, no se cierra nada: no existe un cierre a medias.
 5. El cierre se coordina en una sola transacción PostgreSQL mediante contratos públicos estrechos de Organizaciones, Relaciones, Privacidad, Planificación, Ejecución y Nutrición. Ejecución cancela propuestas de corrección pendientes y Nutrición cancela propuestas nutricionales pendientes. Ningún dominio escribe directamente tablas de otro dominio.
 6. Si falla cualquier contrato público, también se revierten las cancelaciones y el estado organizacional: no queda un cierre parcial.
+
+### HU-STUDIO-092 — Elegir el tema de Studio
+
+**Como** integrante de un gimnasio
+**quiero** elegir entre el tema oscuro y el claro
+**para** trabajar con el que leo mejor, en cualquier navegador.
+
+`E-STUDIO-01` · importante
+
+**Criterios**
+
+1. Studio abre en oscuro. Es lo que ve quien nunca eligió.
+2. Elijo «Oscuro» o «Claro» en «Mi cuenta», y la pantalla cambia en el momento.
+3. La elección se guarda en mi cuenta: la encuentro al entrar desde otro navegador o desde otro equipo.
+4. La elección es mía y es de Studio. No cambia lo que ve el resto del equipo ni lo que veo en otro producto de Allfit One.
+5. Si no se pudo guardar, la pantalla vuelve al tema anterior y me lo dice.
+6. En un navegador donde ya entré veo mi tema desde el primer momento, sin un parpadeo del otro.
+7. El menú se queda oscuro en los dos temas. La página pública de Studio no cambia con mi elección.
 
 ---
 
@@ -1860,7 +1879,7 @@ no usa ningún modelo: es una lectura normal de Studio y se escribirá en `E-STU
 | Épica | Historias | Imprescindibles |
 | --- | --- | ---: |
 | `E-STUDIO-00` Entrar | `HU-STUDIO-001` – `HU-STUDIO-004` | 4 de 4 |
-| `E-STUDIO-01` Perfil y organización | `HU-STUDIO-005` – `HU-STUDIO-013` | 5 de 9 |
+| `E-STUDIO-01` Perfil y organización | `HU-STUDIO-005` – `HU-STUDIO-013`, `HU-STUDIO-092` | 5 de 10 |
 | `E-STUDIO-02` Equipo, roles y membresías | `HU-STUDIO-014` – `HU-STUDIO-022`, `HU-STUDIO-085` – `HU-STUDIO-086` | 9 de 11 |
 | `E-STUDIO-03` Invitación de personas y directorio | `HU-STUDIO-023` – `HU-STUDIO-026`, `HU-STUDIO-087` | 4 de 5 |
 | `E-STUDIO-04` Responsable, suplencias y terminación | `HU-STUDIO-027` – `HU-STUDIO-033` | 3 de 7 |
@@ -1875,7 +1894,7 @@ no usa ningún modelo: es una lectura normal de Studio y se escribirá en `E-STU
 | `E-STUDIO-13` Planes y cobro | `HU-STUDIO-073` – `HU-STUDIO-080`, `HU-STUDIO-088` | 5 de 9 |
 | `E-STUDIO-14` Resumen del día | `HU-STUDIO-081` – `HU-STUDIO-084` | 3 de 4 |
 | `E-STUDIO-15` Asistente | `HU-STUDIO-089` – `HU-STUDIO-091` | 0 de 3 |
-| **Total** | **91 historias** | **45 imprescindibles** |
+| **Total** | **92 historias** | **45 imprescindibles** |
 
 El camino mínimo para lanzar es: entrar, crear el gimnasio con su equipo,
 invitar a una persona dentro del cupo, armar un programa y asignárselo, y ver
