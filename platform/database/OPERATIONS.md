@@ -2670,8 +2670,9 @@ select has_function_privilege('allfit_api', 'relationships.read_studio_today(uui
 
 It must answer `true`, `false`, `false`, `false`.
 
-When this was written, on 19 November 2026, the pull request was open and nothing had run
-in production.
+The migration was applied in production on 20 November 2026 (UTC) by `Deploy database
+(AWS)`, whose plan listed it alone. The verification above had not been run there when
+this was written.
 
 Tests:
 

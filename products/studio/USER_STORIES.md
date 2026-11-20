@@ -1688,9 +1688,21 @@ estado de pago de una persona no es un dato de entrenamiento.
 > a name or a figure of one person. `relationship_changes` (`view_directory`) is the
 > relationships begun and ended in each of the last six months of the viewer's timezone
 > (`?timezone=`), absent without one. `professional_load` (`assign_professionals`) is the
-> clients each coach holds today, the ones who hold nobody included. The Design System
-> draws them (`AreaChart`, `BarChart`, `BarList`); the screen is a separate change. See
-> ADR-047, decision 6.
+> clients each coach holds today, the ones who hold nobody included. See ADR-047,
+> decision 6.
+>
+> **Indicators on the screen (allfitone#287).** Studio's home draws them under the notices
+> and above the team, one panel each, with the charts of the Design System (`AreaChart`,
+> `BarChart` and `BarList`, `@allfitone/react` 0.17.1). They are states: ruled panels
+> without the lift of the notice cards, and none of them changes what criterion 6 says.
+> An indicator absent from the answer has no panel, so a coach reads adherence alone, and
+> an answer with no `indicators` draws the screen as it was. Adherence is a line on a
+> fixed scale of 0 to 100; a week that asked for nothing is a gap that reads «Sin sesiones
+> planeadas», never 0 %. A panel with nothing to plot says so in a sentence instead of
+> drawing empty axes. Every figure is one the server sent, repeated in a table for
+> assistive technology. The read sends the browser's timezone and asks again without it
+> when the server refuses the zone, so a refused zone costs one chart. The panels load in
+> a download of their own, paid for only by an answer that carries an indicator.
 
 ### HU-STUDIO-082 — Buscar a una persona de mi gimnasio
 
