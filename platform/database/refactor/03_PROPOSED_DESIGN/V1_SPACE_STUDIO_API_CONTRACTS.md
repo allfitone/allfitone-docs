@@ -318,6 +318,8 @@ Sujeto: la cuenta o persona autenticada en las rutas personales y de onboarding;
 | `POST` | `/onboarding-attempts/{id}/completion` | `OP-IDN-003` |
 | `GET` | `/me` | `OP-IDN-017` |
 | `PUT` | `/me/professional-profile` | `OP-IDN-010` |
+| `GET` | `/me/preferences` | `OP-IDN-068` |
+| `PUT` | `/me/preferences` | `OP-IDN-069` |
 | `POST` | `/me/professional-credentials` | `OP-IDN-029` |
 | `POST` | `/me/professional-credentials/{credentialId}/revisions` | `OP-IDN-030` |
 | `POST` | `/me/professional-credentials/{credentialId}/retirement` | `OP-IDN-031` |

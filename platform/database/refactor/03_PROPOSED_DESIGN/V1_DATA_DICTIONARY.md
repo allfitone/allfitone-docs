@@ -516,6 +516,22 @@ migration `20261122150000_the_worker_sweeps_photo_disposals.sql` (code branch
 - **Retención:** con la persona.
 - **Eventos:** ninguno propio.
 
+### 4.16 `identity.surface_preferences`
+
+- **Purpose:** what a person chose for how one product looks. Today one choice, her theme for Studio (`HU-STUDIO-092`). It is kept with her account so it follows her to another browser or device.
+- **Domain / source of truth:** Identity.
+- **Classification:** `operational`. A theme says nothing about her health or her training.
+- **Columns:** `person_id uuid` · `surface identity.access_session_surface` (the list her web sessions use; only `studio` is written today) · `theme text` (`dark`, `light`) · `created_at timestamptz` · `updated_at timestamptz`.
+- **FKs and deletion:** `person_id → identity.people(id) ON DELETE RESTRICT`.
+- **Uniques and checks:** `pk_surface_preferences (person_id, surface)`: one row per person per product, so choosing light in Studio does not change another product that gets themes later; `ck_surface_preferences_theme`.
+- **No row means she never chose.** The read answers `null` and the product shows its own default. The database invents none, so changing a default later rewrites nobody's choice.
+- **Actors:** the person, through `identity.read_studio_preferences` (`OP-IDN-068`) and `identity.put_studio_preferences` (`OP-IDN-069`). Both carry `studio` themselves; nothing a client sends can aim them at another product. No organization and no professional reads this table.
+- **RLS:** forced. `surface_preferences_select_self`, `_insert_self` and `_update_self` (`is_self`); no delete policy, since a choice is replaced and never removed. `allfit_api` has no privilege on the table.
+- **Indexes:** the primary key serves the only query.
+- **Retention:** with the person.
+- **Events:** none, and no `ACCESS_EVENT`: nobody but her reads it.
+- **As implemented (allfitone, `feat/studio-theme-preference`, migration `20261212090000_a_person_keeps_her_theme_for_studio.sql`).**
+
 ---
 
 ## 5. Schema `organizations`

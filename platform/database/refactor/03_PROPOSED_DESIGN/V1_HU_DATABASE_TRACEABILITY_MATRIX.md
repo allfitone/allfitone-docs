@@ -57,6 +57,9 @@ Este compromiso no afirma que las 86 HU estén implementadas. Una HU cuenta como
 > AI consent of `HU-SP-124` and `HU-SP-125` in the database and the API, closed in production
 > until a consent text is published. Their priority and scope state are not changed here: that
 > classification is the owner's.
+>
+> On 20 November 2026 the owner asked for Studio's theme to be kept in the person's account.
+> `HU-STUDIO-092` records it. It is new, so the dated counts above do not include it.
 
 ## 2. Reglas de clasificación
 
@@ -377,6 +380,7 @@ Lectura de columnas:
 | `HU-STUDIO-089 — Ver el resumen de un cliente antes de su sesión` | `después` | `deferred` | `NEW-ITL-CLIENT-SUMMARY` | Sin objetos V1 | Not applicable while deferred | `ADR-053`, proposed on 15 November 2026. Deferred: no `intelligence` schema, table, function, permission or job until the slice passes the gates of ADR-021. |
 | `HU-STUDIO-090 — Saber por qué el asistente no está disponible para un cliente` | `después` | `deferred` | `NEW-ITL-CLIENT-SUMMARY` | Sin objetos V1 | Not applicable while deferred | `ADR-053`, proposed on 15 November 2026. Deferred: no `intelligence` schema, table, function, permission or job until the slice passes the gates of ADR-021. |
 | `HU-STUDIO-091 — Saber si nuestro plan incluye el asistente` | `después` | `deferred` | `NEW-ITL-ENTITLEMENT` | Sin objetos V1 | Not applicable while deferred | `ADR-053`, proposed on 15 November 2026. Deferred: no `intelligence` schema, table, function, permission or job until the slice passes the gates of ADR-021. |
+| `HU-STUDIO-092 — Elegir el tema de Studio` | `importante` | `included_v1` | `OP-IDN-068 + OP-IDN-069` | `identity.surface_preferences`; `identity.read_studio_preferences`, `identity.put_studio_preferences` | `T-IDN-STUDIO-PREFERENCES-01` (`T-IDN-PHY-24..27`, `T-IDN-RLS-25..33`, `T-IDN-INT-41..46`, `T-IDN-IDEM-19..20`); `T-IDN-API-01..14`, `T-IDN-UNIT-01..03` | Asked by the owner on 20 November 2026. One row per person per product; no row means she never chose, and Studio shows its own default, dark. Migration `20261212090000_a_person_keeps_her_theme_for_studio.sql` on `feat/studio-theme-preference`. |
 
 ## 5. Brechas que la matriz hace visibles
 

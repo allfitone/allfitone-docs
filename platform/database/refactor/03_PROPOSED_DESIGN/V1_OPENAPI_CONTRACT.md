@@ -35,6 +35,8 @@ generado son el inventario exhaustivo.
 | Completar autenticación Studio | `GET /studio/v1/auth/callback` | `OP-IDN-026` | query `code`, `state` | `303` a Studio + cookie opaca; `303` to the landing with `?access=expired` and no cookie when the `state` expired | `no-store` |
 | Consultar sesión Studio | `GET /studio/v1/session` | `OP-IDN-027` | `cookieAuth` | `StudioSession` | `private, no-store` |
 | Cerrar sesión Studio | `POST /studio/v1/auth/logout` | `OP-IDN-028` | `Origin` exacto + cookie opcional + `reason` (`manual`, `inactivity` o `recovery`) | `303` hacia logout alojado | `no-store` |
+| Leer mis preferencias de Studio | `GET /studio/v1/me/preferences` | `OP-IDN-068` | `cookieAuth` | `StudioPreferences`, con `theme` en `null` hasta que la persona elige | `private, no-store` |
+| Guardar mis preferencias de Studio | `PUT /studio/v1/me/preferences` | `OP-IDN-069` | `Origin` exacto + headers de comando + `StudioPreferencesPut` | `StudioPreferences`; `Idempotent-Replay` en un reintento | `no-store` |
 | Resolver invitación de equipo | `POST /studio/v1/invitations/resolve` | `OP-IDN-016` | `TeamInvitationResolveRequest` con token en cuerpo | `TeamInvitationPresentation` sin email | `no-store` |
 | Decidir invitación de equipo | `POST /studio/v1/invitations/decisions` | `OP-IDN-009` | headers de comando + token/decisión en cuerpo | `TeamInvitationDecisionResult` | `no-store` |
 | Emitir/listar invitaciones de equipo | `POST/GET /studio/v1/organizations/{organizationId}/invitations` | `OP-ORG-005/016` | comando de emisión / filtros y cursor | invitación creada / `TeamInvitationPage` | `no-store` |

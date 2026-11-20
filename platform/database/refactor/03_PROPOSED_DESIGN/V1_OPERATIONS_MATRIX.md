@@ -283,6 +283,8 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-060` | Open one body photo a client shows this gym | Consulta | `A3`, `A7` |
 | `OP-IDN-061` | Show one of my body photos to one gym | Comando idempotente | `A2` |
 | `OP-IDN-062` | Stop showing a body photo to a gym | Comando idempotente | `A2` |
+| `OP-IDN-068` | Read what I chose for how Studio looks | Consulta | `A2` |
+| `OP-IDN-069` | Keep what I chose for how Studio looks | Comando idempotente | `A2` |
 
 > **`OP-IDN-045` a `OP-IDN-048` estuvieron asignados dos veces, y ya no.** Space los usa
 > para el sexo biológico, las zonas de énfasis, saltarse un paso y cerrar sesión. Las
@@ -306,6 +308,11 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 > no receipt, so no receipt is ambiguous today, but the body photo operations
 > (`OP-IDN-056` to `OP-IDN-058` in the contract) have no card here yet. `OP-IDN-059` to
 > `OP-IDN-062` were checked free in both the OpenAPI and this matrix.
+>
+> **`OP-IDN-063` to `OP-IDN-067` are taken in the OpenAPI and have no card here yet.** They
+> name five Space operations: `correctSpaceName`, `correctSpaceBiologicalSex`,
+> `declareSpaceAvailableEquipment`, `changeSpacePassword` and `correctSpaceHealthContext`.
+> `OP-IDN-068` and `OP-IDN-069` were checked free in both before they were taken.
 
 ---
 
@@ -1302,6 +1309,42 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | The share becomes `withdrawn` with `withdrawn_at`; the next Studio read no longer lists or opens it. Answers `200` with `BodyPhotoShare`, like `OP-PRV-007` |
 | **Falla cerrada** | No share: `404` |
 | **Implemented (STUDIO-45)** | Migration `20261109110000_a_coach_reads_what_a_client_shares_about_herself.sql`. `GET /space/v1/body-photos` gains `shared_with: [{relationship_id, organization_name, shared_at}]`, live shares only. Tests: `T-IDN-PHOTO-SHARE-01` |
+
+#### `OP-IDN-068` — Read what I chose for how Studio looks
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /studio/v1/me/preferences` |
+| **Actor** | `A2`, in Studio. Any member, whatever her role |
+| **Filtros obligatorios** | The person the session resolves to, and only her (`42501` → `403`). The product is the function's: `studio`, never a parameter |
+| **Transacción** | `identity.read_studio_preferences(person)`, one read |
+| **Idempotencia** | No aplica |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | The screen keeps the last answer in the browser, so the first frame is right before this is asked |
+| **Información sensible** | None: a theme says nothing about her health or her training, and nobody but her reads it. No `ACCESS_EVENT` |
+| **Evento de dominio** | None |
+| **Reglas** | `HU-STUDIO-092`. Answers `StudioPreferences { theme }`; `theme` is `null` until she chooses. The server invents no default: Studio shows its own, so changing that default later rewrites nobody's choice |
+| **Falla cerrada** | No session: `401`. Registration incomplete or account closed: `403`, as `OP-IDN-017` |
+| **Implemented (allfitone, `feat/studio-theme-preference`)** | Migration `20261212090000_a_person_keeps_her_theme_for_studio.sql`. Tests: `T-IDN-STUDIO-PREFERENCES-01` (`T-IDN-PHY-24..27`, `T-IDN-RLS-25..33`, `T-IDN-INT-41..46`, `T-IDN-IDEM-19..20`), `identity/infrastructure/studio-preferences.test.ts` (`T-IDN-UNIT-01..03`), `identity/handlers/studio-preferences.test.ts` (`T-IDN-API-01..14`) |
+
+#### `OP-IDN-069` — Keep what I chose for how Studio looks
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando idempotente |
+| **Superficie** | `PUT /studio/v1/me/preferences` with body `StudioPreferencesPut { theme }`, `theme` one of `dark`, `light` |
+| **Actor** | `A2`, in Studio |
+| **Filtros obligatorios** | Same as `OP-IDN-068`. A theme outside the list is refused before anything is written (`22023` → `422`) |
+| **Transacción** | `identity.put_studio_preferences(person, theme, idempotency_key, command_id, request_hash)`. One upsert on `identity.surface_preferences`, keyed by person and product |
+| **Idempotencia** | `Idempotency-Key` and `Command-Id`; the request hash is the theme. A replay answers what she keeps now and says it is a replay; the same key with another theme is `409` |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Two commands at once are settled by the primary key: one row, the last theme. Choosing the theme she already has writes nothing |
+| **Información sensible** | None |
+| **Evento de dominio** | None. Nothing outside the database needs to hear of it, so the command enqueues nothing |
+| **Reglas** | `HU-STUDIO-092`. Answers `200` with `StudioPreferences`. The choice is per person and per product: what she keeps for another product does not move |
+| **Falla cerrada** | Another origin than Studio's: `403`. A body outside the contract: `422`. A command without its two identifiers: `400` |
+| **Implemented (allfitone, `feat/studio-theme-preference`)** | Same migration and tests as `OP-IDN-068` |
 
 ### 7.2 Organizaciones
 
