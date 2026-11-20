@@ -448,7 +448,7 @@ Una arista `A → B` significa que la historia `A` **depende directamente de** `
 **Criterios**
 
 1. Studio abre en oscuro. Es lo que ve quien nunca eligió.
-2. Elijo «Oscuro» o «Claro» al pie del menú, y la pantalla cambia en el momento.
+2. Elijo «Oscuro» o «Claro» en «Mi cuenta», y la pantalla cambia en el momento.
 3. La elección se guarda en mi cuenta: la encuentro al entrar desde otro navegador o desde otro equipo.
 4. La elección es mía y es de Studio. No cambia lo que ve el resto del equipo ni lo que veo en otro producto de Allfit One.
 5. Si no se pudo guardar, la pantalla vuelve al tema anterior y me lo dice.
