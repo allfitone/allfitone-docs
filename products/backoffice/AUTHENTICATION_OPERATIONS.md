@@ -1,89 +1,95 @@
-# Operación de autenticación de Allfit Backoffice
+# Allfit Backoffice authentication operations
 
-- **Aplica a:** `HU-BO-001`, `HU-BO-002`, `HU-BO-003`
-- **Superficie:** `/backoffice/v1`
-- **Evidencia V1:** contraseña + TOTP, materializada como AAL2 por sesión
-- **Frontend:** `apps/backoffice-web`, cliente directo de `/backoffice/v1`
+- **Applies to:** `HU-BO-001`, `HU-BO-002`, `HU-BO-003`
+- **Surface:** `/backoffice/v1`
+- **V1 evidence:** password + TOTP, materialized as AAL2 per session
+- **Frontend:** `apps/backoffice-web`, a direct client of `/backoffice/v1`
 
-Backoffice no usa Hosted AuthKit para iniciar sesión. La API combina la autenticación por contraseña de la Application Backoffice con la [API MFA componible de WorkOS](https://workos.com/docs/mfa), y PostgreSQL sólo crea la cookie de sesión después de confirmar el challenge TOTP. La recuperación de contraseña es la única ceremonia alojada: WorkOS envía el correo y sirve la página en su dominio `*.authkit.app`.
+The Backoffice does not use Hosted AuthKit to sign in. The API combines password authentication on the Backoffice Application with the [WorkOS composable MFA API](https://workos.com/docs/mfa), and PostgreSQL creates the session cookie only after the TOTP challenge is confirmed. Password recovery is the only hosted ceremony: WorkOS sends the email and serves the page on its `*.authkit.app` domain.
 
-## Comportamiento del frontend
+## Frontend behaviour
 
-- El arranque consulta sesión e intento en paralelo. Una sesión `200` abre la
-  confirmación AAL2; un intento `200` reanuda enrolamiento o challenge; dos
-  respuestas `401` muestran el acceso. Cualquier estado indeterminado falla
-  cerrado y no monta datos del operador.
-- El enrolamiento muestra el QR devuelto por WorkOS y siempre ofrece la clave
-  manual. Correo, contraseña, TOTP, QR y clave manual viven sólo en memoria y no
-  se escriben en URL, logs, `localStorage` ni `sessionStorage`.
-- Cada código distinto crea un `Idempotency-Key` UUIDv4 y `Command-Id` UUIDv7.
-  Si la respuesta se pierde, el cliente comprueba primero la sesión y conserva
-  los mismos identificadores para un reintento seguro del mismo código.
-- El navegador sincroniza entre pestañas únicamente estado y vencimientos
-  técnicos. Revalida al volver a la pestaña o restaurar BFCache y actualiza la
-  actividad como máximo una vez por minuto.
-- Un cierre manual o por inactividad desmonta de inmediato la vista autenticada.
-  Si no puede confirmarse, aparece “Tu sesión está protegida” sin nombre ni datos
-  del operador, con acciones para completar el cierre o reintentar.
-- Hasta implementar `HU-BO-004`, el resultado autenticado es “Acceso confirmado”:
-  nombre, evidencia AAL2, vencimientos y logout. No simula navegación, permisos ni
-  un dashboard todavía inexistente.
+- Start-up asks for the session and the attempt in parallel. A `200` session goes
+  straight to Inicio (`/panel`); a `200` attempt resumes enrollment or the challenge;
+  two `401` answers show the sign-in. Any indeterminate state fails closed and mounts
+  no operator data.
+- A verified TOTP code also goes straight to Inicio. The address is replaced, not
+  pushed, so Back from Inicio does not return to the access screen. Inicio's operator
+  card shows who signed in, that it was with two factors, and both deadlines.
+- From then on the workspace session gate holds the session: it confirms it before
+  rendering, ends the view at the API deadline, follows a sign-out in another tab, and
+  checks again when a tab comes back into view or is restored from BFCache.
+- Enrollment shows the QR returned by WorkOS and always offers the manual key. Email,
+  password, TOTP code, QR and manual key live only in memory and are never written to
+  the URL, logs, `localStorage` or `sessionStorage`.
+- Each distinct code creates an `Idempotency-Key` UUIDv4 and a `Command-Id` UUIDv7. If
+  the response is lost, the client checks the session first and keeps the same
+  identifiers for a safe retry of the same code.
+- Tabs share only state and technical deadlines. Activity is refreshed at most once a
+  minute.
+- A manual or inactivity sign-out unmounts the authenticated view at once. If it cannot
+  be confirmed, “Tu sesión está protegida” appears with no operator name or data, and
+  with actions to complete the sign-out or retry.
 
-El frontend usa exclusivamente `@allfitone/react` y los DTO generados de
-`@allfitone/contracts`. `NEXT_PUBLIC_API_URL` sigue siendo su única variable de
-entorno.
+The access screen once ended on “Acceso confirmado”, with the name, the AAL2 evidence,
+the deadlines and a sign-out, because `HU-BO-004` did not exist yet. Inicio now shows
+the same facts, so the screen was removed. Authorization did not change: every request
+resolves the session and the duty again.
 
-## Configuración de WorkOS
+The frontend uses only `@allfitone/react` and the DTOs generated in
+`@allfitone/contracts`. `NEXT_PUBLIC_API_URL` is still its only environment variable.
 
-En cada ambiente, usar una Application exclusiva de Backoffice dentro del environment correspondiente:
+## WorkOS configuration
 
-| Ajuste | Valor |
+In every environment, use an Application exclusive to the Backoffice inside the matching WorkOS environment:
+
+| Setting | Value |
 | --- | --- |
-| Método | Email + password activo |
-| Emails predeterminados | Activos |
-| MFA global de AuthKit | Desactivado |
-| SSO, OAuth, Magic Auth, SMS y passkeys | Desactivados en V1 |
-| Dominio personalizado | No requerido; `auth.allfit.one` diferido |
-| Webhook | `password_reset.succeeded` hacia `{API_PUBLIC_URL}/webhooks/workos` |
+| Method | Email + password enabled |
+| Default emails | Enabled |
+| AuthKit global MFA | Disabled |
+| SSO, OAuth, Magic Auth, SMS and passkeys | Disabled in V1 |
+| Custom domain | Not required; `auth.allfit.one` deferred |
+| Webhook | `password_reset.succeeded` to `{API_PUBLIC_URL}/webhooks/workos` |
 
-El login usa `WORKOS_API_KEY_BACKOFFICE`, `WORKOS_CLIENT_ID_BACKOFFICE` y el issuer esperado en la API. El worker sólo necesita `WORKOS_API_KEY_BACKOFFICE` para eliminar factores abandonados y revocar `sid`; no necesita client ID, issuer ni dominio.
+Sign-in uses `WORKOS_API_KEY_BACKOFFICE`, `WORKOS_CLIENT_ID_BACKOFFICE` and the issuer the API expects. The worker needs only `WORKOS_API_KEY_BACKOFFICE`, to delete abandoned factors and revoke a `sid`; it needs no client ID, issuer or domain.
 
-## Variables y gates
+## Variables and gates
 
-| Deployable | Variable | Uso |
+| Deployable | Variable | Use |
 | --- | --- | --- |
-| API | `BACKOFFICE_AUTH_ENABLED=false` | Cierra únicamente nuevos inicios por contraseña durante despliegue o rollback |
-| API | `BACKOFFICE_WEB_URL` | Origen CORS exacto; no admite lista ni wildcard |
-| API | `WORKOS_API_KEY_BACKOFFICE` | Password, MFA, reset y revocación |
-| API | `WORKOS_CLIENT_ID_BACKOFFICE` | Application exacta para autenticar y validar tokens |
-| API | `WORKOS_ISSUER` | Issuer esperado y vínculo de `access_accounts` |
-| API | `SESSION_ENCRYPTION_KEY` | Cifra tokens y datos temporales de enrolamiento |
-| Worker | `WORKOS_API_KEY_BACKOFFICE` | Limpieza y revocación externa |
-| Worker | `DATABASE_URL`, `CRON_SECRET` | Funciones cerradas y protección de `/cron/outbox` |
+| API | `BACKOFFICE_AUTH_ENABLED=false` | Closes only new password sign-ins during a deployment or rollback |
+| API | `BACKOFFICE_WEB_URL` | Exact CORS origin; no list or wildcard |
+| API | `WORKOS_API_KEY_BACKOFFICE` | Password, MFA, reset and revocation |
+| API | `WORKOS_CLIENT_ID_BACKOFFICE` | The exact Application to authenticate against and validate tokens for |
+| API | `WORKOS_ISSUER` | Expected issuer and the link in `access_accounts` |
+| API | `SESSION_ENCRYPTION_KEY` | Encrypts tokens and temporary enrollment data |
+| Worker | `WORKOS_API_KEY_BACKOFFICE` | External cleanup and revocation |
+| Worker | `DATABASE_URL`, `CRON_SECRET` | Closed functions and protection of `/cron/outbox` |
 
-Con el gate apagado, sesión, logout, verificación de intentos ya abiertos, reset, expiración y revocación continúan disponibles. No se agregan variables de dominio personalizado.
+With the gate off, session, logout, verification of attempts already open, reset, expiry and revocation stay available. No custom-domain variables are added.
 
-## Contrato y cookies
+## Contract and cookies
 
-- `POST /backoffice/v1/auth/password` crea un intento de diez minutos y la cookie `allfit_backoffice_auth_attempt`, `HttpOnly`, `SameSite=Strict`, host-only y limitada a `/backoffice/v1/auth`.
-- `GET /backoffice/v1/auth/attempt` recupera challenge o enrolamiento sin devolver IDs, tokens ni identidad.
-- `POST /backoffice/v1/auth/totp/verification` exige `Idempotency-Key`, `Command-Id` y un código de seis dígitos. El intento tolera como máximo cinco códigos incorrectos.
-- `GET /backoffice/v1/session` devuelve únicamente nivel/método, nombre propio y vencimientos. No expone email, factor, claims, deberes ni permisos.
-- `POST /backoffice/v1/auth/logout` acepta `manual`, `inactivity` o `recovery`, no redirige y siempre responde `204`.
-- `POST /backoffice/v1/auth/password-resets` siempre responde `202`; la API descarta URL y token devueltos por WorkOS.
+- `POST /backoffice/v1/auth/password` creates a ten-minute attempt and the `allfit_backoffice_auth_attempt` cookie: `HttpOnly`, `SameSite=Strict`, host-only and limited to `/backoffice/v1/auth`.
+- `GET /backoffice/v1/auth/attempt` resumes the challenge or enrollment without returning IDs, tokens or identity.
+- `POST /backoffice/v1/auth/totp/verification` requires `Idempotency-Key`, `Command-Id` and a six-digit code. An attempt tolerates at most five wrong codes.
+- `GET /backoffice/v1/session` returns only the level and method, the given name and the deadlines. It exposes no email, factor, claims, duties or permissions.
+- `POST /backoffice/v1/auth/logout` accepts `manual`, `inactivity` or `recovery`, never redirects and always answers `204`.
+- `POST /backoffice/v1/auth/password-resets` always answers `202`; the API discards the URL and token WorkOS returns.
 
-Todas las rutas requieren `Origin` exacto, responden `Cache-Control: no-store` y `Referrer-Policy: no-referrer`, y nunca registran email, contraseña, TOTP, QR, clave manual, factor/challenge ID o tokens. The `allfit_backoffice_session` cookie uses path `/backoffice/v1` and `Max-Age=43200`. The session ends after 60 minutes without activity or 12 hours in all (ADR-046); PostgreSQL enforces both through `access_control.backoffice_idle_limit()` and `access_control.backoffice_session_lifetime()`, and `GET /backoffice/v1/session` reports `inactivity_expires_at` as the last activity plus 60 minutes.
+Every route requires the exact `Origin`, answers `Cache-Control: no-store` and `Referrer-Policy: no-referrer`, and never logs an email, password, TOTP code, QR, manual key, factor or challenge ID, or token. The `allfit_backoffice_session` cookie uses path `/backoffice/v1` and `Max-Age=43200`. The session ends after 60 minutes without activity or 12 hours in all (ADR-046); PostgreSQL enforces both through `access_control.backoffice_idle_limit()` and `access_control.backoffice_session_lifetime()`, and `GET /backoffice/v1/session` reports `inactivity_expires_at` as the last activity plus 60 minutes.
 
-## Límites por dirección
+## Per-address limits
 
 **Before AWS, on Vercel.** These rules lived in the Vercel project of the API, with no IP
 stored in PostgreSQL:
 
-- password: 10 solicitudes cada 15 minutos por IP;
-- TOTP: 20 solicitudes cada 15 minutos por IP, además de cinco códigos inválidos por intento en PostgreSQL;
-- reset: 5 solicitudes por hora por IP.
+- password: 10 requests every 15 minutes per IP;
+- TOTP: 20 requests every 15 minutes per IP, on top of five wrong codes per attempt in PostgreSQL;
+- reset: 5 requests an hour per IP.
 
-El rechazo es `429 rate-limited` con `Retry-After`. Las métricas son contadores sin PII para password, enrollment, challenge, verification, session, logout, reset y rate limiting.
+The refusal is `429 rate-limited` with `Retry-After`. The metrics are counters without personal data for password, enrollment, challenge, verification, session, logout, reset and rate limiting.
 
 **On AWS.** The Vercel rules did not move with the API, so production has had no per-address
 limit since. The five-failure lockout per attempt in PostgreSQL still holds, but nothing
@@ -111,7 +117,7 @@ an AWS WAF web ACL on the load balancer. It takes effect when Terraform is appli
 - **Tests:** `infra/modules/edge/tests/edge.tftest.hcl` checks the limits, the window, the
   `429` and the association with the load balancer.
 
-## Bootstrap protegido
+## Protected bootstrap
 
 The `backoffice-bootstrap.yml` workflow and the `backoffice-bootstrap-production`
 environment this section used to describe do not exist (ADR-046, *A stale ceremony*). The
@@ -136,39 +142,39 @@ The task connects with the database master credential. No endpoint, seed or func
 granted to the runtime can repeat the bootstrap. The command does not create people or
 WorkOS accounts.
 
-## Recuperación de un autenticador perdido
+## Recovering a lost authenticator
 
-**Not runnable as written (see ADR-046, *A stale ceremony*):** the `backoffice-totp-recovery.yml` workflow and its environment do not exist, and no migrator command runs the recovery. The function `identity.recover_backoffice_totp_factor` exists and requires two administrators other than the subject, both holding `manage_platform_access`; with two administrators in all, it cannot run for either of them. The rest of this section describes what the function does. La función bloquea el factor, sesiones, intentos y roles relevantes; registra evidencia inmutable y emite limpieza al worker. El próximo password correcto inicia un enrolamiento nuevo.
+**Not runnable as written (see ADR-046, *A stale ceremony*):** the `backoffice-totp-recovery.yml` workflow and its environment do not exist, and no migrator command runs the recovery. The function `identity.recover_backoffice_totp_factor` exists and requires two administrators other than the subject, both holding `manage_platform_access`; with two administrators in all, it cannot run for either of them. The rest of this section describes what the function does. It blocks the factor and the relevant sessions, attempts and roles, records immutable evidence and hands the cleanup to the worker. The next correct password starts a new enrollment.
 
-El proceso nunca muestra ni recupera la clave TOTP anterior. Cambiar la contraseña no elimina por sí solo el factor activo; un `password_reset.succeeded` sí revoca sesiones Studio/Backoffice e intentos pendientes.
+The process never shows or recovers the previous TOTP key. Changing the password does not by itself delete the active factor; a `password_reset.succeeded` does revoke the Studio and Backoffice sessions and the pending attempts.
 
-## Worker y observabilidad
+## Worker and observability
 
-`GET /cron/outbox` procesa en cada ejecución:
+`GET /cron/outbox` processes on every run:
 
-- vencimiento por lotes de intentos;
-- eliminación de factores pendientes abandonados;
-- revocación de `sid` por logout parcial, rol retirado, reset o recuperación;
-- reintentos idempotentes y dead letter después del máximo configurado.
+- batch expiry of attempts;
+- deletion of abandoned pending factors;
+- revocation of a `sid` after a partial logout, a withdrawn role, a reset or a recovery;
+- idempotent retries, and a dead letter after the configured maximum.
 
-Validar el cron con `Authorization: Bearer {CRON_SECRET}`: sin bearer debe responder `401`; con bearer debe devolver los resultados `invitations` y `backofficeAuthentication`. Alertar por `worker.backoffice_auth.cleanup` en `retrying`, crecimiento de intentos abandonados y aumento sostenido de verificaciones fallidas.
+Check the cron with `Authorization: Bearer {CRON_SECRET}`: without the bearer it must answer `401`; with it, it must return the `invitations` and `backofficeAuthentication` results. Alert on `worker.backoffice_auth.cleanup` in `retrying`, on growth of abandoned attempts and on a sustained rise in failed verifications.
 
-## Gate de sandbox y despliegue
+## Sandbox and deployment gate
 
-1. Mantener `BACKOFFICE_AUTH_ENABLED=false`, aplicar estructura y funciones y ejecutar el bootstrap.
-2. Confirmar que password desconocido, password erróneo, persona inactiva y rol ausente devuelven el mismo `401`.
-3. En Preview, activar el gate y enrolar un QR real. Verificar un TOTP real y comprobar que sólo entonces aparece una sesión AAL2.
-4. Repetir el login con el factor existente, probar cuatro códigos incorrectos y confirmar que el quinto termina el intento.
-5. Confirm 60 idle minutes, 12 absolute hours (ADR-046), repeated logout and role withdrawal during a login.
-6. Solicitar reset de una dirección conocida y una desconocida; ambas peticiones responden `202`. Completar el correo alojado en `*.authkit.app` y comprobar revocación de sesiones sin pérdida del TOTP.
-7. Probar recuperación protegida de un factor y el enrolamiento posterior.
-8. Activar Producción sin frontend y ejecutar el mismo smoke test mediante el contrato HTTP.
+1. Keep `BACKOFFICE_AUTH_ENABLED=false`, apply structure and functions, and run the bootstrap.
+2. Confirm that an unknown password, a wrong password, an inactive person and a missing role return the same `401`.
+3. In Preview, turn the gate on and enroll a real QR. Verify a real TOTP code and check that only then does an AAL2 session appear.
+4. Sign in again with the existing factor, try four wrong codes and confirm that the fifth ends the attempt.
+5. Confirm 60 idle minutes, 12 absolute hours (ADR-046), repeated logout and role withdrawal during a sign-in.
+6. Request a reset for a known address and an unknown one; both answer `202`. Complete the hosted email on `*.authkit.app` and check that sessions are revoked without losing the TOTP factor.
+7. Try the protected recovery of a factor and the enrollment after it.
+8. Turn on Production without the frontend and run the same smoke test through the HTTP contract.
 
-Para rollback, apagar primero `BACKOFFICE_AUTH_ENABLED`. No apagar worker, logout, sesión, expiración, reset ni revocación mientras existan intentos o sesiones emitidos.
+To roll back, turn off `BACKOFFICE_AUTH_ENABLED` first. Do not turn off the worker, logout, session, expiry, reset or revocation while attempts or sessions issued under it exist.
 
-## Límite de la garantía
+## Limit of the guarantee
 
-Password + TOTP es la evidencia AAL2 interna aprobada para V1, vinculada a la sesión y no a claims. TOTP puede ser objeto de phishing; Allfit no declarará cumplimiento integral de una oferta AAL2 moderna hasta incorporar WebAuthn/passkeys. Añadir `auth.allfit.one` posteriormente sólo cambia el branding y la configuración de páginas alojadas de WorkOS: no migra contratos HTTP, cookies, factores ni sesiones locales.
+Password + TOTP is the internal AAL2 evidence approved for V1, bound to the session and not to claims. TOTP can be phished; Allfit will not claim full compliance with a modern AAL2 offer until it adds WebAuthn or passkeys. Adding `auth.allfit.one` later only changes the branding and configuration of the WorkOS hosted pages: it does not migrate HTTP contracts, cookies, factors or local sessions.
 
 ### Password + TOTP is not WebAuthn (`HU-BO-001` criterion 7)
 
