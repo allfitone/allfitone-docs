@@ -285,6 +285,12 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | `OP-IDN-065` | Declare the equipment I have | Comando | `A2` |
 | `OP-IDN-066` | Change my password | Comando | `A2` |
 | `OP-IDN-067` | Correct my health context claim | Comando | `A2` |
+| `OP-IDN-070` | Read my units and language | Consulta | `A2` |
+| `OP-IDN-071` | Choose my units and language | Comando | `A2` |
+| `OP-IDN-072` | Register this phone for push | Comando | `A2` |
+| `OP-IDN-073` | Retire this phone from push | Comando | `A2` |
+| `OP-IDN-074` | List my notices | Consulta | `A2` |
+| `OP-IDN-075` | Mark a notice as read | Comando | `A2` |
 
 > **`OP-IDN-045` a `OP-IDN-048` estuvieron asignados dos veces, y ya no.** Space los usa
 > para el sexo biológico, las zonas de énfasis, saltarse un paso y cerrar sesión. Las
@@ -318,6 +324,10 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 > **`OP-IDN-066` (TECH-325)** was checked free in both on 11 November 2026.
 >
 > **`OP-IDN-067` (TECH-326)** was checked free in both on 12 November 2026.
+>
+> **`OP-IDN-070` to `OP-IDN-075` (TECH-44, ADR-054)** were checked free in both on 25 November
+> 2026. `OP-IDN-068` and `OP-IDN-069` are Studio's theme preference, documented on `main`
+> after this branch left it, so they are skipped here rather than reused.
 
 ---
 
@@ -731,6 +741,7 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Evento de dominio** | Ninguno |
 | **Reglas** | Es el dato que hace evaluable el filtro obligatorio de `OP-SYS-002`. Las notificaciones de seguridad **no se pueden desactivar**. Ninguna organización lee ni escribe estas preferencias. Desactivar un canal no cancela la operación de negocio que lo hubiera usado, **salvo** en `OP-REL-003`, donde la notificación es parte de la transacción |
 | **Falla cerrada** | Categoría o canal fuera del catálogo: rechazo |
+| **Shape (ADR-054)** | Channels are `email` and `push` (ADR-050). `GET` answers the six categories × two channels, each with `enabled`, `locked` (security) and `available`: email needs a verified contact email, push a registered phone (`OP-IDN-072`). A missing row reads as enabled, so nothing that is sent today stops silently. `PUT` replaces the set: turning on an unavailable channel or turning off security answers `422` and changes nothing. Turning a channel off never removes a notice from `OP-IDN-074`. Space draws it as `PF-13`, without the SMS column |
 
 #### `OP-IDN-025` — Iniciar autenticación alojada de Studio
 
@@ -1407,6 +1418,74 @@ Regla que gobierna todo el dominio: **un usuario WorkOS no es una persona**. Nin
 | **Reglas** | `HU-SP-022` for health context, as decided on 12 November 2026: correcting changes that claim and keeps no versions; something new is a new claim. The side of the body goes in the description, because the areas have none |
 | **Falla cerrada** | Somebody else's claim or one that does not exist: `404`. Under a live legal hold over `health`, or while the claim's deletion waits: `409` and nothing changes. Invalid values: `422` |
 | **Implemented (TECH-326)** | `identity.correct_health_context(provider, issuer, subject, claim_id, type, description, area, valid_from, valid_to, key, command, hash)`, migration `20261127090000_a_person_corrects_her_health_context.sql`, behind `PUT /space/v1/health-context/{claimId}` answering `200 HealthContextClaim`. The guard `identity.health_context_claim_guard_tg` now refuses only an update that changes `id`, `person_id`, `provenance` or `created_at`, or touches a claim that is not `person_declared`. A live hold is `privacy.live_hold_over(person, 'health')`; a waiting deletion is a `pending` or `suspended` disposition item on the claim. Space draws it as «Dolor y limitaciones» (`PF-7`, `PF-E19b` to `PF-E22`). Tests: `T-IDN-HEALTH-CORRECT-01`, `T-IDN-HEALTH-01` (the old immutability case now asserts the fixed origin), `T-IDN-HEALTH-API-12..15`, `T-SPC-UNIT-HEALTH-01..11` |
+
+#### `OP-IDN-070` — Read my units and language · `OP-IDN-071` — Choose them
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta · Comando |
+| **Superficie** | `GET /space/v1/me/preferences` · `PUT /space/v1/me/preferences` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | `person_id = access_control.person()` |
+| **Transacción** | Consulta: ninguna. Comando: upsert of `identity.person_preferences` |
+| **Idempotencia** | `Idempotency-Key`; the same body converges |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | The app keeps the last value it read; the change needs a connection and the last one wins |
+| **Información sensible** | `operational` |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | `HU-SP-094`, ADR-054. `mass_unit` is `kg` or `lb`, `distance_unit` `km` or `mi`, `locale` `es` or `en`; each is null until chosen, and the app then follows the phone. **Choosing a unit rewrites nothing**: records keep their canonical and original units and are converted when shown. `locale` also decides the language of her email and push. Space draws it as `PF-14` |
+| **Falla cerrada** | A value outside its list: `422` |
+
+#### `OP-IDN-072` — Register this phone for push · `OP-IDN-073` — Retire it
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando · Comando |
+| **Superficie** | `PUT /space/v1/me/push-devices/{deviceId}` with `{ token, platform }` · `DELETE /space/v1/me/push-devices/{deviceId}` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | `person_id = access_control.person()`. `deviceId` is a UUID the app generates once per installation |
+| **Transacción** | Upsert of the device with its Expo push token and platform (`ios`, `android`), refreshing `last_seen_at`; a token held by another device or person moves to this one. Retiring marks it retired |
+| **Idempotencia** | `Idempotency-Key`; registering the same token converges and retiring twice answers the same |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | Registered again on every sign-in and app start while permission holds |
+| **Información sensible** | `operational`: a push token reaches a phone, never a person's data |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | ADR-054. The app asks the phone's permission first (`NT-4`) and registers only once it is granted. Sign-out retires the device. The push job retires a token Expo reports as unregistered |
+| **Falla cerrada** | Unknown platform or an empty token: `422`. Retiring a device that is not hers answers as if it were retired |
+
+#### `OP-IDN-074` — List my notices
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Consulta |
+| **Superficie** | `GET /space/v1/notices?filter=all\|awaiting&cursor=` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | `person_id = access_control.person()` |
+| **Transacción** | Read only. Joins each notice to its subject to know whether it awaits her decision and when it expires |
+| **Idempotencia** | No aplica |
+| **Paginación y orden** | Newest first by `(occurred_at, id)`, 30 per page; the response also carries `awaiting_count` and `unread_count` for the bell |
+| **Offline / concurrencia** | Shows what it last read; no notice is written by the client |
+| **Información sensible** | `operational`. A notice carries kind, category, subject, organization and the names the sentence needs (organization, professional, program), never a weight, measure, meal or health data |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | `HU-SP-091`, ADR-054. The person reads every notice whatever her channels say. A notice awaits while its subject is pending and not expired; decided anywhere, it stops awaiting. Space draws it as `NT-1` and `NT-2` |
+| **Falla cerrada** | An unknown filter: `422` |
+
+#### `OP-IDN-075` — Mark a notice as read
+
+| Campo | Valor |
+| --- | --- |
+| **Tipo** | Comando |
+| **Superficie** | `POST /space/v1/notices/{noticeId}/read` |
+| **Actor** | `A2` |
+| **Filtros obligatorios** | The notice is hers |
+| **Transacción** | Sets `read_at` the first time; later calls change nothing |
+| **Idempotencia** | Natural: reading twice answers the same |
+| **Paginación y orden** | No aplica |
+| **Offline / concurrencia** | The app marks it as read when she opens it |
+| **Información sensible** | `operational` |
+| **Evento de dominio** | Ninguno |
+| **Reglas** | Reading never decides anything: an invitation read but not answered still awaits |
+| **Falla cerrada** | Somebody else's notice or one that does not exist: `404` |
 
 ### 7.2 Organizaciones
 

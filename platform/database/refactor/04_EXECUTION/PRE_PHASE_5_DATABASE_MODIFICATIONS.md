@@ -86,8 +86,8 @@ El documento registra las decisiones de alcance aprobadas y las brechas de traza
 | `DB-P5-008` | P0 | Cerrar resolución determinística de entitlements | Cerrado por `ADR-043` el 12 de octubre de 2026 (`payments.resolve_pro`) |
 | `DB-P5-009` | P0 | Persistir cambios y recuperación de identidad | Pendiente |
 | `DB-P5-010` | P0 | Persistir solicitudes de verificación profesional | Pendiente |
-| `DB-P5-011` | P0 | Crear bandeja de avisos y entregas | Pendiente |
-| `DB-P5-012` | P0 | Crear preferencias generales de persona | Pendiente |
+| `DB-P5-011` | P0 | Crear bandeja de avisos y entregas | Diseñada (ADR-054) |
+| `DB-P5-012` | P0 | Crear preferencias generales de persona | Diseñada (ADR-054) |
 | `DB-P5-013` | P0 | Tipar referencias de perfil a catálogos | Pendiente |
 | `DB-P5-014` | P0 | Recompilar integridad, RLS e idempotencia | Pendiente |
 | `DB-P5-015` | P0 | Cerrar retención y anonimización física | Pendiente legal/producto |

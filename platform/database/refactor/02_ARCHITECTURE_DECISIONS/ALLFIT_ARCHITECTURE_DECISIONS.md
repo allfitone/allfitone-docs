@@ -59,6 +59,7 @@
 | ADR-050 | V1 sends no SMS: the phone is a contact value |
 | ADR-051 | A password change speaks to WorkOS inside the request |
 | ADR-052 | A person corrects her health context in place |
+| ADR-054 | A notice is kept for the person, and each channel only carries it |
 
 Cada sección conserva su contexto, decisión, invariantes, consecuencias y pruebas. Las nuevas decisiones de arquitectura de esta refactorización deben añadirse a este mismo documento.
 
@@ -6884,3 +6885,101 @@ person meant to leave. Law 1581 asks for the minimum.
 4. Under a live legal hold over `health`, or while the claim's deletion waits, nothing changes.
 5. The same validations as a declaration apply.
 6. A professional with the grant reads the corrected claim.
+
+## ADR-054 — A notice is kept for the person, and each channel only carries it
+
+**Status:** accepted for V1.<br>
+**Date:** 25 November 2026<br>
+**Modifies:** `OP-IDN-023`/`OP-IDN-024` and `identity.notification_preferences` (§4.15);
+closes `DB-P5-011` and `DB-P5-012`; adds `OP-IDN-070` to `OP-IDN-075`. Builds on ADR-050
+(no SMS): the channels are email and push.
+
+### Context
+
+Space has a bell and two profile rows that say «Pronto». `HU-SP-078` asks to choose the
+channel per kind of notice, `HU-SP-091` to see every notice and reach where it is resolved,
+and `HU-SP-094` to choose units and language. Today the worker emails each event straight
+from its payload, nothing is kept for the person, nothing reads a preference, and there is
+no push at all: the only notification the app raises is the local rest timer.
+
+Three things had to be settled: where a notice is born so that none is ever lost, what it may
+contain, and how push can be ready before the Apple account that enables it exists.
+
+### Decision
+
+1. **A notice is a row kept for the person**, `identity.person_notifications`, written in the
+   same transaction as the domain event that causes it: an `AFTER INSERT` trigger on
+   `system.outbox_events` runs a closed map from event type to notice kind, category and
+   recipient. If the event commits, the notice exists; if it rolls back, neither does. One
+   notice per recipient per event.
+2. **A notice holds no words and no personal data**: kind, category, the subject it points to
+   (type and id), the organization when there is one, when it happened and when it was read.
+   The app writes the sentence in the person's language from the kind and a closed projection
+   read at list time (the organization's, the professional's and the program's names). Never
+   a weight, a measure, a meal or anything about health (`OP-SYS-002`).
+3. **«Awaits your decision» is read, not stored.** The listing joins each notice to its
+   subject: an invitation, a cover, a correction or a nutrition goal that is still pending and
+   not expired awaits; once decided anywhere, it stops awaiting without a second write. «Vence
+   en N días» comes from the subject's own expiry.
+4. **Nobody is told what she did herself.** An event whose actor is the recipient produces no
+   notice (ending her own relationship, revoking her own grant).
+5. **A channel carries a notice; turning it off never removes it.** Email and push follow
+   `identity.notification_preferences`; security always goes. Email stays where it is today,
+   in each worker consumer, which now reads the preference before sending. Push is a new
+   worker job over `system.notification_deliveries`.
+6. **Push goes through the Expo push service** over HTTPS, with no SDK. Each phone registers
+   its token (`identity.person_push_devices`); a token is retired on sign-out or when Expo
+   reports it unregistered. A push says what happened in one line and opens the app (`NT-3`),
+   in the person's language. The job stays off (`PUSH_DELIVERY_ENABLED`) until the project
+   has APNs and FCM credentials; nothing else waits on them.
+7. **Units and language are the person's**, `identity.person_preferences`: `mass_unit`
+   (`kg`, `lb`), `distance_unit` (`km`, `mi`), `locale` (`es`, `en`). Null until she chooses;
+   the app then follows the phone. Changing a unit never rewrites a record: values keep their
+   canonical and original units and are converted when shown. Email and push use her `locale`,
+   Spanish while she has none.
+
+### What raises a notice in V1
+
+| Event | Kind | Category | Awaits a decision |
+| --- | --- | --- | --- |
+| `relationship.client_invited.v1` | `client_invitation` | `relationship` | While the invitation is pending |
+| `relationship.substitution_proposed.v1` | `cover_proposed` | `relationship` | While the cover is proposed |
+| `relationship.professional_reassigned.v1` | `professional_changed` | `relationship` | No |
+| `relationship.terminated.v1` (by the organization) | `relationship_ended` | `relationship` | No |
+| `payments.subscription_suspended.v1` | `plan_paused` | `relationship` | No |
+| `payments.subscription_reactivated.v1` | `plan_resumed` | `relationship` | No |
+| `payments.subscription_ended.v1` | `plan_ended` | `relationship` | No |
+| `planning.assignment_created.v1` (by a professional) | `program_assigned` | `assignment` | No |
+| `execution.correction_proposed.v1` | `correction_proposed` | `correction` | While the proposal is pending |
+| `nutrition.goal_version_proposed.v1` | `goal_proposed` | `nutrition` | While the proposal is pending |
+| `identity.password_changed.v1` | `password_changed` | `security` | No |
+| `identity.contact_changed.v1` | `email_changed` | `security` | No |
+
+- A client invitation becomes a notice only when its contact is an existing person's verified
+  email; otherwise the email is the only way it arrives, as today.
+- `consent` stays a category the person can configure, but no V1 event addresses her about a
+  consent she did not give herself. It gets its first kind when one does.
+- «No pudimos cobrar tu suscripción» for Pro is the store's: `payments.platform_subscription_*`
+  has no consumer and keeps none (see `delivery-coverage.test.ts`).
+
+### Consequences
+
+- The bell and the inbox read one table. A notice survives a channel being off, a failed
+  email and a phone without push.
+- Adding a kind is a row in the map plus its sentence in the app; the database never stores
+  copy in two languages.
+- Push can be built, tested against a stubbed Expo and shipped dark.
+
+### Mandatory test scenarios
+
+1. Each mapped event writes exactly one notice for its recipient, in the event's transaction;
+   a rolled-back event leaves none.
+2. An event the recipient caused herself writes none.
+3. A notice exposes no words and none of the person's data.
+4. A pending invitation, cover, correction or goal awaits; decided or expired, it does not.
+5. Turning off a channel keeps the notice in the inbox; security cannot be turned off.
+6. Email cannot be turned on without a verified email; push cannot without a registered phone.
+7. Push is not sent while the job is off, is sent once per notice and phone, and an
+   unregistered token is retired.
+8. Changing units rewrites no stored value.
+9. Only the person reads or writes her notices, devices and preferences; no organization does.
