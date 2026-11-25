@@ -6921,18 +6921,22 @@ contain, and how push can be ready before the Apple account that enables it exis
    subject: an invitation, a cover, a correction or a nutrition goal that is still pending and
    not expired awaits; once decided anywhere, it stops awaiting without a second write. «Vence
    en N días» comes from the subject's own expiry.
-4. **Nobody is told what she did herself.** An event whose actor is the recipient produces no
-   notice (ending her own relationship, revoking her own grant).
-5. **A channel carries a notice; turning it off never removes it.** Email and push follow
+4. **Nobody is told what she did herself, except about her security.** An event whose actor is
+   the recipient produces no notice (ending her own relationship, revoking her own grant). A
+   password or email change always does: whoever changed it may not have been her, and that is
+   the reason to tell her.
+5. **One notice per subject that awaits a decision.** An invitation sent again refreshes its
+   notice (newer, unread again) instead of adding a second one.
+6. **A channel carries a notice; turning it off never removes it.** Email and push follow
    `identity.notification_preferences`; security always goes. Email stays where it is today,
    in each worker consumer, which now reads the preference before sending. Push is a new
    worker job over `system.notification_deliveries`.
-6. **Push goes through the Expo push service** over HTTPS, with no SDK. Each phone registers
+7. **Push goes through the Expo push service** over HTTPS, with no SDK. Each phone registers
    its token (`identity.person_push_devices`); a token is retired on sign-out or when Expo
    reports it unregistered. A push says what happened in one line and opens the app (`NT-3`),
    in the person's language. The job stays off (`PUSH_DELIVERY_ENABLED`) until the project
    has APNs and FCM credentials; nothing else waits on them.
-7. **Units and language are the person's**, `identity.person_preferences`: `mass_unit`
+8. **Units and language are the person's**, `identity.person_preferences`: `mass_unit`
    (`kg`, `lb`), `distance_unit` (`km`, `mi`), `locale` (`es`, `en`). Null until she chooses;
    the app then follows the phone. Changing a unit never rewrites a record: values keep their
    canonical and original units and are converted when shown. Email and push use her `locale`,
@@ -6953,7 +6957,7 @@ contain, and how push can be ready before the Apple account that enables it exis
 | `execution.correction_proposed.v1` | `correction_proposed` | `correction` | While the proposal is pending |
 | `nutrition.goal_version_proposed.v1` | `goal_proposed` | `nutrition` | While the proposal is pending |
 | `identity.password_changed.v1` | `password_changed` | `security` | No |
-| `identity.contact_changed.v1` | `email_changed` | `security` | No |
+| `identity.contact_verified.v1` (email change confirmed) | `email_changed` | `security` | No |
 
 - A client invitation becomes a notice only when its contact is an existing person's verified
   email; otherwise the email is the only way it arrives, as today.
@@ -6974,7 +6978,8 @@ contain, and how push can be ready before the Apple account that enables it exis
 
 1. Each mapped event writes exactly one notice for its recipient, in the event's transaction;
    a rolled-back event leaves none.
-2. An event the recipient caused herself writes none.
+2. An event the recipient caused herself writes none, except a security one; a resent
+   invitation refreshes its notice instead of adding one.
 3. A notice exposes no words and none of the person's data.
 4. A pending invitation, cover, correction or goal awaits; decided or expired, it does not.
 5. Turning off a channel keeps the notice in the inbox; security cannot be turned off.
