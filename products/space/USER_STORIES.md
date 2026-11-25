@@ -1918,6 +1918,10 @@ Si el proveedor rechaza el correo, nada cambia en ningún lado.
 4. Un canal desactivado no cancela lo que ocurrió: la operación de negocio sigue su curso y puedo verla en la aplicación.
 5. Si no tengo un contacto verificado para un canal, ese canal no puede activarse.
 
+> **Diseño cerrado el 25 de noviembre de 2026 (`TECH-44`, ADR-054).** Los canales son correo y push
+> (ADR-050). Apagar un canal nunca quita el aviso de «Avisos». Push queda listo y apagado hasta que el
+> proyecto tenga credenciales de Apple y Google. Pantalla `PF-13`, sin la columna SMS.
+
 ---
 
 ## E-SP-13 · Mi plan con el gimnasio
@@ -2253,6 +2257,11 @@ presenta con la tarjeta de Hoy, que es además lo que va a ver cada mañana si a
 3. Desde cada aviso llego a donde se resuelve.
 4. **Un aviso nunca contiene mis datos**: dice qué pasó y me lleva a la aplicación.
 
+> **Diseño cerrado el 25 de noviembre de 2026 (`TECH-44`, ADR-054).** El aviso nace en la misma
+> transacción que el evento y no guarda texto: la app lo redacta en mi idioma. «Cobros fallidos» es
+> la pausa de mi plan con el gimnasio (`payments.subscription_suspended.v1`); el cobro de Pro lo avisa
+> la tienda. Pantallas `NT-1` a `NT-4`.
+
 ### HU-SP-092 — Saber cuándo estoy sin conexión
 
 **Como** persona entrenando en un gimnasio con mala señal
@@ -2296,6 +2305,10 @@ presenta con la tarjeta de Hoy, que es además lo que va a ver cada mañana si a
 1. Elijo kilos o libras, y kilómetros o millas.
 2. Cambiar las unidades **no altera lo que ya registré**: se convierte al mostrarlo y el original se conserva.
 3. Desde aquí llego a mis datos de contacto, mis permisos y la eliminación de mi cuenta.
+
+> **Diseño cerrado el 25 de noviembre de 2026 (`TECH-44`, ADR-054).** Idiomas: español e inglés; mientras
+> no elijo, la app sigue el idioma del teléfono. El idioma elegido también decide el de mis correos y
+> push. Pantalla `PF-14`.
 
 ---
 

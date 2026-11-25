@@ -519,6 +519,45 @@ Cada ficha lista: propósito, dominio/fuente de verdad, clasificación, columnas
 - **Índices:** el unique sirve la consulta.
 - **Retención:** con la persona.
 - **Eventos:** ninguno propio.
+- **ADR-054:** a missing row reads as enabled. Email can be enabled only with `identity.people.contact_email_verified_at`, push only with an active row in `identity.person_push_devices`. Turning a channel off never removes a notice from `identity.person_notifications`.
+
+### 4.15.1 `identity.person_preferences`
+
+- **Purpose:** the person's units and language (`HU-SP-094`, ADR-054).
+- **Domain / source of truth:** Identity.
+- **Classification:** `operational`.
+- **Columns:** `person_id uuid` (PK) · `mass_unit text` (`kg`, `lb`; nullable) · `distance_unit text` (`km`, `mi`; nullable) · `locale text` (`es`, `en`; nullable) · `updated_at timestamptz`.
+- **FKs and deletion:** `person_id → identity.people(id) ON DELETE CASCADE`.
+- **Checks:** each column within its closed list or null. Null means «not chosen»: the app follows the phone and email and push go out in Spanish.
+- **Actors:** only the person, through `OP-IDN-070`/`071`; the worker reads `locale` to word email and push.
+- **RLS:** `person_id = access_control.person()`.
+- **Retention:** with the person. **Events:** none.
+- **Invariant:** choosing a unit never rewrites a stored value; body progress and sets keep their canonical and original units.
+
+### 4.15.2 `identity.person_push_devices`
+
+- **Purpose:** the phones that may receive her push (ADR-054).
+- **Domain / source of truth:** Identity.
+- **Classification:** `operational`.
+- **Columns:** `id uuid` (the app's installation id) · `person_id uuid` · `platform text` (`ios`, `android`) · `push_token text` · `registered_at timestamptz` · `last_seen_at timestamptz` · `retired_at timestamptz` (nullable) · `retired_reason text` (`sign_out`, `unregistered`, `moved`; nullable).
+- **FKs and deletion:** `person_id → identity.people(id) ON DELETE CASCADE`.
+- **Uniques and checks:** a partial unique on `push_token` among active rows, so one token reaches one person; `retired_at` and `retired_reason` together.
+- **Actors:** the person registers and retires her own (`OP-IDN-072`/`073`); the push job retires an unregistered token.
+- **RLS:** `person_id = access_control.person()`.
+- **Retention:** retired rows are deleted after 90 days. **Events:** none.
+
+### 4.15.3 `identity.person_notifications`
+
+- **Purpose:** every notice kept for the person, the inbox behind the bell (`HU-SP-091`, ADR-054).
+- **Domain / source of truth:** Identity.
+- **Classification:** `operational`. It holds no words and none of the person's data.
+- **Columns:** `id uuid` · `person_id uuid` · `source_event_id uuid` · `kind text` (closed list in ADR-054) · `category text` (the six of §4.15) · `subject_type text` · `subject_id uuid` · `organization_id uuid` (nullable) · `occurred_at timestamptz` · `read_at timestamptz` (nullable).
+- **FKs and deletion:** `person_id → identity.people(id) ON DELETE CASCADE`; `source_event_id → system.outbox_events(id)` is not enforced, because published events are pruned.
+- **Uniques and checks:** `UNIQUE (person_id, source_event_id)`; `kind` and `category` within their lists and consistent with the map.
+- **Writer:** only the `AFTER INSERT` trigger on `system.outbox_events`, in the event's transaction. The person sets only `read_at` (`OP-IDN-075`).
+- **RLS:** `person_id = access_control.person()`; no organization reads it.
+- **Queries:** `(person_id, occurred_at desc, id)`.
+- **Retention:** with the person. **Events:** none.
 
 ---
 
@@ -2611,6 +2650,17 @@ Nota de conteo: `planning` tiene 22 tablas y 23 fichas; §9.5–9.8 son cuatro t
 - **Eventos:** ninguno.
 
 ---
+
+### 11.6 `system.notification_deliveries`
+
+- **Purpose:** one push per notice and phone, and what came of it (ADR-054). Email keeps its delivery in the outbox publication, as before.
+- **Classification:** `operational`.
+- **Columns:** `id uuid` · `notification_id uuid` · `device_id uuid` · `status text` (`pending`, `sent`, `failed`, `skipped`) · `attempt_count integer` · `last_error_code text` (nullable) · `created_at` · `sent_at` (nullable).
+- **FKs and deletion:** `notification_id → identity.person_notifications(id) ON DELETE CASCADE`; `device_id → identity.person_push_devices(id) ON DELETE CASCADE`.
+- **Uniques:** `UNIQUE (notification_id, device_id)`, so a retry never pushes twice.
+- **Writer:** the projection trigger creates a `pending` row per active phone when push is enabled for the category; the push job claims and settles them.
+- **RLS:** no person or organization reads it; only the worker role writes it.
+- **Retention:** 90 days.
 
 ## 12. Schema `support`
 
